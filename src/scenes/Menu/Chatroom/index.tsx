@@ -3,7 +3,7 @@ import ExpandLess from "@mui/icons-material/ExpandLess";
 import ExpandMore from "@mui/icons-material/ExpandMore";
 import TagIcon from "@mui/icons-material/Tag";
 import { useState } from "react";
-import { useChatroomStore } from "../../../stores/Menu/ChatroomStore";
+import { useCurrentTopicContext } from "../../../stores/Topic/TopicStore";
 import MenuSection from "../../../components/Navigation/MenuSection";
 import MenuListItem from "../../../components/Navigation/MenuListItem";
 import MenuCollapsibleSection from "../../../components/Navigation/MenuCollapsibleSection";
@@ -11,8 +11,7 @@ import MenuCollapsibleSection from "../../../components/Navigation/MenuCollapsib
 const groups: any[] = [];
 
 export default function Chatroom() {
-  const selectedTopics = useChatroomStore((state) => state.selectedTopics);
-  const setSelectedTopic = useChatroomStore((state) => state.setSelectedTopic);
+  const { selectedTopics, setSelectedTopic } = useCurrentTopicContext();
 
   // Initialize openGroups based on selectedTopics
   const [openGroups, setOpenGroups] = useState<{ [key: string]: boolean }>(() => {

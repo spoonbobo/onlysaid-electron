@@ -67,7 +67,7 @@ export function ThemeContextProvider({ children }: ThemeContextProviderProps) {
       },
       typography: {
         fontFamily: [
-          'Poppins',
+          'Noto Serif HK',
           'Space Mono',
           'Space Grotesk',
           'Arial',

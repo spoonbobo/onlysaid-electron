@@ -29,16 +29,22 @@
   "menu.fileExplorer": "檔案瀏覽器",
   "menu.codeEditor": "程式碼編輯器",
   "menu.exit": "退出",
+  "menu.home": "首頁",
+  "menu.team": "團隊",
+  "menu.settings": "設定",
 
   "settings.general": "一般",
   "settings.user": "用戶",
   "settings.models": "模型",
   "settings.llmSettings": "語言模型設定",
-  "settings.publicLLMs": "公共語言模型",
+  "settings.publicLLMs": "雲端語言模型",
   "settings.privateLLMs": "私人語言模型",
   "settings.knowledgeBase": "知識庫",
   "settings.tools": "工具",
   "settings.mcp": "MCP",
   "settings.dangerZone": "危險區域",
-  "settings.deleteAccount": "刪除帳戶"
+  "settings.deleteAccount": "刪除帳戶",
+  "settings.cloudKb": "雲端知識庫",
+  "settings.privateKb": "私人知識庫",
+  "settings.kbSettings": "知識庫設定"
 }

@@ -1,6 +1,6 @@
 import { Box } from "@mui/material";
 import { useEffect, useState } from "react";
-import { useChatroomStore } from "../../../stores/Menu/ChatroomStore";
+import { useCurrentTopicContext } from "../../../stores/Topic/TopicStore";
 import ChatHeader from "./ChatHeader";
 import ChatUI from "./ChatUI";
 import ChatInput from "./ChatInput";
@@ -10,7 +10,7 @@ import { getRooms } from '../../../service/chat';
 function Chatroom() {
   const [messages, setMessages] = useState<IChatMessage[]>([]);
   const [input, setInput] = useState("");
-  const selectedTopics = useChatroomStore((state) => state.selectedTopics);
+  const { selectedTopics } = useCurrentTopicContext();
 
   useEffect(() => {
     const chatService = getRooms(['room1', 'room2'], 'token', 'cookieName')

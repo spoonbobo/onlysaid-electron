@@ -1,13 +1,22 @@
 import { useEffect } from 'react';
 import MainInterface from '../scenes/Interface/MainInterface';
+import { useTopicStore } from '../stores/Topic/TopicStore';
 
 function App() {
+  const { selectedContext, contexts, setSelectedContext } = useTopicStore();
 
-    return (
-        <>
-            <MainInterface />
-        </>
-    );
+  // Initialize context on app start if none is selected
+  useEffect(() => {
+    if (!selectedContext && contexts.length > 0) {
+      setSelectedContext(contexts[0]);
+    }
+  }, [selectedContext, contexts, setSelectedContext]);
+
+  return (
+    <>
+      <MainInterface />
+    </>
+  );
 }
 
 export default App;

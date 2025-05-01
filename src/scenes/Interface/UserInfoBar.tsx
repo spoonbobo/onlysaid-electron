@@ -2,10 +2,11 @@ import { Box, Avatar, Typography, IconButton } from "@mui/material";
 import SettingsIcon from "@mui/icons-material/Settings";
 import { useUserStore } from "../../stores/User/User";
 import { IUser } from "../../models/User/UserInfo";
-import { useMenuStore, MenuItems } from "../../stores/Menu/MenuStore";
+import { useTopicStore } from "../../stores/Topic/TopicStore";
 
 export default function UserInfoBar() {
   const user: IUser | null = useUserStore((state) => state.user);
+  const setSelectedContext = useTopicStore((state) => state.setSelectedContext);
 
   const displayName = user?.name || "Guest";
   const status = user === null ? "offline" : "online";
@@ -48,7 +49,13 @@ export default function UserInfoBar() {
         </Box>
       </Box>
 
-      <IconButton size="small" onClick={() => useMenuStore.getState().setSelectedMenu(MenuItems.UserSettings)}>
+      <IconButton
+        size="small"
+        onClick={() => setSelectedContext({
+          name: "settings",
+          type: "settings"
+        })}
+      >
         <SettingsIcon fontSize="small" />
       </IconButton>
     </Box>

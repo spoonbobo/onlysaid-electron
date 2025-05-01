@@ -1,11 +1,9 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
 import App from './App';
-import '@fontsource/poppins';
-// import "@fontsource/space-mono"; // Defaults to weight 400
-// import "@fontsource/space-mono/400.css"; // Specify weight
-// import "@fontsource/space-mono/400-italic.css"; // Specify weight and style
-// import '@fontsource-variable/inter';
+import '@fontsource/noto-serif-hk/400.css';
+import '@fontsource/noto-serif-hk/700.css';
+
 import { ThemeContextProvider } from "../providers/MaterialTheme";
 import { SSEProvider } from "../providers/SSEProvider";
 import { ToastProvider } from "../providers/ToastProvider";

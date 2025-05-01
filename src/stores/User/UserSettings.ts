@@ -1,13 +1,16 @@
 import { create } from "zustand";
 
 export const UserSettingsSubcategories = {
-  User: "User",
-  LLMSettings: "LLM Settings",
-  PublicLLM: "Public LLM",
-  PrivateLLM: "Private LLM",
-  KnowledgeBase: "Knowledge Base",
-  MCP: "MCP",
-  DeleteAccount: "Delete Account",
+  User: "user",
+  LLMSettings: "llmSettings",
+  PublicLLM: "publicLLMs",
+  PrivateLLM: "privateLLMs",
+  KnowledgeBase: "knowledgeBase",
+  KBSettings: "kbSettings",
+  CloudKB: "cloudKb",
+  PrivateKB: "privateKb",
+  MCP: "mcp",
+  DeleteAccount: "deleteAccount",
 } as const;
 
 type UserSettingsSubcategory = typeof UserSettingsSubcategories[keyof typeof UserSettingsSubcategories];
