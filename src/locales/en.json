@@ -1,0 +1,22 @@
+{
+  "app.title": "OnlySaid",
+  "app.welcome": "Welcome to OnlySaid",
+  "settings.account": "Account",
+  "settings.userPreferences": "User Preferences",
+  "settings.darkMode": "Dark Mode",
+  "settings.language": "Language",
+  "settings.signin": "Sign In",
+  "settings.signinMessage": "Sign in to access all features and save your preferences across devices.",
+  "settings.signingIn": "Signing In...",
+  "settings.signedInAs": "Signed in as",
+  "settings.logout": "Log Out",
+  "settings.savePreferences": "Save Preferences",
+  "toast.welcome": "Welcome back, {name}!",
+  "toast.preferenceSaved": "Preferences saved successfully",
+  "toast.loggedOut": "You have been logged out",
+  "toast.signingIn": "Signing in...",
+  "toast.authTimeout": "Authentication timed out. Please try again.",
+  "language.english": "English",
+  "language.spanish": "Spanish",
+  "language.french": "French"
+}
