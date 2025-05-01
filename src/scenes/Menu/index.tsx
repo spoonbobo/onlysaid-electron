@@ -5,10 +5,12 @@ import { useIntl } from "../../providers/IntlProvider";
 import { useTopicStore } from "../../stores/Topic/TopicStore";
 import { useCurrentTopicContext } from "../../stores/Topic/TopicStore";
 import { FormattedMessage } from "react-intl";
+import HomeMenu from "./Home";
 
 const menuComponentMap: Record<string, React.ReactNode> = {
   team: <Chatroom />,
   settings: <UserSettings />,
+  home: <HomeMenu />
 };
 
 function Menu() {
