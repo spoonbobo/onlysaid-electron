@@ -2,16 +2,31 @@ import { Box, Avatar, Typography, IconButton } from "@mui/material";
 import SettingsIcon from "@mui/icons-material/Settings";
 import { useUserStore } from "../../stores/User/User";
 import { IUser } from "../../models/User/UserInfo";
-import { useTopicStore } from "../../stores/Topic/TopicStore";
+import { useTopicStore, TopicContext } from "../../stores/Topic/TopicStore";
+import { useWindowStore } from "../../stores/Topic/WindowStore";
 
 export default function UserInfoBar() {
   const user: IUser | null = useUserStore((state) => state.user);
   const setSelectedContext = useTopicStore((state) => state.setSelectedContext);
+  const updateActiveTabContext = useWindowStore((state) => state.updateActiveTabContext);
 
   const displayName = user?.name || "Guest";
   const status = user === null ? "offline" : "online";
   const avatar = user?.avatar || "";
   const isOffline = status === "offline";
+
+  // Handle navigation to settings
+  const handleNavigateToSettings = () => {
+    // Create a properly typed settings context
+    const settingsContext = {
+      name: "settings",
+      type: "settings" as const // Use const assertion to fix type issue
+    };
+
+    // Update both the selected context and the active tab context
+    setSelectedContext(settingsContext);
+    updateActiveTabContext(settingsContext);
+  };
 
   return (
     <Box
@@ -51,10 +66,7 @@ export default function UserInfoBar() {
 
       <IconButton
         size="small"
-        onClick={() => setSelectedContext({
-          name: "settings",
-          type: "settings"
-        })}
+        onClick={handleNavigateToSettings}
       >
         <SettingsIcon fontSize="small" />
       </IconButton>

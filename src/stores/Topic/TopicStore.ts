@@ -3,7 +3,7 @@ import { persist, createJSONStorage } from "zustand/middleware";
 import { ITopicSelection } from "../../models/Topic/Topic";
 
 // Define the Tab/Context type
-interface TopicContext {
+export interface TopicContext {
   name: string;
   type: "home" | "team" | "settings";
 }

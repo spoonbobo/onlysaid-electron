@@ -3,7 +3,9 @@
 import { contextBridge, ipcRenderer, IpcRendererEvent } from 'electron';
 
 export type Channels = 'ipc-example' | 'auth:sign-in' | 'auth:signed-in' |
-  'db:initialize' | 'db:query' | 'db:transaction' | 'db:close' | 'api:get-rooms' | 'api:get-url';
+  'db:initialize' | 'db:query' | 'db:transaction' | 'db:close' | 'api:get-rooms' | 'api:get-url' |
+  'window:create-tab' | 'window:close-tab' | 'window:focus-tab' | 'window:rename-tab' |
+  'window:sync-state' | 'window:tab-created' | 'menu:close-tab' | 'menu:new-tab';
 
 const electronHandler = {
   ipcRenderer: {

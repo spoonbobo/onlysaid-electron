@@ -84,6 +84,22 @@ export default class MenuBuilder {
         },
       ],
     };
+    const subMenuFile: DarwinMenuItemConstructorOptions = {
+      label: 'File',
+      submenu: [
+        {
+          label: 'New Tab',
+          accelerator: 'Command+N',
+          click: () => {
+            this.mainWindow.webContents.send('menu:new-tab');
+          },
+        },
+        { type: 'separator' },
+        { label: 'Open', accelerator: 'Command+O' },
+        { label: 'Close Tab', accelerator: 'Command+W', click: () => { this.mainWindow.webContents.send('menu:close-tab'); } },
+        { label: 'Close', accelerator: 'Command+Q', click: () => { this.mainWindow.close(); } },
+      ],
+    };
     const subMenuEdit: DarwinMenuItemConstructorOptions = {
       label: 'Edit',
       submenu: [
@@ -189,7 +205,7 @@ export default class MenuBuilder {
         ? subMenuViewDev
         : subMenuViewProd;
 
-    return [subMenuAbout, subMenuEdit, subMenuView, subMenuWindow, subMenuHelp];
+    return [subMenuAbout, subMenuFile, subMenuEdit, subMenuView, subMenuWindow, subMenuHelp];
   }
 
   buildDefaultTemplate() {
@@ -198,12 +214,26 @@ export default class MenuBuilder {
         label: '&File',
         submenu: [
           {
+            label: '&New Tab',
+            accelerator: 'Ctrl+N',
+            click: () => {
+              this.mainWindow.webContents.send('menu:new-tab');
+            },
+          },
+          {
             label: '&Open',
             accelerator: 'Ctrl+O',
           },
           {
-            label: '&Close',
+            label: 'Close &Tab',
             accelerator: 'Ctrl+W',
+            click: () => {
+              this.mainWindow.webContents.send('menu:close-tab');
+            },
+          },
+          {
+            label: '&Close',
+            accelerator: 'Ctrl+Q',
             click: () => {
               this.mainWindow.close();
             },
