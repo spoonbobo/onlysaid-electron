@@ -8,6 +8,7 @@ import { useWindowStore } from "../../stores/Topic/WindowStore";
 import { useTopicStore } from "../../stores/Topic/TopicStore";
 import { useRef, useEffect } from "react";
 import UserInfoBar from "./UserInfoBar";
+import LevelUp from "./LevelUp";
 
 function MainInterface() {
   const { menuWidth, setMenuWidth } = useLayoutResize();
@@ -21,11 +22,9 @@ function MainInterface() {
   // When active tab changes, update selected context
   useEffect(() => {
     if (activeTabId) {
-      console.log("Tab changed, activeTabId:", activeTabId);
       const activeTab = tabs.find(tab => tab.id === activeTabId);
 
       if (activeTab && activeTab.context) {
-        console.log("Setting context from active tab:", activeTab.context);
         setSelectedContext(activeTab.context);
       } else {
         console.warn("Active tab has no valid context", activeTab);
@@ -41,7 +40,6 @@ function MainInterface() {
       selectedContext?.name !== previousContextRef.current?.name;
 
     if (selectedContext && contextChanged) {
-      console.log("Context changed from:", previousContextRef.current, "to:", selectedContext);
 
       // Update the active tab with the new context
       updateActiveTabContext(selectedContext);
@@ -51,10 +49,6 @@ function MainInterface() {
     }
   }, [selectedContext, updateActiveTabContext]);
 
-  // Debug the current selectedContext
-  useEffect(() => {
-    console.log("Currently selected context:", selectedContext);
-  }, [selectedContext]);
 
   // Add keyboard shortcut to reset tab state (Ctrl+Shift+R)
   useEffect(() => {
@@ -143,6 +137,8 @@ function MainInterface() {
           display: "flex",
           flex: 1,
           overflow: "hidden",
+          position: "relative",
+          minHeight: 0,
         }}
       >
         <Box
@@ -156,6 +152,7 @@ function MainInterface() {
             borderRight: "1px solid #eee",
             bgcolor: "background.paper",
             flexShrink: 0,
+            position: "relative", // Add position relative for absolute positioning of drag handle
           }}
         >
           <Box sx={{ display: "flex", flexDirection: "row", flex: 1, minHeight: 0 }}>
@@ -183,19 +180,31 @@ function MainInterface() {
             </Box>
           </Box>
           <UserInfoBar />
+
+          {/* Reposition the drag handle to overlap the border */}
+          <Box
+            sx={{
+              position: "absolute",
+              top: 0,
+              right: -3, // Negative margin to overlap with the border
+              width: 6,
+              height: "100%",
+              cursor: "col-resize",
+              zIndex: 1,
+              bgcolor: "transparent",
+              "&:hover": { bgcolor: "rgba(200, 200, 200, 0.4)" },
+            }}
+            onMouseDown={handleMenuMouseDown}
+          />
         </Box>
-        <Box
-          sx={{
-            width: 6,
-            cursor: "col-resize",
-            zIndex: 1,
-            bgcolor: "transparent",
-            "&:hover": { bgcolor: "#eee" },
-          }}
-          onMouseDown={handleMenuMouseDown}
-        />
-        <Box sx={{ flex: 1, overflow: "auto" }}>
-          <Main />
+
+        {/* Remove the separate Box for the drag handle */}
+
+        <Box sx={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+          <Box sx={{ flex: 1, overflow: "auto" }}>
+            <Main />
+          </Box>
+          <LevelUp />
         </Box>
       </Box>
     </Box>

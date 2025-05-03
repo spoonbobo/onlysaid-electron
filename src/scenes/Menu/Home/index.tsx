@@ -78,24 +78,7 @@ export default function HomeMenu() {
           />
 
           <MenuCollapsibleSection isOpen={isSectionExpanded("Friends")}>
-            <MenuListItem
-              label={<FormattedMessage id="home.allFriends" defaultMessage="All Friends" />}
-              isSelected={selectedSubcategory === HomeSubcategories.AllFriends}
-              onClick={() => setSelectedSubcategory(HomeSubcategories.AllFriends)}
-              sx={{ pl: 4, py: 0.25, minHeight: 28 }}
-            />
-            <MenuListItem
-              label={<FormattedMessage id="home.onlineFriends" defaultMessage="Online" />}
-              isSelected={selectedSubcategory === HomeSubcategories.OnlineFriends}
-              onClick={() => setSelectedSubcategory(HomeSubcategories.OnlineFriends)}
-              sx={{ pl: 4, py: 0.25, minHeight: 28 }}
-            />
-            <MenuListItem
-              label={<FormattedMessage id="home.favoriteFriends" defaultMessage="Favorites" />}
-              isSelected={selectedSubcategory === HomeSubcategories.FavoriteFriends}
-              onClick={() => setSelectedSubcategory(HomeSubcategories.FavoriteFriends)}
-              sx={{ pl: 4, py: 0.25, minHeight: 28 }}
-            />
+            <></>
           </MenuCollapsibleSection>
         </Box>
 
@@ -114,24 +97,7 @@ export default function HomeMenu() {
           />
 
           <MenuCollapsibleSection isOpen={isSectionExpanded("Agents")}>
-            <MenuListItem
-              label={<FormattedMessage id="home.allAgents" defaultMessage="All Agents" />}
-              isSelected={selectedSubcategory === HomeSubcategories.AllAgents}
-              onClick={() => setSelectedSubcategory(HomeSubcategories.AllAgents)}
-              sx={{ pl: 4, py: 0.25, minHeight: 28 }}
-            />
-            <MenuListItem
-              label={<FormattedMessage id="home.customAgents" defaultMessage="Custom" />}
-              isSelected={selectedSubcategory === HomeSubcategories.CustomAgents}
-              onClick={() => setSelectedSubcategory(HomeSubcategories.CustomAgents)}
-              sx={{ pl: 4, py: 0.25, minHeight: 28 }}
-            />
-            <MenuListItem
-              label={<FormattedMessage id="home.favoriteAgents" defaultMessage="Favorites" />}
-              isSelected={selectedSubcategory === HomeSubcategories.FavoriteAgents}
-              onClick={() => setSelectedSubcategory(HomeSubcategories.FavoriteAgents)}
-              sx={{ pl: 4, py: 0.25, minHeight: 28 }}
-            />
+            <></>
           </MenuCollapsibleSection>
         </Box>
       </MenuSection>

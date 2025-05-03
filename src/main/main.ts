@@ -16,11 +16,14 @@ import MenuBuilder from './menu';
 import { resolveHtmlPath } from './util';
 import { initializeDatabase, executeQuery, executeTransaction, closeDatabase, runMigrations } from '../service/db';
 import { allMigrations } from '../service/migrations';
-import { setupApiHandlers, getApiUrl } from './api';
 import { initAuth } from './auth';
+import dotenv from 'dotenv';
+import { setupChatroomHandlers } from './api/v2/chat/chatroom';
 
-// Get API URL from the api module
-const ONLYSAID_API_URL = getApiUrl();
+dotenv.config();
+
+setupChatroomHandlers();
+initAuth(process.env.ONLYSAID_API_URL || '', process.env.ONLYSAID_DOMAIN || '');
 
 class AppUpdater {
   constructor() {
@@ -40,9 +43,6 @@ ipcMain.on('ipc-example', async (event, arg) => {
   console.log(msgTemplate(arg));
   event.reply('ipc-example', msgTemplate('pong'));
 });
-
-// Initialize the auth module with the API URL
-initAuth(ONLYSAID_API_URL);
 
 // Tab/Window management IPC handlers
 ipcMain.on('window:create-tab', (event, { tabId, context }) => {
@@ -144,9 +144,6 @@ ipcMain.handle('db:close', async () => {
     throw error;
   }
 });
-
-// Set up API handlers from the api module
-setupApiHandlers();
 
 if (process.env.NODE_ENV === 'production') {
   const sourceMapSupport = require('source-map-support');

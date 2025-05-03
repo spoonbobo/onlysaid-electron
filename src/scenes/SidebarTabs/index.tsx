@@ -5,7 +5,7 @@ import GroupIcon from "@mui/icons-material/Group";
 import { useState } from "react";
 import { useTopicStore, TopicContext } from "../../stores/Topic/TopicStore";
 import { useWindowStore } from "../../stores/Topic/WindowStore";
-import AddTeamDialog from "./AddTeamDialog";
+import AddTeamDialog from "../../components/Dialog/AddTeamDialog";
 
 function SidebarTabs() {
   const { selectedContext, contexts, setSelectedContext } = useTopicStore();

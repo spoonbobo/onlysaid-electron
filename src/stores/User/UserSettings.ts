@@ -10,10 +10,14 @@ export const UserSettingsSubcategories = {
   CloudKB: "cloudKb",
   PrivateKB: "privateKb",
   MCP: "mcp",
+  DeveloperAPI: "developerAPI",
   DeleteAccount: "deleteAccount",
 } as const;
 
 type UserSettingsSubcategory = typeof UserSettingsSubcategories[keyof typeof UserSettingsSubcategories];
+
+export type UserSectionName = 'General' | 'LLM' | 'KnowledgeBase' | 'MCP' | 'Developer' | 'DangerZone';
+
 
 interface UserSettingsStore {
   selectedSubcategory: UserSettingsSubcategory;

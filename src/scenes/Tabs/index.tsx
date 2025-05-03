@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import {
   Box,
   Typography,
@@ -14,16 +14,22 @@ import CloseIcon from "@mui/icons-material/Close";
 import HomeIcon from "@mui/icons-material/Home";
 import GroupIcon from "@mui/icons-material/Group";
 import SettingsIcon from "@mui/icons-material/Settings";
+import HelpIcon from "@mui/icons-material/Help";
+import InboxIcon from "@mui/icons-material/Inbox";
+import { useIntl } from 'react-intl';
 import { useTopicStore } from "../../stores/Topic/TopicStore";
 import { useWindowStore } from "../../stores/Topic/WindowStore";
+import HelpDialog, { getHelpItemsForContext, getHelpTitleForContext } from "./Help";
 
 function Tabs() {
-  const { contexts, setSelectedContext } = useTopicStore();
+  const intl = useIntl();
+  const { contexts, selectedContext, setSelectedContext } = useTopicStore();
   const { tabs = [], activeTabId, addTab, closeTab, setActiveTab, repairStore } = useWindowStore();
   const [menuAnchorEl, setMenuAnchorEl] = useState<null | HTMLElement>(null);
-
-  console.log("Current tabs:", tabs);
-  console.log("Active tab ID:", activeTabId);
+  const [draggedTab, setDraggedTab] = useState<string | null>(null);
+  const [dropTarget, setDropTarget] = useState<{ id: string, position: 'left' | 'right' } | null>(null);
+  const draggedTabIndex = useRef<number>(-1);
+  const [isHelpOpen, setIsHelpOpen] = useState(false);
 
   // Attempt to repair the store if needed
   useEffect(() => {
@@ -149,6 +155,128 @@ function Tabs() {
     handleCloseMenu();
   };
 
+  // Drag event handlers
+  const handleDragStart = (e: React.DragEvent<HTMLDivElement>, tabId: string) => {
+    setDraggedTab(tabId);
+    e.dataTransfer.setData('text/plain', tabId);
+
+    // Store the original index of the dragged tab for use in determining direction
+    const index = tabs.findIndex(tab => tab.id === tabId);
+    draggedTabIndex.current = index;
+
+    // Add some opacity to the dragged element
+    if (e.currentTarget) {
+      e.currentTarget.style.opacity = '0.4';
+    }
+  };
+
+  const handleDragEnd = (e: React.DragEvent<HTMLDivElement>) => {
+    setDraggedTab(null);
+    setDropTarget(null);
+    draggedTabIndex.current = -1;
+
+    // Restore opacity
+    if (e.currentTarget) {
+      e.currentTarget.style.opacity = '1';
+    }
+  };
+
+  const handleDragOver = (e: React.DragEvent<HTMLDivElement>, tabId: string) => {
+    if (!draggedTab || draggedTab === tabId) {
+      setDropTarget(null);
+      return;
+    }
+
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+
+    // Get the index of the current tab
+    const draggedIndex = draggedTabIndex.current;
+    const targetIndex = tabs.findIndex(tab => tab.id === tabId);
+
+    // Determine if we should place the tab to the left or right of the target
+    if (draggedIndex !== -1 && targetIndex !== -1) {
+      // Set the position based on whether we're moving left or right
+      const position = draggedIndex < targetIndex ? 'right' : 'left';
+      setDropTarget({ id: tabId, position });
+    }
+  };
+
+  const handleEmptyAreaDragOver = (e: React.DragEvent<HTMLDivElement>) => {
+    if (!draggedTab) return;
+
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+
+    // When dragging over the empty area, always set position to the end
+    setDropTarget({ id: 'end', position: 'right' });
+  };
+
+  const handleDrop = (e: React.DragEvent<HTMLDivElement>, targetTabId: string) => {
+    e.preventDefault();
+    setDropTarget(null);
+
+    const sourceTabId = e.dataTransfer.getData('text/plain');
+    if (sourceTabId === targetTabId) return;
+
+    const sourceIndex = tabs.findIndex(tab => tab.id === sourceTabId);
+    const targetIndex = tabs.findIndex(tab => tab.id === targetTabId);
+
+    if (sourceIndex === -1 || targetIndex === -1) return;
+
+    // Create a new array of tabs with the dragged tab moved appropriately
+    const newTabs = [...tabs];
+    const [movedTab] = newTabs.splice(sourceIndex, 1);
+
+    // If dropping on the right, insert after target
+    const insertIndex = dropTarget?.position === 'right'
+      ? targetIndex
+      : targetIndex === 0
+        ? 0
+        : targetIndex - 1;
+
+    newTabs.splice(insertIndex, 0, movedTab);
+
+    // Update tabs in the Zustand store instead of localStorage
+    // This will trigger a re-render without reloading the page
+    updateTabsOrder(newTabs);
+  };
+
+  // Handle drop at the end
+  const handleEndDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setDropTarget(null);
+
+    const sourceTabId = e.dataTransfer.getData('text/plain');
+    const sourceIndex = tabs.findIndex(tab => tab.id === sourceTabId);
+
+    if (sourceIndex === -1) return;
+
+    // Create a new array of tabs with the dragged tab moved to the end
+    const newTabs = [...tabs];
+    const [movedTab] = newTabs.splice(sourceIndex, 1);
+    newTabs.push(movedTab);
+
+    // Update tabs in the Zustand store instead of localStorage
+    updateTabsOrder(newTabs);
+  };
+
+  // Add this helper function to update tabs in the store:
+  const updateTabsOrder = (newTabs: typeof tabs) => {
+    // Get the current Zustand store state
+    const state = useWindowStore.getState();
+
+    // Update the tabs array directly in the store
+    // This preserves the active tab state
+    useWindowStore.setState({
+      ...state,
+      tabs: newTabs.map(tab => ({
+        ...tab,
+        active: tab.id === activeTabId
+      }))
+    });
+  };
+
   // Render a safe version of tabs that catches errors
   const renderTabs = () => {
     try {
@@ -163,10 +291,19 @@ function Tabs() {
           return null;
         }
 
+        // Determine if this tab has drop indicators
+        const isDropTargetLeft = dropTarget?.id === tab.id && dropTarget.position === 'left';
+        const isDropTargetRight = dropTarget?.id === tab.id && dropTarget.position === 'right';
+
         return (
           <Box
             key={tab.id || `tab-${Math.random()}`}
             onClick={() => handleTabClick(tab.id, tab.context)}
+            draggable
+            onDragStart={(e) => handleDragStart(e, tab.id)}
+            onDragEnd={handleDragEnd}
+            onDragOver={(e) => handleDragOver(e, tab.id)}
+            onDrop={(e) => handleDrop(e, tab.id)}
             sx={{
               py: 1,
               px: 2,
@@ -180,7 +317,24 @@ function Tabs() {
               bgcolor: tab.active ? "action.selected" : "background.paper",
               "&:hover": {
                 bgcolor: tab.active ? "action.selected" : "action.hover",
-              }
+              },
+              // Left border indicator
+              borderLeft: isDropTargetLeft ? 2 : 0,
+              borderLeftColor: isDropTargetLeft ? "primary.main" : "transparent",
+              // Right border indicator
+              position: "relative",
+              ...(isDropTargetRight && {
+                "&::after": {
+                  content: '""',
+                  position: "absolute",
+                  right: 0,
+                  top: 0,
+                  bottom: 0,
+                  width: 2,
+                  bgcolor: "primary.main",
+                  zIndex: 1
+                }
+              })
             }}
           >
             <Box
@@ -228,12 +382,28 @@ function Tabs() {
     }
   };
 
+  // Handler to open the help dialog
+  const handleOpenHelp = () => {
+    setIsHelpOpen(true);
+  };
+
+  // Handler to close the help dialog
+  const handleCloseHelp = () => {
+    setIsHelpOpen(false);
+  };
+
+  // Get current help items and title based on selected context
+  const currentHelpItems = getHelpItemsForContext(selectedContext, intl);
+  const currentHelpTitle = getHelpTitleForContext(selectedContext, intl);
+
   return (
     <Box sx={{
       width: "100%",
+      height: "auto",
       borderBottom: 1,
       borderColor: "divider",
-      display: "flex"
+      display: "flex",
+      flexShrink: 0
     }}>
       <Stack
         direction="row"
@@ -251,6 +421,23 @@ function Tabs() {
         }}
       >
         {renderTabs()}
+
+        {/* Empty area for dropping tabs at the end */}
+        <Box
+          onDragOver={handleEmptyAreaDragOver}
+          onDrop={handleEndDrop}
+          sx={{
+            width: 50,
+            height: "100%",
+            flexGrow: 1,
+            minWidth: 50,
+            ...(dropTarget?.id === 'end' ? {
+              borderLeft: 2,
+              borderLeftColor: "primary.main",
+              bgcolor: "action.hover"
+            } : {})
+          }}
+        />
       </Stack>
 
       <Box sx={{ display: "flex", alignItems: "center", borderLeft: 1, borderColor: "divider" }}>
@@ -263,6 +450,28 @@ function Tabs() {
             <AddIcon />
           </IconButton>
         </Tooltip>
+
+        {/* Inbox icon */}
+        <Tooltip title="Inbox">
+          <IconButton
+            size="small"
+            sx={{ mx: 1 }}
+          >
+            <InboxIcon />
+          </IconButton>
+        </Tooltip>
+
+        {/* Help icon */}
+        <Tooltip title="Help">
+          <IconButton
+            size="small"
+            sx={{ mx: 1 }}
+            onClick={handleOpenHelp}
+          >
+            <HelpIcon />
+          </IconButton>
+        </Tooltip>
+
         <Menu
           anchorEl={menuAnchorEl}
           open={Boolean(menuAnchorEl)}
@@ -280,6 +489,14 @@ function Tabs() {
           ))}
         </Menu>
       </Box>
+
+      {/* Render the Help Dialog */}
+      <HelpDialog
+        open={isHelpOpen}
+        onClose={handleCloseHelp}
+        helpItems={currentHelpItems}
+        title={currentHelpTitle}
+      />
     </Box>
   );
 }

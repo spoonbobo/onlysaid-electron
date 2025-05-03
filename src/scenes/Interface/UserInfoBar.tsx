@@ -1,12 +1,15 @@
 import { Box, Avatar, Typography, IconButton } from "@mui/material";
 import SettingsIcon from "@mui/icons-material/Settings";
-import { useUserStore } from "../../stores/User/User";
-import { IUser } from "../../models/User/UserInfo";
-import { useTopicStore, TopicContext } from "../../stores/Topic/TopicStore";
-import { useWindowStore } from "../../stores/Topic/WindowStore";
+import { useUserStore } from "@/stores/User/User";
+import { IUser } from "@/models/User/UserInfo";
+import { useTopicStore } from "@/stores/Topic/TopicStore";
+import { useWindowStore } from "@/stores/Topic/WindowStore";
+import { FormattedMessage } from "react-intl";
+import { useUserLevelStore } from "@/stores/User/UserLevel";
 
 export default function UserInfoBar() {
   const user: IUser | null = useUserStore((state) => state.user);
+  const { level } = useUserLevelStore();
   const setSelectedContext = useTopicStore((state) => state.setSelectedContext);
   const updateActiveTabContext = useWindowStore((state) => state.updateActiveTabContext);
 
@@ -59,17 +62,39 @@ export default function UserInfoBar() {
             variant="caption"
             color={isOffline ? "text.disabled" : "success.main"}
           >
-            {status}
+            <FormattedMessage id={`user.status.${status}`} />
           </Typography>
         </Box>
       </Box>
 
-      <IconButton
-        size="small"
-        onClick={handleNavigateToSettings}
-      >
-        <SettingsIcon fontSize="small" />
-      </IconButton>
+      <Box sx={{ display: "flex", alignItems: "center" }}>
+        {user && (
+          <Typography
+            variant="body2"
+            sx={{
+              fontSize: "0.75rem",
+              fontWeight: "medium",
+              bgcolor: "primary.main",
+              color: "white",
+              borderRadius: "12px",
+              px: 1,
+              py: 0.25,
+              mr: 1,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center"
+            }}
+          >
+            <FormattedMessage id="agent.level" /> {level}
+          </Typography>
+        )}
+        <IconButton
+          size="small"
+          onClick={handleNavigateToSettings}
+        >
+          <SettingsIcon fontSize="small" />
+        </IconButton>
+      </Box>
     </Box>
   );
 }

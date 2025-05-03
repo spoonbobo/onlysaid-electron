@@ -2,10 +2,24 @@
 /* eslint no-unused-vars: off */
 import { contextBridge, ipcRenderer, IpcRendererEvent } from 'electron';
 
-export type Channels = 'ipc-example' | 'auth:sign-in' | 'auth:signed-in' |
-  'db:initialize' | 'db:query' | 'db:transaction' | 'db:close' | 'api:get-rooms' | 'api:get-url' |
-  'window:create-tab' | 'window:close-tab' | 'window:focus-tab' | 'window:rename-tab' |
-  'window:sync-state' | 'window:tab-created' | 'menu:close-tab' | 'menu:new-tab';
+// namespace
+type AuthChannels = 'auth:sign-in' | 'auth:signed-in';
+type WindowChannels = 'window:create-tab' | 'window:close-tab' | 'window:focus-tab' | 'window:rename-tab' | 'window:sync-state' | 'window:tab-created';
+type MenuChannels = 'menu:close-tab' | 'menu:new-tab';
+type MiscChannels = 'ipc-example';
+type DbChannels = 'db:initialize' | 'db:query' | 'db:transaction' | 'db:close';
+
+
+type ApiChatroomChannels = 'api:chatroom:get';
+type ApiChannels = ApiChatroomChannels;
+
+export type Channels =
+  | AuthChannels
+  | DbChannels
+  | ApiChannels
+  | WindowChannels
+  | MenuChannels
+  | MiscChannels;
 
 const electronHandler = {
   ipcRenderer: {
@@ -28,9 +42,32 @@ const electronHandler = {
       return ipcRenderer.invoke(channel, ...args);
     },
   },
+  auth: {
+    signIn: (...args: unknown[]) => ipcRenderer.invoke('auth:sign-in', ...args),
+  },
+  db: {
+    initialize: (...args: unknown[]) => ipcRenderer.invoke('db:initialize', ...args),
+    query: (...args: unknown[]) => ipcRenderer.invoke('db:query', ...args),
+    transaction: (...args: unknown[]) => ipcRenderer.invoke('db:transaction', ...args),
+    close: (...args: unknown[]) => ipcRenderer.invoke('db:close', ...args),
+  },
+  chatroom: {
+    get: (...args: unknown[]) => ipcRenderer.invoke('chatroom:get', ...args),
+  },
+  window: {
+    createTab: (...args: unknown[]) => ipcRenderer.invoke('window:create-tab', ...args),
+    closeTab: (...args: unknown[]) => ipcRenderer.invoke('window:close-tab', ...args),
+    focusTab: (...args: unknown[]) => ipcRenderer.invoke('window:focus-tab', ...args),
+    renameTab: (...args: unknown[]) => ipcRenderer.invoke('window:rename-tab', ...args),
+    syncState: (...args: unknown[]) => ipcRenderer.send('window:sync-state', ...args),
+  },
+  menu: {
+    newTab: (...args: unknown[]) => ipcRenderer.invoke('menu:new-tab', ...args),
+    closeTab: (...args: unknown[]) => ipcRenderer.invoke('menu:close-tab', ...args),
+  },
   api: {
-    getApiUrl: () => ipcRenderer.invoke('api:get-url')
-  }
+    getUrl: () => ipcRenderer.invoke('api:get-url'),
+  },
 };
 
 contextBridge.exposeInMainWorld('electron', electronHandler);

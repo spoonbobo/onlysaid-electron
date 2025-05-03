@@ -1,11 +1,11 @@
 import { Box } from "@mui/material";
 import { useEffect, useState } from "react";
-import { useCurrentTopicContext } from "../../../stores/Topic/TopicStore";
+import { useCurrentTopicContext } from "@/stores/Topic/TopicStore";
 import ChatHeader from "./ChatHeader";
 import ChatUI from "./ChatUI";
 import ChatInput from "./ChatInput";
-import { IChatMessage } from "../../../models/Chat/Message";
-import { getRooms } from '../../../service/chat';
+import { IChatMessage } from "@/models/Chat/Message";
+import { toast } from "@/utils/toast";
 
 function Chatroom() {
   const [messages, setMessages] = useState<IChatMessage[]>([]);
@@ -13,16 +13,18 @@ function Chatroom() {
   const { selectedTopics } = useCurrentTopicContext();
 
   useEffect(() => {
-    const chatService = getRooms(['room1', 'room2'], 'token', 'cookieName')
-
-    // Example with dummy room IDs
-    getRooms(['room1', 'room2'], 'token', 'cookieName')
-      .then(rooms => {
-        // Process rooms data
+    const fetchRooms = async () => {
+      const rooms = await window.electron.chatroom.get({
+        roomIds: ['room1', 'room2'],
+        token: 'token',
+        cookieName: 'cookieName'
       })
-      .catch(error => {
-        console.error('Failed to fetch rooms:', error);
-      });
+      if (rooms.error) {
+        toast.error(`Error fetching rooms: ${rooms.error}`, 1000);
+      }
+    }
+
+    fetchRooms();
   }, []);
 
   // Find the first selected group and topic (if any)
@@ -49,9 +51,16 @@ function Chatroom() {
   };
 
   return (
-    <Box sx={{ height: "100%", display: "flex", flexDirection: "column" }}>
+    <Box sx={{
+      height: "100%",
+      display: "flex",
+      flexDirection: "column",
+      overflow: "hidden"
+    }}>
       <ChatHeader selectedGroup={selectedGroup} selectedTopic={selectedTopic} />
-      <ChatUI messages={messages} />
+      <Box sx={{ flex: 1, overflow: "auto", minHeight: 0 }}>
+        <ChatUI messages={messages} />
+      </Box>
       <ChatInput input={input} setInput={setInput} handleSend={handleSend} />
     </Box>
   );

@@ -30,7 +30,6 @@ function Settings() {
         return <LLMSettings />;
 
       case UserSettingsSubcategories.KnowledgeBase:
-        // Add your knowledge base component here
         return (
           <SettingsSection title="Knowledge Base">
             <Typography>Knowledge Base settings</Typography>
@@ -38,7 +37,6 @@ function Settings() {
         );
 
       case UserSettingsSubcategories.MCP:
-        // Add your MCP component here
         return (
           <SettingsSection title="MCP">
             <Typography>MCP settings</Typography>

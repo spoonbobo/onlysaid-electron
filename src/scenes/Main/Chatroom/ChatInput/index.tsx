@@ -13,9 +13,10 @@ import SendIcon from "@mui/icons-material/Send";
 import MicIcon from "@mui/icons-material/Mic";
 import AttachFileIcon from "@mui/icons-material/AttachFile";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
-import { useChatStore } from "../../../../stores/Chat/chatStore";
-import { LLMService } from "../../../../service/llm";
-import { useSelectedModelStore } from "../../../../stores/LLM/SelectedModelStore";
+import { LLMService } from "@/service/llm";
+import { useSelectedModelStore } from "@/stores/LLM/SelectedModelStore";
+import { FormattedMessage } from "react-intl";
+import { useIntl } from "react-intl";
 
 // Create a single instance of LLMService outside the component
 const llmService = new LLMService();
@@ -31,7 +32,6 @@ function ChatInput({ input, setInput, handleSend, disabled = false }: ChatInputP
   const [trustMode, setTrustMode] = useState(false);
   const textFieldRef = useRef<HTMLTextAreaElement>(null);
   const [isSending, setIsSending] = useState(false);
-  const sendMessage = useChatStore(state => state.sendMessage);
   const [availableModels, setAvailableModels] = useState<any[]>([]);
 
   // Get the selected model from the persisted store
@@ -40,6 +40,8 @@ function ChatInput({ input, setInput, handleSend, disabled = false }: ChatInputP
   // Model menu state
   const [modelMenuAnchor, setModelMenuAnchor] = useState<null | HTMLElement>(null);
   const modelMenuOpen = Boolean(modelMenuAnchor);
+
+  const intl = useIntl();
 
   // Load available models when component mounts
   useEffect(() => {
@@ -73,7 +75,6 @@ function ChatInput({ input, setInput, handleSend, disabled = false }: ChatInputP
       setIsSending(true);
 
       // Pass the selected model's provider and ID
-      // await sendMessage(input, trustMode, provider, modelId);
 
       // After successful insertion, clear the input
       handleSend();
@@ -83,7 +84,7 @@ function ChatInput({ input, setInput, handleSend, disabled = false }: ChatInputP
     } finally {
       setIsSending(false);
     }
-  }, [input, disabled, trustMode, handleSend, isSending, sendMessage, provider, modelId]);
+  }, [input, disabled, trustMode, handleSend, isSending, provider, modelId]);
 
   // Then define handleKeyDown which depends on it
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
@@ -176,7 +177,10 @@ function ChatInput({ input, setInput, handleSend, disabled = false }: ChatInputP
             value={input}
             onChange={handleInputChange}
             onKeyDown={handleKeyDown}
-            placeholder={disabled ? "Please select a room" : "Type your message..."}
+            placeholder={disabled ?
+              intl.formatMessage({ id: "chat.selectRoom" }) :
+              intl.formatMessage({ id: "chat.typeMessage" })
+            }
             disabled={disabled}
             fullWidth
             variant="outlined"
@@ -188,6 +192,7 @@ function ChatInput({ input, setInput, handleSend, disabled = false }: ChatInputP
               }
             }}
             sx={{
+              bgcolor: theme => alpha(theme.palette.background.paper, 0.5),
               "& .MuiOutlinedInput-root": {
                 borderRadius: 0,
                 py: 1,
@@ -283,7 +288,7 @@ function ChatInput({ input, setInput, handleSend, disabled = false }: ChatInputP
               }}
               onClick={() => setTrustMode(!trustMode)}
             >
-              Trust Mode
+              <FormattedMessage id="chat.trustMode" />
             </Button>
 
             {/* Action buttons - no longer need ml: auto since all buttons are right-aligned */}
@@ -318,7 +323,7 @@ function ChatInput({ input, setInput, handleSend, disabled = false }: ChatInputP
             <IconButton
               type="submit"
               size="small"
-              disabled={!input.trim() || disabled || isSending || !modelId || !provider}
+              disabled={!input.trim() || disabled || isSending}
               sx={{
                 color: input.trim() && !disabled && modelId && provider ? "primary.main" : "text.disabled",
                 "&:hover": {

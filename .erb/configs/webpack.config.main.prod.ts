@@ -11,6 +11,9 @@ import baseConfig from './webpack.config.base';
 import webpackPaths from './webpack.paths';
 import checkNodeEnv from '../scripts/check-node-env';
 import deleteSourceMaps from '../scripts/delete-source-maps';
+import dotenv from 'dotenv';
+
+dotenv.config();
 
 checkNodeEnv('production');
 deleteSourceMaps();
@@ -62,6 +65,7 @@ const configuration: webpack.Configuration = {
       NODE_ENV: 'production',
       DEBUG_PROD: false,
       START_MINIMIZED: false,
+      ONLYSAID_API_URL: process.env.ONLYSAID_API_URL
     }),
 
     new webpack.DefinePlugin({

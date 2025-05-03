@@ -2,12 +2,13 @@ import { BrowserWindow, ipcMain } from 'electron';
 
 // Will be imported from main.ts
 let ONLYSAID_API_URL: string;
-
+let ONLYSAID_DOMAIN: string;
 let authWindow: BrowserWindow | null = null;
 
 // Function to initialize the authentication module with the API URL
-export function initAuth(apiUrl: string) {
+export function initAuth(apiUrl: string, domain: string) {
   ONLYSAID_API_URL = apiUrl;
+  ONLYSAID_DOMAIN = domain;
   setupAuthHandlers();
 }
 
@@ -115,7 +116,7 @@ function setupAuthHandlers() {
         // Check for session cookies that indicate the user is logged in
         const checkForSession = async () => {
           const cookies = await authWindow?.webContents.session.cookies.get({
-            url: ONLYSAID_API_URL
+            url: ONLYSAID_DOMAIN
           });
 
           const sessionCookie = cookies?.find(cookie =>
@@ -270,7 +271,8 @@ function setupAuthHandlers() {
     };
 
     // Load the Next.js auth page
-    authWindow.loadURL(ONLYSAID_API_URL + '/zh-HK/signin');
+    console.log('Loading auth page:', ONLYSAID_DOMAIN + '/zh-HK/signin');
+    authWindow.loadURL(ONLYSAID_DOMAIN + '/zh-HK/signin');
 
     // Watch for URL changes - simplified to just detect when we leave the signin page
     authWindow.webContents.on('did-navigate', async (_, url) => {
@@ -280,7 +282,7 @@ function setupAuthHandlers() {
       if (!url.includes('/signin') && !authCompleted) {
         // Check for session cookie
         const cookies = await authWindow?.webContents.session.cookies.get({
-          url: ONLYSAID_API_URL
+          url: ONLYSAID_DOMAIN
         });
 
         const sessionCookie = cookies?.find(cookie =>

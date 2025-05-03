@@ -8,15 +8,15 @@ interface ChatHeaderProps {
 function ChatHeader({ selectedGroup, selectedTopic }: ChatHeaderProps) {
   return (
     <Box sx={{
-      px: 3,
-      py: 0.5,
-      minHeight: 36,
+      px: 2,
+      py: 1.5,
+      height: "auto", // TODO: replace with static design system
       borderBottom: 1,
       borderColor: "divider",
       display: "flex",
       alignItems: "center"
     }}>
-      <Typography variant="h6" sx={{ fontWeight: 700, fontSize: "1.1rem" }}>
+      <Typography variant="subtitle1" sx={{ fontWeight: 500 }}>
         {selectedGroup && selectedTopic
           ? `# ${selectedGroup} / ${selectedTopic}`
           : "# NULL"}

@@ -11,6 +11,7 @@ import {
 import { useState } from "react";
 import { useTopicStore, TopicContext } from "../../stores/Topic/TopicStore";
 import { useWindowStore } from "../../stores/Topic/WindowStore";
+import { FormattedMessage } from "react-intl";
 
 interface AddTeamDialogProps {
   open: boolean;
@@ -59,14 +60,16 @@ function AddTeamDialog({ open, onClose }: AddTeamDialogProps) {
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
-      <DialogTitle>Create New Team</DialogTitle>
+      <DialogTitle>
+        <FormattedMessage id="team.create.title" />
+      </DialogTitle>
       <DialogContent>
         <Box sx={{ mt: 1 }}>
           <TextField
             autoFocus
             label="Team Name"
             fullWidth
-            value={teamName}
+            value={<FormattedMessage id="team.create.name" />}
             onChange={(e) => {
               setTeamName(e.target.value);
               setError("");
@@ -76,14 +79,16 @@ function AddTeamDialog({ open, onClose }: AddTeamDialogProps) {
             sx={{ mb: 2 }}
           />
           <Typography variant="body2" color="text.secondary">
-            Creating a new team will allow you to collaborate with others in a shared workspace.
+            <FormattedMessage id="team.create.description" />
           </Typography>
         </Box>
       </DialogContent>
       <DialogActions>
-        <Button onClick={handleCancel}>Cancel</Button>
+        <Button onClick={handleCancel}>
+          <FormattedMessage id="common.close" />
+        </Button>
         <Button onClick={handleCreateTeam} variant="contained" color="primary">
-          Create Team
+          <FormattedMessage id="common.create" />
         </Button>
       </DialogActions>
     </Dialog>

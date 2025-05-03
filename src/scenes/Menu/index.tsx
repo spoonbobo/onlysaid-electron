@@ -1,11 +1,11 @@
-import { Box, Typography } from "@mui/material";
+import { Box } from "@mui/material";
 import Chatroom from "./Chatroom";
 import UserSettings from "./Settings/UserSettings";
-import { useIntl } from "../../providers/IntlProvider";
-import { useTopicStore } from "../../stores/Topic/TopicStore";
-import { useCurrentTopicContext } from "../../stores/Topic/TopicStore";
-import { FormattedMessage } from "react-intl";
+import { useIntl } from "@/providers/IntlProvider";
+import { useTopicStore } from "@/stores/Topic/TopicStore";
 import HomeMenu from "./Home";
+import FileExplorer from "./FileExplorer/FileExplorer";
+import MenuHeader from "./MenuHeader/MenuHeader";
 
 const menuComponentMap: Record<string, React.ReactNode> = {
   team: <Chatroom />,
@@ -13,26 +13,26 @@ const menuComponentMap: Record<string, React.ReactNode> = {
   home: <HomeMenu />
 };
 
+// Define minimum height for the content area above the file explorer
+const MIN_CONTENT_HEIGHT = 50; // px
+
 function Menu() {
-  const intl = useIntl();
   const selectedContext = useTopicStore((state) => state.selectedContext);
   const selectedContextType = selectedContext?.type || "";
-  console.log(selectedContext?.name);
 
   const ContentComponent = menuComponentMap[selectedContextType] || (
     <Box p={2}>Select a menu item</Box>
   );
 
   return (
-    <Box sx={{ height: "100%", display: "flex", flexDirection: "column" }}>
-      <Box sx={{ px: 2, py: 1, borderBottom: 1, borderColor: "divider" }}>
-        <Typography variant="subtitle1" sx={{ fontWeight: 500 }}>
-          <FormattedMessage id={`menu.${selectedContext?.name}`} />
-        </Typography>
+    <Box id="menu-container" sx={{ height: "100%", display: "flex", flexDirection: "column" }}>
+      <Box id="menu-header-wrapper">
+        <MenuHeader />
       </Box>
-      <Box sx={{ flex: 1, overflow: "auto" }}>
+      <Box sx={{ flex: 1, overflow: "auto", minHeight: `${MIN_CONTENT_HEIGHT}px` }}>
         {ContentComponent}
       </Box>
+      <FileExplorer minContentHeightAbove={MIN_CONTENT_HEIGHT} />
     </Box>
   );
 }
