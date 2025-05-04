@@ -1,21 +1,21 @@
 import { TextField, Switch, Button, FormControlLabel, Typography, Box } from "@mui/material";
 import { useState, useEffect, useRef } from "react";
 import { FormattedMessage, useIntl as useReactIntl } from "react-intl";
-import SettingsSection from "../../../../../components/Settings/SettingsSection";
-import SettingsFormField from "../../../../../components/Settings/SettingsFormField";
-import { useUserStore } from "../../../../../stores/User/User";
-import { useUserTokenStore } from "../../../../../stores/User/UserToken";
-import { useIntl } from "../../../../../providers/IntlProvider";
-import { useThemeStore } from "../../../../../providers/MaterialTheme";
-import authService from "../../../../../service/auth";
-import { toast } from "../../../../../utils/toast";
+import SettingsSection from "@/components/Settings/SettingsSection";
+import SettingsFormField from "@/components/Settings/SettingsFormField";
+import { useUserStore } from "@/stores/User/User";
+import { useUserTokenStore } from "@/stores/User/UserToken";
+import { useIntl } from "@/providers/IntlProvider";
+import { useThemeStore } from "@/providers/MaterialTheme";
+import authService from "@/service/auth";
+import { toast } from "@/utils/toast";
 
 function UserPreferences() {
   const { locale, setLocale, availableLocales } = useIntl();
   const intl = useReactIntl();
   const user = useUserStore(state => state.user);
   const setUser = useUserStore(state => state.setUser);
-  const { setToken, clearToken, setSigningIn, setSignInError } = useUserTokenStore();
+  const { setToken, clearToken, setSigningIn, setSignInError, getToken } = useUserTokenStore();
   const { mode, setMode } = useThemeStore();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
@@ -60,6 +60,7 @@ function UserPreferences() {
           if (response.token && response.cookieName) {
             setToken(response.token, response.cookieName);
             console.log('Token set:', response.token, response.cookieName);
+            console.log('Token:', getToken());
           }
 
           // We should have userData directly from the main process now

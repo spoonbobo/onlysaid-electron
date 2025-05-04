@@ -6,6 +6,7 @@ interface UserTokenStore {
   cookieName: string | null;
   isSigningIn: boolean;
   signInError: string | null;
+  getToken: () => string | null;
   setToken: (token: string | null, cookieName: string | null) => void;
   clearToken: () => void;
   setSigningIn: (isSigningIn: boolean) => void;
@@ -14,11 +15,12 @@ interface UserTokenStore {
 
 export const useUserTokenStore = create<UserTokenStore>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       token: null,
       cookieName: null,
       isSigningIn: false,
       signInError: null,
+      getToken: () => get().token,
       setToken: (token, cookieName) => set({
         token,
         cookieName,

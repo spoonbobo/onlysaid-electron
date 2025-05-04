@@ -10,7 +10,7 @@ type MiscChannels = 'ipc-example';
 type DbChannels = 'db:initialize' | 'db:query' | 'db:transaction' | 'db:close';
 
 
-type ApiChatroomChannels = 'api:chatroom:get';
+type ApiChatroomChannels = 'api:chatroom:get' | 'api:chatroom:create' | 'api:chatroom:update' | 'api:chatroom:delete';
 type ApiChannels = ApiChatroomChannels;
 
 export type Channels =
@@ -53,6 +53,9 @@ const electronHandler = {
   },
   chatroom: {
     get: (...args: unknown[]) => ipcRenderer.invoke('chatroom:get', ...args),
+    create: (...args: unknown[]) => ipcRenderer.invoke('chatroom:create', ...args),
+    update: (...args: unknown[]) => ipcRenderer.invoke('chatroom:update', ...args),
+    delete: (...args: unknown[]) => ipcRenderer.invoke('chatroom:delete', ...args),
   },
   window: {
     createTab: (...args: unknown[]) => ipcRenderer.invoke('window:create-tab', ...args),

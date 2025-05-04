@@ -74,7 +74,6 @@ export const useWindowStore = create<WindowStore>()(
       activeTabId: null,
 
       addTab: (context) => {
-        console.log("Adding tab with context:", context);
 
         // Ensure we have a valid context
         const validContext = ensureValidContext(context);
@@ -97,7 +96,6 @@ export const useWindowStore = create<WindowStore>()(
             ],
             activeTabId: newTab.id,
           };
-          console.log("New state after adding tab:", newState);
           return newState;
         });
 
@@ -113,7 +111,6 @@ export const useWindowStore = create<WindowStore>()(
       },
 
       closeTab: (tabId) => {
-        console.log("Closing tab:", tabId);
         set((state) => {
           const tabIndex = state.tabs.findIndex(tab => tab.id === tabId);
           if (tabIndex === -1) {
@@ -146,13 +143,11 @@ export const useWindowStore = create<WindowStore>()(
             tabs: newTabs,
             activeTabId: newActiveTabId
           };
-          console.log("New state after closing tab:", newState);
           return newState;
         });
       },
 
       setActiveTab: (tabId) => {
-        console.log("Setting active tab:", tabId);
         set((state) => {
           const targetTab = state.tabs.find(tab => tab.id === tabId);
           if (!targetTab) {
@@ -160,7 +155,6 @@ export const useWindowStore = create<WindowStore>()(
             return state;
           }
 
-          console.log("Target tab context:", targetTab.context);
 
           // Send IPC message to focus tab window
           if (window.electron) {
@@ -176,14 +170,12 @@ export const useWindowStore = create<WindowStore>()(
             })),
             activeTabId: tabId
           };
-          console.log("New state after activating tab:", newState);
           return newState;
         });
       },
 
       // Updates the context of the active tab when navigation occurs
       updateActiveTabContext: (newContext) => {
-        console.log("Updating active tab context to:", newContext);
 
         set((state) => {
           const { activeTabId, tabs } = state;
@@ -212,13 +204,11 @@ export const useWindowStore = create<WindowStore>()(
             tabs: updatedTabs
           };
 
-          console.log("Updated tab state after context change:", newState);
           return newState;
         });
       },
 
       renameTab: (tabId, newTitle) => {
-        console.log("Renaming tab:", tabId, "to:", newTitle);
         set((state) => {
           if (!state.tabs.some(tab => tab.id === tabId)) {
             console.warn("Attempted to rename non-existent tab:", tabId);
@@ -238,22 +228,17 @@ export const useWindowStore = create<WindowStore>()(
               tab.id === tabId ? { ...tab, title: newTitle } : tab
             )
           };
-          console.log("New state after renaming tab:", newState);
           return newState;
         });
       },
 
       // Utility to repair store if it's corrupted
       repairStore: () => {
-        console.log("Repairing window store");
-
         set((state) => {
           // Filter out invalid tabs
           const validTabs = Array.isArray(state.tabs)
             ? state.tabs.filter(tab => isValidTab(tab))
             : [];
-
-          console.log(`Found ${validTabs.length} valid tabs out of ${Array.isArray(state.tabs) ? state.tabs.length : 0}`);
 
           // Make sure we have an active tab
           let newActiveTabId = state.activeTabId;
@@ -285,7 +270,6 @@ export const useWindowStore = create<WindowStore>()(
 
       // Completely reset the store to its initial state
       resetStore: () => {
-        console.log("Resetting window store to initial state");
 
         // Clear any IPC-related resources if needed
         const tabs = get().tabs;
@@ -305,7 +289,6 @@ export const useWindowStore = create<WindowStore>()(
         // Try to also clear localStorage directly if there's a persistent issue
         try {
           localStorage.removeItem("window-tabs-storage");
-          console.log("Successfully cleared localStorage for window tabs");
         } catch (error) {
           console.error("Failed to clear localStorage", error);
         }
@@ -316,7 +299,6 @@ export const useWindowStore = create<WindowStore>()(
       storage: createJSONStorage(() => localStorage),
       version: 1,
       onRehydrateStorage: () => (state) => {
-        console.log("Rehydrated window store state:", state);
 
         // Check if state is valid
         if (!state || !Array.isArray(state.tabs)) {
