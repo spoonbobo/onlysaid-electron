@@ -5,20 +5,12 @@ import ExpandLess from "@mui/icons-material/ExpandLess";
 import ExpandMore from "@mui/icons-material/ExpandMore";
 import { useEffect } from "react";
 import { FormattedMessage } from "react-intl";
-import { useCurrentTopicContext } from "@/stores/Topic/TopicStore";
 import MenuSection from "@/components/Navigation/MenuSection";
 import MenuListItem from "@/components/Navigation/MenuListItem";
 import MenuCollapsibleSection from "@/components/Navigation/MenuCollapsibleSection";
-
-// Define the home subcategories
-export const HomeSubcategories = {
-  AllFriends: "allFriends",
-  OnlineFriends: "onlineFriends",
-  FavoriteFriends: "favoriteFriends",
-  AllAgents: "allAgents",
-  CustomAgents: "customAgents",
-  FavoriteAgents: "favoriteAgents",
-} as const;
+import { useChatStore } from "@/stores/Chat/chatStore";
+import { useUserStore } from "@/stores/User/UserStore";
+import { useCurrentTopicContext } from "@/stores/Topic/TopicStore";
 
 // Define the section names
 type SectionName = 'Friends' | 'Agents';
@@ -29,10 +21,11 @@ export default function HomeMenu() {
     setSelectedTopic,
     selectedContext,
     expandedGroups,
-    setGroupExpanded
+    setGroupExpanded,
   } = useCurrentTopicContext();
+  const { getChat } = useChatStore();
+  const user = useUserStore((state) => state.user);
 
-  // Initialize default expanded groups if not set
   useEffect(() => {
     if (selectedContext && (!expandedGroups || Object.keys(expandedGroups).length === 0)) {
       setGroupExpanded('Friends', true);
@@ -40,14 +33,13 @@ export default function HomeMenu() {
     }
   }, [selectedContext, expandedGroups]);
 
-  const selectedSubcategory = selectedTopics['home'] || HomeSubcategories.AllFriends;
-
-  // Set the selected subcategory
-  const setSelectedSubcategory = (subcategory: string) => {
-    if (selectedContext) {
-      setSelectedTopic('home', subcategory);
+  useEffect(() => {
+    if (user?.id) {
+      getChat(user.id, 'agent');
     }
-  };
+  }, [user?.id]);
+
+  const selectedSubcategory = selectedTopics['Agents'] || '';
 
   // Use the store to toggle section expansion
   const toggleSection = (section: SectionName) => {
@@ -97,7 +89,25 @@ export default function HomeMenu() {
           />
 
           <MenuCollapsibleSection isOpen={isSectionExpanded("Agents")}>
-            <></>
+            {useChatStore((state) => state.rooms)
+              .filter(room => room.type === 'agent')
+              .map((chat) => (
+                <MenuListItem
+                  key={chat.id}
+                  label={chat.name}
+                  isSelected={selectedSubcategory === chat.id}
+                  onClick={() => {
+                    setSelectedTopic('Agents', chat.id);
+                    useChatStore.getState().setActiveChat(chat.id);
+                  }}
+                  sx={{ pl: 4 }}
+                />
+              ))}
+            {useChatStore((state) => state.rooms).filter(room => room.type === 'agent').length === 0 && (
+              <Box sx={{ pl: 4, py: 1, color: 'text.secondary', fontSize: '0.875rem' }}>
+                <FormattedMessage id="home.noAgents" defaultMessage="No agents found" />
+              </Box>
+            )}
           </MenuCollapsibleSection>
         </Box>
       </MenuSection>

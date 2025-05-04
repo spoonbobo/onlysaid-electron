@@ -1,7 +1,6 @@
 import { Box } from "@mui/material";
 import Menu from "../Menu";
 import Main from "../Main";
-import Tabs from "../Tabs";
 import SidebarTabs from "../SidebarTabs";
 import { useLayoutResize } from "../../stores/Layout/LayoutResize";
 import { useWindowStore } from "../../stores/Topic/WindowStore";
@@ -9,6 +8,7 @@ import { useTopicStore } from "../../stores/Topic/TopicStore";
 import { useRef, useEffect } from "react";
 import UserInfoBar from "./UserInfoBar";
 import LevelUp from "./LevelUp";
+import Pane from "../Pane/index";
 
 function MainInterface() {
   const { menuWidth, setMenuWidth } = useLayoutResize();
@@ -128,9 +128,6 @@ function MainInterface() {
         overflow: "hidden",
       }}
     >
-      {/* Horizontal tab bar at the top */}
-      <Tabs />
-
       {/* Main Content Area */}
       <Box
         sx={{
@@ -201,9 +198,9 @@ function MainInterface() {
         {/* Remove the separate Box for the drag handle */}
 
         <Box sx={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-          <Box sx={{ flex: 1, overflow: "auto" }}>
+          <Pane>
             <Main />
-          </Box>
+          </Pane>
           <LevelUp />
         </Box>
       </Box>

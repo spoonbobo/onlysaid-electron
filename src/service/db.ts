@@ -8,36 +8,21 @@ let dbPath: string;
 
 // Make sure this is only run in the main process
 if (process.type === 'browser') {
-  // For production, use the app's user data directory
-  const userDataPath = app.getPath('userData');
-  console.log('User data path:', userDataPath);
+  // Custom database location
+  const customDBPath = path.join(app.getPath('userData'), 'onlysaid-data');
+  // Or use home directory
+  // const customDBPath = path.join(require('os').homedir(), 'onlysaid-data');
 
-  const dbDirectory = path.join(userDataPath, 'databases');
+  console.log('Custom data path:', customDBPath);
+
+  const dbDirectory = path.join(customDBPath, 'databases');
   console.log('Database directory path:', dbDirectory);
-
-  // Ensure the directory exists with better error handling
-  try {
-    if (!fs.existsSync(dbDirectory)) {
-      console.log('Creating database directory...');
-      fs.mkdirSync(dbDirectory, { recursive: true });
-      console.log('Database directory created successfully');
-    } else {
-      console.log('Database directory already exists');
-    }
-
-    // Verify the directory was created correctly
-    if (!fs.existsSync(dbDirectory)) {
-      console.error('Failed to create database directory even after mkdirSync');
-    }
-  } catch (error) {
-    console.error('Error creating database directory:', error);
-  }
 
   dbPath = path.join(dbDirectory, 'onlysaid.db');
   console.log('Full database path:', dbPath);
 } else {
-  // For renderer process or testing, use a placeholder
-  // This will be replaced by the IPC handler
+  // Use in-memory database if not in the main process (e.g., renderer tests)
+  console.log('Using in-memory database because process.type is not "browser"');
   dbPath = ':memory:';
 }
 
@@ -53,12 +38,14 @@ export const initializeDatabase = (): Database.Database => {
     try {
       console.log(`Attempting to initialize database at: ${dbPath}`);
 
-      // Check if the database directory exists before opening the connection
+      // Ensure the database directory exists right before opening the connection
       const dbDir = path.dirname(dbPath);
-      if (!fs.existsSync(dbDir)) {
-        console.error(`Database directory does not exist: ${dbDir}`);
+      if (dbPath !== ':memory:' && !fs.existsSync(dbDir)) {
+        console.log(`Database directory does not exist: ${dbDir}`);
         console.log('Creating it now...');
+        // Use recursive: true to create parent directories if needed
         fs.mkdirSync(dbDir, { recursive: true });
+        console.log('Database directory created.');
       }
 
       // Open the database with WAL mode for better concurrency
@@ -76,6 +63,10 @@ export const initializeDatabase = (): Database.Database => {
       // Enable foreign keys
       dbInstance.pragma('foreign_keys = ON');
 
+      // Make WAL mode more durable by increasing checkpoint frequency
+      dbInstance.pragma('synchronous = NORMAL'); // or FULL for more durability
+      dbInstance.pragma('wal_autocheckpoint = 1000'); // Checkpoint after 1000 pages (default is 1000)
+
       console.log(`Database successfully initialized at: ${dbPath}`);
     } catch (error) {
       console.error('Failed to initialize database:', error);
@@ -92,8 +83,26 @@ export const initializeDatabase = (): Database.Database => {
  */
 export const closeDatabase = (): void => {
   if (dbInstance) {
-    dbInstance.close();
-    dbInstance = null;
+    console.log('Closing database connection...');
+
+    try {
+      // Force a complete checkpoint to ensure all WAL data is written to the main DB file
+      const result = dbInstance.pragma('wal_checkpoint(FULL)');
+      console.log('Checkpoint result:', result);
+
+      // Add a brief delay to ensure checkpoint completes
+      const start = Date.now();
+      while (Date.now() - start < 100) {
+        // Small busy wait to give SQLite time to complete the checkpoint
+      }
+
+      // Close the connection
+      dbInstance.close();
+      dbInstance = null;
+      console.log('Database connection closed successfully.');
+    } catch (error) {
+      console.error('Error during database close:', error);
+    }
   }
 };
 
@@ -108,16 +117,27 @@ export const executeQuery = <T = any>(
   params: Record<string, any> = {}
 ): T[] => {
   if (!dbInstance) {
-    throw new Error('Database not initialized');
+    // It's better to initialize if not already initialized,
+    // though in the main process flow, it should be.
+    initializeDatabase();
+    if (!dbInstance) { // Check again after trying to initialize
+      throw new Error('Database not initialized and failed to initialize.');
+    }
   }
 
   try {
     const statement = dbInstance.prepare(query);
 
-    if (query.trim().toLowerCase().startsWith('select')) {
+    // Distinguish between read and write queries based on keywords
+    const lowerQuery = query.trim().toLowerCase();
+    if (lowerQuery.startsWith('select') || lowerQuery.startsWith('pragma')) {
+      // Use .all() for select queries to get multiple rows
       return statement.all(params) as T[];
     } else {
-      return [statement.run(params)] as T[];
+      // Use .run() for insert, update, delete, etc., which returns run info
+      // Wrap the run info in an array to match the expected return type T[]
+      const runInfo = statement.run(params);
+      return [runInfo] as T[];
     }
   } catch (error) {
     console.error('Error executing query:', query, params, error);
@@ -134,11 +154,22 @@ export const executeTransaction = <T>(
   callback: (db: Database.Database) => T
 ): T => {
   if (!dbInstance) {
-    throw new Error('Database not initialized');
+    // Initialize if needed
+    initializeDatabase();
+    if (!dbInstance) { // Check again
+      throw new Error('Database not initialized and failed to initialize for transaction.');
+    }
   }
 
-  const transaction = dbInstance.transaction(callback);
-  return transaction(dbInstance);
+  // Ensure dbInstance is not null before proceeding
+  const currentDbInstance = dbInstance;
+  if (!currentDbInstance) {
+    throw new Error('Database instance is null even after initialization check.');
+  }
+
+
+  const transaction = currentDbInstance.transaction(callback);
+  return transaction(currentDbInstance); // Pass the non-null instance
 };
 
 /**
@@ -147,14 +178,24 @@ export const executeTransaction = <T>(
  */
 export const runMigrations = (migrations: string[]): void => {
   if (!dbInstance) {
-    throw new Error('Database not initialized');
+    // Initialize if needed, although it should be called after initializeDatabase in main.ts
+    initializeDatabase();
+    if (!dbInstance) { // Check again
+      throw new Error('Database not initialized and failed to initialize for migrations.');
+    }
   }
 
   executeTransaction((db) => {
     migrations.forEach(migration => {
-      db.exec(migration);
+      try {
+        db.exec(migration);
+      } catch (error) {
+        console.error(`Error executing migration: ${migration}`, error);
+        // Decide if you want to stop all migrations on error or continue
+        // throw error; // Uncomment to stop on first error
+      }
     });
   });
 
-  console.log('Database migrations completed successfully');
+  console.log('Database migrations completed.'); // Simplified log
 };

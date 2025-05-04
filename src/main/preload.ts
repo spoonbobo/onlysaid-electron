@@ -10,8 +10,9 @@ type MiscChannels = 'ipc-example';
 type DbChannels = 'db:initialize' | 'db:query' | 'db:transaction' | 'db:close';
 
 
-type ApiChatroomChannels = 'api:chatroom:get' | 'api:chatroom:create' | 'api:chatroom:update' | 'api:chatroom:delete';
-type ApiChannels = ApiChatroomChannels;
+type ApiChatChannels = 'chat:get' | 'chat:create' | 'chat:update' | 'chat:delete';
+type ApiUserChannels = 'user:get';
+type ApiChannels = ApiChatChannels | ApiUserChannels;
 
 export type Channels =
   | AuthChannels
@@ -51,11 +52,14 @@ const electronHandler = {
     transaction: (...args: unknown[]) => ipcRenderer.invoke('db:transaction', ...args),
     close: (...args: unknown[]) => ipcRenderer.invoke('db:close', ...args),
   },
-  chatroom: {
-    get: (...args: unknown[]) => ipcRenderer.invoke('chatroom:get', ...args),
-    create: (...args: unknown[]) => ipcRenderer.invoke('chatroom:create', ...args),
-    update: (...args: unknown[]) => ipcRenderer.invoke('chatroom:update', ...args),
-    delete: (...args: unknown[]) => ipcRenderer.invoke('chatroom:delete', ...args),
+  user: {
+    get: (...args: unknown[]) => ipcRenderer.invoke('user:get', ...args),
+  },
+  chat: {
+    get: (...args: unknown[]) => ipcRenderer.invoke('chat:get', ...args),
+    create: (...args: unknown[]) => ipcRenderer.invoke('chat:create', ...args),
+    update: (...args: unknown[]) => ipcRenderer.invoke('chat:update', ...args),
+    delete: (...args: unknown[]) => ipcRenderer.invoke('chat:delete', ...args),
   },
   window: {
     createTab: (...args: unknown[]) => ipcRenderer.invoke('window:create-tab', ...args),
@@ -71,6 +75,10 @@ const electronHandler = {
   api: {
     getUrl: () => ipcRenderer.invoke('api:get-url'),
   },
+  fileSystem: {
+    openFolderDialog: () => ipcRenderer.invoke('folder:open-dialog'),
+    getFolderContents: (folderPath: string) => ipcRenderer.invoke('folder:get-contents', folderPath)
+  }
 };
 
 contextBridge.exposeInMainWorld('electron', electronHandler);

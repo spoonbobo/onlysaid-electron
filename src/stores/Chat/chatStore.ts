@@ -2,10 +2,9 @@ import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 import { IChatMessage } from "@/models/Chat/Message";
 import { IChatRoom } from "@/models/Chat/Chatroom";
-import { getUserTokenFromStore } from "@/utils/user";
-
+import { getUserTokenFromStore, getUserFromStore } from "@/utils/user";
+import { v4 as uuidv4 } from 'uuid';
 interface ChatState {
-  // State
   activeRoomId: string | null;
   messages: Record<string, IChatMessage[]>;
   rooms: IChatRoom[];
@@ -13,25 +12,37 @@ interface ChatState {
   isLoading: boolean;
   error: string | null;
 
-  // Actions
-  setActiveRoom: (roomId: string) => void;
-  createNewChat: (users: string[]) => Promise<string>;
-  createChatroom: () => Promise<void>;
-  updateChatroom: (roomId: string, data: Partial<IChatRoom>) => Promise<void>;
-  sendMessage: (roomId: string, content: string) => Promise<void>;
+  // chat
+  createChat: (userId: string, type: string) => Promise<void>;
+  getChat: (userId: string, type: string) => Promise<void>;
+  updateChat: (roomId: string, data: Partial<IChatRoom>) => Promise<void>;
+  setActiveChat: (roomId: string) => void;
+  markAsRead: (roomId: string) => void;
+
+  // message
+  sendMessage: (roomId: string, messageData: Partial<IChatMessage>) => Promise<string | void>;
   updateMessage: (roomId: string, messageId: string, data: Partial<IChatMessage>) => Promise<void>;
   fetchMessages: (roomId: string) => Promise<void>;
-  fetchRooms: () => Promise<void>;
-  setInput: (roomId: string, input: string) => void;
-  markAsRead: (roomId: string) => void;
   deleteMessage: (roomId: string, messageId: string) => Promise<void>;
   editMessage: (roomId: string, messageId: string, content: string) => Promise<void>;
+
+  setInput: (roomId: string, input: string) => void;
+}
+
+const NewChat = (userId: string, type: string) => {
+  return {
+    name: `New Chat`,
+    created_at: new Date().toISOString(),
+    last_updated: new Date().toISOString(),
+    unread: 0,
+    active_users: [userId],
+    type: type,
+  }
 }
 
 export const useChatStore = create<ChatState>()(
   persist(
     (set, get) => ({
-      // State
       activeRoomId: null,
       messages: {},
       rooms: [],
@@ -39,25 +50,43 @@ export const useChatStore = create<ChatState>()(
       isLoading: false,
       error: null,
 
-      // Actions
-      setActiveRoom: (roomId) => {
+      setActiveChat: (roomId) => {
         set({ activeRoomId: roomId });
-        // Mark as read when setting active room
         get().markAsRead(roomId);
       },
 
-      createChatroom: async () => {
+      createChat: async (userId: string, type: string) => {
         set({ isLoading: true, error: null });
         try {
-          const response = await window.electron.chatroom.create({
-            created_at: new Date().toISOString(),
-            last_updated: new Date().toISOString(),
-            name: 'New Chatroom',
-            unread: 0,
-            active_users: [],
-            token: getUserTokenFromStore()
+          const newChat = NewChat(userId, type);
+          const response = await window.electron.chat.create({
+            token: getUserTokenFromStore(),
+            request: newChat
           });
-          console.log(response);
+
+          await get().getChat(userId, type);
+          get().setActiveChat(response.data.data[0].id);
+
+        } catch (error: any) {
+          set({ error: error.message, isLoading: false });
+          console.error(error);
+        }
+      },
+
+      getChat: async (userId: string, type: string) => {
+        set({ isLoading: true, error: null });
+        try {
+          const response = await window.electron.chat.get({
+            token: getUserTokenFromStore(),
+            userId: userId,
+            type: type
+          });
+
+          if (response.data && response.data.data && Array.isArray(response.data.data)) {
+            set({ rooms: [...response.data.data], isLoading: false });
+          } else {
+            set({ isLoading: false });
+          }
           set({ isLoading: false });
         } catch (error: any) {
           set({ error: error.message, isLoading: false });
@@ -65,7 +94,7 @@ export const useChatStore = create<ChatState>()(
         }
       },
 
-      updateChatroom: async (roomId, data) => {
+      updateChat: async (roomId, data) => {
         set({ isLoading: true, error: null });
         try {
           // Update chatroom locally first
@@ -76,15 +105,6 @@ export const useChatStore = create<ChatState>()(
                 : room
             )
           }));
-
-          // In a real app, update on server
-          // await window.electron.chatroom.update({
-          //   roomId,
-          //   data,
-          //   token: 'token',
-          //   cookieName: 'cookieName'
-          // });
-
           set({ isLoading: false });
         } catch (error: any) {
           set({ error: error.message, isLoading: false });
@@ -93,49 +113,35 @@ export const useChatStore = create<ChatState>()(
         }
       },
 
-      createNewChat: async (users) => {
+      sendMessage: async (roomId, messageData) => {
         set({ isLoading: true, error: null });
         try {
-          // Generate a temporary ID for the room
-          const tempId = `new-room-${Date.now()}`;
-          const now = new Date().toISOString();
+          const messageId = uuidv4();
 
-          // Create a new chat room locally first for immediate UI feedback
-          set((state) => ({
-            rooms: [
-              ...state.rooms,
-              {
-                id: tempId,
-                name: users.join(", "), // Temporary name
-                created_at: now,
-                last_updated: now,
-                unread: 0,
-                active_users: users
-              }
-            ]
-          }));
+          await window.electron.db.query({
+            query: `
+            insert into messages
+            (id, room_id, sender, text, created_at)
+            values
+            (@id, @roomId, @sender, @text, @createdAt)
+            `,
+            params: {
+              id: messageId,
+              roomId,
+              sender: getUserFromStore()?.id || "",
+              text: messageData.text || "",
+              createdAt: messageData.created_at
+            }
+          });
 
-          // In a real app, you would call an API here
-          // const response = await window.electron.chatroom.create({
-          //   users,
-          //   token: 'token',
-          //   cookieName: 'cookieName'
-          // });
-
-          // if (response.error) throw new Error(response.error);
 
           set({ isLoading: false });
-          return tempId; // Eventually return the real room ID from the server
+          return messageId;
         } catch (error: any) {
           set({ error: error.message, isLoading: false });
-          console.error("Error creating new chat:", error);
+          console.error("Error sending message:", error);
           throw error;
         }
-      },
-
-      sendMessage: async (roomId, content) => {
-        console.log("Dummy sendMessage function called with:", roomId, content);
-        return;
       },
 
       updateMessage: async (roomId, messageId, data) => {
@@ -152,7 +158,7 @@ export const useChatStore = create<ChatState>()(
           }));
 
           // In a real app, update on server
-          // await window.electron.chatroom.updateMessage({
+          // await window.electron.chat.updateMessage({
           //   roomId,
           //   messageId,
           //   data,
@@ -169,13 +175,30 @@ export const useChatStore = create<ChatState>()(
       },
 
       fetchMessages: async (roomId) => {
-        console.log("Dummy fetchMessages function called with:", roomId);
-        return;
-      },
+        set({ isLoading: true, error: null });
+        try {
+          const response = await window.electron.db.query({
+            query: `
+              SELECT * FROM messages
+              WHERE room_id = @roomId
+              ORDER BY created_at ASC
+            `,
+            params: { roomId }
+          });
 
-      fetchRooms: async () => {
-        console.log("Dummy fetchRooms function called");
-        return;
+          if (response && Array.isArray(response)) {
+            set(state => ({
+              messages: {
+                ...state.messages,
+                [roomId]: response
+              },
+              isLoading: false
+            }));
+          }
+        } catch (error: any) {
+          set({ error: error.message, isLoading: false });
+          console.error("Error fetching messages:", error);
+        }
       },
 
       setInput: (roomId, input) => {

@@ -1,15 +1,13 @@
 import { ipcMain } from 'electron';
-import onlysaidServiceInstance from '../service';
-import { IChatRoom } from '@/models/Chat/Chatroom';
-import { CreateChatroomArgs } from '@/models/Chat/Chatroom';
+import onlysaidServiceInstance from './service';
+import { IChatRoom, ICreateChatArgs, IGetChatArgs } from '@/models/Chat/Chatroom';
 
 export const setupChatroomHandlers = () => {
-  ipcMain.handle('chatroom:create', async (event, args: CreateChatroomArgs) => {
+  ipcMain.handle('chat:create', async (event, args: ICreateChatArgs) => {
     try {
-      console.log("args", args);
       const response = await onlysaidServiceInstance.post<IChatRoom>(
-        '/chatroom',
-        args,
+        '/chat',
+        args.request,
         {
           headers: {
             Authorization: `Bearer ${args.token}`
@@ -26,10 +24,15 @@ export const setupChatroomHandlers = () => {
     }
   });
 
-  ipcMain.handle('chatroom:get', async (event, args) => {
+  ipcMain.handle('chat:get', async (event, args: IGetChatArgs) => {
     try {
       const response = await onlysaidServiceInstance.get<IChatRoom[]>(
-        '/chatroom?userId=1'
+        `/chat?userId=${args.userId}&type=${args.type}`,
+        {
+          headers: {
+            Authorization: `Bearer ${args.token}`
+          }
+        }
       );
 
       return { data: response.data };
@@ -42,9 +45,9 @@ export const setupChatroomHandlers = () => {
     }
   });
 
-  ipcMain.handle('chatroom:update', async (event, args) => {
+  ipcMain.handle('chat:update', async (event, args) => {
     try {
-      const response = await onlysaidServiceInstance.put<IChatRoom>(`/chatroom/${args.id}`, args);
+      const response = await onlysaidServiceInstance.put<IChatRoom>(`/chat/${args.id}`, args);
       return { data: response.data };
     } catch (error: any) {
       console.error('Error in main process API call (update_room):', error.message);
@@ -55,9 +58,9 @@ export const setupChatroomHandlers = () => {
     }
   });
 
-  ipcMain.handle('chatroom:delete', async (event, args) => {
+  ipcMain.handle('chat:delete', async (event, args) => {
     try {
-      const response = await onlysaidServiceInstance.delete<null>(`/chatroom/${args.id}`);
+      const response = await onlysaidServiceInstance.delete<null>(`/chat/${args.id}`);
       return { data: response.data };
     } catch (error: any) {
       console.error('Error in main process API call (delete_room):', error.message);
@@ -67,4 +70,5 @@ export const setupChatroomHandlers = () => {
       };
     }
   });
+
 };

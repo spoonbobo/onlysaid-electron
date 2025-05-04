@@ -9,7 +9,7 @@
  * `./src/main.js` using webpack. This gives us some performance wins.
  */
 import path from 'path';
-import { app, BrowserWindow, shell, ipcMain } from 'electron';
+import { app, BrowserWindow, shell, ipcMain, dialog } from 'electron';
 import { autoUpdater } from 'electron-updater';
 import log from 'electron-log';
 import MenuBuilder from './menu';
@@ -18,11 +18,16 @@ import { initializeDatabase, executeQuery, executeTransaction, closeDatabase, ru
 import { allMigrations } from '../service/migrations';
 import { initAuth } from './auth';
 import dotenv from 'dotenv';
-import { setupChatroomHandlers } from './api/v2/chat/chatroom';
+import { setupChatroomHandlers } from './api/v2/chat';
+import { setupUserHandlers } from './api/v2/user';
+import { setupFileSystemHandlers } from './filesystem';
 
 dotenv.config();
 
 setupChatroomHandlers();
+setupUserHandlers();
+setupFileSystemHandlers();
+
 initAuth(process.env.ONLYSAID_API_URL || '', process.env.ONLYSAID_DOMAIN || '');
 
 class AppUpdater {
@@ -104,7 +109,7 @@ ipcMain.on('window:rename-tab', (event, { tabId, title }) => {
 // Add these IPC handlers before app.whenReady()
 ipcMain.handle('db:initialize', async () => {
   try {
-    const db = initializeDatabase();
+    initializeDatabase();
 
     // Run migrations from the migrations file
     runMigrations(allMigrations);
@@ -119,6 +124,7 @@ ipcMain.handle('db:initialize', async () => {
 
 ipcMain.handle('db:query', async (_event, { query, params }) => {
   try {
+    console.log('Executing query:', query, params);
     return executeQuery(query, params);
   } catch (error) {
     console.error('Error executing query:', error);
@@ -261,6 +267,13 @@ app
   .catch(console.log);
 
 // Make sure to close the database when the app is quitting
-app.on('will-quit', () => {
-  closeDatabase();
+app.on('will-quit', (event) => {
+  try {
+    console.log('App is quitting, ensuring database is properly closed...');
+    // Just call closeDatabase() which already handles the checkpoint internally
+    closeDatabase();
+    console.log('Database closed successfully on app exit');
+  } catch (error) {
+    console.error('Error during database close on app exit:', error);
+  }
 });

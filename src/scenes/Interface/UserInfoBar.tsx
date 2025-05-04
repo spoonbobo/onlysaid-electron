@@ -1,6 +1,6 @@
 import { Box, Avatar, Typography, IconButton } from "@mui/material";
 import SettingsIcon from "@mui/icons-material/Settings";
-import { useUserStore } from "@/stores/User/User";
+import { useUserStore } from "@/stores/User/UserStore";
 import { IUser } from "@/models/User/UserInfo";
 import { useTopicStore } from "@/stores/Topic/TopicStore";
 import { useWindowStore } from "@/stores/Topic/WindowStore";
@@ -13,7 +13,7 @@ export default function UserInfoBar() {
   const setSelectedContext = useTopicStore((state) => state.setSelectedContext);
   const updateActiveTabContext = useWindowStore((state) => state.updateActiveTabContext);
 
-  const displayName = user?.name || "Guest";
+  const displayName = user?.username || "Guest";
   const status = user === null ? "offline" : "online";
   const avatar = user?.avatar || "";
   const isOffline = status === "offline";

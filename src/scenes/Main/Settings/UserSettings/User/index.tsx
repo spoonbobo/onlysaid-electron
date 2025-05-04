@@ -1,31 +1,29 @@
 import { TextField, Switch, Button, FormControlLabel, Typography, Box } from "@mui/material";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { FormattedMessage, useIntl as useReactIntl } from "react-intl";
 import SettingsSection from "@/components/Settings/SettingsSection";
 import SettingsFormField from "@/components/Settings/SettingsFormField";
-import { useUserStore } from "@/stores/User/User";
+import { useUserStore } from "@/stores/User/UserStore";
 import { useUserTokenStore } from "@/stores/User/UserToken";
 import { useIntl } from "@/providers/IntlProvider";
 import { useThemeStore } from "@/providers/MaterialTheme";
-import authService from "@/service/auth";
 import { toast } from "@/utils/toast";
 
 function UserPreferences() {
-  const { locale, setLocale, availableLocales } = useIntl();
+  const { locale, setLocale } = useIntl();
   const intl = useReactIntl();
   const user = useUserStore(state => state.user);
-  const setUser = useUserStore(state => state.setUser);
-  const { setToken, clearToken, setSigningIn, setSignInError, getToken } = useUserTokenStore();
+  const isLoading = useUserStore(state => state.isLoading);
+  const error = useUserStore(state => state.error);
+  const signIn = useUserStore(state => state.signIn);
+  const logout = useUserStore(state => state.logout);
+  const handleAuthResponse = useUserStore(state => state.handleAuthResponse);
+  const clearAuthTimeout = useUserStore(state => state.clearAuthTimeout);
   const { mode, setMode } = useThemeStore();
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState('');
   const [preferences, setPreferences] = useState({
     darkMode: mode === 'dark',
     language: locale
   });
-
-  // Use a ref for the timeout to avoid hook dependency issues
-  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     // Update language preference when locale changes
@@ -46,102 +44,23 @@ function UserPreferences() {
   useEffect(() => {
     // Set up the listener for auth responses
     const removeListener = window.electron.ipcRenderer.on('auth:signed-in', async (response: any) => {
-      setSigningIn(false);
-
-      // Clear timeout if it exists
-      if (timeoutRef.current) {
-        clearTimeout(timeoutRef.current);
-        timeoutRef.current = null;
-      }
-
-      if (response.success) {
-        try {
-          // Store token in UserTokenStore
-          if (response.token && response.cookieName) {
-            setToken(response.token, response.cookieName);
-            console.log('Token set:', response.token, response.cookieName);
-            console.log('Token:', getToken());
-          }
-
-          // We should have userData directly from the main process now
-          if (response.userData) {
-            const userData = authService.createUserFromData(response.userData);
-            console.log('User data:', userData);
-
-            if (userData) {
-              // Store user data in Zustand store
-              setUser(userData);
-              setError('');
-              setSignInError(null);
-              // Show success toast
-              toast.success(intl.formatMessage(
-                { id: 'toast.welcome' },
-                { name: userData.name }
-              ));
-            } else {
-              const errorMsg = 'Could not create user from provided data';
-              setError(errorMsg);
-              setSignInError(errorMsg);
-              toast.error(errorMsg);
-            }
-          } else {
-            const errorMsg = 'No user data received from authentication';
-            setError(errorMsg);
-            setSignInError(errorMsg);
-            toast.error(errorMsg);
-          }
-        } catch (error) {
-          console.error('Error processing user data:', error);
-          const errorMsg = 'Failed to process user data';
-          setError(errorMsg);
-          setSignInError(errorMsg);
-          toast.error(errorMsg);
-        } finally {
-          setIsLoading(false);
-        }
-      } else {
-        setIsLoading(false);
-        const errorMsg = response.error || 'Authentication failed';
-        setError(errorMsg);
-        setSignInError(errorMsg);
-        toast.error(errorMsg);
-      }
+      handleAuthResponse(response, intl);
     });
 
     // Clean up listener when component unmounts
     return () => {
       if (removeListener) removeListener();
-      if (timeoutRef.current) {
-        clearTimeout(timeoutRef.current);
-      }
+      clearAuthTimeout();
     };
-  }, [setUser, setToken, setSignInError, intl]);
+  }, [handleAuthResponse, intl, clearAuthTimeout]);
 
   const handleSignIn = () => {
-    setIsLoading(true);
-    setError('');
-    setSignInError(null);
-    setSigningIn(true);
+    signIn();
     toast.info(intl.formatMessage({ id: 'toast.signingIn' }));
-
-    // Send authentication request to the main process
-    window.electron.ipcRenderer.sendMessage('auth:sign-in');
-
-    // Set a timeout to handle cases where no response comes back
-    // Store the timeout ID in the ref
-    timeoutRef.current = setTimeout(() => {
-      setIsLoading(false);
-      setSigningIn(false);
-      const errorMsg = 'Authentication timed out. Please try again.';
-      setError(errorMsg);
-      setSignInError(errorMsg);
-      toast.warning(intl.formatMessage({ id: 'toast.authTimeout' }));
-    }, 60000); // 1 minute timeout
   };
 
   const handleLogout = () => {
-    setUser(null);
-    clearToken();
+    logout();
     toast.info(intl.formatMessage({ id: 'toast.loggedOut' }));
   };
 
@@ -192,7 +111,7 @@ function UserPreferences() {
                 <FormattedMessage id="settings.signedInAs" />
               </Typography>
               <Typography variant="body1" sx={{ mb: 2 }}>
-                {user.name} ({user.email})
+                {user.username} ({user.email})
               </Typography>
               <Button
                 variant="outlined"
@@ -246,7 +165,6 @@ function UserPreferences() {
             </option>
           </TextField>
         </SettingsFormField>
-
       </SettingsSection>
     </>
   );

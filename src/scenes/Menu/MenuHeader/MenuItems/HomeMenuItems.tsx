@@ -5,10 +5,10 @@ import AccountCircleIcon from "@mui/icons-material/AccountCircle";
 type HomeMenuItemsProps = {
   handleClose: () => void;
   setShowAddFriendDialog: (show: boolean) => void;
-  handleCreateChatroom: () => void;
+  handleCreateChat: () => void;
 };
 
-function HomeMenuItems({ handleClose, setShowAddFriendDialog, handleCreateChatroom }: HomeMenuItemsProps) {
+function HomeMenuItems({ handleClose, setShowAddFriendDialog, handleCreateChat }: HomeMenuItemsProps) {
   return (
     <>
       <ListSubheader sx={{ fontSize: 13, fontWeight: 700, color: "text.secondary", bgcolor: "background.paper", lineHeight: 2, px: 2 }}>
@@ -28,7 +28,7 @@ function HomeMenuItems({ handleClose, setShowAddFriendDialog, handleCreateChatro
       </ListSubheader>
       <MenuItem onClick={() => {
         handleClose();
-        handleCreateChatroom();
+        handleCreateChat();
       }} sx={{ minHeight: 36, fontSize: 14 }}>
         <AccountCircleIcon fontSize="small" sx={{ mr: 1.5, color: "text.secondary" }} />
         <FormattedMessage id="menu.home.newChat" />

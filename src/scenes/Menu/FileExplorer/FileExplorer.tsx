@@ -1,12 +1,15 @@
-import { useRef, useEffect } from "react";
-import { Box, Typography, Button } from "@mui/material";
+import { useRef, useEffect, useState } from "react";
+import { Box, Typography, Button, List, ListItem, ListItemIcon, ListItemText, CircularProgress } from "@mui/material";
 import FolderIcon from "@mui/icons-material/Folder";
+import InsertDriveFileIcon from "@mui/icons-material/InsertDriveFile";
 import ExpandLess from "@mui/icons-material/ExpandLess";
 import ExpandMore from "@mui/icons-material/ExpandMore";
 import CreateNewFolderIcon from "@mui/icons-material/CreateNewFolder";
+import FolderOpenIcon from "@mui/icons-material/FolderOpen";
 import MenuListItem from "../../../components/Navigation/MenuListItem";
 import MenuSection from "../../../components/Navigation/MenuSection";
 import { useFileExplorerStore } from "../../../stores/Layout/FileExplorerResize";
+import { useFileExplorerStore as useFilesStore, selectors } from "../../../stores/File/FileExplorerStore";
 import { FormattedMessage } from "react-intl";
 
 // Define props interface
@@ -14,8 +17,101 @@ interface FileExplorerProps {
   minContentHeightAbove: number;
 }
 
+function FileNodeItem({ node, level = 0 }: { node: any, level?: number }) {
+  const { loadFolder, toggleFolder, selectItem } = useFilesStore();
+  const isLoading = useFilesStore(selectors.selectIsNodeLoading(node.path));
+
+  const handleClick = () => {
+    if (isLoading) return;
+
+    if (node.type === 'directory') {
+      if (node.isExpanded || node.children?.length > 0) {
+        toggleFolder(node.path);
+      } else if (!node.isExpanded && !node.children) {
+        loadFolder(node.path);
+      } else if (!node.isExpanded && node.children?.length === 0) {
+        toggleFolder(node.path);
+      }
+    } else {
+      selectItem(node.path);
+    }
+  };
+
+  // Simple rendering without collapse animation
+  return (
+    <div>
+      <ListItem
+        component="div"
+        onClick={handleClick}
+        sx={{
+          pl: 2 + level * 2,
+          py: 0.5,
+          cursor: isLoading ? 'default' : 'pointer',
+          opacity: isLoading ? 0.7 : 1,
+          '&:hover': { bgcolor: isLoading ? 'transparent' : 'action.hover' },
+          height: 36,
+          minHeight: 36,
+          boxSizing: 'border-box'
+        }}
+      >
+        <ListItemIcon sx={{ minWidth: 36 }}>
+          {node.type === 'directory' ? (
+            isLoading ? (
+              <CircularProgress size={20} color="inherit" />
+            ) : node.isExpanded ? (
+              <FolderOpenIcon fontSize="small" color="primary" />
+            ) : (
+              <FolderIcon fontSize="small" color="primary" />
+            )
+          ) : (
+            <InsertDriveFileIcon fontSize="small" />
+          )}
+        </ListItemIcon>
+        <ListItemText
+          primary={node.name}
+          slotProps={{
+            primary: {
+              fontSize: '0.875rem',
+              noWrap: true,
+              sx: { lineHeight: 1.1 }
+            }
+          }}
+        />
+        {node.type === 'directory' && !isLoading && (
+          node.isExpanded ? <ExpandLess fontSize="small" /> : <ExpandMore fontSize="small" />
+        )}
+      </ListItem>
+
+      {node.type === 'directory' && node.isExpanded && node.children && (
+        node.children.length > 0 ? (
+          node.children.map((child: any) => (
+            <FileNodeItem key={child.id} node={child} level={level + 1} />
+          ))
+        ) : (
+          !isLoading && (
+            <ListItem
+              sx={{
+                pl: 4 + level * 2,
+                py: 0.5,
+                height: 36,
+                minHeight: 36,
+                boxSizing: 'border-box'
+              }}
+            >
+              <Typography variant="body2" color="text.secondary">
+                <FormattedMessage id="file.emptyFolder" defaultMessage="Empty folder" />
+              </Typography>
+            </ListItem>
+          )
+        )
+      )}
+    </div>
+  );
+}
+
 function FileExplorer({ minContentHeightAbove }: FileExplorerProps) {
   const { height, isExpanded, setHeight, setIsExpanded } = useFileExplorerStore();
+  const { rootFolders, isLoading, addRootFolder } = useFilesStore();
   const isDragging = useRef(false);
   const startY = useRef(0);
   const fileExplorerRef = useRef<HTMLDivElement>(null);
@@ -67,8 +163,6 @@ function FileExplorer({ minContentHeightAbove }: FileExplorerProps) {
     };
 
     const handleMouseUp = (e: MouseEvent) => {
-      // Prevent browser default actions on mouse up during drag
-      // Although less critical here, it's good practice for consistency
       e.preventDefault();
 
       if (isDragging.current) {
@@ -130,28 +224,63 @@ function FileExplorer({ minContentHeightAbove }: FileExplorerProps) {
                 transition: isDragging.current ? 'none' : 'height 0.2s ease',
               }}
             >
-              <Box
-                display="flex"
-                flexDirection="column"
-                alignItems="center"
-                justifyContent="center"
-                height="100%"
-                p={2}
-                textAlign="center"
-              >
-                <Typography color="text.secondary" gutterBottom>
-                  <FormattedMessage id="menu.fileExplorer.empty" defaultMessage="No folders found" />
-                </Typography>
-                <Button
-                  startIcon={<CreateNewFolderIcon />}
-                  variant="outlined"
-                  size="small"
-                  color="primary"
-                  sx={{ mt: 1 }}
+              {isLoading && (
+                <Box display="flex" justifyContent="center" p={2}>
+                  <CircularProgress size={24} />
+                </Box>
+              )}
+
+              {!isLoading && rootFolders.length === 0 ? (
+                <Box
+                  display="flex"
+                  flexDirection="column"
+                  alignItems="center"
+                  justifyContent="center"
+                  height="100%"
+                  p={2}
+                  textAlign="center"
                 >
-                  <FormattedMessage id="menu.fileExplorer.addFolder" defaultMessage="Add Folder" />
-                </Button>
-              </Box>
+                  <Typography color="text.secondary" gutterBottom>
+                    <FormattedMessage id="menu.fileExplorer.empty" defaultMessage="No folders found" />
+                  </Typography>
+                  <Button
+                    startIcon={<CreateNewFolderIcon />}
+                    variant="outlined"
+                    size="small"
+                    color="primary"
+                    sx={{ mt: 1 }}
+                    onClick={addRootFolder}
+                  >
+                    <FormattedMessage id="menu.fileExplorer.addFolder" defaultMessage="Add Folder" />
+                  </Button>
+                </Box>
+              ) : (
+                <div>
+                  {rootFolders.map(folder => (
+                    <FileNodeItem key={folder.id} node={folder} />
+                  ))}
+                  <ListItem
+                    onClick={addRootFolder}
+                    sx={{
+                      pl: 2,
+                      py: 0.5,
+                      cursor: 'pointer',
+                      height: 36,
+                      minHeight: 36
+                    }}
+                  >
+                    <ListItemIcon sx={{ minWidth: 36 }}>
+                      <CreateNewFolderIcon fontSize="small" color="primary" />
+                    </ListItemIcon>
+                    <ListItemText
+                      primary={<FormattedMessage id="menu.fileExplorer.addFolder" defaultMessage="Add Folder" />}
+                      slotProps={{
+                        primary: { fontSize: '0.875rem' }
+                      }}
+                    />
+                  </ListItem>
+                </div>
+              )}
             </Box>
           )}
         </Box>

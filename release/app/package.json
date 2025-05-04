@@ -1,12 +1,12 @@
 {
-  "name": "electron-react-boilerplate",
-  "version": "4.6.0",
-  "description": "A foundation for scalable desktop apps",
+  "name": "onlysaid",
+  "version": "1.0.0",
+  "description": "OnlySaid Electron App",
   "license": "MIT",
   "author": {
-    "name": "Electron React Boilerplate Maintainers",
-    "email": "electronreactboilerplate@gmail.com",
-    "url": "https://github.com/electron-react-boilerplate"
+    "name": "OnlySaid",
+    "email": "onlysaid@gmail.com",
+    "url": "https://github.com/onlysaid"
   },
   "main": "./dist/main/main.js",
   "scripts": {

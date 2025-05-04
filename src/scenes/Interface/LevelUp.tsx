@@ -1,7 +1,7 @@
 import { Box, LinearProgress, Tooltip, Typography } from "@mui/material";
 import { useUserLevelStore } from "../../stores/User/UserLevel";
-import { useUserStore } from "../../stores/User/User";
-import { useEffect, useState, useRef } from "react";
+import { useUserStore } from "../../stores/User/UserStore";
+import { useState, useRef } from "react";
 import { FormattedMessage } from "react-intl";
 
 function LevelUp() {
@@ -13,20 +13,6 @@ function LevelUp() {
 
   // Calculate progress percentage
   const progressPercentage = (experience / experienceToNextLevel) * 100;
-
-  // Simulate gaining experience randomly (for demo purposes)
-  useEffect(() => {
-    // Only run the interval if user is logged in
-    if (!user) return;
-
-    const interval = setInterval(() => {
-      // Randomly gain 1-5 experience points every 10 seconds
-      const gainExp = useUserLevelStore.getState().gainExperience;
-      gainExp(Math.floor(Math.random() * 5) + 1);
-    }, 10000);
-
-    return () => clearInterval(interval);
-  }, [user]);
 
   // If no user is logged in, show disabled progress bar
   if (!user) {

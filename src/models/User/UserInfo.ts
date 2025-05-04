@@ -43,7 +43,7 @@ export interface IUserSettings {
 
 export interface IUser {
   id?: string;
-  name: string;
+  username: string;
   email: string;
   active_rooms: string[];
   archived_rooms: string[];

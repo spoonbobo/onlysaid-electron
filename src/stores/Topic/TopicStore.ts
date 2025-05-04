@@ -1,31 +1,29 @@
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
-import { ITopicSelection } from "../../models/Topic/Topic";
-
 // Define the Tab/Context type
 export interface TopicContext {
   name: string;
   type: "home" | "team" | "settings";
+  section?: string;
 }
 
 interface TopicStore {
+  // Context management
   contexts: TopicContext[];
   selectedContext: TopicContext | null;
   addContext: (context: TopicContext) => void;
   removeContext: (context: TopicContext) => void;
   setSelectedContext: (context: TopicContext) => void;
 
-  // Topic selection per context
+  // Topic selection (nested approach)
   selectedTopicsByContext: Record<string, Record<string, string>>;
-  setSelectedTopic: (contextName: string, contextType: string, groupName: string, topic: string) => void;
-  clearSelectedTopic: (contextName: string, contextType: string, groupName: string) => void;
+  setSelectedTopic: (sectionName: string, topicId: string) => void;
+  clearSelectedTopic: (sectionName: string) => void;
+  getCurrentContextTopics: () => Record<string, string>;
 
-  // Group expansion per context
+  // Group expansion (per context)
   expandedGroupsByContext: Record<string, Record<string, boolean>>;
-  setGroupExpanded: (contextName: string, contextType: string, groupName: string, expanded: boolean) => void;
-
-  // Helper to get current context's selected topics and expanded groups
-  getCurrentContextTopics: () => ITopicSelection;
+  setGroupExpanded: (sectionName: string, expanded: boolean) => void;
   getCurrentContextExpandedGroups: () => Record<string, boolean>;
 }
 
@@ -64,22 +62,32 @@ export const useTopicStore = create<TopicStore>()(
       // Topic management
       selectedTopicsByContext: {},
 
-      setSelectedTopic: (contextName, contextType, groupName, topic) =>
-        set((state) => ({
-          selectedTopicsByContext: {
-            ...state.selectedTopicsByContext,
-            [`${contextName}:${contextType}`]: {
-              ...(state.selectedTopicsByContext[`${contextName}:${contextType}`] || {}),
-              [groupName]: topic,
-            },
-          },
-        })),
-
-      clearSelectedTopic: (contextName, contextType, groupName) =>
+      setSelectedTopic: (sectionName, topicId) =>
         set((state) => {
-          const contextKey = `${contextName}:${contextType}`;
-          const updatedContextTopics = { ...state.selectedTopicsByContext[contextKey] || {} };
-          delete updatedContextTopics[groupName];
+          if (!state.selectedContext) return state;
+
+          const contextKey = `${state.selectedContext.name}:${state.selectedContext.type}`;
+
+          return {
+            selectedTopicsByContext: {
+              ...state.selectedTopicsByContext,
+              [contextKey]: {
+                ...(state.selectedTopicsByContext[contextKey] || {}),
+                [sectionName]: topicId,
+              },
+            },
+          };
+        }),
+
+      clearSelectedTopic: (sectionName) =>
+        set((state) => {
+          if (!state.selectedContext) return state;
+
+          const contextKey = `${state.selectedContext.name}:${state.selectedContext.type}`;
+          const updatedContextTopics = {
+            ...state.selectedTopicsByContext[contextKey] || {}
+          };
+          delete updatedContextTopics[sectionName];
 
           return {
             selectedTopicsByContext: {
@@ -92,15 +100,15 @@ export const useTopicStore = create<TopicStore>()(
       // Group expansion management
       expandedGroupsByContext: {},
 
-      setGroupExpanded: (contextName, contextType, groupName, expanded) =>
+      setGroupExpanded: (sectionName, expanded) =>
         set((state) => {
-          const contextKey = `${contextName}:${contextType}`;
+          const contextKey = `${state.selectedContext?.name}:${state.selectedContext?.type}`;
           return {
             expandedGroupsByContext: {
               ...state.expandedGroupsByContext,
               [contextKey]: {
                 ...(state.expandedGroupsByContext[contextKey] || {}),
-                [groupName]: expanded,
+                [sectionName]: expanded,
               },
             },
           };
@@ -146,26 +154,26 @@ export const useCurrentTopicContext = () => {
     getCurrentContextExpandedGroups,
     setSelectedTopic,
     clearSelectedTopic,
-    setGroupExpanded
+    setGroupExpanded,
   } = useTopicStore();
 
   return {
     selectedContext,
     selectedTopics: getCurrentContextTopics(),
     expandedGroups: getCurrentContextExpandedGroups(),
-    setSelectedTopic: (groupName: string, topic: string) => {
+    setSelectedTopic: (groupName: string, topic: string, section?: string) => {
       if (selectedContext) {
-        setSelectedTopic(selectedContext.name, selectedContext.type, groupName, topic);
+        setSelectedTopic(groupName, topic);
       }
     },
     clearSelectedTopic: (groupName: string) => {
       if (selectedContext) {
-        clearSelectedTopic(selectedContext.name, selectedContext.type, groupName);
+        clearSelectedTopic(groupName);
       }
     },
     setGroupExpanded: (groupName: string, expanded: boolean) => {
       if (selectedContext) {
-        setGroupExpanded(selectedContext.name, selectedContext.type, groupName, expanded);
+        setGroupExpanded(groupName, expanded);
       }
     }
   };

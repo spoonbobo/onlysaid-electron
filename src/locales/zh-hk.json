@@ -12,6 +12,7 @@
   "home.allAgents": "所有代理",
   "home.customAgents": "自定義",
   "home.favoriteAgents": "最愛",
+  "home.noAgents": "沒有與代理的對話, 按『新增聊天』以開始",
 
   "app.title": "OnlySaid",
   "app.welcome": "歡迎使用 OnlySaid",
@@ -37,6 +38,7 @@
   "chat.selectRoom": "請選擇一個聊天室",
   "chat.typeMessage": "請輸入訊息...",
   "chat.trustMode": "信任模式",
+  "chat.noModelsEnabled": "沒有 AI 模型可用。請在設定中配置並驗證您的 LLM 提供者。",
 
   "team.create": "創建團隊",
   "team.create.description": "創建一個團隊，讓您可以與其他人共享工作空間。",
@@ -76,6 +78,8 @@
   "menu.home.message": "訊息",
   "menu.home.messagePlaceholder": "新增個人訊息到您的請求",
   "menu.home.messageDescription": "請輸入您想要新增的個人訊息。",
+
+  "file.emptyFolder": "這個資料夾是空的",
 
   "settings.general": "一般",
   "settings.user": "用戶",

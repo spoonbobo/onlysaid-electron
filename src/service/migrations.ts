@@ -46,7 +46,7 @@ export const featureMigrations = [
   )`,
 
   // Chat rooms table
-  `CREATE TABLE IF NOT EXISTS chat_rooms (
+  `CREATE TABLE IF NOT EXISTS chat (
     id TEXT PRIMARY KEY,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -61,12 +61,17 @@ export const featureMigrations = [
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     room_id TEXT,
     sender TEXT,
-    content TEXT NOT NULL,
     avatar TEXT,
     reactions TEXT, -- Stored as JSON string
     reply_to TEXT,
     mention TEXT, -- Stored as JSON string
-    attachment TEXT -- Stored as JSON string
+    image TEXT,
+    video TEXT,
+    audio TEXT,
+    poll TEXT,
+    contact TEXT,
+    gif TEXT,
+    text TEXT
   )`,
 
   // Notifications table
@@ -79,7 +84,7 @@ export const featureMigrations = [
   )`,
 
   // Plan table
-  `CREATE TABLE IF NOT EXISTS plan (
+  `CREATE TABLE IF NOT EXISTS plans (
     id TEXT PRIMARY KEY,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -97,7 +102,7 @@ export const featureMigrations = [
   )`,
 
   // Task table
-  `CREATE TABLE IF NOT EXISTS task (
+  `CREATE TABLE IF NOT EXISTS tasks (
     id TEXT PRIMARY KEY,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     start_time TIMESTAMP,
@@ -112,11 +117,11 @@ export const featureMigrations = [
     status TEXT,
     result TEXT,
     logs TEXT, -- Stored as JSON string
-    FOREIGN KEY (plan_id) REFERENCES plan(id)
+    FOREIGN KEY (plan_id) REFERENCES plans(id)
   )`,
 
   // Plan log table
-  `CREATE TABLE IF NOT EXISTS plan_log (
+  `CREATE TABLE IF NOT EXISTS logs (
     id TEXT PRIMARY KEY,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     type TEXT,
@@ -127,7 +132,7 @@ export const featureMigrations = [
   )`,
 
   // Skill table
-  `CREATE TABLE IF NOT EXISTS skill (
+  `CREATE TABLE IF NOT EXISTS skills (
     id TEXT PRIMARY KEY,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,

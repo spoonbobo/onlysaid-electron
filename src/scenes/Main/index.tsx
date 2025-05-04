@@ -1,14 +1,15 @@
-import Chatroom from "./Chatroom";
+import Chat from "./Chat";
 import Settings from "./Settings";
-import { useTopicStore } from "../../stores/Topic/TopicStore";
-import { useWindowStore } from "../../stores/Topic/WindowStore";
-import { Box, Typography } from "@mui/material";
+import { useTopicStore } from "@/stores/Topic/TopicStore";
+import { useWindowStore } from "@/stores/Topic/WindowStore";
+import { Box } from "@mui/material";
 import { useEffect } from "react";
+import Tabs from "../Tabs";
 
 const menuComponents: Record<string, React.ReactNode> = {
-  team: <Chatroom />,
+  team: <Chat />,
   settings: <Settings />,
-  home: <Chatroom />,
+  home: <Chat />,
 };
 
 function Main() {
@@ -51,23 +52,12 @@ function Main() {
 
   // Get the active tab
   const activeTab = activeTabId ? tabs.find(tab => tab?.id === activeTabId) : null;
-
-  // Use selected context from the store (primary source of truth)
-  // Or fall back to the active tab's context if needed
   const contextToRender = selectedContext || (activeTab?.context || null);
-
-  // Default to home if no context is available
   const contextTypeToRender = contextToRender?.type || "home";
-
-  // Map the context type to the component name for display
-  // const componentTypeLabel = {
-  //   home: "Home",
-  //   team: "Team",
-  //   settings: "Settings"
-  // }[contextTypeToRender] || "Home";
 
   return (
     <Box sx={{ height: "100%", display: "flex", flexDirection: "column" }}>
+      <Tabs />
       <Box sx={{ flex: 1, overflow: "auto", display: "flex", flexDirection: "column" }}>
         {menuComponents[contextTypeToRender] || menuComponents.home}
       </Box>

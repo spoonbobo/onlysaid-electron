@@ -9,10 +9,11 @@ import HomeMenuItems from "./MenuItems/HomeMenuItems";
 import TeamMenuItems from "./MenuItems/TeamMenuItems";
 import SettingsMenuItems from "./MenuItems/SettingsMenuItems";
 import DefaultMenuItems from "./MenuItems/DefaultMenuItems";
-
+import { useUserStore } from "@/stores/User/UserStore";
 function MenuHeader() {
+  const user = useUserStore((state) => state.user);
   const selectedContext = useTopicStore((state) => state.selectedContext);
-  const createChatroom = useChatStore((state) => state.createChatroom);
+  const createChat = useChatStore((state) => state.createChat);
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const open = Boolean(anchorEl);
   const [showAddFriendDialog, setShowAddFriendDialog] = useState(false);
@@ -25,14 +26,16 @@ function MenuHeader() {
     setAnchorEl(null);
   };
 
-  const handleCreateChatroom = async () => {
-    await createChatroom();
+  const handleCreateChat = async () => {
+    if (user?.id) {
+      await createChat(user.id, 'agent');
+    }
   };
 
   const renderMenuItems = () => {
     switch (selectedContext?.type) {
       case 'home':
-        return <HomeMenuItems handleClose={handleClose} setShowAddFriendDialog={setShowAddFriendDialog} handleCreateChatroom={handleCreateChatroom} />;
+        return <HomeMenuItems handleClose={handleClose} setShowAddFriendDialog={setShowAddFriendDialog} handleCreateChat={handleCreateChat} />;
       case 'team':
         return <TeamMenuItems handleClose={handleClose} />;
       case 'settings':
