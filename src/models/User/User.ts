@@ -54,3 +54,10 @@ export interface IUser {
   role?: string;
   token?: string;
 }
+
+export interface IUserGet {
+  token: string;
+  args: {
+    ids: string[];
+  }
+}

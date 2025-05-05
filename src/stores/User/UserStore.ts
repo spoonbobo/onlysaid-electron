@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import { IUser } from "../../models/User/UserInfo";
+import { IUser } from "../../models/User/User";
 import { useUserTokenStore } from "./UserToken";
 import { toast } from "@/utils/toast";
 
@@ -69,8 +69,8 @@ export const useUserStore = create<UserStore>()(
 
             // We should have userData directly from the main process now
             if (response.userData) {
-              const userData = await window.electron.user.get({
-                token: response.token
+              const userData = await window.electron.user.auth({
+                token: response.token,
               });
 
               if (userData) {

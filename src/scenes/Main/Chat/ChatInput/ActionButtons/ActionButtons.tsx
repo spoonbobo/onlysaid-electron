@@ -6,6 +6,7 @@ import AttachFileIcon from "@mui/icons-material/AttachFile";
 import { FormattedMessage } from "react-intl";
 import { useSelectedModelStore } from "@/stores/LLM/SelectedModelStore";
 import ModelSelector from "./ModelSelector";
+import { useCurrentTopicContext } from "@/stores/Topic/TopicStore";
 
 interface ActionButtonsProps {
   input: string;
@@ -24,7 +25,7 @@ export default function ActionButtons({
   isSending = false,
   hasAttachments = false
 }: ActionButtonsProps) {
-  const [trustMode, setTrustMode] = useState(false);
+  const { parentId, trustMode, setTrustMode } = useCurrentTopicContext();
   const { modelId, provider } = useSelectedModelStore();
   const fileInputRef = useRef<HTMLInputElement>(null);
 

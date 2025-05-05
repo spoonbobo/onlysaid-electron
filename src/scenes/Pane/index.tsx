@@ -1,6 +1,7 @@
 import { Box } from "@mui/material";
 import { ReactNode } from "react";
-import { useWindowStore } from "../../stores/Topic/WindowStore";
+import { useWindowStore } from "@/stores/Topic/WindowStore";
+import { useCurrentTopicContext } from "@/stores/Topic/TopicStore";
 
 interface PaneProps {
   children?: ReactNode;
@@ -8,9 +9,17 @@ interface PaneProps {
 
 const Pane = ({ children }: PaneProps) => {
   const { activeTabId, tabs } = useWindowStore();
+  const { selectedContext, parentId } = useCurrentTopicContext();
 
-  // Get active tab information
   const activeTab = activeTabId ? tabs.find(tab => tab.id === activeTabId) : null;
+
+  if (parentId && parentId !== activeTabId && activeTabId) {
+    console.warn("Parent-child relationship mismatch in Pane", {
+      contextKey: selectedContext ? `${selectedContext.name}:${selectedContext.type}` : 'none',
+      expectedParent: activeTabId,
+      actualParent: parentId
+    });
+  }
 
   return (
     <Box
@@ -21,6 +30,7 @@ const Pane = ({ children }: PaneProps) => {
       }}
       data-tab-id={activeTabId}
       data-context-type={activeTab?.context.type || "unknown"}
+      data-parent-id={parentId}
     >
       {children}
     </Box>

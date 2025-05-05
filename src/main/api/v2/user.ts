@@ -1,12 +1,13 @@
 import onlysaidServiceInstance from "./service";
 import { ipcMain } from "electron";
-import { IUser } from "@/models/User/UserInfo";
+import { IUser } from "@/models/User/User";
+import { IUserGet } from "@/models/User/User";
 
 export const setupUserHandlers = () => {
-  ipcMain.handle('user:get', async (event, args) => {
+  ipcMain.handle('user:auth', async (event, args) => {
     try {
       const user = await onlysaidServiceInstance.get<IUser>(
-        '/user',
+        '/user/auth',
         {
           headers: {
             Authorization: `Bearer ${args.token}`
@@ -22,6 +23,48 @@ export const setupUserHandlers = () => {
       };
     }
   });
+
+  ipcMain.handle('user:get_one', async (event, args) => {
+    try {
+      const user = await onlysaidServiceInstance.get<IUser>(
+        '/user?id=' + args.id,
+        {
+          headers: {
+            Authorization: `Bearer ${args.token}`
+          }
+        }
+      );
+      return { data: user.data };
+    } catch (error: any) {
+      console.error('Error in main process API call (get_user):', error.message);
+      return {
+        error: error.message,
+        status: error.response?.status
+      };
+    }
+  });
+
+  ipcMain.handle('user:get', async (event, arg: IUserGet) => {
+    try {
+      const user = await onlysaidServiceInstance.post<IUser>(
+        '/user',
+        arg.args,
+        {
+          headers: {
+            Authorization: `Bearer ${arg.token}`
+          }
+        }
+      );
+      return { data: user.data };
+    } catch (error: any) {
+      console.error('Error in main process API call (get_user):', error.message);
+      return {
+        error: error.message,
+        status: error.response?.status
+      };
+    }
+  });
+
 };
 
 export default setupUserHandlers;

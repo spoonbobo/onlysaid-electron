@@ -1,7 +1,7 @@
 import { Typography, TextField, Button } from "@mui/material";
-import SettingsSection from "../../../../../components/Settings/SettingsSection";
-import SettingsFormField from "../../../../../components/Settings/SettingsFormField";
-import SettingsActionBar from "../../../../../components/Settings/SettingsActionBar";
+import SettingsSection from "../../../../components/Settings/SettingsSection";
+import SettingsFormField from "../../../../components/Settings/SettingsFormField";
+import SettingsActionBar from "../../../../components/Settings/SettingsActionBar";
 
 function DeleteAccount() {
   return (

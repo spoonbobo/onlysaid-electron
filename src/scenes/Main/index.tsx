@@ -13,19 +13,37 @@ const menuComponents: Record<string, React.ReactNode> = {
 };
 
 function Main() {
-  const selectedContext = useTopicStore((state) => state.selectedContext);
+  const { selectedContext, contextParents } = useTopicStore();
   const { activeTabId, tabs = [], closeTab, addTab } = useWindowStore();
 
   useEffect(() => {
-
+    // Validate parent-child relationship between window and context
     const activeTab = tabs.find(tab => tab?.id === activeTabId);
     if (selectedContext && activeTab && activeTab.context) {
+      const contextKey = `${selectedContext.name}:${selectedContext.type}`;
+      const parentId = contextParents[contextKey];
+
+      // Ensure parent relationship is correctly set
+      if (parentId !== activeTabId) {
+        console.warn("Parent-child relationship mismatch:", {
+          contextKey,
+          expectedParent: activeTabId,
+          actualParent: parentId
+        });
+
+        // Fix the relationship
+        useTopicStore.getState().setContextParent(contextKey, activeTabId || "");
+      }
+
+      // Also check context type consistency
       if (selectedContext.type !== activeTab.context.type) {
-        console.warn("Context mismatch! selectedContext:", selectedContext.type,
-          "vs activeTab.context:", activeTab.context.type);
+        console.warn("Context type mismatch:", {
+          selectedContext: selectedContext.type,
+          activeTabContext: activeTab.context.type
+        });
       }
     }
-  }, [selectedContext, activeTabId, tabs]);
+  }, [selectedContext, activeTabId, tabs, contextParents]);
 
   // Set up listener for menu events
   useEffect(() => {
@@ -41,6 +59,7 @@ function Main() {
       const newTabListener = window.electron.ipcRenderer.on('menu:new-tab', () => {
         // Create a new tab with home context
         addTab({ name: "home", type: "home" });
+        // Parent relationship is set in the updated addTab function
       });
 
       return () => {

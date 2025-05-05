@@ -2,6 +2,7 @@ import { Box, Typography, IconButton, Menu, Divider } from "@mui/material";
 import { FormattedMessage } from "react-intl";
 import { useTopicStore } from "@/stores/Topic/TopicStore";
 import { useChatStore } from "@/stores/Chat/chatStore";
+import { useWindowStore, WindowTab } from "@/stores/Topic/WindowStore";
 import MoreVertIcon from "@mui/icons-material/MoreVert";
 import { useState } from "react";
 import AddNewFriend from "@/components/Dialog/AddNewFriend";
@@ -10,7 +11,13 @@ import TeamMenuItems from "./MenuItems/TeamMenuItems";
 import SettingsMenuItems from "./MenuItems/SettingsMenuItems";
 import DefaultMenuItems from "./MenuItems/DefaultMenuItems";
 import { useUserStore } from "@/stores/User/UserStore";
-function MenuHeader() {
+
+// Add parent tab to props
+interface MenuHeaderProps {
+  parentTab?: WindowTab;
+}
+
+function MenuHeader({ parentTab }: MenuHeaderProps) {
   const user = useUserStore((state) => state.user);
   const selectedContext = useTopicStore((state) => state.selectedContext);
   const createChat = useChatStore((state) => state.createChat);
@@ -35,19 +42,38 @@ function MenuHeader() {
   const renderMenuItems = () => {
     switch (selectedContext?.type) {
       case 'home':
-        return <HomeMenuItems handleClose={handleClose} setShowAddFriendDialog={setShowAddFriendDialog} handleCreateChat={handleCreateChat} />;
+        return <HomeMenuItems
+          handleClose={handleClose}
+          setShowAddFriendDialog={setShowAddFriendDialog}
+          handleCreateChat={handleCreateChat}
+          parentTab={parentTab} // Pass parent tab to menu items
+        />;
       case 'team':
-        return <TeamMenuItems handleClose={handleClose} />;
+        return <TeamMenuItems
+          handleClose={handleClose}
+          parentTab={parentTab} // Pass parent tab to menu items
+        />;
       case 'settings':
-        return <SettingsMenuItems handleClose={handleClose} />;
+        return <SettingsMenuItems
+          handleClose={handleClose}
+          parentTab={parentTab} // Pass parent tab to menu items
+        />;
       default:
-        return <DefaultMenuItems handleClose={handleClose} />;
+        return <DefaultMenuItems
+          handleClose={handleClose}
+          parentTab={parentTab} // Pass parent tab to menu items
+        />;
     }
   };
 
   return (
     <Box sx={{ px: 2, py: 1, borderBottom: 1, borderColor: "divider", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
       <Typography variant="subtitle1" sx={{ fontWeight: 500 }}>
+        {/* {parentTab && (
+          <Typography component="span" variant="caption" color="text.secondary" sx={{ mr: 1 }}>
+            {parentTab.title}:
+          </Typography>
+        )} */}
         <FormattedMessage id={`menu.${selectedContext?.name}`} />
       </Typography>
 

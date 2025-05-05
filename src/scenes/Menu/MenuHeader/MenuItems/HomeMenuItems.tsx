@@ -1,14 +1,18 @@
 import { MenuItem, ListSubheader, Divider } from "@mui/material";
 import { FormattedMessage } from "react-intl";
 import AccountCircleIcon from "@mui/icons-material/AccountCircle";
+import { WindowTab } from "@/stores/Topic/WindowStore";
+
 
 type HomeMenuItemsProps = {
   handleClose: () => void;
   setShowAddFriendDialog: (show: boolean) => void;
   handleCreateChat: () => void;
+  parentTab?: WindowTab; // Add this line
 };
 
-function HomeMenuItems({ handleClose, setShowAddFriendDialog, handleCreateChat }: HomeMenuItemsProps) {
+
+function HomeMenuItems({ handleClose, setShowAddFriendDialog, handleCreateChat, parentTab }: HomeMenuItemsProps) {
   return (
     <>
       <ListSubheader sx={{ fontSize: 13, fontWeight: 700, color: "text.secondary", bgcolor: "background.paper", lineHeight: 2, px: 2 }}>

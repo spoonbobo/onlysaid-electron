@@ -7,7 +7,6 @@ import {
   Stack,
   Menu,
   MenuItem,
-  Button
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import CloseIcon from "@mui/icons-material/Close";
@@ -17,8 +16,8 @@ import SettingsIcon from "@mui/icons-material/Settings";
 import HelpIcon from "@mui/icons-material/Help";
 import InboxIcon from "@mui/icons-material/Inbox";
 import { useIntl } from 'react-intl';
-import { useTopicStore } from "../../stores/Topic/TopicStore";
-import { useWindowStore } from "../../stores/Topic/WindowStore";
+import { useTopicStore } from "@/stores/Topic/TopicStore";
+import { useWindowStore } from "@/stores/Topic/WindowStore";
 import HelpDialog, { getHelpItemsForContext, getHelpTitleForContext } from "./Help";
 
 function Tabs() {
@@ -31,7 +30,6 @@ function Tabs() {
   const draggedTabIndex = useRef<number>(-1);
   const [isHelpOpen, setIsHelpOpen] = useState(false);
 
-  // Attempt to repair the store if needed
   useEffect(() => {
     const hasErrors = !tabs ||
       !Array.isArray(tabs) ||
@@ -43,11 +41,9 @@ function Tabs() {
         repairStore();
       } catch (err) {
         console.error("Failed to repair store:", err);
-        // As a last resort, clear local storage
         try {
           console.warn("Clearing localStorage for window-tabs-storage");
           localStorage.removeItem("window-tabs-storage");
-          // Force reload
           window.location.reload();
         } catch (clearErr) {
           console.error("Failed to clear localStorage:", clearErr);
@@ -56,11 +52,9 @@ function Tabs() {
     }
   }, [tabs, repairStore]);
 
-  // Set up initial tab if none exists
   useEffect(() => {
     if (!tabs || tabs.length === 0) {
       console.log("No tabs exist, creating initial home tab");
-      // Create an initial Home tab
       const homeContext = contexts.find(c => c.name === "home" && c.type === "home");
       if (homeContext) {
         console.log("Found home context:", homeContext);
@@ -72,27 +66,21 @@ function Tabs() {
     }
   }, [tabs?.length, contexts, addTab]);
 
-  // Register for IPC messages for tab synchronization
   useEffect(() => {
     if (window.electron) {
-      // Listen for tab state synchronization from other windows
       const removeListener = window.electron.ipcRenderer.on(
         'window:sync-state',
         (data: any) => {
           console.log('Received tab state sync:', data);
-          // In a real implementation, we would update the local state
-          // based on the synced data from other windows
         }
       );
 
-      // Clean up listener on unmount
       return () => {
         if (removeListener) removeListener();
       };
     }
   }, []);
 
-  // Get the icon for a given context type
   const getContextIcon = (type: string | undefined) => {
     switch (type) {
       case "home":
@@ -106,7 +94,6 @@ function Tabs() {
     }
   };
 
-  // Handle tab click
   const handleTabClick = (tabId: string, context: any) => {
     if (!tabId) {
       console.warn("Attempted to click on tab with no ID");
@@ -115,13 +102,16 @@ function Tabs() {
 
     setActiveTab(tabId);
     if (context) {
+      useTopicStore.getState().setContextParent(
+        `${context.name}:${context.type}`,
+        tabId
+      );
       setSelectedContext(context);
     } else {
       console.warn("No context found for tab:", tabId);
     }
   };
 
-  // Handle tab close
   const handleCloseTab = (e: React.MouseEvent, tabId: string) => {
     if (!tabId) {
       console.warn("Attempted to close tab with no ID");
@@ -131,17 +121,14 @@ function Tabs() {
     closeTab(tabId);
   };
 
-  // Open context menu
   const handleOpenMenu = (event: React.MouseEvent<HTMLElement>) => {
     setMenuAnchorEl(event.currentTarget);
   };
 
-  // Close context menu
   const handleCloseMenu = () => {
     setMenuAnchorEl(null);
   };
 
-  // Add a new tab
   const handleAddTab = (context: any) => {
     if (!context) {
       console.warn("Attempted to add tab with no context");
@@ -155,16 +142,13 @@ function Tabs() {
     handleCloseMenu();
   };
 
-  // Drag event handlers
   const handleDragStart = (e: React.DragEvent<HTMLDivElement>, tabId: string) => {
     setDraggedTab(tabId);
     e.dataTransfer.setData('text/plain', tabId);
 
-    // Store the original index of the dragged tab for use in determining direction
     const index = tabs.findIndex(tab => tab.id === tabId);
     draggedTabIndex.current = index;
 
-    // Add some opacity to the dragged element
     if (e.currentTarget) {
       e.currentTarget.style.opacity = '0.4';
     }
@@ -175,7 +159,6 @@ function Tabs() {
     setDropTarget(null);
     draggedTabIndex.current = -1;
 
-    // Restore opacity
     if (e.currentTarget) {
       e.currentTarget.style.opacity = '1';
     }
@@ -190,13 +173,10 @@ function Tabs() {
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
 
-    // Get the index of the current tab
     const draggedIndex = draggedTabIndex.current;
     const targetIndex = tabs.findIndex(tab => tab.id === tabId);
 
-    // Determine if we should place the tab to the left or right of the target
     if (draggedIndex !== -1 && targetIndex !== -1) {
-      // Set the position based on whether we're moving left or right
       const position = draggedIndex < targetIndex ? 'right' : 'left';
       setDropTarget({ id: tabId, position });
     }
@@ -208,7 +188,6 @@ function Tabs() {
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
 
-    // When dragging over the empty area, always set position to the end
     setDropTarget({ id: 'end', position: 'right' });
   };
 
@@ -224,11 +203,9 @@ function Tabs() {
 
     if (sourceIndex === -1 || targetIndex === -1) return;
 
-    // Create a new array of tabs with the dragged tab moved appropriately
     const newTabs = [...tabs];
     const [movedTab] = newTabs.splice(sourceIndex, 1);
 
-    // If dropping on the right, insert after target
     const insertIndex = dropTarget?.position === 'right'
       ? targetIndex
       : targetIndex === 0
@@ -237,12 +214,9 @@ function Tabs() {
 
     newTabs.splice(insertIndex, 0, movedTab);
 
-    // Update tabs in the Zustand store instead of localStorage
-    // This will trigger a re-render without reloading the page
     updateTabsOrder(newTabs);
   };
 
-  // Handle drop at the end
   const handleEndDrop = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     setDropTarget(null);
@@ -252,22 +226,16 @@ function Tabs() {
 
     if (sourceIndex === -1) return;
 
-    // Create a new array of tabs with the dragged tab moved to the end
     const newTabs = [...tabs];
     const [movedTab] = newTabs.splice(sourceIndex, 1);
     newTabs.push(movedTab);
 
-    // Update tabs in the Zustand store instead of localStorage
     updateTabsOrder(newTabs);
   };
 
-  // Add this helper function to update tabs in the store:
   const updateTabsOrder = (newTabs: typeof tabs) => {
-    // Get the current Zustand store state
     const state = useWindowStore.getState();
 
-    // Update the tabs array directly in the store
-    // This preserves the active tab state
     useWindowStore.setState({
       ...state,
       tabs: newTabs.map(tab => ({
@@ -277,7 +245,6 @@ function Tabs() {
     });
   };
 
-  // Render a safe version of tabs that catches errors
   const renderTabs = () => {
     try {
       if (!tabs || !Array.isArray(tabs)) {
@@ -291,7 +258,6 @@ function Tabs() {
           return null;
         }
 
-        // Determine if this tab has drop indicators
         const isDropTargetLeft = dropTarget?.id === tab.id && dropTarget.position === 'left';
         const isDropTargetRight = dropTarget?.id === tab.id && dropTarget.position === 'right';
 
@@ -318,10 +284,8 @@ function Tabs() {
               "&:hover": {
                 bgcolor: tab.active ? "action.selected" : "action.hover",
               },
-              // Left border indicator
               borderLeft: isDropTargetLeft ? 2 : 0,
               borderLeftColor: isDropTargetLeft ? "primary.main" : "transparent",
-              // Right border indicator
               position: "relative",
               ...(isDropTargetRight && {
                 "&::after": {
@@ -382,17 +346,14 @@ function Tabs() {
     }
   };
 
-  // Handler to open the help dialog
   const handleOpenHelp = () => {
     setIsHelpOpen(true);
   };
 
-  // Handler to close the help dialog
   const handleCloseHelp = () => {
     setIsHelpOpen(false);
   };
 
-  // Get current help items and title based on selected context
   const currentHelpItems = getHelpItemsForContext(selectedContext, intl);
   const currentHelpTitle = getHelpTitleForContext(selectedContext, intl);
 
@@ -422,7 +383,6 @@ function Tabs() {
       >
         {renderTabs()}
 
-        {/* Empty area for dropping tabs at the end */}
         <Box
           onDragOver={handleEmptyAreaDragOver}
           onDrop={handleEndDrop}
@@ -451,7 +411,6 @@ function Tabs() {
           </IconButton>
         </Tooltip>
 
-        {/* Inbox icon */}
         <Tooltip title="Inbox">
           <IconButton
             size="small"
@@ -461,7 +420,6 @@ function Tabs() {
           </IconButton>
         </Tooltip>
 
-        {/* Help icon */}
         <Tooltip title="Help">
           <IconButton
             size="small"
@@ -490,7 +448,6 @@ function Tabs() {
         </Menu>
       </Box>
 
-      {/* Render the Help Dialog */}
       <HelpDialog
         open={isHelpOpen}
         onClose={handleCloseHelp}

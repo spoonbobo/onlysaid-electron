@@ -6,10 +6,10 @@ import ExpandLess from "@mui/icons-material/ExpandLess";
 import ExpandMore from "@mui/icons-material/ExpandMore";
 import CreateNewFolderIcon from "@mui/icons-material/CreateNewFolder";
 import FolderOpenIcon from "@mui/icons-material/FolderOpen";
-import MenuListItem from "../../../components/Navigation/MenuListItem";
-import MenuSection from "../../../components/Navigation/MenuSection";
-import { useFileExplorerStore } from "../../../stores/Layout/FileExplorerResize";
-import { useFileExplorerStore as useFilesStore, selectors } from "../../../stores/File/FileExplorerStore";
+import MenuListItem from "@/components/Navigation/MenuListItem";
+import MenuSection from "@/components/Navigation/MenuSection";
+import { useFileExplorerStore } from "@/stores/Layout/FileExplorerResize";
+import { useFileExplorerStore as useFilesStore, selectors } from "@/stores/File/FileExplorerStore";
 import { FormattedMessage } from "react-intl";
 
 // Define props interface
@@ -30,7 +30,7 @@ function FileNodeItem({ node, level = 0 }: { node: any, level?: number }) {
       } else if (!node.isExpanded && !node.children) {
         loadFolder(node.path);
       } else if (!node.isExpanded && node.children?.length === 0) {
-        toggleFolder(node.path);
+        loadFolder(node.path);
       }
     } else {
       selectItem(node.path);

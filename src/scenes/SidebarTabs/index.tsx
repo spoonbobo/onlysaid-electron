@@ -25,8 +25,15 @@ function SidebarTabs() {
 
   // Handle navigation to a context
   const handleNavigate = (context: TopicContext) => {
-    setSelectedContext(context);
+    // Don't update if it's already the current context
+    if (selectedContext?.name === context.name && selectedContext?.type === context.type) {
+      return; // Prevent unnecessary updates
+    }
+
+    // Update the context first, which sets parent in updateActiveTabContext
     updateActiveTabContext(context);
+    // Then set the selected context
+    setSelectedContext(context);
   };
 
   // Handle add team button click

@@ -4,6 +4,7 @@ import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import { LLMService } from "@/service/llm";
 import { useSelectedModelStore } from "@/stores/LLM/SelectedModelStore";
 import { useIntl } from "react-intl";
+import { useCurrentTopicContext } from "@/stores/Topic/TopicStore";
 
 const llmService = new LLMService();
 
@@ -17,10 +18,16 @@ export default function ModelSelector({ disabled = false }: ModelSelectorProps) 
   const [menuAnchor, setMenuAnchor] = useState<null | HTMLElement>(null);
   const menuOpen = Boolean(menuAnchor);
   const intl = useIntl();
+  const { parentId } = useCurrentTopicContext();
 
   useEffect(() => {
     loadModels();
   }, []);
+
+  useEffect(() => {
+    setMenuAnchor(null);
+    loadModels();
+  }, [parentId]);
 
   const loadModels = async () => {
     try {

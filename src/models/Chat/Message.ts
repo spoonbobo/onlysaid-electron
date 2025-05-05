@@ -1,3 +1,5 @@
+import { IUser } from "@/models/User/User";
+
 export interface IChatMessage {
   id: string;
   created_at: string;
@@ -14,4 +16,6 @@ export interface IChatMessage {
   contact?: string;
   gif?: string;
   text: string;
+
+  sender_object?: IUser;
 }

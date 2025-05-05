@@ -4,7 +4,6 @@ import { FormattedMessage, useIntl as useReactIntl } from "react-intl";
 import SettingsSection from "@/components/Settings/SettingsSection";
 import SettingsFormField from "@/components/Settings/SettingsFormField";
 import { useUserStore } from "@/stores/User/UserStore";
-import { useUserTokenStore } from "@/stores/User/UserToken";
 import { useIntl } from "@/providers/IntlProvider";
 import { useThemeStore } from "@/providers/MaterialTheme";
 import { toast } from "@/utils/toast";

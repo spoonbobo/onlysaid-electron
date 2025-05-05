@@ -1,7 +1,7 @@
 import { Box, Avatar, Typography, IconButton } from "@mui/material";
 import SettingsIcon from "@mui/icons-material/Settings";
 import { useUserStore } from "@/stores/User/UserStore";
-import { IUser } from "@/models/User/UserInfo";
+import { IUser } from "@/models/User/User";
 import { useTopicStore } from "@/stores/Topic/TopicStore";
 import { useWindowStore } from "@/stores/Topic/WindowStore";
 import { FormattedMessage } from "react-intl";
@@ -18,17 +18,15 @@ export default function UserInfoBar() {
   const avatar = user?.avatar || "";
   const isOffline = status === "offline";
 
-  // Handle navigation to settings
   const handleNavigateToSettings = () => {
-    // Create a properly typed settings context
     const settingsContext = {
       name: "settings",
-      type: "settings" as const // Use const assertion to fix type issue
+      type: "settings" as const
     };
 
-    // Update both the selected context and the active tab context
-    setSelectedContext(settingsContext);
     updateActiveTabContext(settingsContext);
+
+    setSelectedContext(settingsContext);
   };
 
   return (
@@ -50,6 +48,12 @@ export default function UserInfoBar() {
             height: 32,
             mr: 1,
             opacity: isOffline ? 0.5 : 1
+          }}
+          slotProps={{
+            img: {
+              referrerPolicy: "no-referrer",
+              crossOrigin: "anonymous"
+            }
           }}
         />
         <Box>

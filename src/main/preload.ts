@@ -8,10 +8,11 @@ type WindowChannels = 'window:create-tab' | 'window:close-tab' | 'window:focus-t
 type MenuChannels = 'menu:close-tab' | 'menu:new-tab';
 type MiscChannels = 'ipc-example';
 type DbChannels = 'db:initialize' | 'db:query' | 'db:transaction' | 'db:close';
+type SystemChannels = 'system:get-cpu-usage' | 'system:get-memory-usage' | 'system:get-storage-usage';
 
 
 type ApiChatChannels = 'chat:get' | 'chat:create' | 'chat:update' | 'chat:delete';
-type ApiUserChannels = 'user:get';
+type ApiUserChannels = 'user:auth' | 'user:get' | 'user:get_one';
 type ApiChannels = ApiChatChannels | ApiUserChannels;
 
 export type Channels =
@@ -20,7 +21,8 @@ export type Channels =
   | ApiChannels
   | WindowChannels
   | MenuChannels
-  | MiscChannels;
+  | MiscChannels
+  | SystemChannels;
 
 const electronHandler = {
   ipcRenderer: {
@@ -53,7 +55,9 @@ const electronHandler = {
     close: (...args: unknown[]) => ipcRenderer.invoke('db:close', ...args),
   },
   user: {
+    auth: (...args: unknown[]) => ipcRenderer.invoke('user:auth', ...args),
     get: (...args: unknown[]) => ipcRenderer.invoke('user:get', ...args),
+    get_one: (...args: unknown[]) => ipcRenderer.invoke('user:get_one', ...args),
   },
   chat: {
     get: (...args: unknown[]) => ipcRenderer.invoke('chat:get', ...args),

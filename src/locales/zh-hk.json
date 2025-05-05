@@ -13,6 +13,7 @@
   "home.customAgents": "自定義",
   "home.favoriteAgents": "最愛",
   "home.noAgents": "沒有與代理的對話, 按『新增聊天』以開始",
+  "home.Agents": "代理",
 
   "app.title": "OnlySaid",
   "app.welcome": "歡迎使用 OnlySaid",
@@ -27,6 +28,10 @@
   "language.french": "法文",
   "language.chinese": "中文（香港）",
 
+  "context.home": "首頁",
+  "context.team": "團隊",
+  "context.settings": "設定",
+
   "user.name": "用戶",
   "user.status.online": "在線",
   "user.status.offline": "離線",
@@ -39,6 +44,9 @@
   "chat.typeMessage": "請輸入訊息...",
   "chat.trustMode": "信任模式",
   "chat.noModelsEnabled": "沒有 AI 模型可用。請在設定中配置並驗證您的 LLM 提供者。",
+  "chat.header.context": "上下文",
+  "chat.header.group": "群組",
+  "chat.header.noChatSelected": "沒有選取聊天室",
 
   "team.create": "創建團隊",
   "team.create.description": "創建一個團隊，讓您可以與其他人共享工作空間。",
@@ -107,6 +115,13 @@
   "settings.logout": "登出",
   "settings.savePreferences": "儲存設定",
   "settings.apiKey": "API密鑰",
+  "settings.debugMode": "偵錯模式",
+  "settings.debug_mode": "偵錯模式",
+  "settings.debugModeDescription": "啟用偵錯模式將在應用程式中顯示額外的資訊，有助於除錯和開發。",
+  "settings.dangerZoneDescription": "這個區域包含可能導致數據丟失或系統故障的危險操作。請謹慎操作。",
+  "settings.developerAPI": "開發者 API",
+  "settings.developerAPIKey": "API 密鑰",
+  "settings.developerAPIDescription": "請輸入您的 API 密鑰以使用開發者 API。",
 
   "help.general": "一般",
   "help.home": "首頁",
@@ -140,5 +155,9 @@
   "help.appearanceDescription": "自訂應用程式的外觀，例如主題（亮/暗）。",
   "help.homeHelp": "首頁幫助",
   "help.teamHelp": "團隊幫助",
-  "help.settingsHelp": "設定幫助"
+  "help.settingsHelp": "設定幫助",
+
+  "debug.clean-messages": "清理聊天室訊息",
+  "debug.bot-message": "模擬機器人訊息",
+  "debug.database-tools": "資料庫工具"
 }

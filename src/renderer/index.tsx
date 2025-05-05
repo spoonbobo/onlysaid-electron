@@ -3,6 +3,7 @@ import ReactDOM from "react-dom/client";
 import App from './App';
 import '@fontsource/noto-serif-hk/400.css';
 import '@fontsource/noto-serif-hk/700.css';
+import './App.css';
 
 import { ThemeContextProvider } from "../providers/MaterialTheme";
 import { SSEProvider } from "../providers/SSEProvider";

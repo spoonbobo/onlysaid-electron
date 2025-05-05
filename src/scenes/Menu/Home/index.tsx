@@ -11,8 +11,8 @@ import MenuCollapsibleSection from "@/components/Navigation/MenuCollapsibleSecti
 import { useChatStore } from "@/stores/Chat/chatStore";
 import { useUserStore } from "@/stores/User/UserStore";
 import { useCurrentTopicContext } from "@/stores/Topic/TopicStore";
+import { useWindowStore } from "@/stores/Topic/WindowStore";
 
-// Define the section names
 type SectionName = 'Friends' | 'Agents';
 
 export default function HomeMenu() {
@@ -22,38 +22,65 @@ export default function HomeMenu() {
     selectedContext,
     expandedGroups,
     setGroupExpanded,
+    parentId
   } = useCurrentTopicContext();
+
+  const { tabs } = useWindowStore();
+  const { setActiveChat } = useChatStore();
+  const parentTab = tabs.find(tab => tab.id === parentId);
+
   const { getChat } = useChatStore();
   const user = useUserStore((state) => state.user);
 
+  const menuInstanceKey = `${parentId || "no-parent"}-${selectedContext?.name || ""}`;
+
   useEffect(() => {
-    if (selectedContext && (!expandedGroups || Object.keys(expandedGroups).length === 0)) {
-      setGroupExpanded('Friends', true);
-      setGroupExpanded('Agents', true);
+    if (selectedContext && parentId && Object.keys(expandedGroups).length === 0) {
+      const updates = {
+        'Friends': true,
+        'Agents': true
+      };
+
+      Object.entries(updates).forEach(([section, expanded]) => {
+        setGroupExpanded(section as SectionName, expanded);
+      });
     }
-  }, [selectedContext, expandedGroups]);
+  }, [parentId, selectedContext, setGroupExpanded]);
+
+  useEffect(() => {
+    const activeSection = Object.keys(selectedTopics).find(
+      section => selectedTopics[section]
+    );
+
+    if (activeSection && selectedTopics[activeSection] && parentId) {
+      setActiveChat(selectedTopics[activeSection], parentId);
+    }
+  }, [parentId, selectedTopics, setActiveChat]);
 
   useEffect(() => {
     if (user?.id) {
       getChat(user.id, 'agent');
     }
-  }, [user?.id]);
+  }, [user?.id, getChat]);
 
   const selectedSubcategory = selectedTopics['Agents'] || '';
 
-  // Use the store to toggle section expansion
   const toggleSection = (section: SectionName) => {
     const isCurrentlyExpanded = expandedGroups[section] || false;
     setGroupExpanded(section, !isCurrentlyExpanded);
   };
 
-  // Get expansion state from the store with fallbacks
   const isSectionExpanded = (section: SectionName) => {
     return expandedGroups ? (expandedGroups[section] || false) : true;
   };
 
+  const selectTopic = (section: string, topicId: string) => {
+    setSelectedTopic(section, topicId);
+    setActiveChat(topicId, parentId || '');
+  };
+
   return (
-    <Box sx={{ mt: 2, px: 2 }}>
+    <Box key={menuInstanceKey} sx={{ mt: 2, px: 2 }}>
       <MenuSection>
         <Box>
           <MenuListItem
@@ -96,10 +123,7 @@ export default function HomeMenu() {
                   key={chat.id}
                   label={chat.name}
                   isSelected={selectedSubcategory === chat.id}
-                  onClick={() => {
-                    setSelectedTopic('Agents', chat.id);
-                    useChatStore.getState().setActiveChat(chat.id);
-                  }}
+                  onClick={() => selectTopic('Agents', chat.id)}
                   sx={{ pl: 4 }}
                 />
               ))}

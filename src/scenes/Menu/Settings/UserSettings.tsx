@@ -9,11 +9,12 @@ import ExpandMore from "@mui/icons-material/ExpandMore";
 import CodeIcon from "@mui/icons-material/Code";
 import { useEffect } from "react";
 import { FormattedMessage } from "react-intl";
-import { UserSettingsSubcategories, UserSectionName } from "../../../stores/User/UserSettings";
-import { useCurrentTopicContext } from "../../../stores/Topic/TopicStore";
-import MenuSection from "../../../components/Navigation/MenuSection";
-import MenuListItem from "../../../components/Navigation/MenuListItem";
-import MenuCollapsibleSection from "../../../components/Navigation/MenuCollapsibleSection";
+import { UserSettingsSubcategories, UserSectionName } from "@/stores/User/UserSettings";
+import { useCurrentTopicContext } from "@/stores/Topic/TopicStore";
+import MenuSection from "@/components/Navigation/MenuSection";
+import MenuListItem from "@/components/Navigation/MenuListItem";
+import MenuCollapsibleSection from "@/components/Navigation/MenuCollapsibleSection";
+import { useUserSettingsStore } from "@/stores/User/UserSettings";
 
 // Define the section names
 
@@ -23,15 +24,24 @@ export default function UserSettings() {
     setSelectedTopic,
     selectedContext,
     expandedGroups,
-    setGroupExpanded
+    setGroupExpanded,
+    parentId
   } = useCurrentTopicContext();
 
-  // Initialize default expanded groups if not set
+  const { debugMode } = useUserSettingsStore();
+
+  // Create key for component instance
+  const settingsKey = `${parentId || "no-parent"}-settings`;
+
+  // Only initialize expanded groups if not already set
   useEffect(() => {
-    if (selectedContext && (!expandedGroups || Object.keys(expandedGroups).length === 0)) {
+    if (selectedContext && Object.keys(expandedGroups).length === 0) {
       setGroupExpanded('General', true);
+      ['LLM', 'KnowledgeBase', 'MCP', 'Developer', 'DangerZone'].forEach(section => {
+        setGroupExpanded(section as UserSectionName, false);
+      });
     }
-  }, [selectedContext, expandedGroups]);
+  }, [parentId, selectedContext, expandedGroups]);
 
   const selectedSubcategory = selectedTopics['settings'] || UserSettingsSubcategories.User;
 
@@ -55,7 +65,7 @@ export default function UserSettings() {
   };
 
   return (
-    <Box sx={{ mt: 2, px: 2 }}>
+    <Box key={settingsKey} sx={{ mt: 2, px: 2 }}>
       <MenuSection>
         <Box>
           <MenuListItem
@@ -196,6 +206,12 @@ export default function UserSettings() {
               label={<FormattedMessage id="settings.apiKey" />}
               isSelected={selectedSubcategory === UserSettingsSubcategories.DeveloperAPI}
               onClick={() => setSelectedSubcategory(UserSettingsSubcategories.DeveloperAPI)}
+              sx={{ pl: 4, py: 0.25, minHeight: 28 }}
+            />
+            <MenuListItem
+              label={<FormattedMessage id="settings.debugMode" />}
+              isSelected={selectedSubcategory === UserSettingsSubcategories.DebugMode}
+              onClick={() => setSelectedSubcategory(UserSettingsSubcategories.DebugMode)}
               sx={{ pl: 4, py: 0.25, minHeight: 28 }}
             />
           </MenuCollapsibleSection>

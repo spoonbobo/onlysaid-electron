@@ -1,6 +1,6 @@
 import { Box, LinearProgress, Tooltip, Typography } from "@mui/material";
-import { useUserLevelStore } from "../../stores/User/UserLevel";
-import { useUserStore } from "../../stores/User/UserStore";
+import { useUserLevelStore } from "@/stores/User/UserLevel";
+import { useUserStore } from "@/stores/User/UserStore";
 import { useState, useRef } from "react";
 import { FormattedMessage } from "react-intl";
 

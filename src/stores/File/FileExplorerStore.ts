@@ -112,6 +112,7 @@ export const useFileExplorerStore = create<FileExplorerState>()(
 
         try {
           const folderContents = await window.electron.fileSystem.getFolderContents(path);
+          console.log('Folder contents for path:', path, folderContents);
 
           set(state => ({
             rootFolders: updateNodeRecursively(state.rootFolders, path, node => ({

@@ -1,15 +1,18 @@
 import { Box, Typography } from "@mui/material";
-import { UserSettingsSubcategories } from "../../../stores/User/UserSettings";
-import { useCurrentTopicContext } from "../../../stores/Topic/TopicStore";
-import SettingsSection from "../../../components/Settings/SettingsSection";
-import UserPreferences from "./UserSettings/User";
+import { UserSettingsSubcategories } from "@/stores/User/UserSettings";
+import { useCurrentTopicContext } from "@/stores/Topic/TopicStore";
+import SettingsSection from "@/components/Settings/SettingsSection";
+import UserPreferences from "./UserSettings/UserPreference";
 import DeleteAccount from "./UserSettings/DeleteAccount";
 import PublicLLMConfiguration from "./LLMModels/Public";
 import PrivateLLMConfiguration from "./LLMModels/Private";
 import LLMSettings from "./LLMSettings";
+import DebugMode from "./UserSettings/DebugMode";
 import { FormattedMessage } from "react-intl";
+
 function Settings() {
   const { selectedTopics } = useCurrentTopicContext();
+
   const selectedSubcategory = selectedTopics['settings'] || UserSettingsSubcategories.User;
 
   const renderContent = () => {
@@ -28,6 +31,9 @@ function Settings() {
 
       case UserSettingsSubcategories.LLMSettings:
         return <LLMSettings />;
+
+      case UserSettingsSubcategories.DebugMode:
+        return <DebugMode />;
 
       case UserSettingsSubcategories.KnowledgeBase:
         return (

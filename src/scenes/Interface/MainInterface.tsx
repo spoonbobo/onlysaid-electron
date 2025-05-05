@@ -2,24 +2,22 @@ import { Box } from "@mui/material";
 import Menu from "../Menu";
 import Main from "../Main";
 import SidebarTabs from "../SidebarTabs";
-import { useLayoutResize } from "../../stores/Layout/LayoutResize";
-import { useWindowStore } from "../../stores/Topic/WindowStore";
-import { useTopicStore } from "../../stores/Topic/TopicStore";
+import { useLayoutResize } from "@/stores/Layout/LayoutResize";
+import { useWindowStore } from "@/stores/Topic/WindowStore";
+import { useTopicStore } from "@/stores/Topic/TopicStore";
 import { useRef, useEffect } from "react";
 import UserInfoBar from "./UserInfoBar";
 import LevelUp from "./LevelUp";
 import Pane from "../Pane/index";
+import OverlaysContainer from "./Overlays/OverlaysContainer";
 
 function MainInterface() {
   const { menuWidth, setMenuWidth } = useLayoutResize();
   const { tabs = [], activeTabId, updateActiveTabContext, resetStore } = useWindowStore();
   const { setSelectedContext, selectedContext } = useTopicStore();
   const isDraggingMenu = useRef(false);
-
-  // Track the previous context to detect actual changes
   const previousContextRef = useRef(selectedContext);
 
-  // When active tab changes, update selected context
   useEffect(() => {
     if (activeTabId) {
       const activeTab = tabs.find(tab => tab.id === activeTabId);
@@ -32,34 +30,29 @@ function MainInterface() {
     }
   }, [activeTabId, tabs, setSelectedContext]);
 
-  // When selectedContext changes, update the active tab's context
   useEffect(() => {
-    // Check if the context actually changed (different type or name)
     const contextChanged =
       selectedContext?.type !== previousContextRef.current?.type ||
       selectedContext?.name !== previousContextRef.current?.name;
 
     if (selectedContext && contextChanged) {
+      if (activeTabId) {
+        const contextId = `${selectedContext.name}:${selectedContext.type}`;
+        useTopicStore.getState().setContextParent(contextId, activeTabId);
+      }
 
-      // Update the active tab with the new context
       updateActiveTabContext(selectedContext);
-
-      // Update the ref for the next comparison
       previousContextRef.current = selectedContext;
     }
-  }, [selectedContext, updateActiveTabContext]);
+  }, [selectedContext, updateActiveTabContext, activeTabId]);
 
-
-  // Add keyboard shortcut to reset tab state (Ctrl+Shift+R)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Check for Ctrl+Shift+R keyboard shortcut
       if (e.ctrlKey && e.shiftKey && e.key === 'r') {
-        e.preventDefault(); // Prevent browser refresh
+        e.preventDefault();
         console.log("Resetting tab state via keyboard shortcut");
         resetStore();
 
-        // Reload the page after a short delay to ensure clean state
         setTimeout(() => {
           window.location.reload();
         }, 100);
@@ -73,15 +66,12 @@ function MainInterface() {
     };
   }, [resetStore]);
 
-  // Listen for IPC messages from the main process
   useEffect(() => {
     if (window.electron) {
-      // Setup IPC listeners for window/tab management
       const tabCreatedListener = window.electron.ipcRenderer.on(
         'window:tab-created',
         (data: any) => {
           console.log('New tab created in another window:', data);
-          // In a real implementation, we would potentially sync tab state
         }
       );
 
@@ -96,7 +86,6 @@ function MainInterface() {
     document.body.style.cursor = "col-resize";
   };
 
-  // Mouse move and up listeners
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
       if (isDraggingMenu.current) {
@@ -128,7 +117,6 @@ function MainInterface() {
         overflow: "hidden",
       }}
     >
-      {/* Main Content Area */}
       <Box
         sx={{
           display: "flex",
@@ -149,7 +137,7 @@ function MainInterface() {
             borderRight: "1px solid #eee",
             bgcolor: "background.paper",
             flexShrink: 0,
-            position: "relative", // Add position relative for absolute positioning of drag handle
+            position: "relative",
           }}
         >
           <Box sx={{ display: "flex", flexDirection: "row", flex: 1, minHeight: 0 }}>
@@ -162,7 +150,6 @@ function MainInterface() {
                 flexDirection: "column",
               }}
             >
-              {/* Restored sidebar vertical tabs */}
               <SidebarTabs />
             </Box>
             <Box
@@ -178,12 +165,11 @@ function MainInterface() {
           </Box>
           <UserInfoBar />
 
-          {/* Reposition the drag handle to overlap the border */}
           <Box
             sx={{
               position: "absolute",
               top: 0,
-              right: -3, // Negative margin to overlap with the border
+              right: -3,
               width: 6,
               height: "100%",
               cursor: "col-resize",
@@ -195,8 +181,6 @@ function MainInterface() {
           />
         </Box>
 
-        {/* Remove the separate Box for the drag handle */}
-
         <Box sx={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
           <Pane>
             <Main />
@@ -204,6 +188,8 @@ function MainInterface() {
           <LevelUp />
         </Box>
       </Box>
+
+      <OverlaysContainer />
     </Box>
   );
 }

@@ -9,8 +9,8 @@ import {
   Typography
 } from "@mui/material";
 import { useState } from "react";
-import { useTopicStore, TopicContext } from "../../stores/Topic/TopicStore";
-import { useWindowStore } from "../../stores/Topic/WindowStore";
+import { useTopicStore, TopicContext } from "@/stores/Topic/TopicStore";
+import { useWindowStore } from "@/stores/Topic/WindowStore";
 import { FormattedMessage } from "react-intl";
 
 interface AddTeamDialogProps {
@@ -67,9 +67,9 @@ function AddTeamDialog({ open, onClose }: AddTeamDialogProps) {
         <Box sx={{ mt: 1 }}>
           <TextField
             autoFocus
-            label="Team Name"
+            label={<FormattedMessage id="team.create.name" />}
             fullWidth
-            value={<FormattedMessage id="team.create.name" />}
+            value={teamName}
             onChange={(e) => {
               setTeamName(e.target.value);
               setError("");

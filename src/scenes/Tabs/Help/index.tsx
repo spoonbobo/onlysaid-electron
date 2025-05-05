@@ -1,6 +1,6 @@
-import HelpDialog from '../../../components/Dialog/HelpDialog';
-import { TopicContext } from '@/stores/Topic/TopicStore';
-import { IntlShape } from 'react-intl'; // Import IntlShape
+import HelpDialog from "@/components/Dialog/HelpDialog";
+import { TopicContext } from "@/stores/Topic/TopicStore";
+import { IntlShape } from "react-intl";
 
 export interface HelpItemIds {
   titleId: string;
@@ -11,7 +11,6 @@ export interface HelpItem {
   title: string;
   text: string;
 }
-
 
 export const generalHelpItemIds: HelpItemIds[] = [
   { titleId: "help.addingTabs", textId: "help.addingTabsDescription" },
@@ -24,54 +23,46 @@ export const generalHelpItemIds: HelpItemIds[] = [
 export const homeHelpItemIds: HelpItemIds[] = [
   { titleId: "help.homeOverview", textId: "help.homeOverviewDescription" },
   { titleId: "help.personalTopics", textId: "help.personalTopicsDescription" },
-  ...generalHelpItemIds.slice(0, 4), // Include general tab operations IDs - Keep this for Home
+  ...generalHelpItemIds.slice(0, 4),
 ];
 
-// Define Team-specific help item IDs
 export const teamHelpItemIds: HelpItemIds[] = [
   { titleId: "help.teamOverview", textId: "help.teamOverviewDescription" },
   { titleId: "help.teamCollaboration", textId: "help.teamCollaborationDescription" },
   { titleId: "help.switchingTeams", textId: "help.switchingTeamsDescription" },
-  // ...generalHelpItemIds.slice(0, 4), // REMOVED: No longer include general items here
 ];
 
-// Define Settings-specific help item IDs
 export const settingsHelpItemIds: HelpItemIds[] = [
   { titleId: "help.settingsOverview", textId: "help.settingsOverviewDescription" },
   { titleId: "help.accountManagement", textId: "help.accountManagementDescription" },
   { titleId: "help.appearance", textId: "help.appearanceDescription" },
-  // ...generalHelpItemIds.slice(0, 4), // REMOVED: No longer include general items here
 ];
 
-// Map context types to their help item IDs
 export const helpItemIdsByContextType: Record<string, HelpItemIds[]> = {
   home: homeHelpItemIds,
   team: teamHelpItemIds,
   settings: settingsHelpItemIds,
-  general: generalHelpItemIds, // Fallback remains general
+  general: generalHelpItemIds,
 };
 
-// Function to get translated help items based on context
 export const getHelpItemsForContext = (context: TopicContext | null, intl: IntlShape): HelpItem[] => {
   let itemIds: HelpItemIds[];
   if (!context || !context.type || !helpItemIdsByContextType[context.type]) {
-    itemIds = generalHelpItemIds; // Default to general help IDs
+    itemIds = generalHelpItemIds;
   } else {
     itemIds = helpItemIdsByContextType[context.type];
   }
 
-  // Translate the IDs into strings
   return itemIds.map(item => ({
     title: intl.formatMessage({ id: item.titleId }),
     text: intl.formatMessage({ id: item.textId }),
   }));
 };
 
-// Function to get the translated title based on context
 export const getHelpTitleForContext = (context: TopicContext | null, intl: IntlShape): string => {
   let titleId: string;
   if (!context || !context.type) {
-    titleId = "help.generalHelp"; // Assuming a key "help.generalHelp"
+    titleId = "help.generalHelp";
   } else {
     switch (context.type) {
       case 'home':
@@ -89,6 +80,5 @@ export const getHelpTitleForContext = (context: TopicContext | null, intl: IntlS
   }
   return intl.formatMessage({ id: titleId });
 }
-
 
 export default HelpDialog;

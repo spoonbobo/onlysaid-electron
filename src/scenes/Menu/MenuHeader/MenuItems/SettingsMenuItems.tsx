@@ -3,12 +3,14 @@ import { FormattedMessage } from "react-intl";
 import SettingsIcon from "@mui/icons-material/Settings";
 import HelpIcon from "@mui/icons-material/Help";
 import ExitToAppIcon from "@mui/icons-material/ExitToApp";
+import { WindowTab } from "@/stores/Topic/WindowStore";
 
 type SettingsMenuItemsProps = {
   handleClose: () => void;
+  parentTab?: WindowTab;
 };
 
-function SettingsMenuItems({ handleClose }: SettingsMenuItemsProps) {
+function SettingsMenuItems({ handleClose, parentTab }: SettingsMenuItemsProps) {
   return (
     <>
       <ListSubheader sx={{ fontSize: 13, fontWeight: 700, color: "text.secondary", bgcolor: "background.paper", lineHeight: 2, px: 2 }}>

@@ -65,9 +65,9 @@ export const featureMigrations = [
     reactions TEXT, -- Stored as JSON string
     reply_to TEXT,
     mention TEXT, -- Stored as JSON string
-    image TEXT,
-    video TEXT,
-    audio TEXT,
+    image TEXT[], -- accepted multiple images
+    video TEXT[],
+    audio TEXT[],
     poll TEXT,
     contact TEXT,
     gif TEXT,
