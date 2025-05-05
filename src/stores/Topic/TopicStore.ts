@@ -39,6 +39,10 @@ interface TopicStore {
   trustModeByContext: Record<string, boolean>;
   setTrustMode: (trustMode: boolean) => void;
   getTrustMode: () => boolean;
+
+  replyingToByContext: Record<string, string | null>;
+  setReplyingTo: (messageId: string | null) => void;
+  getReplyingTo: () => string | null;
 }
 
 export const useTopicStore = create<TopicStore>()(
@@ -235,6 +239,38 @@ export const useTopicStore = create<TopicStore>()(
         return trustModeByContext[contextKey] || false;
       },
 
+      replyingToByContext: {},
+
+      setReplyingTo: (messageId) =>
+        set((state) => {
+          if (!state.selectedContext) return state;
+
+          const parentId = state.contextParents[`${state.selectedContext.name}:${state.selectedContext.type}`] || '';
+          const contextKey = `${parentId}-${state.selectedContext.name}:${state.selectedContext.type}`;
+
+          const newReplyingTo = { ...state.replyingToByContext };
+
+          if (messageId === null) {
+            delete newReplyingTo[contextKey];
+          } else {
+            newReplyingTo[contextKey] = messageId;
+          }
+
+          return {
+            replyingToByContext: newReplyingTo
+          };
+        }),
+
+      getReplyingTo: () => {
+        const { selectedContext, replyingToByContext, contextParents } = get();
+        if (!selectedContext) return null;
+
+        const parentId = contextParents[`${selectedContext.name}:${selectedContext.type}`] || '';
+        const contextKey = `${parentId}-${selectedContext.name}:${selectedContext.type}`;
+
+        return replyingToByContext[contextKey] || null;
+      },
+
       cleanupDanglingReferences: () => {
         const { useWindowStore } = require("./WindowStore");
         const windowStore = useWindowStore.getState();
@@ -270,9 +306,25 @@ export const useTopicStore = create<TopicStore>()(
             }
           });
 
+          // Clean up replying state for non-existent tabs
+          const newReplyingTo = { ...state.replyingToByContext };
+          Object.keys(newReplyingTo).forEach(key => {
+            const parts = key.split('-');
+            const tabId = parts.length > 1 ? parts[0] : '';
+
+            if (tabId && !validTabIds.includes(tabId)) {
+              delete newReplyingTo[key];
+            }
+
+            if (key.startsWith('-')) {
+              delete newReplyingTo[key];
+            }
+          });
+
           return {
             expandedGroupsByContext: newExpandedGroups,
-            trustModeByContext: newTrustMode
+            trustModeByContext: newTrustMode,
+            replyingToByContext: newReplyingTo
           };
         });
       },
@@ -288,6 +340,7 @@ export const useTopicStore = create<TopicStore>()(
           selectedContext: persistedState.selectedContext || { name: "home", type: "home" },
           contextParents: persistedState.contextParents || {},
           trustModeByContext: persistedState.trustModeByContext || {},
+          replyingToByContext: persistedState.replyingToByContext || {},
         };
       },
     }
@@ -305,6 +358,8 @@ export const useCurrentTopicContext = () => {
     contextParents,
     getTrustMode,
     setTrustMode,
+    getReplyingTo,
+    setReplyingTo,
   } = useTopicStore();
 
   return {
@@ -328,6 +383,8 @@ export const useCurrentTopicContext = () => {
       if (selectedContext) {
         setGroupExpanded(groupName, expanded);
       }
-    }
+    },
+    replyingToId: getReplyingTo(),
+    setReplyingTo,
   };
 };

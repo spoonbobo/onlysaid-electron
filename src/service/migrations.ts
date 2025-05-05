@@ -61,7 +61,6 @@ export const featureMigrations = [
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     room_id TEXT,
     sender TEXT,
-    avatar TEXT,
     reactions TEXT, -- Stored as JSON string
     reply_to TEXT,
     mention TEXT, -- Stored as JSON string

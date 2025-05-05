@@ -10,9 +10,12 @@ import ChatBubble from "./ChatBubble";
 
 interface ChatUIProps {
   messages: IChatMessage[];
+  scrollContainerRef?: React.RefObject<HTMLDivElement>;
+  messagesEndRef?: React.RefObject<HTMLDivElement>;
+  onReply?: (message: IChatMessage) => void;
 }
 
-function ChatUI({ messages }: ChatUIProps) {
+function ChatUI({ messages, onReply }: ChatUIProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const userId = getUserFromStore()?.id;
@@ -22,13 +25,15 @@ function ChatUI({ messages }: ChatUIProps) {
   const prevMessagesLength = useRef(0);
   const hasUserScrolled = useRef(false);
 
-  // Get current room id
   const { getCurrentContextTopics } = useTopicStore();
   const roomId = Object.values(getCurrentContextTopics())[0];
 
   const scrollToBottom = useCallback(() => {
     if (messagesEndRef.current) {
-      messagesEndRef.current.scrollIntoView({ behavior: "auto" });
+      messagesEndRef.current.scrollIntoView({
+        behavior: "auto",
+        block: "end"
+      });
     }
   }, []);
 
@@ -38,16 +43,13 @@ function ChatUI({ messages }: ChatUIProps) {
     const { scrollTop, scrollHeight, clientHeight } = scrollContainerRef.current;
     const loadMoreThreshold = clientHeight * 0.1;
 
-    // Mark that user has scrolled
     if (!hasUserScrolled.current && scrollTop !== 0) {
       hasUserScrolled.current = true;
     }
 
-    // Check if user is near bottom for auto-scroll
-    const isNearBottom = scrollHeight - scrollTop - clientHeight < 100;
+    const isNearBottom = scrollHeight - scrollTop - clientHeight < (clientHeight * 0.15);
     shouldScrollToBottom.current = isNearBottom;
 
-    // Load more when scrolling to top (if user has scrolled)
     if (
       scrollTop < loadMoreThreshold &&
       hasMoreMessages &&
@@ -69,36 +71,29 @@ function ChatUI({ messages }: ChatUIProps) {
     const prevScrollPosition = scrollContainer?.scrollTop || 0;
 
     try {
-      // Call fetchMessages with loadMore flag
       const fetchedMore = await useChatStore.getState().fetchMessages(roomId, true);
 
-      // Update hasMoreMessages based on the result
       if (!fetchedMore) {
         setHasMoreMessages(false);
       }
 
-      // Use setTimeout to allow the DOM to update before adjusting scroll
-      setTimeout(() => {
+      requestAnimationFrame(() => {
         if (scrollContainer) {
           const newScrollHeight = scrollContainer.scrollHeight;
           const heightDifference = newScrollHeight - prevScrollHeight;
           scrollContainer.scrollTop = prevScrollPosition + heightDifference;
         }
         setIsLoadingMore(false);
-      }, 0);
+      });
     } catch (error) {
-      console.error("Error loading older messages:", error);
       setIsLoadingMore(false);
       setHasMoreMessages(false);
     }
   };
 
-  // Initial Fetch Effect
   useEffect(() => {
-    // Reset and fetch initial messages when roomId changes
     if (roomId) {
       setHasMoreMessages(true);
-      // Reset scroll flags for new room
       hasUserScrolled.current = false;
       shouldScrollToBottom.current = true;
       prevMessagesLength.current = 0;
@@ -111,50 +106,43 @@ function ChatUI({ messages }: ChatUIProps) {
     }
   }, [roomId, scrollToBottom]);
 
-  // Scroll to bottom on initial load and when new messages arrive
   useEffect(() => {
-    if (messages.length > prevMessagesLength.current) {
-      const lastMessage = messages[messages.length - 1];
-      const isNewerMessage = !isLoadingMore;
+  }, []);
 
-      if (isNewerMessage && ((lastMessage && lastMessage.sender === userId) || shouldScrollToBottom.current)) {
+  useEffect(() => {
+    const scrollAfterRender = () => {
+      requestAnimationFrame(() => {
         scrollToBottom();
+      });
+    };
+
+    if (messages.length > 0 && prevMessagesLength.current === 0) {
+      scrollAfterRender();
+    }
+
+    if (messages.length > prevMessagesLength.current && !isLoadingMore) {
+      const lastMessage = messages[messages.length - 1];
+      if (lastMessage?.sender === userId || shouldScrollToBottom.current) {
+        scrollAfterRender();
       }
     }
 
-    // Always update prev length *after* the comparison
     prevMessagesLength.current = messages.length;
   }, [messages, userId, scrollToBottom, isLoadingMore]);
-
-  // Add this useEffect for debugging the ref
-  useEffect(() => {
-    if (scrollContainerRef.current) {
-      console.log("ChatUI Effect: scrollContainerRef is attached to an element.");
-    } else {
-      console.log("ChatUI Effect: scrollContainerRef.current is NULL.");
-    }
-    // Optional: Add a simple scroll listener directly for testing
-    const testScroll = () => console.log("Direct scroll listener fired!");
-    const element = scrollContainerRef.current;
-    element?.addEventListener('scroll', testScroll);
-
-    return () => {
-      element?.removeEventListener('scroll', testScroll); // Cleanup
-    };
-  }, []); // Run only once on mount
 
   return (
     <Box
       ref={scrollContainerRef}
       sx={{
         flex: 1,
-        overflowY: "auto",
-        px: 3,
-        py: 2,
         display: "flex",
         flexDirection: "column",
+        overflowY: "auto",
         height: "100%",
-        maxHeight: "100%"
+        maxHeight: "100%",
+        px: 1,
+        pt: 2,
+        pb: 0.8
       }}
       onClick={(e) => {
         if (e.target === e.currentTarget) {
@@ -176,19 +164,39 @@ function ChatUI({ messages }: ChatUIProps) {
         </Typography>
       )}
 
+      {messages.length > 0 && messages.length < 10 && (
+        <Box sx={{ flexGrow: 1 }} />
+      )}
+
       {messages.map((msg, index) => {
         const isCurrentUser = msg.sender === userId;
         const previousMessage = index > 0 ? messages[index - 1] : undefined;
+        const nextMessage = index < messages.length - 1 ? messages[index + 1] : undefined;
+        const isLastInSequence = nextMessage?.sender !== msg.sender;
+
+        const replyToMessage = msg.reply_to
+          ? messages.find(m => m.id === msg.reply_to) || null
+          : null;
+
+        const isContinuation = !replyToMessage &&
+          previousMessage?.sender === msg.sender;
+
+        const messageKey = msg.id || `message-${index}-${Date.now()}`;
+
         return (
           <ChatBubble
-            key={msg.id}
+            key={messageKey}
             message={msg}
             isCurrentUser={isCurrentUser}
-            isContinuation={previousMessage?.sender === msg.sender}
+            isContinuation={isContinuation}
+            isLastInSequence={isLastInSequence}
+            onReply={onReply}
+            replyToMessage={replyToMessage}
           />
         );
       })}
-      <div ref={messagesEndRef} style={{ height: "1px" }} />
+
+      <div ref={messagesEndRef} style={{ height: "1px", margin: 0, padding: 0 }} />
     </Box>
   );
 }

@@ -9,7 +9,7 @@ import * as R from 'ramda';
 import { IUser } from "@/models/User/User";
 
 // Define the message limit
-const MESSAGE_FETCH_LIMIT = 20;
+const MESSAGE_FETCH_LIMIT = 50;
 
 interface ChatState {
   // Track active room by tab ID
@@ -34,7 +34,7 @@ interface ChatState {
   sendMessage: (roomId: string, messageData: Partial<IChatMessage>) => Promise<string | void>;
   updateMessage: (roomId: string, messageId: string, data: Partial<IChatMessage>) => Promise<void>;
   // Modify fetchMessages to return a boolean indicating if messages were fetched
-  fetchMessages: (roomId: string, loadMore?: boolean) => Promise<boolean>;
+  fetchMessages: (roomId: string, loadMore?: boolean, preserveHistory?: boolean) => Promise<boolean>;
   deleteMessage: (roomId: string, messageId: string) => Promise<void>;
   editMessage: (roomId: string, messageId: string, content: string) => Promise<void>;
 
@@ -50,6 +50,16 @@ interface ChatState {
 
   // New function to clean up orphaned rooms
   cleanupOrphanedRooms: () => void;
+
+  // Add to the ChatState interface
+  isTyping: boolean;
+  setTyping: (typing: boolean) => void;
+
+  // Add this to ChatState interface
+  appendMessage: (roomId: string, message: IChatMessage) => void;
+
+  // Add to the ChatState interface
+  getMessageById: (roomId: string, messageId: string) => Promise<IChatMessage | null>;
 }
 
 const NewChat = (userId: string, type: string) => {
@@ -74,6 +84,7 @@ export const useChatStore = create<ChatState>()(
       inputByTabRoom: {},
       isLoading: false,
       error: null,
+      isTyping: false,
 
       getActiveRoomIdForTab: (tabId) => {
         return get().activeRoomByTab[tabId] || null;
@@ -157,16 +168,17 @@ export const useChatStore = create<ChatState>()(
           await window.electron.db.query({
             query: `
             insert into messages
-            (id, room_id, sender, text, created_at)
+            (id, room_id, sender, text, created_at, reply_to)
             values
-            (@id, @roomId, @sender, @text, @createdAt)
+            (@id, @roomId, @sender, @text, @createdAt, @replyTo)
             `,
             params: {
               id: messageId,
               roomId,
               sender: getUserFromStore()?.id || "",
               text: messageData.text || "",
-              createdAt: messageData.created_at
+              createdAt: messageData.created_at,
+              replyTo: messageData.reply_to || null
             }
           });
 
@@ -210,28 +222,33 @@ export const useChatStore = create<ChatState>()(
         }
       },
 
-      fetchMessages: async (roomId, loadMore = false) => {
+      fetchMessages: async (roomId, loadMore = false, preserveHistory = false) => {
         set({ isLoading: true, error: null });
         try {
           const currentOffset = loadMore ? (get().messageOffsets[roomId] || 0) : 0;
+          const existingMessages = (preserveHistory || loadMore) ?
+            (get().messages[roomId] || []) : [];
+
+          // Create a Set of existing message IDs for quick lookup
+          const existingMessageIds = new Set(existingMessages.map(msg => msg.id));
 
           const response = await window.electron.db.query({
             query: `
               select * from messages
               where room_id = @roomId
-              order by created_at desc -- Fetch newest first for offset, reverse later
+              order by created_at desc
               limit @limit offset @offset
             `,
             params: { roomId, limit: MESSAGE_FETCH_LIMIT, offset: currentOffset }
           });
 
           if (response && Array.isArray(response)) {
-            const fetchedMessages = response.reverse(); // Reverse to get chronological order
+            const fetchedMessages = response.reverse();
             const numFetched = fetchedMessages.length;
 
             if (numFetched === 0) {
               set({ isLoading: false });
-              return false; // No messages fetched
+              return false;
             }
 
             const uniqueSenderIds = R.uniq(R.pluck('sender', fetchedMessages));
@@ -246,35 +263,41 @@ export const useChatStore = create<ChatState>()(
               R.prop('id') as (user: IUser) => string,
               userInfos.data.data as IUser[]
             );
+
             const messagesWithUsers = R.map(msg => ({
               ...msg,
               sender_object: userMap[msg.sender]
-            }), fetchedMessages);
+            }), fetchedMessages).filter(msg => !existingMessageIds.has(msg.id));
 
-            set(state => ({
-              messages: {
-                ...state.messages,
-                // Prepend if loading more, replace if initial fetch
-                [roomId]: loadMore
-                  ? [...messagesWithUsers, ...(state.messages[roomId] || [])]
-                  : messagesWithUsers
-              },
-              // Update offset
-              messageOffsets: {
-                ...state.messageOffsets,
-                [roomId]: currentOffset + numFetched
-              },
-              isLoading: false
-            }));
-            return true; // Messages were fetched
+            set(state => {
+              const currentMessages = state.messages[roomId] || [];
+
+              return {
+                messages: {
+                  ...state.messages,
+                  [roomId]: loadMore
+                    ? [...messagesWithUsers, ...currentMessages]
+                    : preserveHistory
+                      ? [...currentMessages, ...messagesWithUsers.filter(msg =>
+                        !currentMessages.some(m => m.id === msg.id))]
+                      : messagesWithUsers
+                },
+                messageOffsets: {
+                  ...state.messageOffsets,
+                  [roomId]: currentOffset + numFetched
+                },
+                isLoading: false
+              };
+            });
+            return true;
           } else {
             set({ isLoading: false });
-            return false; // No messages fetched
+            return false;
           }
         } catch (error: any) {
           set({ error: error.message, isLoading: false });
           console.error("Error fetching messages:", error);
-          return false; // Indicate error/no messages
+          return false;
         }
       },
 
@@ -346,37 +369,73 @@ export const useChatStore = create<ChatState>()(
             }
           });
 
-          // Clean up message offsets for removed tabs
           const newMessageOffsets: Record<string, number> = {};
           Object.entries(state.messageOffsets).forEach(([roomId, offset]) => {
-            // This logic assumes room IDs are not directly tied to tabs,
-            // which seems correct based on the existing code.
-            // If offsets should be cleaned based on active tabs, the logic needs adjustment.
-            // For now, keep offsets unless the room itself is removed (not handled here).
             newMessageOffsets[roomId] = offset;
           });
-
 
           return {
             activeRoomByTab: newActiveRoomByTab,
             inputByTabRoom: newInputByTabRoom,
-            messageOffsets: newMessageOffsets // Include cleaned offsets
+            messageOffsets: newMessageOffsets
           };
         });
-      }
+      },
+
+      setTyping: (typing) => set({ isTyping: typing }),
+
+      appendMessage: (roomId, message) => {
+        set(state => {
+          const currentMessages = state.messages[roomId] || [];
+
+          // Check if message already exists
+          if (currentMessages.some(msg => msg.id === message.id)) {
+            return state; // No change needed
+          }
+
+          return {
+            messages: {
+              ...state.messages,
+              [roomId]: [...currentMessages, message]
+            }
+          };
+        });
+      },
+
+      // Add the implementation
+      getMessageById: async (roomId, messageId) => {
+        const query = `
+          select * from messages
+          where id = @messageId
+          and room_id = @roomId
+        `;
+
+        const result = await window.electron.db.query({
+          query,
+          params: { messageId, roomId }
+        });
+
+        return result.data[0] || null;
+      },
     }),
     {
       name: "chat-storage",
       storage: createJSONStorage(() => localStorage),
-      // *** Important: Add messageOffsets to the persisted state ***
-      partialize: (state) => ({
-        activeRoomByTab: state.activeRoomByTab,
-        messages: state.messages, // Consider if messages should be persisted long-term
-        messageOffsets: state.messageOffsets, // Persist offsets
-        rooms: state.rooms,
-        inputByTabRoom: state.inputByTabRoom,
-        // Exclude isLoading and error from persisted state
-      }),
+      partialize: (state) => {
+        // Limit each room's messages to 100 most recent
+        const limitedMessages: Record<string, IChatMessage[]> = {};
+        Object.entries(state.messages).forEach(([roomId, messages]) => {
+          limitedMessages[roomId] = messages.slice(-100);
+        });
+
+        return {
+          activeRoomByTab: state.activeRoomByTab,
+          messages: limitedMessages,
+          messageOffsets: state.messageOffsets,
+          rooms: state.rooms,
+          inputByTabRoom: state.inputByTabRoom,
+        };
+      },
     }
   )
 );

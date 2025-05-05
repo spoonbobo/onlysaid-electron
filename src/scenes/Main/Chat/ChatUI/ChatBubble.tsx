@@ -11,9 +11,19 @@ interface ChatBubbleProps {
   message: IChatMessage;
   isCurrentUser: boolean;
   isContinuation?: boolean;
+  isLastInSequence?: boolean;
+  onReply?: (message: IChatMessage) => void;
+  replyToMessage?: IChatMessage | null;
 }
 
-const ChatBubble = ({ message: msg, isCurrentUser, isContinuation = false }: ChatBubbleProps) => {
+const ChatBubble = ({
+  message: msg,
+  isCurrentUser,
+  isContinuation = false,
+  isLastInSequence = false,
+  onReply,
+  replyToMessage
+}: ChatBubbleProps) => {
   const [isHovered, setIsHovered] = useState(false);
 
   // Format time as HH:MM for continued messages
@@ -23,10 +33,16 @@ const ChatBubble = ({ message: msg, isCurrentUser, isContinuation = false }: Cha
     return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
   };
 
+  const handleReplyClick = () => {
+    if (onReply) {
+      onReply(msg);
+    }
+  };
+
   return (
     <Box
       sx={{
-        mb: 0,
+        mb: isLastInSequence ? 0.8 : 0,
         display: "flex",
         alignItems: "center",
         justifyContent: "flex-start",
@@ -42,20 +58,24 @@ const ChatBubble = ({ message: msg, isCurrentUser, isContinuation = false }: Cha
       onMouseLeave={() => setIsHovered(false)}
     >
       {isContinuation ? (
-        <Box sx={{ width: 36, minWidth: 36, mr: 1.5, position: "relative" }}>
+        <Box sx={{
+          width: 36,
+          minWidth: 36,
+          mr: 1.5,
+          position: "relative",
+          height: "100%",
+          display: "flex",
+          alignItems: "center"
+        }}>
           {/* Small timestamp for continued messages - only shown on hover */}
           {isHovered && (
             <Typography
               noWrap
               sx={{
-                position: "absolute",
                 fontSize: "0.65rem",
                 color: "text.secondary",
                 opacity: 0.7,
-                left: "50%",
-                top: "50%",
-                transform: "translate(-50%, -50%)",
-                maxWidth: "36px",
+                width: "100%",
                 textAlign: "center"
               }}
             >
@@ -96,6 +116,36 @@ const ChatBubble = ({ message: msg, isCurrentUser, isContinuation = false }: Cha
             </Typography>
           </Typography>
         )}
+
+        {replyToMessage && (
+          <Box
+            sx={{
+              mb: 0.5,
+              mt: 0.5,
+              pl: 1,
+              borderLeft: '2px solid',
+              borderColor: 'primary.light',
+              opacity: 0.8
+            }}
+          >
+            <Typography variant="caption" sx={{ fontWeight: 500, color: 'primary.dark' }}>
+              Replying to {replyToMessage.sender_object?.username}
+            </Typography>
+            <Typography
+              noWrap
+              sx={{
+                fontSize: '0.8rem',
+                color: 'text.secondary',
+                maxWidth: '250px',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis'
+              }}
+            >
+              {replyToMessage.text}
+            </Typography>
+          </Box>
+        )}
+
         <Typography sx={{
           color: "text.secondary",
           fontSize: "0.95rem",
@@ -131,7 +181,7 @@ const ChatBubble = ({ message: msg, isCurrentUser, isContinuation = false }: Cha
           <IconButton size="small" sx={{ p: 0.5 }}>
             <EmojiEmotionsIcon fontSize="small" color="warning" />
           </IconButton>
-          <IconButton size="small" sx={{ p: 0.5 }}>
+          <IconButton size="small" sx={{ p: 0.5 }} onClick={handleReplyClick}>
             <ReplyIcon fontSize="small" />
           </IconButton>
           <IconButton size="small" sx={{ p: 0.5 }}>
