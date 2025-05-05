@@ -2,6 +2,9 @@ import { ipcMain, dialog, BrowserWindow } from 'electron';
 import fs from 'fs';
 import path from 'path';
 import { promisify } from 'util';
+import axios from 'axios';
+import { v4 as uuidv4 } from 'uuid';
+import FormData from 'form-data';
 
 const readdir = promisify(fs.readdir);
 const stat = promisify(fs.stat);
@@ -64,6 +67,38 @@ export function setupFileSystemHandlers() {
     } catch (err) {
       console.error(`Error reading directory ${folderPath}:`, err);
       throw err;
+    }
+  });
+
+  // Upload file
+  ipcMain.handle('upload-file', async (event, { filePath, fileType, fileName }) => {
+    try {
+      // Create form data for upload
+      const formData = new FormData();
+      formData.append('file', fs.createReadStream(filePath));
+      formData.append('fileType', fileType);
+      formData.append('fileName', fileName);
+
+      // Replace with your actual upload URL
+      const response = await axios.post('https://api.onlysaid.com/upload', formData, {
+        headers: {
+          ...formData.getHeaders(),
+          'Content-Type': 'multipart/form-data'
+        }
+      });
+
+      // Return success response with file URL and ID
+      return {
+        success: true,
+        url: response.data.url,
+        id: response.data.id || uuidv4()
+      };
+    } catch (error: any) {
+      console.error('Error uploading file:', error);
+      return {
+        success: false,
+        error: error.message
+      };
     }
   });
 }

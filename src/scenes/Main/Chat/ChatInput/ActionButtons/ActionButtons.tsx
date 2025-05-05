@@ -44,6 +44,7 @@ export default function ActionButtons({
         type = 'audio';
       }
 
+      // Just pass the file object to parent without uploading
       onAttachment(type, file);
 
       // Reset file input
@@ -104,6 +105,7 @@ export default function ActionButtons({
       <IconButton
         size="small"
         onClick={() => fileInputRef.current?.click()}
+        disabled={disabled}
         sx={{
           color: hasAttachments ? "primary.main" : "text.secondary",
           "&:hover": {
@@ -117,6 +119,7 @@ export default function ActionButtons({
           ref={fileInputRef}
           style={{ display: 'none' }}
           onChange={handleFileSelect}
+          accept="image/*,video/*,audio/*,application/*"
         />
       </IconButton>
 

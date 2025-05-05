@@ -13,8 +13,6 @@ if (process.type === 'browser') {
   // Or use home directory
   // const customDBPath = path.join(require('os').homedir(), 'onlysaid-data');
 
-  console.log('Custom data path:', customDBPath);
-
   const dbDirectory = path.join(customDBPath, 'databases');
   console.log('Database directory path:', dbDirectory);
 

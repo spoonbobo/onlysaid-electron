@@ -61,17 +61,35 @@ export const featureMigrations = [
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     room_id TEXT,
     sender TEXT,
-    reactions TEXT, -- Stored as JSON string
+    reactions TEXT[], -- Stored as JSON string
     reply_to TEXT,
-    mention TEXT, -- Stored as JSON string
-    image TEXT[], -- accepted multiple images
-    video TEXT[],
-    audio TEXT[],
+    mentions TEXT[], -- Stored as JSON string
+    files TEXT[], -- Stored as JSON string
     poll TEXT,
     contact TEXT,
     gif TEXT,
     text TEXT
   )`,
+
+  // reactions table
+  `CREATE TABLE IF NOT EXISTS reactions (
+    id TEXT PRIMARY KEY,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    reaction TEXT NOT NULL,
+    message_id TEXT NOT NULL,
+    user_id TEXT NOT NULL,
+    FOREIGN KEY (message_id) REFERENCES messages(id)
+  )`,
+
+  // Files table
+  `CREATE TABLE IF NOT EXISTS files (
+    id TEXT PRIMARY KEY,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    file_url TEXT NOT NULL,
+    file_type TEXT NOT NULL,
+    file_name TEXT NOT NULL
+  )`,
+
 
   // Notifications table
   `CREATE TABLE IF NOT EXISTS notifications (

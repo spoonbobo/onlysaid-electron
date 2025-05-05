@@ -43,6 +43,11 @@ interface TopicStore {
   replyingToByContext: Record<string, string | null>;
   setReplyingTo: (messageId: string | null) => void;
   getReplyingTo: () => string | null;
+
+  attachmentsByContext: Record<string, Record<string, any>>;
+  setAttachment: (type: string, file: any) => void;
+  clearAttachments: () => void;
+  getAttachments: () => Record<string, any>;
 }
 
 export const useTopicStore = create<TopicStore>()(
@@ -271,6 +276,51 @@ export const useTopicStore = create<TopicStore>()(
         return replyingToByContext[contextKey] || null;
       },
 
+      attachmentsByContext: {},
+
+      setAttachment: (type, file) =>
+        set((state) => {
+          if (!state.selectedContext) return state;
+
+          const parentId = state.contextParents[`${state.selectedContext.name}:${state.selectedContext.type}`] || '';
+          const contextKey = `${parentId}-${state.selectedContext.name}:${state.selectedContext.type}`;
+
+          return {
+            attachmentsByContext: {
+              ...state.attachmentsByContext,
+              [contextKey]: {
+                ...(state.attachmentsByContext[contextKey] || {}),
+                [type]: file,
+              },
+            },
+          };
+        }),
+
+      clearAttachments: () =>
+        set((state) => {
+          if (!state.selectedContext) return state;
+
+          const parentId = state.contextParents[`${state.selectedContext.name}:${state.selectedContext.type}`] || '';
+          const contextKey = `${parentId}-${state.selectedContext.name}:${state.selectedContext.type}`;
+
+          const newAttachments = { ...state.attachmentsByContext };
+          delete newAttachments[contextKey];
+
+          return {
+            attachmentsByContext: newAttachments
+          };
+        }),
+
+      getAttachments: () => {
+        const { selectedContext, attachmentsByContext, contextParents } = get();
+        if (!selectedContext) return {};
+
+        const parentId = contextParents[`${selectedContext.name}:${selectedContext.type}`] || '';
+        const contextKey = `${parentId}-${selectedContext.name}:${selectedContext.type}`;
+
+        return attachmentsByContext[contextKey] || {};
+      },
+
       cleanupDanglingReferences: () => {
         const { useWindowStore } = require("./WindowStore");
         const windowStore = useWindowStore.getState();
@@ -321,10 +371,26 @@ export const useTopicStore = create<TopicStore>()(
             }
           });
 
+          // Clean up attachments for non-existent tabs
+          const newAttachments = { ...state.attachmentsByContext };
+          Object.keys(newAttachments).forEach(key => {
+            const parts = key.split('-');
+            const tabId = parts.length > 1 ? parts[0] : '';
+
+            if (tabId && !validTabIds.includes(tabId)) {
+              delete newAttachments[key];
+            }
+
+            if (key.startsWith('-')) {
+              delete newAttachments[key];
+            }
+          });
+
           return {
             expandedGroupsByContext: newExpandedGroups,
             trustModeByContext: newTrustMode,
-            replyingToByContext: newReplyingTo
+            replyingToByContext: newReplyingTo,
+            attachmentsByContext: newAttachments
           };
         });
       },
@@ -341,6 +407,7 @@ export const useTopicStore = create<TopicStore>()(
           contextParents: persistedState.contextParents || {},
           trustModeByContext: persistedState.trustModeByContext || {},
           replyingToByContext: persistedState.replyingToByContext || {},
+          attachmentsByContext: persistedState.attachmentsByContext || {},
         };
       },
     }
@@ -360,6 +427,9 @@ export const useCurrentTopicContext = () => {
     setTrustMode,
     getReplyingTo,
     setReplyingTo,
+    getAttachments,
+    setAttachment,
+    clearAttachments,
   } = useTopicStore();
 
   return {
@@ -386,5 +456,8 @@ export const useCurrentTopicContext = () => {
     },
     replyingToId: getReplyingTo(),
     setReplyingTo,
+    attachments: getAttachments(),
+    setAttachment,
+    clearAttachments,
   };
 };

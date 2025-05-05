@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
-import { IChatMessage } from "@/models/Chat/Message";
+import { IChatMessage, IReaction } from "@/models/Chat/Message";
 import { IChatRoom } from "@/models/Chat/Chatroom";
 import { getUserTokenFromStore, getUserFromStore } from "@/utils/user";
 import { v4 as uuidv4 } from 'uuid';
@@ -10,6 +10,20 @@ import { IUser } from "@/models/User/User";
 
 // Define the message limit
 const MESSAGE_FETCH_LIMIT = 50;
+
+// update to be dynamic later -- TODO:
+export const DeepSeekUser: IUser = {
+  id: "d8585d79-795d-4956-8061-ee082e202d98",
+  username: "DeepSeek",
+  email: "deepseek@llm.com",
+  avatar: "https://diplo-media.s3.eu-central-1.amazonaws.com/2025/01/deepseek-italy-ban-garante.png",
+  active_rooms: [],
+  archived_rooms: [],
+  teams: [],
+  settings: {
+    theme: "light",
+  },
+}
 
 interface ChatState {
   // Track active room by tab ID
@@ -60,6 +74,9 @@ interface ChatState {
 
   // Add to the ChatState interface
   getMessageById: (roomId: string, messageId: string) => Promise<IChatMessage | null>;
+
+  // Add this to the ChatState interface
+  toggleReaction: (roomId: string, messageId: string, reaction: string) => Promise<void>;
 }
 
 const NewChat = (userId: string, type: string) => {
@@ -168,9 +185,9 @@ export const useChatStore = create<ChatState>()(
           await window.electron.db.query({
             query: `
             insert into messages
-            (id, room_id, sender, text, created_at, reply_to)
+            (id, room_id, sender, text, created_at, reply_to, files)
             values
-            (@id, @roomId, @sender, @text, @createdAt, @replyTo)
+            (@id, @roomId, @sender, @text, @createdAt, @replyTo, @files)
             `,
             params: {
               id: messageId,
@@ -178,7 +195,8 @@ export const useChatStore = create<ChatState>()(
               sender: getUserFromStore()?.id || "",
               text: messageData.text || "",
               createdAt: messageData.created_at,
-              replyTo: messageData.reply_to || null
+              replyTo: messageData.reply_to || null,
+              files: JSON.stringify(messageData.files) || null
             }
           });
 
@@ -204,15 +222,54 @@ export const useChatStore = create<ChatState>()(
               )
             }
           }));
+          console.log("updateMessage", data);
 
-          // In a real app, update on server
-          // await window.electron.chat.updateMessage({
-          //   roomId,
-          //   messageId,
-          //   data,
-          //   token: 'token',
-          //   cookieName: 'cookieName'
-          // });
+          // First check if message exists
+          const checkQuery = `
+            select count(*) as count from messages
+            where id = @messageId and room_id = @roomId
+          `;
+
+          const result = await window.electron.db.query({
+            query: checkQuery,
+            params: { messageId, roomId }
+          });
+
+          if (result && result[0] && result[0].count > 0) {
+            // Message exists, update it
+            const updateQuery = `
+              update messages
+              set text = @text, created_at = @createdAt
+              where id = @messageId
+              and room_id = @roomId
+            `;
+
+            await window.electron.db.query({
+              query: updateQuery,
+              params: { messageId, roomId, text: data.text, createdAt: data.created_at }
+            });
+          } else {
+            // Message doesn't exist, insert it
+            const insertQuery = `
+              insert into messages (id, room_id, sender, text, created_at)
+              values (@messageId, @roomId, @sender, @text, @createdAt)
+            `;
+
+            // Find the message in state to get the sender
+            const message = get().messages[roomId]?.find(msg => msg.id === messageId);
+            const sender = message?.sender || 'assistant';
+
+            await window.electron.db.query({
+              query: insertQuery,
+              params: {
+                messageId,
+                roomId,
+                sender,
+                text: data.text,
+                createdAt: data.created_at || new Date().toISOString()
+              }
+            });
+          }
 
           set({ isLoading: false });
         } catch (error: any) {
@@ -251,22 +308,50 @@ export const useChatStore = create<ChatState>()(
               return false;
             }
 
-            const uniqueSenderIds = R.uniq(R.pluck('sender', fetchedMessages));
-            const userInfos = await window.electron.user.get({
-              token: getUserTokenFromStore(),
-              args: {
-                ids: uniqueSenderIds
-              }
+            const msgIds = fetchedMessages.map(msg => msg.id);
+            const placeholders = msgIds.map((_, i) => `@id${i}`).join(',');
+            const params = msgIds.reduce((acc, id, i) => ({ ...acc, [`id${i}`]: id }), {});
+
+            const reactions = await window.electron.db.query({
+              query: `
+              select * from reactions
+              where message_id in (${placeholders})
+              `,
+              params: params
             });
 
-            const userMap = R.indexBy(
-              R.prop('id') as (user: IUser) => string,
-              userInfos.data.data as IUser[]
-            );
+            // Access reactions data directly like we do with messages
+            // The structure appears different between responses
+            const reactionData = Array.isArray(reactions) ? reactions : (reactions?.data?.data || []);
+            const reactionsByMessageId = R.groupBy(R.prop('message_id'), reactionData as IReaction[]);
 
-            const messagesWithUsers = R.map(msg => ({
+            const uniqueSenderIds = R.uniq(R.pluck('sender', fetchedMessages));
+            let userMap: Record<string, IUser> = {};
+
+            try {
+              const userInfos = await window.electron.user.get({
+                token: getUserTokenFromStore(),
+                args: {
+                  ids: uniqueSenderIds
+                }
+              });
+
+              // Add null checks to handle undefined data
+              if (userInfos && userInfos.data && userInfos.data.data) {
+                userMap = R.indexBy(
+                  R.prop('id') as (user: IUser) => string,
+                  userInfos.data.data as IUser[]
+                );
+              }
+            } catch (error) {
+              console.error("Error fetching user information:", error);
+            }
+
+            // Add reactions to messages
+            const messagesWithUsersAndReactions = R.map(msg => ({
               ...msg,
-              sender_object: userMap[msg.sender]
+              sender_object: userMap[msg.sender] || null,
+              reactions: reactionsByMessageId[msg.id] || []
             }), fetchedMessages).filter(msg => !existingMessageIds.has(msg.id));
 
             set(state => {
@@ -276,11 +361,11 @@ export const useChatStore = create<ChatState>()(
                 messages: {
                   ...state.messages,
                   [roomId]: loadMore
-                    ? [...messagesWithUsers, ...currentMessages]
+                    ? [...messagesWithUsersAndReactions, ...currentMessages]
                     : preserveHistory
-                      ? [...currentMessages, ...messagesWithUsers.filter(msg =>
+                      ? [...currentMessages, ...messagesWithUsersAndReactions.filter(msg =>
                         !currentMessages.some(m => m.id === msg.id))]
-                      : messagesWithUsers
+                      : messagesWithUsersAndReactions
                 },
                 messageOffsets: {
                   ...state.messageOffsets,
@@ -416,6 +501,106 @@ export const useChatStore = create<ChatState>()(
         });
 
         return result.data[0] || null;
+      },
+
+      // Add this implementation inside the store
+      toggleReaction: async (roomId, messageId, reaction) => {
+        console.log("toggleReaction", roomId, messageId, reaction);
+        try {
+          const currentUser = getUserFromStore();
+          if (!currentUser || !currentUser.id) return;
+
+          // Check if reaction already exists in database
+          const existingReaction = await window.electron.db.query({
+            query: `
+              select id from reactions
+              where message_id = @messageId
+              and user_id = @userId
+              and reaction = @reaction
+            `,
+            params: {
+              messageId,
+              userId: currentUser.id,
+              reaction
+            }
+          });
+
+          const reactionExists = Array.isArray(existingReaction) && existingReaction.length > 0;
+          const reactionId = reactionExists ? existingReaction[0]?.id : uuidv4();
+          const createdAt = new Date().toISOString();
+
+          // Get current message for UI update
+          const messages = get().messages[roomId] || [];
+          const message = messages.find(m => m.id === messageId);
+          if (!message) return;
+
+          const currentReactions = message.reactions || [];
+
+          // Update local state
+          set((state) => {
+            const messages = state.messages[roomId] || [];
+            const messageIndex = messages.findIndex(m => m.id === messageId);
+
+            if (messageIndex === -1) return state;
+
+            const updatedReactions = reactionExists
+              ? currentReactions.filter(r => !(r.reaction === reaction && r.user_id === currentUser.id))
+              : [...currentReactions, {
+                id: reactionId,
+                message_id: messageId,
+                user_id: currentUser.id as string,
+                reaction,
+                created_at: createdAt
+              }];
+
+            const updatedMessages = R.update(
+              messageIndex,
+              { ...message, reactions: updatedReactions as IReaction[] },
+              messages
+            );
+
+            return {
+              messages: {
+                ...state.messages,
+                [roomId]: updatedMessages
+              }
+            };
+          });
+
+          if (!reactionExists) {
+            await window.electron.db.query({
+              query: `
+                insert into reactions
+                (id, message_id, user_id, reaction, created_at)
+                values
+                (@id, @messageId, @userId, @reaction, @createdAt)
+              `,
+              params: {
+                id: reactionId,
+                messageId,
+                userId: currentUser.id,
+                reaction,
+                createdAt
+              }
+            });
+          } else {
+            await window.electron.db.query({
+              query: `
+                delete from reactions
+                where message_id = @messageId
+                and user_id = @userId
+                and reaction = @reaction
+              `,
+              params: {
+                messageId,
+                userId: currentUser.id,
+                reaction
+              }
+            });
+          }
+        } catch (error: any) {
+          console.error("Error toggling reaction:", error);
+        }
       },
     }),
     {

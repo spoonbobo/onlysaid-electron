@@ -6,6 +6,11 @@ import FavoriteIcon from '@mui/icons-material/Favorite';
 import EmojiEmotionsIcon from '@mui/icons-material/EmojiEmotions';
 import ReplyIcon from '@mui/icons-material/Reply';
 import MoreHorizIcon from '@mui/icons-material/MoreHoriz';
+import { useChatStore } from "@/stores/Chat/chatStore";
+import { useCurrentTopicContext } from "@/stores/Topic/TopicStore";
+import { useWindowStore } from "@/stores/Topic/WindowStore";
+import { useStreamStore } from "@/stores/SSE/StreamStore";
+import * as R from 'ramda';
 
 interface ChatBubbleProps {
   message: IChatMessage;
@@ -14,6 +19,9 @@ interface ChatBubbleProps {
   isLastInSequence?: boolean;
   onReply?: (message: IChatMessage) => void;
   replyToMessage?: IChatMessage | null;
+  isStreaming?: boolean;
+  isConnecting?: boolean;
+  streamContent?: string;
 }
 
 const ChatBubble = ({
@@ -22,9 +30,17 @@ const ChatBubble = ({
   isContinuation = false,
   isLastInSequence = false,
   onReply,
-  replyToMessage
+  replyToMessage,
+  isStreaming = false,
+  isConnecting = false,
+  streamContent = ""
 }: ChatBubbleProps) => {
   const [isHovered, setIsHovered] = useState(false);
+  const { selectedTopics } = useCurrentTopicContext();
+  const toggleReaction = useChatStore(state => state.toggleReaction);
+
+  // Get active room ID using selectedTopics approach
+  const activeRoomId = Object.values(selectedTopics).find(Boolean) || null;
 
   // Format time as HH:MM for continued messages
   const getTimeString = () => {
@@ -39,12 +55,23 @@ const ChatBubble = ({
     }
   };
 
+  const handleReaction = (reaction: string) => {
+    if (activeRoomId) {
+      toggleReaction(activeRoomId, msg.id, reaction);
+    }
+  };
+
+  // Determine what text to display
+  const displayText = isStreaming
+    ? streamContent || (isConnecting ? "Generating..." : "")
+    : msg.text;
+
   return (
     <Box
       sx={{
         mb: isLastInSequence ? 0.8 : 0,
         display: "flex",
-        alignItems: "center",
+        alignItems: "flex-start",
         justifyContent: "flex-start",
         mt: isContinuation ? 0 : 0.8,
         position: "relative",
@@ -152,8 +179,58 @@ const ChatBubble = ({
           mt: !isContinuation ? 0.2 : 0,
           whiteSpace: "pre-line"
         }}>
-          {msg.text}
+          {displayText}
+          {isStreaming && isConnecting && (
+            <Typography component="span" sx={{
+              display: "inline-block",
+              width: "1em",
+              animation: "cursorBlink 1s infinite",
+              "@keyframes cursorBlink": {
+                "0%": { opacity: 0 },
+                "50%": { opacity: 1 },
+                "100%": { opacity: 0 }
+              }
+            }}>
+              _
+            </Typography>
+          )}
         </Typography>
+
+        {msg.reactions && msg.reactions.length > 0 && (
+          <Box sx={{
+            display: 'flex',
+            gap: 0.5,
+            mt: 0.5,
+            height: 24
+          }}>
+            {Object.entries(
+              R.groupBy(reaction => reaction.reaction, msg.reactions)
+            ).map(([emoji, reactions]) => (
+              <Box
+                key={emoji}
+                onClick={() => handleReaction(emoji)}
+                sx={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  bgcolor: 'action.hover',
+                  borderRadius: 2,
+                  px: 0.8,
+                  py: 0.2,
+                  cursor: 'pointer',
+                  border: '1px solid',
+                  borderColor: 'divider',
+                  '&:hover': {
+                    bgcolor: 'action.selected',
+                    boxShadow: 1
+                  }
+                }}
+              >
+                <Typography sx={{ fontSize: '0.9rem', mr: 0.3 }}>{emoji}</Typography>
+                <Typography sx={{ fontSize: '0.75rem', fontWeight: 500 }}>{reactions?.length || 0}</Typography>
+              </Box>
+            ))}
+          </Box>
+        )}
       </Box>
 
       {isHovered && (
@@ -165,26 +242,28 @@ const ChatBubble = ({
             transform: "translateY(-50%)",
             display: "flex",
             bgcolor: "background.paper",
-            borderRadius: 2,
-            boxShadow: 3,
-            p: 0.5,
+            borderRadius: 1,
+            boxShadow: 2,
+            p: 0.4,
             zIndex: 10,
-            transition: 'none'
+            transition: 'none',
+            border: '1px solid',
+            borderColor: 'divider'
           }}
         >
-          <IconButton size="small" sx={{ p: 0.5 }}>
+          <IconButton size="small" sx={{ p: 0.5, borderRadius: 1, m: 0.1 }} onClick={() => handleReaction("👍")}>
             <ThumbUpIcon fontSize="small" />
           </IconButton>
-          <IconButton size="small" sx={{ p: 0.5 }}>
+          <IconButton size="small" sx={{ p: 0.5, borderRadius: 1, m: 0.1 }} onClick={() => handleReaction("❤️")}>
             <FavoriteIcon fontSize="small" color="error" />
           </IconButton>
-          <IconButton size="small" sx={{ p: 0.5 }}>
+          <IconButton size="small" sx={{ p: 0.5, borderRadius: 1, m: 0.1 }} onClick={() => handleReaction("😊")}>
             <EmojiEmotionsIcon fontSize="small" color="warning" />
           </IconButton>
-          <IconButton size="small" sx={{ p: 0.5 }} onClick={handleReplyClick}>
+          <IconButton size="small" sx={{ p: 0.5, borderRadius: 1, m: 0.1 }} onClick={() => handleReplyClick}>
             <ReplyIcon fontSize="small" />
           </IconButton>
-          <IconButton size="small" sx={{ p: 0.5 }}>
+          <IconButton size="small" sx={{ p: 0.5, borderRadius: 1, m: 0.1 }}>
             <MoreHorizIcon fontSize="small" />
           </IconButton>
         </Box>

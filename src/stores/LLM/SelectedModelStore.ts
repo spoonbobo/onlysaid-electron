@@ -12,7 +12,7 @@ export interface SelectedLLMState {
   modelName: string | null;
 
   // Actions
-  setSelectedModel: (provider: "openai" | "deepseek" | "ollama", modelId: string, modelName: string) => void;
+  setSelectedModel: (provider: "openai" | "deepseek" | "ollama" | null, modelId: string | null, modelName: string | null) => void;
   resetSelection: () => void;
 }
 

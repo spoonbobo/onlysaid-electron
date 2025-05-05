@@ -47,6 +47,7 @@
   "chat.header.context": "上下文",
   "chat.header.group": "群組",
   "chat.header.noChatSelected": "沒有選取聊天室",
+  "chat.noneLLM": "不使用LLM",
 
   "team.create": "創建團隊",
   "team.create.description": "創建一個團隊，讓您可以與其他人共享工作空間。",

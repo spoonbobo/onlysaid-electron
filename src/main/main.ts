@@ -21,16 +21,16 @@ import dotenv from 'dotenv';
 import { setupChatroomHandlers } from './api/v2/chat';
 import { setupUserHandlers } from './api/v2/user';
 import { setupFileSystemHandlers } from './filesystem';
-import os from 'os';
-import fs from 'fs';
-import { promisify } from 'util';
-import childProcess from 'child_process';
-
+import { setupWindowHandlers } from './window';
+import { setupResourceHandlers } from './resource';
+import { setupSSEHandlers } from './sse';
 dotenv.config();
 
 setupChatroomHandlers();
 setupUserHandlers();
 setupFileSystemHandlers();
+setupResourceHandlers();
+setupSSEHandlers();
 
 initAuth(process.env.ONLYSAID_API_URL || '', process.env.ONLYSAID_DOMAIN || '');
 
@@ -52,64 +52,6 @@ ipcMain.on('ipc-example', async (event, arg) => {
   console.log(msgTemplate(arg));
   event.reply('ipc-example', msgTemplate('pong'));
 });
-
-// Tab/Window management IPC handlers
-ipcMain.on('window:create-tab', (event, { tabId, context }) => {
-  console.log(`Creating new tab: ${tabId} with context:`, context);
-  // In a real implementation, we might create a new BrowserWindow or BrowserView
-  // Instead, we're just broadcasting this event to all windows
-  if (mainWindow) {
-    mainWindow.webContents.send('window:tab-created', { tabId, context });
-  }
-  // Sync tab state across all windows
-  if (mainWindow) {
-    mainWindow.webContents.send('window:sync-state', { action: 'tab-created', tabId, context });
-  }
-});
-
-ipcMain.on('window:close-tab', (event, { tabId }) => {
-  console.log(`Closing tab: ${tabId}`);
-  // If we have an actual window/view for this tab, we'd close it here
-  const tabWindow = tabWindows.get(tabId);
-  if (tabWindow && !tabWindow.isDestroyed()) {
-    tabWindow.close();
-    tabWindows.delete(tabId);
-  }
-  // Sync tab state across all windows
-  if (mainWindow) {
-    mainWindow.webContents.send('window:sync-state', { action: 'tab-closed', tabId });
-  }
-});
-
-ipcMain.on('window:focus-tab', (event, { tabId }) => {
-  console.log(`Focusing tab: ${tabId}`);
-  // If we have an actual window/view for this tab, we'd focus it here
-  const tabWindow = tabWindows.get(tabId);
-  if (tabWindow && !tabWindow.isDestroyed()) {
-    if (tabWindow.isMinimized()) {
-      tabWindow.restore();
-    }
-    tabWindow.focus();
-  }
-  // Sync tab state across all windows
-  if (mainWindow) {
-    mainWindow.webContents.send('window:sync-state', { action: 'tab-focused', tabId });
-  }
-});
-
-ipcMain.on('window:rename-tab', (event, { tabId, title }) => {
-  console.log(`Renaming tab: ${tabId} to: ${title}`);
-  // If we have an actual window/view for this tab, we'd update its title here
-  const tabWindow = tabWindows.get(tabId);
-  if (tabWindow && !tabWindow.isDestroyed()) {
-    tabWindow.setTitle(title);
-  }
-  // Sync tab state across all windows
-  if (mainWindow) {
-    mainWindow.webContents.send('window:sync-state', { action: 'tab-renamed', tabId, title });
-  }
-});
-
 // Add these IPC handlers before app.whenReady()
 ipcMain.handle('db:initialize', async () => {
   try {
@@ -154,126 +96,6 @@ ipcMain.handle('db:close', async () => {
   }
 });
 
-// These IPC handlers will report the Electron app's own resource usage
-
-ipcMain.handle('system:get-cpu-usage', async () => {
-  try {
-    // Get initial CPU usage for the current process
-    const startUsage = process.cpuUsage();
-
-    // Wait a bit to measure delta
-    await new Promise(resolve => setTimeout(resolve, 500));
-
-    // Get CPU usage after the delay and calculate the difference
-    const endUsage = process.cpuUsage(startUsage);
-
-    // Convert from microseconds to milliseconds and calculate percentage
-    // endUsage contains user and system CPU time used in microseconds
-    const totalUsage = endUsage.user + endUsage.system;
-
-    // Convert to percentage of CPU used during the measured time period
-    // We measured for 500ms, so divide by 5000 microseconds and multiply by 100 for percentage
-    const cpuPercent = (totalUsage / 5000) * 100;
-
-    // Cap at 100% for single core representation
-    return Math.min(cpuPercent, 100);
-  } catch (error) {
-    console.error('Error getting Electron app CPU usage:', error);
-    return 0;
-  }
-});
-
-ipcMain.handle('system:get-memory-usage', async () => {
-  try {
-    // Get memory usage for the current process
-    const memoryUsage = process.memoryUsage();
-
-    // Return RSS (Resident Set Size) and heapTotal (total allocated heap)
-    return {
-      total: memoryUsage.heapTotal,  // Total heap allocated
-      used: memoryUsage.heapUsed,    // Heap actually used
-      rss: memoryUsage.rss           // Resident Set Size - total memory allocated
-    };
-  } catch (error) {
-    console.error('Error getting Electron app memory usage:', error);
-    return { total: 0, used: 0, rss: 0 };
-  }
-});
-
-const exec = promisify(childProcess.exec);
-
-// Directory size calculation helper
-const getDirSize = async (dirPath: string): Promise<number> => {
-  try {
-    const files = await fs.promises.readdir(dirPath);
-    const stats = await Promise.all(
-      files.map(async (file: string) => {
-        const filePath = path.join(dirPath, file);
-        const stat = await fs.promises.stat(filePath);
-
-        if (stat.isDirectory()) {
-          return getDirSize(filePath);
-        }
-        return stat.size;
-      })
-    );
-
-    return stats.reduce((acc: number, size: number) => acc + size, 0);
-  } catch (e) {
-    console.error(`Error calculating dir size for ${dirPath}:`, e);
-    return 0;
-  }
-};
-
-// Add this handler
-ipcMain.handle('system:get-storage-usage', async () => {
-  try {
-    const userDataPath = app.getPath('userData');
-
-    // Get app storage size (recursively)
-    const appStorageUsed = await getDirSize(userDataPath);
-
-    // Get disk space info
-    let free = 0;
-    let total = 0;
-
-    // Platform-specific disk space check
-    if (process.platform === 'win32') {
-      // Windows
-      const drive = path.parse(userDataPath).root;
-      const { stdout } = await exec(`wmic logicaldisk where "DeviceID='${drive.charAt(0)}:'" get FreeSpace,Size /format:csv`);
-      const lines = stdout.trim().split('\n');
-      if (lines.length > 1) {
-        const parts = lines[1].split(',');
-        if (parts.length >= 3) {
-          free = parseInt(parts[1], 10) || 0;
-          total = parseInt(parts[2], 10) || 0;
-        }
-      }
-    } else {
-      // Linux/macOS
-      const { stdout } = await exec(`df -k "${userDataPath}"`);
-      const lines = stdout.trim().split('\n');
-      if (lines.length > 1) {
-        const parts = lines[1].split(/\s+/);
-        if (parts.length >= 4) {
-          // df returns sizes in 1K blocks, convert to bytes
-          total = parseInt(parts[1], 10) * 1024 || 0;
-          free = parseInt(parts[3], 10) * 1024 || 0;
-        }
-      }
-    }
-
-    return {
-      appStorage: appStorageUsed,
-      free,
-      total
-    };
-  } catch (error) {
-    console.error('Error getting storage usage:', error);
-    return { appStorage: 0, free: 0, total: 0 };
-  }
-});
 
 if (process.env.NODE_ENV === 'production') {
   const sourceMapSupport = require('source-map-support');
@@ -368,6 +190,8 @@ const createWindow = async () => {
   // Remove this if your app does not use auto updates
   // eslint-disable-next-line
   new AppUpdater();
+
+  setupWindowHandlers(mainWindow);
 };
 
 /**

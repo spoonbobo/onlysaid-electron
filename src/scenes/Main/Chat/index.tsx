@@ -1,5 +1,5 @@
 import { Box } from "@mui/material";
-import { useEffect, useRef, useCallback } from "react";
+import { useEffect, useRef, useCallback, useState } from "react";
 import { useCurrentTopicContext } from "@/stores/Topic/TopicStore";
 import ChatHeader from "./ChatHeader";
 import ChatUI from "./ChatUI";
@@ -9,7 +9,11 @@ import { useChatStore } from "@/stores/Chat/chatStore";
 import { useWindowStore } from "@/stores/Topic/WindowStore";
 import { getUserFromStore } from "@/utils/user";
 import { IUser } from "@/models/User/User";
-
+import { IFile } from "@/models/File/File";
+import { useSelectedModelStore } from "@/stores/LLM/SelectedModelStore";
+import { useStreamStore } from "@/stores/SSE/StreamStore";
+import { DeepSeekUser } from "@/stores/Chat/chatStore";
+import { v4 as uuidv4 } from 'uuid';
 type SectionName = 'Friends' | 'Agents';
 
 function Chat() {
@@ -28,8 +32,12 @@ function Chat() {
     fetchMessages,
     getInput,
     setInput,
-    appendMessage
+    appendMessage,
+    updateMessage
   } = useChatStore();
+
+  const { modelId, provider, modelName } = useSelectedModelStore();
+  const { streamChatCompletion } = useStreamStore();
 
   const activeRoomId = activeRoomByTab[tabId] || null;
   const input = getInput(activeRoomId || '', tabId);
@@ -42,6 +50,9 @@ function Chat() {
 
   const messages = storeMessages[activeRoomId || ''] || [];
   const replyingToMessage = replyingToId ? messages.find(m => m.id === replyingToId) || null : null;
+
+  // Add state for tracking streaming
+  const [streamingMessageId, setStreamingMessageId] = useState<string | null>(null);
 
   useEffect(() => {
     if (activeTopic && activeTopic !== activeRoomId) {
@@ -56,10 +67,20 @@ function Chat() {
     }
   }, [activeRoomId, fetchMessages]);
 
-  // Clear reply state when changing rooms
+  // Only clear reply state when explicitly needed (not when switching tabs)
+  const previousActiveRoomIdRef = useRef<string | null>(null);
+  const previousTabIdRef = useRef<string | null>(null);
   useEffect(() => {
-    setReplyingTo(null);
-  }, [activeRoomId, setReplyingTo]);
+    // Only clear reply state when changing rooms within the same tab
+    if (activeRoomId && previousActiveRoomIdRef.current &&
+      activeRoomId !== previousActiveRoomIdRef.current &&
+      tabId === previousTabIdRef.current) {
+      setReplyingTo(null);
+    }
+
+    previousActiveRoomIdRef.current = activeRoomId;
+    previousTabIdRef.current = tabId;
+  }, [activeRoomId, tabId, setReplyingTo]);
 
   const handleReply = (message: IChatMessage) => {
     setReplyingTo(message.id);
@@ -71,7 +92,7 @@ function Chat() {
 
   const handleSend = async (messageData: Partial<IChatMessage>) => {
     if (
-      (messageData.text?.trim() || messageData.image || messageData.video || messageData.audio)
+      (messageData.text?.trim() || messageData.files)
       && activeRoomId
     ) {
       try {
@@ -81,6 +102,10 @@ function Chat() {
         if (replyingToId) {
           messageData.reply_to = replyingToId;
         }
+
+        const fileIds = messageData.files?.map(file => file.id);
+        messageData.files = fileIds as unknown as IFile[];
+        console.log(messageData.files);
 
         const messageId = await sendMessage(activeRoomId, messageData);
 
@@ -94,15 +119,58 @@ function Chat() {
             text: messageData.text || "",
             created_at: messageData.created_at,
             sender_object: currentUser as IUser,
-            reply_to: replyingToId || undefined
+            reply_to: replyingToId || undefined,
+            files: messageData.files
           };
 
           // Add directly to the state instead of refetching
+          console.log("newMessage", newMessage);
           appendMessage(activeRoomId, newMessage);
 
           // Clear input and reply state
           setInput(activeRoomId, '', tabId);
           setReplyingTo(null);
+
+          // Add AI response with streaming if model is selected
+          if (modelId && provider && messageData.text) {
+            // Create assistant message
+            const assistantMessage: IChatMessage = {
+              id: uuidv4(),
+              room_id: activeRoomId,
+              sender: DeepSeekUser?.id || "",
+              sender_object: DeepSeekUser,
+              text: "",
+              created_at: new Date().toISOString(),
+            };
+
+            appendMessage(activeRoomId, assistantMessage);
+
+            // Set streaming ID - use the actual message ID
+            setStreamingMessageId(assistantMessage.id);
+
+            console.log("streaming", modelId, provider, assistantMessage.id);
+            try {
+              // Start streaming
+              const response = await streamChatCompletion(
+                [{ role: "user", content: messageData.text }],
+                {
+                  model: modelId,
+                  streamId: `stream-${assistantMessage.id}`,
+                  provider: provider
+                }
+              );
+
+              // Update message with full response
+              updateMessage(activeRoomId, assistantMessage.id, { text: response });
+            } catch (error) {
+              console.error("Stream error:", error);
+              updateMessage(activeRoomId, assistantMessage.id, {
+                text: "Error generating response. Please try again."
+              });
+            } finally {
+              setStreamingMessageId(null);
+            }
+          }
         }
       } catch (error) {
         console.error("Error sending message:", error);
@@ -162,6 +230,7 @@ function Chat() {
         <ChatUI
           messages={messages}
           onReply={handleReply}
+          streamingMessageId={streamingMessageId}
         />
       </Box>
       <ChatInput

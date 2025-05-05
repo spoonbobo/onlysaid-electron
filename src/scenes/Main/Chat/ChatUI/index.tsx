@@ -5,7 +5,7 @@ import { IChatMessage } from "@/models/Chat/Message";
 import { getUserFromStore } from "@/utils/user";
 import { useChatStore } from "@/stores/Chat/chatStore";
 import { useTopicStore } from "@/stores/Topic/TopicStore";
-import * as R from "ramda";
+import { useStreamStore } from "@/stores/SSE/StreamStore";
 import ChatBubble from "./ChatBubble";
 
 interface ChatUIProps {
@@ -13,9 +13,10 @@ interface ChatUIProps {
   scrollContainerRef?: React.RefObject<HTMLDivElement>;
   messagesEndRef?: React.RefObject<HTMLDivElement>;
   onReply?: (message: IChatMessage) => void;
+  streamingMessageId?: string | null;
 }
 
-function ChatUI({ messages, onReply }: ChatUIProps) {
+function ChatUI({ messages, onReply, streamingMessageId }: ChatUIProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const userId = getUserFromStore()?.id;
@@ -27,6 +28,10 @@ function ChatUI({ messages, onReply }: ChatUIProps) {
 
   const { getCurrentContextTopics } = useTopicStore();
   const roomId = Object.values(getCurrentContextTopics())[0];
+
+  const [streamContent, setStreamContent] = useState("");
+  const { messages: streamMessages, isConnecting } = useStreamStore();
+  const streamId = streamingMessageId ? `stream-${streamingMessageId}` : null;
 
   const scrollToBottom = useCallback(() => {
     if (messagesEndRef.current) {
@@ -107,6 +112,18 @@ function ChatUI({ messages, onReply }: ChatUIProps) {
   }, [roomId, scrollToBottom]);
 
   useEffect(() => {
+    if (streamingMessageId && streamId) {
+      const messages = streamMessages[streamId] || [];
+      if (messages.length > 0) {
+        const latestMessage = messages[messages.length - 1];
+        setStreamContent(latestMessage.full || latestMessage.content);
+      }
+    } else {
+      setStreamContent("");
+    }
+  }, [streamingMessageId, streamId, streamMessages]);
+
+  useEffect(() => {
   }, []);
 
   useEffect(() => {
@@ -164,7 +181,7 @@ function ChatUI({ messages, onReply }: ChatUIProps) {
         </Typography>
       )}
 
-      {messages.length > 0 && messages.length < 10 && (
+      {messages.length > 0 && (
         <Box sx={{ flexGrow: 1 }} />
       )}
 
@@ -183,6 +200,10 @@ function ChatUI({ messages, onReply }: ChatUIProps) {
 
         const messageKey = msg.id || `message-${index}-${Date.now()}`;
 
+        // Check if this message is currently streaming
+        const isStreaming = streamingMessageId === msg.id;
+        const isCurrentlyConnecting = isStreaming && isConnecting[streamId || ""];
+
         return (
           <ChatBubble
             key={messageKey}
@@ -192,6 +213,9 @@ function ChatUI({ messages, onReply }: ChatUIProps) {
             isLastInSequence={isLastInSequence}
             onReply={onReply}
             replyToMessage={replyToMessage}
+            isStreaming={isStreaming}
+            isConnecting={isCurrentlyConnecting}
+            streamContent={isStreaming ? streamContent : ""}
           />
         );
       })}

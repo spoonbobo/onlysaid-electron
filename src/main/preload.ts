@@ -10,6 +10,7 @@ type MiscChannels = 'ipc-example';
 type DbChannels = 'db:initialize' | 'db:query' | 'db:transaction' | 'db:close';
 type SystemChannels = 'system:get-cpu-usage' | 'system:get-memory-usage' | 'system:get-storage-usage';
 
+type SSEChannels = 'sse:chat_stream_complete' | 'sse:chat_complete' | 'sse:generate_image' | 'sse:chunk';
 
 type ApiChatChannels = 'chat:get' | 'chat:create' | 'chat:update' | 'chat:delete';
 type ApiUserChannels = 'user:auth' | 'user:get' | 'user:get_one';
@@ -22,7 +23,8 @@ export type Channels =
   | WindowChannels
   | MenuChannels
   | MiscChannels
-  | SystemChannels;
+  | SystemChannels
+  | SSEChannels;
 
 const electronHandler = {
   ipcRenderer: {
@@ -65,6 +67,12 @@ const electronHandler = {
     update: (...args: unknown[]) => ipcRenderer.invoke('chat:update', ...args),
     delete: (...args: unknown[]) => ipcRenderer.invoke('chat:delete', ...args),
   },
+  sse: {
+    chat_stream_complete: (...args: unknown[]) => ipcRenderer.invoke('sse:chat_stream_complete', ...args),
+    chat_complete: (...args: unknown[]) => ipcRenderer.invoke('sse:chat_complete', ...args),
+    generate_image: (...args: unknown[]) => ipcRenderer.invoke('sse:generate_image', ...args),
+    chunk: (...args: unknown[]) => ipcRenderer.invoke('sse:chunk', ...args),
+  },
   window: {
     createTab: (...args: unknown[]) => ipcRenderer.invoke('window:create-tab', ...args),
     closeTab: (...args: unknown[]) => ipcRenderer.invoke('window:close-tab', ...args),
@@ -81,7 +89,8 @@ const electronHandler = {
   },
   fileSystem: {
     openFolderDialog: () => ipcRenderer.invoke('folder:open-dialog'),
-    getFolderContents: (folderPath: string) => ipcRenderer.invoke('folder:get-contents', folderPath)
+    getFolderContents: (folderPath: string) => ipcRenderer.invoke('folder:get-contents', folderPath),
+    uploadFile: (...args: unknown[]) => ipcRenderer.invoke('upload-file', ...args),
   }
 };
 

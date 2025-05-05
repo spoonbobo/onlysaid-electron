@@ -33,7 +33,7 @@ export default function ModelSelector({ disabled = false }: ModelSelectorProps) 
     try {
       const models = await llmService.GetEnabledLLM();
       setAvailableModels(models);
-      if (models.length > 0 && (!modelId || !provider)) {
+      if (models.length > 0 && (modelId === undefined || provider === undefined)) {
         setSelectedModel(models[0].provider, models[0].id, models[0].name);
       }
     } catch (error) {
@@ -113,15 +113,31 @@ export default function ModelSelector({ disabled = false }: ModelSelectorProps) 
         }}
       >
         {availableModels.length > 0 ? (
-          availableModels.map((model) => (
+          [
             <MenuItem
-              key={model.id}
-              onClick={() => handleModelSelect(model)}
-              selected={modelId === model.id && provider === model.provider}
+              key="none-option"
+              onClick={() => setSelectedModel(null, null, "None")}
+              selected={!modelId && !provider}
             >
-              <Typography variant="body2">{model.name}</Typography>
-            </MenuItem>
-          ))
+              <Typography variant="body2">None</Typography>
+            </MenuItem>,
+            <MenuItem
+              key="divider"
+              sx={{ borderTop: 1, borderColor: 'divider', my: 0.5 }}
+              disabled
+            >
+              <Typography variant="caption" color="text.secondary">Models</Typography>
+            </MenuItem>,
+            ...availableModels.map((model) => (
+              <MenuItem
+                key={model.id}
+                onClick={() => handleModelSelect(model)}
+                selected={modelId === model.id && provider === model.provider}
+              >
+                <Typography variant="body2">{model.name}</Typography>
+              </MenuItem>
+            ))
+          ]
         ) : (
           <MenuItem disabled>
             <Typography variant="body2" sx={{ maxWidth: 220 }}>
