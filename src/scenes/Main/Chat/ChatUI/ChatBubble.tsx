@@ -16,343 +16,343 @@ import CircularProgress from '@mui/material/CircularProgress';
 import MarkdownRenderer from "@/scenes/Main/Chat/ChatUI/MarkdownRenderer";
 
 interface ChatBubbleProps {
-  message: IChatMessage;
-  isCurrentUser: boolean;
-  isContinuation?: boolean;
-  isLastInSequence?: boolean;
-  onReply?: (message: IChatMessage) => void;
-  replyToMessage?: IChatMessage | null;
-  isStreaming?: boolean;
-  isConnecting?: boolean;
-  streamContent?: string;
-  isHovered?: boolean;
-  onMouseEnter?: () => void;
-  onMouseLeave?: () => void;
+    message: IChatMessage;
+    isCurrentUser: boolean;
+    isContinuation?: boolean;
+    isLastInSequence?: boolean;
+    onReply?: (message: IChatMessage) => void;
+    replyToMessage?: IChatMessage | null;
+    isStreaming?: boolean;
+    isConnecting?: boolean;
+    streamContent?: string;
+    isHovered?: boolean;
+    onMouseEnter?: () => void;
+    onMouseLeave?: () => void;
 }
 
 const ChatBubble = ({
-  message: msg,
-  isCurrentUser,
-  isContinuation = false,
-  isLastInSequence = false,
-  onReply,
-  replyToMessage,
-  isStreaming = false,
-  isConnecting = false,
-  streamContent = "",
-  isHovered = false,
-  onMouseEnter = () => { },
-  onMouseLeave = () => { }
+    message: msg,
+    isCurrentUser,
+    isContinuation = false,
+    isLastInSequence = false,
+    onReply,
+    replyToMessage,
+    isStreaming = false,
+    isConnecting = false,
+    streamContent = "",
+    isHovered = false,
+    onMouseEnter = () => { },
+    onMouseLeave = () => { }
 }: ChatBubbleProps) => {
-  const [menuPosition, setMenuPosition] = useState<{ top: number, left: number } | null>(null);
-  const { selectedTopics } = useCurrentTopicContext();
-  const toggleReaction = useChatStore(state => state.toggleReaction);
+    const [menuPosition, setMenuPosition] = useState<{ top: number, left: number } | null>(null);
+    const { selectedTopics } = useCurrentTopicContext();
+    const toggleReaction = useChatStore(state => state.toggleReaction);
 
-  // Get active room ID using selectedTopics approach
-  const activeRoomId = Object.values(selectedTopics).find(Boolean) || null;
+    // Get active room ID using selectedTopics approach
+    const activeRoomId = Object.values(selectedTopics).find(Boolean) || null;
 
-  // Format time as HH:MM for continued messages
-  const getTimeString = () => {
-    if (!msg.created_at) return "";
-    const date = new Date(msg.created_at);
-    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
-  };
-
-  const handleReplyClick = () => {
-    if (onReply) {
-      onReply(msg);
-    }
-  };
-
-  const handleReaction = (reaction: string) => {
-    if (activeRoomId) {
-      toggleReaction(activeRoomId, msg.id, reaction);
-    }
-  };
-
-  const handleContextMenu = (event: React.MouseEvent) => {
-    event.preventDefault(); // Prevent default context menu
-
-    // Close any existing menu first
-    handleMenuClose();
-
-    // Set the new position in the next tick to ensure proper re-rendering
-    setTimeout(() => {
-      setMenuPosition({
-        top: event.clientY,
-        left: event.clientX,
-      });
-    }, 0);
-  };
-
-  const handleMenuClose = () => {
-    setMenuPosition(null);
-  };
-
-  // Handle clicks outside to close the menu
-  useEffect(() => {
-    const handleClickOutside = () => {
-      handleMenuClose();
+    // Format time as HH:MM for continued messages
+    const getTimeString = () => {
+        if (!msg.created_at) return "";
+        const date = new Date(msg.created_at);
+        return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
     };
 
-    if (menuPosition) {
-      document.addEventListener('click', handleClickOutside);
-    }
-
-    return () => {
-      document.removeEventListener('click', handleClickOutside);
+    const handleReplyClick = () => {
+        if (onReply) {
+            onReply(msg);
+        }
     };
-  }, [menuPosition]);
 
-  const handleCopyText = () => {
-    navigator.clipboard.writeText(msg.text);
-    handleMenuClose();
-  };
+    const handleReaction = (reaction: string) => {
+        if (activeRoomId) {
+            toggleReaction(activeRoomId, msg.id, reaction);
+        }
+    };
 
-  const handleDelete = () => {
-    // Placeholder for delete functionality
-    console.log('Delete message:', msg.id);
-    handleMenuClose();
-  };
+    const handleContextMenu = (event: React.MouseEvent) => {
+        event.preventDefault(); // Prevent default context menu
 
-  const handleReport = () => {
-    // Placeholder for report functionality
-    console.log('Report message:', msg.id);
-    handleMenuClose();
-  };
+        // Close any existing menu first
+        handleMenuClose();
 
-  return (
-    <Box
-      sx={{
-        mb: isLastInSequence ? 0.3 : 0,
-        display: "flex",
-        alignItems: "flex-start",
-        justifyContent: "flex-start",
-        mt: isContinuation ? 0 : 0.3,
-        position: "relative",
-        py: 0.3,
-        px: 1,
-        borderRadius: 1,
-        bgcolor: isHovered ? 'action.hover' : 'transparent',
-        transition: 'background-color 0.2s',
-      }}
-      onMouseEnter={onMouseEnter}
-      onMouseLeave={onMouseLeave}
-      onContextMenu={handleContextMenu}
-    >
-      {isContinuation ? (
-        <Box sx={{
-          width: 36,
-          minWidth: 36,
-          mr: 1.5,
-          position: "relative",
-          height: "100%",
-          display: "flex",
-          alignItems: "center"
-        }}>
-          {/* Small timestamp for continued messages - only shown on hover */}
-          {isHovered && (
-            <Typography
-              noWrap
-              sx={{
-                fontSize: "0.65rem",
-                color: "text.secondary",
-                opacity: 0.7,
-                width: "100%",
-                textAlign: "center"
-              }}
-            >
-              {getTimeString()}
-            </Typography>
-          )}
-        </Box>
-      ) : (
-        <Avatar
-          src={msg.sender_object?.avatar}
-          alt={msg.sender_object?.username?.charAt(0) || '?'}
-          sx={{
-            width: 36,
-            height: 36,
-            minWidth: 36,
-            mr: 1.5,
-            mt: 0.5,
-            bgcolor: 'primary.main'
-          }}
-          slotProps={{
-            img: {
-              referrerPolicy: "no-referrer",
-              crossOrigin: "anonymous"
-            }
-          }}
-        />
-      )}
-      <Box
-        sx={{ maxWidth: "calc(100% - 50px)", width: "100%" }}
-      >
-        {!isContinuation && (
-          <Typography sx={{
-            fontWeight: 600,
-            fontSize: "0.95rem",
-            color: "text.primary",
-            mb: 0
-          }}>
-            {msg.sender_object?.username}
-            <Typography component="span" sx={{ color: "text.secondary", fontWeight: 400, fontSize: "0.8rem", ml: 1 }}>
-              {msg.created_at ? new Date(msg.created_at).toLocaleString() : 'Sending...'}
-            </Typography>
-          </Typography>
-        )}
+        // Set the new position in the next tick to ensure proper re-rendering
+        setTimeout(() => {
+            setMenuPosition({
+                top: event.clientY,
+                left: event.clientX,
+            });
+        }, 0);
+    };
 
-        {replyToMessage && (
-          <Box
-            sx={{
-              mb: 0.5,
-              mt: 0.5,
-              pl: 1,
-              borderLeft: '2px solid',
-              borderColor: 'primary.light',
-              opacity: 0.8
-            }}
-          >
-            <Typography variant="caption" sx={{ fontWeight: 500, color: 'primary.dark' }}>
-              Replying to {replyToMessage.sender_object?.username}
-            </Typography>
-            <Typography
-              noWrap
-              sx={{
-                fontSize: '0.8rem',
-                color: 'text.secondary',
-                maxWidth: '250px',
-                overflow: 'hidden',
-                textOverflow: 'ellipsis'
-              }}
-            >
-              {replyToMessage.text}
-            </Typography>
-          </Box>
-        )}
+    const handleMenuClose = () => {
+        setMenuPosition(null);
+    };
 
-        <MarkdownRenderer
-          content={msg.text}
-          isStreaming={isStreaming}
-          isConnecting={isConnecting}
-          streamContent={streamContent}
-        />
+    // Handle clicks outside to close the menu
+    useEffect(() => {
+        const handleClickOutside = () => {
+            handleMenuClose();
+        };
 
-        {isStreaming && isConnecting && !streamContent && (
-          <Box sx={{ display: 'flex', mt: 1, alignItems: 'center' }}>
-            <CircularProgress
-              size={16}
-              thickness={4}
-              sx={{
-                color: 'text.secondary'
-              }}
-            />
-            <Typography sx={{ ml: 1, fontSize: '0.85rem', color: 'text.secondary' }}>
-              Loading...
-            </Typography>
-          </Box>
-        )}
+        if (menuPosition) {
+            document.addEventListener('click', handleClickOutside);
+        }
 
-        {msg.reactions && msg.reactions.length > 0 && (
-          <Box sx={{
-            display: 'flex',
-            gap: 0.5,
-            mt: 0.5,
-            mb: 0.3,
-            height: 24
-          }}>
-            {Object.entries(
-              R.groupBy(reaction => reaction.reaction, msg.reactions)
-            ).map(([emoji, reactions]) => (
-              <Box
-                key={emoji}
-                onClick={() => handleReaction(emoji)}
-                sx={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  bgcolor: 'action.hover',
-                  borderRadius: 2,
-                  px: 0.8,
-                  py: 0.3,
-                  pb: 0.4,
-                  cursor: 'pointer',
-                  border: '1px solid',
-                  borderColor: 'divider',
-                  '&:hover': {
-                    bgcolor: 'action.selected',
-                    boxShadow: 1
-                  }
-                }}
-              >
-                <Typography sx={{ fontSize: '0.9rem', mr: 0.3 }}>{emoji}</Typography>
-                <Typography sx={{ fontSize: '0.75rem', fontWeight: 500 }}>{reactions?.length || 0}</Typography>
-              </Box>
-            ))}
-          </Box>
-        )}
-      </Box>
+        return () => {
+            document.removeEventListener('click', handleClickOutside);
+        };
+    }, [menuPosition]);
 
-      {isHovered && (
+    const handleCopyText = () => {
+        navigator.clipboard.writeText(msg.text);
+        handleMenuClose();
+    };
+
+    const handleDelete = () => {
+        // Placeholder for delete functionality
+        console.log('Delete message:', msg.id);
+        handleMenuClose();
+    };
+
+    const handleReport = () => {
+        // Placeholder for report functionality
+        console.log('Report message:', msg.id);
+        handleMenuClose();
+    };
+
+    return (
         <Box
-          sx={{
-            position: "absolute",
-            right: 0,
-            top: 0,
-            transform: "translateY(-50%)",
-            display: "flex",
-            bgcolor: "background.paper",
-            borderRadius: 1,
-            boxShadow: 2,
-            p: 0.4,
-            zIndex: 10,
-            transition: 'none',
-            border: '1px solid',
-            borderColor: 'divider'
-          }}
+            sx={{
+                mb: isLastInSequence ? 0.3 : 0,
+                display: "flex",
+                alignItems: "flex-start",
+                justifyContent: "flex-start",
+                mt: isContinuation ? 0 : 0.3,
+                position: "relative",
+                py: 0.3,
+                px: 1,
+                borderRadius: 1,
+                bgcolor: isHovered ? 'action.hover' : 'transparent',
+                transition: 'background-color 0.2s',
+            }}
+            onMouseEnter={onMouseEnter}
+            onMouseLeave={onMouseLeave}
         >
-          <IconButton size="small" sx={{ p: 0.5, borderRadius: 1, m: 0.1 }} onClick={() => handleReaction("👍")}>
-            <ThumbUpIcon fontSize="small" />
-          </IconButton>
-          <IconButton size="small" sx={{ p: 0.5, borderRadius: 1, m: 0.1 }} onClick={() => handleReaction("❤️")}>
-            <FavoriteIcon fontSize="small" color="error" />
-          </IconButton>
-          <IconButton size="small" sx={{ p: 0.5, borderRadius: 1, m: 0.1 }} onClick={() => handleReaction("😊")}>
-            <EmojiEmotionsIcon fontSize="small" color="warning" />
-          </IconButton>
-          <IconButton size="small" sx={{ p: 0.5, borderRadius: 1, m: 0.1 }} onClick={handleReplyClick}>
-            <ReplyIcon fontSize="small" />
-          </IconButton>
-          <IconButton size="small" sx={{ p: 0.5, borderRadius: 1, m: 0.1 }} onClick={handleContextMenu}>
-            <MoreHorizIcon fontSize="small" />
-          </IconButton>
-        </Box>
-      )}
+            {isContinuation ? (
+                <Box sx={{
+                    width: 36,
+                    minWidth: 36,
+                    mr: 1.5,
+                    position: "relative",
+                    height: "100%",
+                    display: "flex",
+                    alignItems: "center"
+                }}>
+                    {/* Small timestamp for continued messages - only shown on hover */}
+                    {isHovered && (
+                        <Typography
+                            noWrap
+                            sx={{
+                                fontSize: "0.65rem",
+                                color: "text.secondary",
+                                opacity: 0.7,
+                                width: "100%",
+                                textAlign: "center"
+                            }}
+                        >
+                            {getTimeString()}
+                        </Typography>
+                    )}
+                </Box>
+            ) : (
+                <Avatar
+                    src={msg.sender_object?.avatar}
+                    alt={msg.sender_object?.username?.charAt(0) || '?'}
+                    sx={{
+                        width: 36,
+                        height: 36,
+                        minWidth: 36,
+                        mr: 1.5,
+                        mt: 0.5,
+                        bgcolor: 'primary.main'
+                    }}
+                    slotProps={{
+                        img: {
+                            referrerPolicy: "no-referrer",
+                            crossOrigin: "anonymous"
+                        }
+                    }}
+                />
+            )}
+            <Box
+                sx={{ maxWidth: "calc(100% - 50px)", width: "100%" }}
+                onContextMenu={handleContextMenu}
+            >
+                {!isContinuation && (
+                    <Typography sx={{
+                        fontWeight: 600,
+                        fontSize: "0.95rem",
+                        color: "text.primary",
+                        mb: 0
+                    }}>
+                        {msg.sender_object?.username}
+                        <Typography component="span" sx={{ color: "text.secondary", fontWeight: 400, fontSize: "0.8rem", ml: 1 }}>
+                            {msg.created_at ? new Date(msg.created_at).toLocaleString() : 'Sending...'}
+                        </Typography>
+                    </Typography>
+                )}
 
-      <Menu
-        open={Boolean(menuPosition)}
-        onClose={handleMenuClose}
-        anchorReference="anchorPosition"
-        anchorPosition={menuPosition ? { top: menuPosition.top, left: menuPosition.left } : undefined}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <MenuItem onClick={handleCopyText} dense>
-          <ContentCopyIcon fontSize="small" sx={{ mr: 1 }} />
-          Copy text
-        </MenuItem>
-        {isCurrentUser && (
-          <MenuItem onClick={handleDelete} dense>
-            <DeleteIcon fontSize="small" sx={{ mr: 1 }} />
-            Delete
-          </MenuItem>
-        )}
-        <MenuItem onClick={handleReport} dense>
-          <FlagIcon fontSize="small" sx={{ mr: 1 }} />
-          Report
-        </MenuItem>
-      </Menu>
-    </Box>
-  );
+                {replyToMessage && (
+                    <Box
+                        sx={{
+                            mb: 0.5,
+                            mt: 0.5,
+                            pl: 1,
+                            borderLeft: '2px solid',
+                            borderColor: 'primary.light',
+                            opacity: 0.8
+                        }}
+                    >
+                        <Typography variant="caption" sx={{ fontWeight: 500, color: 'primary.dark' }}>
+                            Replying to {replyToMessage.sender_object?.username}
+                        </Typography>
+                        <Typography
+                            noWrap
+                            sx={{
+                                fontSize: '0.8rem',
+                                color: 'text.secondary',
+                                maxWidth: '250px',
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis'
+                            }}
+                        >
+                            {replyToMessage.text}
+                        </Typography>
+                    </Box>
+                )}
+
+                <MarkdownRenderer
+                    content={msg.text}
+                    isStreaming={isStreaming}
+                    isConnecting={isConnecting}
+                    streamContent={streamContent}
+                />
+
+                {isStreaming && isConnecting && !streamContent && (
+                    <Box sx={{ display: 'flex', mt: 1, alignItems: 'center' }}>
+                        <CircularProgress
+                            size={16}
+                            thickness={4}
+                            sx={{
+                                color: 'text.secondary'
+                            }}
+                        />
+                        <Typography sx={{ ml: 1, fontSize: '0.85rem', color: 'text.secondary' }}>
+                            Loading...
+                        </Typography>
+                    </Box>
+                )}
+
+                {msg.reactions && msg.reactions.length > 0 && (
+                    <Box sx={{
+                        display: 'flex',
+                        gap: 0.5,
+                        mt: 0.5,
+                        mb: 0.3,
+                        height: 24
+                    }}>
+                        {Object.entries(
+                            R.groupBy(reaction => reaction.reaction, msg.reactions)
+                        ).map(([emoji, reactions]) => (
+                            <Box
+                                key={emoji}
+                                onClick={() => handleReaction(emoji)}
+                                sx={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    bgcolor: 'action.hover',
+                                    borderRadius: 2,
+                                    px: 0.8,
+                                    py: 0.3,
+                                    pb: 0.4,
+                                    cursor: 'pointer',
+                                    border: '1px solid',
+                                    borderColor: 'divider',
+                                    '&:hover': {
+                                        bgcolor: 'action.selected',
+                                        boxShadow: 1
+                                    }
+                                }}
+                            >
+                                <Typography sx={{ fontSize: '0.9rem', mr: 0.3 }}>{emoji}</Typography>
+                                <Typography sx={{ fontSize: '0.75rem', fontWeight: 500 }}>{reactions?.length || 0}</Typography>
+                            </Box>
+                        ))}
+                    </Box>
+                )}
+            </Box>
+
+            {isHovered && (
+                <Box
+                    sx={{
+                        position: "absolute",
+                        right: 0,
+                        top: 0,
+                        transform: "translateY(-50%)",
+                        display: "flex",
+                        bgcolor: "background.paper",
+                        borderRadius: 1,
+                        boxShadow: 2,
+                        p: 0.4,
+                        zIndex: 10,
+                        transition: 'none',
+                        border: '1px solid',
+                        borderColor: 'divider'
+                    }}
+                >
+                    <IconButton size="small" sx={{ p: 0.5, borderRadius: 1, m: 0.1 }} onClick={() => handleReaction("👍")}>
+                        <ThumbUpIcon fontSize="small" />
+                    </IconButton>
+                    <IconButton size="small" sx={{ p: 0.5, borderRadius: 1, m: 0.1 }} onClick={() => handleReaction("❤️")}>
+                        <FavoriteIcon fontSize="small" color="error" />
+                    </IconButton>
+                    <IconButton size="small" sx={{ p: 0.5, borderRadius: 1, m: 0.1 }} onClick={() => handleReaction("😊")}>
+                        <EmojiEmotionsIcon fontSize="small" color="warning" />
+                    </IconButton>
+                    <IconButton size="small" sx={{ p: 0.5, borderRadius: 1, m: 0.1 }} onClick={handleReplyClick}>
+                        <ReplyIcon fontSize="small" />
+                    </IconButton>
+                    <IconButton size="small" sx={{ p: 0.5, borderRadius: 1, m: 0.1 }} onClick={handleContextMenu}>
+                        <MoreHorizIcon fontSize="small" />
+                    </IconButton>
+                </Box>
+            )}
+
+            <Menu
+                open={Boolean(menuPosition)}
+                onClose={handleMenuClose}
+                anchorReference="anchorPosition"
+                anchorPosition={menuPosition ? { top: menuPosition.top, left: menuPosition.left } : undefined}
+                onClick={(e) => e.stopPropagation()}
+            >
+                <MenuItem onClick={handleCopyText} dense>
+                    <ContentCopyIcon fontSize="small" sx={{ mr: 1 }} />
+                    Copy text
+                </MenuItem>
+                {isCurrentUser && (
+                    <MenuItem onClick={handleDelete} dense>
+                        <DeleteIcon fontSize="small" sx={{ mr: 1 }} />
+                        Delete
+                    </MenuItem>
+                )}
+                <MenuItem onClick={handleReport} dense>
+                    <FlagIcon fontSize="small" sx={{ mr: 1 }} />
+                    Report
+                </MenuItem>
+            </Menu>
+        </Box>
+    );
 };
 
 export default ChatBubble;

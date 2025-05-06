@@ -1,0 +1,518 @@
+import { create } from "zustand";
+import { persist } from "zustand/middleware";
+
+// Define service configuration interfaces
+interface WeatherServiceConfig {
+    apiKey: string;
+    endpoint: string;
+    units: string;
+}
+
+interface LocationServiceConfig {
+    path: string;
+}
+
+// Add new service configuration interfaces
+interface NearbySearchConfig {
+    apiKey: string;
+    endpoint: string;
+    defaultRadius: number;
+}
+
+interface Web3ResearchConfig {
+    apiKey: string;
+    endpoint: string;
+}
+
+interface DoorDashConfig {
+    apiKey: string;
+    endpoint: string;
+    region: string;
+}
+
+interface WhatsAppConfig {
+    path: string;
+}
+
+interface GitHubConfig {
+    accessToken: string;
+}
+
+interface IPLocationConfig {
+    apiKey: string;
+}
+
+interface MCPState {
+    // Service states
+    weatherEnabled: boolean;
+    locationEnabled: boolean;
+    ipLocationEnabled: boolean;
+
+    // Service configurations
+    weatherConfig: WeatherServiceConfig;
+    locationConfig: LocationServiceConfig;
+
+    // New services
+    nearbySearchEnabled: boolean;
+    web3ResearchEnabled: boolean;
+    doorDashEnabled: boolean;
+    whatsAppEnabled: boolean;
+    gitHubEnabled: boolean;
+
+    nearbySearchConfig: NearbySearchConfig;
+    web3ResearchConfig: Web3ResearchConfig;
+    doorDashConfig: DoorDashConfig;
+    whatsAppConfig: WhatsAppConfig;
+    gitHubConfig: GitHubConfig;
+    ipLocationConfig: IPLocationConfig;
+
+    // Actions
+    setWeatherEnabled: (enabled: boolean) => void;
+    setLocationEnabled: (enabled: boolean) => void;
+    setWeatherConfig: (config: Partial<WeatherServiceConfig>) => void;
+    setLocationConfig: (config: Partial<LocationServiceConfig>) => void;
+    setNearbySearchEnabled: (enabled: boolean) => void;
+    setWeb3ResearchEnabled: (enabled: boolean) => void;
+    setDoorDashEnabled: (enabled: boolean) => void;
+    setWhatsAppEnabled: (enabled: boolean) => void;
+    setGitHubEnabled: (enabled: boolean) => void;
+    setIPLocationEnabled: (enabled: boolean) => void;
+    setNearbySearchConfig: (config: Partial<NearbySearchConfig>) => void;
+    setWeb3ResearchConfig: (config: Partial<Web3ResearchConfig>) => void;
+    setDoorDashConfig: (config: Partial<DoorDashConfig>) => void;
+    setWhatsAppConfig: (config: Partial<WhatsAppConfig>) => void;
+    setGitHubConfig: (config: Partial<GitHubConfig>) => void;
+    setIPLocationConfig: (config: Partial<IPLocationConfig>) => void;
+    resetToDefaults: () => void;
+
+    // Generic IPC action
+    initializeClient: (serviceType: string) => Promise<{ success: boolean; message?: string; error?: string }>;
+
+    // Add validation functions
+    isWeatherConfigured: () => boolean;
+    isLocationConfigured: () => boolean;
+    isNearbySearchConfigured: () => boolean;
+    isWeb3ResearchConfigured: () => boolean;
+    isDoorDashConfigured: () => boolean;
+    isWhatsAppConfigured: () => boolean;
+    isGitHubConfigured: () => boolean;
+    isIPLocationConfigured: () => boolean;
+
+    // Add new action
+    getAllConfiguredServers: () => {
+        [key: string]: {
+            enabled: boolean;
+            configured: boolean;
+            config: any;
+        }
+    };
+}
+
+const DEFAULT_CONFIG = {
+    weatherEnabled: false,
+    locationEnabled: false,
+    ipLocationEnabled: false,
+    weatherConfig: {
+        apiKey: "",
+        endpoint: "",
+        units: "metric"
+    },
+    locationConfig: {
+        path: "",
+    },
+    nearbySearchEnabled: false,
+    web3ResearchEnabled: false,
+    doorDashEnabled: false,
+    whatsAppEnabled: false,
+    gitHubEnabled: false,
+    nearbySearchConfig: {
+        apiKey: "",
+        endpoint: "",
+        defaultRadius: 1500
+    },
+    web3ResearchConfig: {
+        apiKey: "",
+        endpoint: ""
+    },
+    doorDashConfig: {
+        apiKey: "",
+        endpoint: "",
+        region: "us"
+    },
+    whatsAppConfig: {
+        path: ""
+    },
+    gitHubConfig: {
+        accessToken: ""
+    },
+    ipLocationConfig: {
+        apiKey: ""
+    }
+};
+
+// Add validation functions to the store
+const isWeatherConfigured = (config: WeatherServiceConfig): boolean => {
+    return !!config.apiKey && !!config.endpoint && !!config.units;
+};
+
+const isLocationConfigured = (config: LocationServiceConfig): boolean => {
+    return !!config.path;
+};
+
+// Validation functions
+const isNearbySearchConfigured = (config: NearbySearchConfig): boolean => {
+    return !!config.apiKey && !!config.endpoint;
+};
+
+const isWeb3ResearchConfigured = (config: Web3ResearchConfig): boolean => {
+    return !!config.apiKey && !!config.endpoint;
+};
+
+const isDoorDashConfigured = (config: DoorDashConfig): boolean => {
+    return !!config.apiKey && !!config.endpoint && !!config.region;
+};
+
+const isWhatsAppConfigured = (config: WhatsAppConfig): boolean => {
+    return !!config.path;
+};
+
+const isGitHubConfigured = (config: GitHubConfig): boolean => {
+    return !!config.accessToken;
+};
+
+const isIPLocationConfigured = (config: IPLocationConfig): boolean => {
+    return !!config.apiKey;
+};
+
+export const useMCPStore = create<MCPState>()(
+    persist(
+        (set, get) => ({
+            ...DEFAULT_CONFIG,
+
+            setWeatherEnabled: (enabled) => {
+                const state = get();
+                if (enabled && !isWeatherConfigured(state.weatherConfig)) {
+                    // Don't enable if not configured
+                    return;
+                }
+                set({ weatherEnabled: enabled });
+            },
+
+            setLocationEnabled: (enabled) => {
+                const state = get();
+                if (enabled && !isLocationConfigured(state.locationConfig)) {
+                    // Don't enable if not configured
+                    return;
+                }
+                set({ locationEnabled: enabled });
+            },
+
+            setWeatherConfig: (config) => set((state) => ({
+                weatherConfig: { ...state.weatherConfig, ...config }
+            })),
+
+            setLocationConfig: (config) => set((state) => ({
+                locationConfig: { ...state.locationConfig, ...config }
+            })),
+
+            setNearbySearchEnabled: (enabled) => {
+                const state = get();
+                if (enabled && !isNearbySearchConfigured(state.nearbySearchConfig)) return;
+                set({ nearbySearchEnabled: enabled });
+            },
+
+            setWeb3ResearchEnabled: (enabled) => {
+                const state = get();
+                if (enabled && !isWeb3ResearchConfigured(state.web3ResearchConfig)) return;
+                set({ web3ResearchEnabled: enabled });
+            },
+
+            setDoorDashEnabled: (enabled) => {
+                const state = get();
+                if (enabled && !isDoorDashConfigured(state.doorDashConfig)) return;
+                set({ doorDashEnabled: enabled });
+            },
+
+            setWhatsAppEnabled: (enabled) => {
+                const state = get();
+                if (enabled && !isWhatsAppConfigured(state.whatsAppConfig)) return;
+                set({ whatsAppEnabled: enabled });
+            },
+
+            setGitHubEnabled: (enabled) => {
+                const state = get();
+                if (enabled && !isGitHubConfigured(state.gitHubConfig)) return;
+                set({ gitHubEnabled: enabled });
+            },
+
+            setIPLocationEnabled: (enabled) => {
+                const state = get();
+                if (enabled && !isIPLocationConfigured(state.ipLocationConfig)) return;
+                set({ ipLocationEnabled: enabled });
+            },
+
+            setNearbySearchConfig: (config) => set((state) => ({
+                nearbySearchConfig: { ...state.nearbySearchConfig, ...config }
+            })),
+
+            setWeb3ResearchConfig: (config) => set((state) => ({
+                web3ResearchConfig: { ...state.web3ResearchConfig, ...config }
+            })),
+
+            setDoorDashConfig: (config) => set((state) => ({
+                doorDashConfig: { ...state.doorDashConfig, ...config }
+            })),
+
+            setWhatsAppConfig: (config) => set((state) => ({
+                whatsAppConfig: { ...state.whatsAppConfig, ...config }
+            })),
+
+            setGitHubConfig: (config) => set((state) => ({
+                gitHubConfig: { ...state.gitHubConfig, ...config }
+            })),
+
+            setIPLocationConfig: (config) => set((state) => ({
+                ipLocationConfig: { ...state.ipLocationConfig, ...config }
+            })),
+
+            resetToDefaults: () => set(DEFAULT_CONFIG),
+
+            // Generic initialize client action
+            initializeClient: async (serviceType: string) => {
+                const state = get();
+
+                try {
+                    let config;
+
+                    // Configure based on service type
+                    switch (serviceType) {
+                        case "weather":
+                            config = {
+                                enabled: state.weatherEnabled,
+                                command: "node",
+                                args: [
+                                    state.weatherConfig.endpoint,
+                                    "--api-key", state.weatherConfig.apiKey,
+                                    "--units", state.weatherConfig.units
+                                ],
+                                clientName: "onlysaid-weather-client",
+                                clientVersion: "1.0.0"
+                            };
+                            break;
+                        case "location":
+                            config = {
+                                enabled: state.locationEnabled,
+                                command: `${window.electron.homedir()}/.local/bin/uv`,
+                                args: [
+                                    "--directory",
+                                    state.locationConfig.path,
+                                    "run",
+                                    "osm-mcp-server"
+                                ],
+                                clientName: "onlysaid-location-client",
+                                clientVersion: "1.0.0"
+                            };
+                            break;
+                        case "nearby-search":
+                            config = {
+                                enabled: state.nearbySearchEnabled,
+                                command: "uv",
+                                args: [
+                                    "run",
+                                    "main.py",
+                                    "--api-key", state.nearbySearchConfig.apiKey
+                                ],
+                                env: {
+                                    "GOOGLE_API_KEY": state.nearbySearchConfig.apiKey
+                                },
+                                clientName: "nearby-search-client",
+                                clientVersion: "1.0.0"
+                            };
+                            break;
+                        case "web3-research":
+                            config = {
+                                enabled: state.web3ResearchEnabled,
+                                command: "node",
+                                args: [
+                                    state.web3ResearchConfig.endpoint,
+                                    "--api-key", state.web3ResearchConfig.apiKey
+                                ],
+                                clientName: "web3-research-client",
+                                clientVersion: "0.9.0"
+                            };
+                            break;
+                        case "doordash":
+                            config = {
+                                enabled: state.doorDashEnabled,
+                                command: "node",
+                                args: [
+                                    state.doorDashConfig.endpoint,
+                                    "--api-key", state.doorDashConfig.apiKey,
+                                    "--region", state.doorDashConfig.region
+                                ],
+                                clientName: "doordash-client",
+                                clientVersion: "1.1.0"
+                            };
+                            break;
+                        case "whatsapp":
+                            console.log(`${window.electron.homedir()}/.local/bin/uv`);
+                            console.log("/home/spoonbobo/.local/bin/uv");
+                            config = {
+                                enabled: state.whatsAppEnabled,
+                                command: `${window.electron.homedir()}/.local/bin/uv`,
+                                args: [
+                                    "--directory",
+                                    state.whatsAppConfig.path,
+                                    "run",
+                                    "main.py"
+                                ],
+                                clientName: "whatsapp-client",
+                                clientVersion: "0.8.0"
+                            };
+                            break;
+                        case "github":
+                            config = {
+                                enabled: state.gitHubEnabled,
+                                command: "docker",
+                                args: [
+                                    "run",
+                                    "-i",
+                                    "--rm",
+                                    "-e",
+                                    "GITHUB_PERSONAL_ACCESS_TOKEN",
+                                    "ghcr.io/github/github-mcp-server"
+                                ],
+                                env: {
+                                    "GITHUB_PERSONAL_ACCESS_TOKEN": state.gitHubConfig.accessToken
+                                },
+                                clientName: "github-client",
+                                clientVersion: "1.2.0"
+                            };
+                            break;
+                        case "ip-location":
+                            config = {
+                                enabled: state.ipLocationEnabled,
+                                command: `${window.electron.homedir()}/.local/bin/uvx`,
+                                args: [
+                                    "--from",
+                                    "git+https://github.com/briandconnelly/mcp-server-ipinfo.git",
+                                    "mcp-server-ipinfo"
+
+                                ],
+                                env: {
+                                    "IPINFO_API_TOKEN": state.ipLocationConfig.apiKey
+                                },
+                                clientName: "ip-location-client",
+                                clientVersion: "1.0.0"
+                            };
+                            break;
+                        default:
+                            return { success: false, error: `Unknown service type: ${serviceType}` };
+                    }
+
+                    const result = await window.electron.mcp.initialize_client({
+                        serverName: serviceType,
+                        config
+                    });
+                    console.log(result);
+
+                    return result;
+                } catch (error: any) {
+                    console.error(`Error initializing ${serviceType} client:`, error);
+                    return { success: false, error: error.message || "Unknown error" };
+                }
+            },
+
+            // Add validation methods
+            isWeatherConfigured: () => {
+                const { weatherConfig } = get();
+                return isWeatherConfigured(weatherConfig);
+            },
+
+            isLocationConfigured: () => {
+                const { locationConfig } = get();
+                return isLocationConfigured(locationConfig);
+            },
+
+            isNearbySearchConfigured: () => {
+                const { nearbySearchConfig } = get();
+                return isNearbySearchConfigured(nearbySearchConfig);
+            },
+
+            isWeb3ResearchConfigured: () => {
+                const { web3ResearchConfig } = get();
+                return isWeb3ResearchConfigured(web3ResearchConfig);
+            },
+
+            isDoorDashConfigured: () => {
+                const { doorDashConfig } = get();
+                return isDoorDashConfigured(doorDashConfig);
+            },
+
+            isWhatsAppConfigured: () => {
+                const { whatsAppConfig } = get();
+                return isWhatsAppConfigured(whatsAppConfig);
+            },
+
+            isGitHubConfigured: () => {
+                const { gitHubConfig } = get();
+                return isGitHubConfigured(gitHubConfig);
+            },
+
+            isIPLocationConfigured: () => {
+                const { ipLocationConfig } = get();
+                return isIPLocationConfigured(ipLocationConfig);
+            },
+
+            getAllConfiguredServers: () => {
+                const state = get();
+
+                return {
+                    weatherCategory: {
+                        enabled: state.weatherEnabled,
+                        configured: state.isWeatherConfigured(),
+                        config: state.weatherConfig
+                    },
+                    location: {
+                        enabled: state.locationEnabled,
+                        configured: state.isLocationConfigured(),
+                        config: state.locationConfig
+                    },
+                    nearbySearch: {
+                        enabled: state.nearbySearchEnabled,
+                        configured: state.isNearbySearchConfigured(),
+                        config: state.nearbySearchConfig
+                    },
+                    web3Research: {
+                        enabled: state.web3ResearchEnabled,
+                        configured: state.isWeb3ResearchConfigured(),
+                        config: state.web3ResearchConfig
+                    },
+                    doorDash: {
+                        enabled: state.doorDashEnabled,
+                        configured: state.isDoorDashConfigured(),
+                        config: state.doorDashConfig
+                    },
+                    whatsApp: {
+                        enabled: state.whatsAppEnabled,
+                        configured: state.isWhatsAppConfigured(),
+                        config: state.whatsAppConfig
+                    },
+                    github: {
+                        enabled: state.gitHubEnabled,
+                        configured: state.isGitHubConfigured(),
+                        config: state.gitHubConfig
+                    },
+                    ipLocation: {
+                        enabled: state.ipLocationEnabled,
+                        configured: state.isIPLocationConfigured(),
+                        config: state.ipLocationConfig
+                    }
+                };
+            }
+        }),
+        {
+            name: "mcp-service-storage"
+        }
+    )
+);

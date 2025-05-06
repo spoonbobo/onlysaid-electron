@@ -113,6 +113,7 @@
     "@fontsource/poppins": "^5.2.5",
     "@fontsource/roboto": "^5.2.5",
     "@fontsource/space-mono": "^5.2.5",
+    "@modelcontextprotocol/sdk": "^1.11.0",
     "@mui/icons-material": "^7.0.2",
     "@mui/material": "^7.0.2",
     "@mui/x-date-pickers": "^8.1.0",
@@ -209,8 +210,8 @@
     "webpack-merge": "^6.0.1"
   },
   "build": {
-    "productName": "ElectronReact",
-    "appId": "org.erb.ElectronReact",
+    "productName": "Onlysaid",
+    "appId": "org.onlysaid.electron",
     "asar": true,
     "asarUnpack": "**\\*.{node,dll}",
     "files": [
@@ -252,7 +253,9 @@
       "target": [
         {
           "target": "nsis",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         }
       ]
     },
