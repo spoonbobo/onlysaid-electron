@@ -5,7 +5,7 @@ import { useCurrentTopicContext } from "@/stores/Topic/TopicStore";
 import { useWindowStore } from "@/stores/Topic/WindowStore";
 import { useFileExplorerStore } from "@/stores/Layout/FileExplorerResize";
 import HomeMenu from "./Home";
-import FileExplorer from "./FileExplorer/FileExplorer";
+import FileExplorer from "@/components/FileExplorer/FileExplorer";
 import MenuHeader from "./MenuHeader/MenuHeader";
 import React from "react";
 

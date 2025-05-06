@@ -1,16 +1,19 @@
-import { Box, Typography, Avatar, IconButton } from "@mui/material";
+import { Box, Typography, Avatar, IconButton, Menu, MenuItem } from "@mui/material";
 import { IChatMessage } from "@/models/Chat/Message";
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import ThumbUpIcon from '@mui/icons-material/ThumbUp';
 import FavoriteIcon from '@mui/icons-material/Favorite';
 import EmojiEmotionsIcon from '@mui/icons-material/EmojiEmotions';
 import ReplyIcon from '@mui/icons-material/Reply';
 import MoreHorizIcon from '@mui/icons-material/MoreHoriz';
+import ContentCopyIcon from '@mui/icons-material/ContentCopy';
+import DeleteIcon from '@mui/icons-material/Delete';
+import FlagIcon from '@mui/icons-material/Flag';
 import { useChatStore } from "@/stores/Chat/chatStore";
 import { useCurrentTopicContext } from "@/stores/Topic/TopicStore";
-import { useWindowStore } from "@/stores/Topic/WindowStore";
-import { useStreamStore } from "@/stores/SSE/StreamStore";
 import * as R from 'ramda';
+import CircularProgress from '@mui/material/CircularProgress';
+import MarkdownRenderer from "@/scenes/Main/Chat/ChatUI/MarkdownRenderer";
 
 interface ChatBubbleProps {
   message: IChatMessage;
@@ -22,6 +25,9 @@ interface ChatBubbleProps {
   isStreaming?: boolean;
   isConnecting?: boolean;
   streamContent?: string;
+  isHovered?: boolean;
+  onMouseEnter?: () => void;
+  onMouseLeave?: () => void;
 }
 
 const ChatBubble = ({
@@ -33,9 +39,12 @@ const ChatBubble = ({
   replyToMessage,
   isStreaming = false,
   isConnecting = false,
-  streamContent = ""
+  streamContent = "",
+  isHovered = false,
+  onMouseEnter = () => { },
+  onMouseLeave = () => { }
 }: ChatBubbleProps) => {
-  const [isHovered, setIsHovered] = useState(false);
+  const [menuPosition, setMenuPosition] = useState<{ top: number, left: number } | null>(null);
   const { selectedTopics } = useCurrentTopicContext();
   const toggleReaction = useChatStore(state => state.toggleReaction);
 
@@ -61,28 +70,75 @@ const ChatBubble = ({
     }
   };
 
-  // Determine what text to display
-  const displayText = isStreaming
-    ? streamContent || (isConnecting ? "Generating..." : "")
-    : msg.text;
+  const handleContextMenu = (event: React.MouseEvent) => {
+    event.preventDefault(); // Prevent default context menu
+
+    // Close any existing menu first
+    handleMenuClose();
+
+    // Set the new position in the next tick to ensure proper re-rendering
+    setTimeout(() => {
+      setMenuPosition({
+        top: event.clientY,
+        left: event.clientX,
+      });
+    }, 0);
+  };
+
+  const handleMenuClose = () => {
+    setMenuPosition(null);
+  };
+
+  // Handle clicks outside to close the menu
+  useEffect(() => {
+    const handleClickOutside = () => {
+      handleMenuClose();
+    };
+
+    if (menuPosition) {
+      document.addEventListener('click', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('click', handleClickOutside);
+    };
+  }, [menuPosition]);
+
+  const handleCopyText = () => {
+    navigator.clipboard.writeText(msg.text);
+    handleMenuClose();
+  };
+
+  const handleDelete = () => {
+    // Placeholder for delete functionality
+    console.log('Delete message:', msg.id);
+    handleMenuClose();
+  };
+
+  const handleReport = () => {
+    // Placeholder for report functionality
+    console.log('Report message:', msg.id);
+    handleMenuClose();
+  };
 
   return (
     <Box
       sx={{
-        mb: isLastInSequence ? 0.8 : 0,
+        mb: isLastInSequence ? 0.3 : 0,
         display: "flex",
         alignItems: "flex-start",
         justifyContent: "flex-start",
-        mt: isContinuation ? 0 : 0.8,
+        mt: isContinuation ? 0 : 0.3,
         position: "relative",
-        py: 0.5,
+        py: 0.3,
         px: 1,
         borderRadius: 1,
         bgcolor: isHovered ? 'action.hover' : 'transparent',
         transition: 'background-color 0.2s',
       }}
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
+      onMouseEnter={onMouseEnter}
+      onMouseLeave={onMouseLeave}
+      onContextMenu={handleContextMenu}
     >
       {isContinuation ? (
         <Box sx={{
@@ -119,6 +175,7 @@ const ChatBubble = ({
             height: 36,
             minWidth: 36,
             mr: 1.5,
+            mt: 0.5,
             bgcolor: 'primary.main'
           }}
           slotProps={{
@@ -129,7 +186,9 @@ const ChatBubble = ({
           }}
         />
       )}
-      <Box>
+      <Box
+        sx={{ maxWidth: "calc(100% - 50px)", width: "100%" }}
+      >
         {!isContinuation && (
           <Typography sx={{
             fontWeight: 600,
@@ -173,34 +232,34 @@ const ChatBubble = ({
           </Box>
         )}
 
-        <Typography sx={{
-          color: "text.secondary",
-          fontSize: "0.95rem",
-          mt: !isContinuation ? 0.2 : 0,
-          whiteSpace: "pre-line"
-        }}>
-          {displayText}
-          {isStreaming && isConnecting && (
-            <Typography component="span" sx={{
-              display: "inline-block",
-              width: "1em",
-              animation: "cursorBlink 1s infinite",
-              "@keyframes cursorBlink": {
-                "0%": { opacity: 0 },
-                "50%": { opacity: 1 },
-                "100%": { opacity: 0 }
-              }
-            }}>
-              _
+        <MarkdownRenderer
+          content={msg.text}
+          isStreaming={isStreaming}
+          isConnecting={isConnecting}
+          streamContent={streamContent}
+        />
+
+        {isStreaming && isConnecting && !streamContent && (
+          <Box sx={{ display: 'flex', mt: 1, alignItems: 'center' }}>
+            <CircularProgress
+              size={16}
+              thickness={4}
+              sx={{
+                color: 'text.secondary'
+              }}
+            />
+            <Typography sx={{ ml: 1, fontSize: '0.85rem', color: 'text.secondary' }}>
+              Loading...
             </Typography>
-          )}
-        </Typography>
+          </Box>
+        )}
 
         {msg.reactions && msg.reactions.length > 0 && (
           <Box sx={{
             display: 'flex',
             gap: 0.5,
             mt: 0.5,
+            mb: 0.3,
             height: 24
           }}>
             {Object.entries(
@@ -215,7 +274,8 @@ const ChatBubble = ({
                   bgcolor: 'action.hover',
                   borderRadius: 2,
                   px: 0.8,
-                  py: 0.2,
+                  py: 0.3,
+                  pb: 0.4,
                   cursor: 'pointer',
                   border: '1px solid',
                   borderColor: 'divider',
@@ -260,14 +320,37 @@ const ChatBubble = ({
           <IconButton size="small" sx={{ p: 0.5, borderRadius: 1, m: 0.1 }} onClick={() => handleReaction("😊")}>
             <EmojiEmotionsIcon fontSize="small" color="warning" />
           </IconButton>
-          <IconButton size="small" sx={{ p: 0.5, borderRadius: 1, m: 0.1 }} onClick={() => handleReplyClick}>
+          <IconButton size="small" sx={{ p: 0.5, borderRadius: 1, m: 0.1 }} onClick={handleReplyClick}>
             <ReplyIcon fontSize="small" />
           </IconButton>
-          <IconButton size="small" sx={{ p: 0.5, borderRadius: 1, m: 0.1 }}>
+          <IconButton size="small" sx={{ p: 0.5, borderRadius: 1, m: 0.1 }} onClick={handleContextMenu}>
             <MoreHorizIcon fontSize="small" />
           </IconButton>
         </Box>
       )}
+
+      <Menu
+        open={Boolean(menuPosition)}
+        onClose={handleMenuClose}
+        anchorReference="anchorPosition"
+        anchorPosition={menuPosition ? { top: menuPosition.top, left: menuPosition.left } : undefined}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <MenuItem onClick={handleCopyText} dense>
+          <ContentCopyIcon fontSize="small" sx={{ mr: 1 }} />
+          Copy text
+        </MenuItem>
+        {isCurrentUser && (
+          <MenuItem onClick={handleDelete} dense>
+            <DeleteIcon fontSize="small" sx={{ mr: 1 }} />
+            Delete
+          </MenuItem>
+        )}
+        <MenuItem onClick={handleReport} dense>
+          <FlagIcon fontSize="small" sx={{ mr: 1 }} />
+          Report
+        </MenuItem>
+      </Menu>
     </Box>
   );
 };

@@ -52,9 +52,9 @@ export function ThemeContextProvider({ children }: ThemeContextProviderProps) {
           paper: mode === 'light' ? '#ffffff' : '#1e1e1e',
         },
         text: {
-          primary: mode === 'light' ? 'rgba(0, 0, 0, 0.9)' : 'rgba(255, 255, 255, 0.87)',
-          secondary: mode === 'light' ? 'rgba(0, 0, 0, 0.65)' : 'rgba(255, 255, 255, 0.6)',
-          disabled: mode === 'light' ? 'rgba(0, 0, 0, 0.38)' : 'rgba(255, 255, 255, 0.38)',
+          primary: mode === 'light' ? 'rgba(0, 0, 0, 0.9)' : 'rgba(255, 255, 255, 1)',
+          secondary: mode === 'light' ? 'rgba(0, 0, 0, 0.65)' : 'rgba(255, 255, 255, 0.85)',
+          disabled: mode === 'light' ? 'rgba(0, 0, 0, 0.38)' : 'rgba(255, 255, 255, 0.5)',
         },
         divider: mode === 'light' ? 'rgba(0, 0, 0, 0.09)' : 'rgba(255, 255, 255, 0.12)',
         action: {
@@ -67,6 +67,7 @@ export function ThemeContextProvider({ children }: ThemeContextProviderProps) {
       },
       typography: {
         fontFamily: [
+          'Roboto',
           'Noto Serif HK',
           'Space Mono',
           'Space Grotesk',

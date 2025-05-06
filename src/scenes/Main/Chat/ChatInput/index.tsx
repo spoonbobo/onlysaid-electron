@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { Box, Typography, alpha, IconButton } from "@mui/material";
 import MessageTextField from "./TextField/MessageTextField";
 import ActionButtons from "./ActionButtons/ActionButtons";
@@ -29,6 +29,7 @@ function ChatInput({
   const [isSending, setIsSending] = useState(false);
   const { attachments, setAttachment, clearAttachments } = useCurrentTopicContext();
   const { modelName, provider, modelId } = useSelectedModelStore();
+  const [isDragOver, setIsDragOver] = useState(false);
   // console.log(modelName, provider, modelId);
 
   const handleAttachment = (type: string, value: string | File) => {
@@ -115,6 +116,77 @@ function ChatInput({
     }
   }, [input, attachments, disabled, handleSend, isSending, replyingTo, setInput, clearAttachments]);
 
+  // Handle drag events for file dropping
+  const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOver(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOver(false);
+  };
+
+  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOver(false);
+
+    // Handle file drop from FileExplorer
+    const filePath = e.dataTransfer.getData('text/plain');
+
+    if (filePath) {
+      // Option 1: If file path is dragged from FileExplorer
+      // Create a File object from the path or request it from electron
+      try {
+        // For simplicity - here we'd normally use IPC to get the actual file from path
+        // Mock implementation for now:
+        const fileName = filePath.split('/').pop() || 'file';
+        const fileType = fileName.includes('.') ?
+          fileName.split('.').pop()?.toLowerCase() : 'unknown';
+
+        // Determine file type category
+        let type = 'file';
+        if (['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(fileType || '')) {
+          type = 'image';
+        } else if (['mp4', 'webm', 'avi', 'mov'].includes(fileType || '')) {
+          type = 'video';
+        } else if (['mp3', 'wav', 'ogg'].includes(fileType || '')) {
+          type = 'audio';
+        }
+
+        // In production, we would use electron to get the actual file from the path
+        // For now, we'll simulate it
+        // window.electron.fileSystem.getFileFromPath(filePath).then(file => {
+        //   setAttachment(type, file);
+        // });
+
+        // Mock implementation
+        const mockFile = new File([''], fileName, { type: `${type}/${fileType}` });
+        setAttachment(type, mockFile);
+      } catch (error) {
+        console.error('Failed to handle dragged file:', error);
+      }
+    } else if (e.dataTransfer.files.length > 0) {
+      // Option 2: If files were dragged from outside the app
+      const file = e.dataTransfer.files[0];
+
+      // Determine file type
+      let type = 'file';
+      if (file.type.startsWith('image/')) {
+        type = 'image';
+      } else if (file.type.startsWith('video/')) {
+        type = 'video';
+      } else if (file.type.startsWith('audio/')) {
+        type = 'audio';
+      }
+
+      setAttachment(type, file);
+    }
+  };
+
   return (
     <Box
       sx={{
@@ -125,11 +197,13 @@ function ChatInput({
       }}
     >
       <Box
-        component="form"
         onSubmit={e => {
           e.preventDefault();
           handleSendMessage();
         }}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
         sx={{
           width: "100%",
           borderRadius: 2,
@@ -137,7 +211,11 @@ function ChatInput({
           boxShadow: theme => `0 0 2px ${alpha(theme.palette.primary.main, 0.2)}`,
           "&:focus-within": {
             boxShadow: theme => `0 0 3px ${alpha(theme.palette.primary.main, 0.3)}`
-          }
+          },
+          ...(isDragOver && {
+            boxShadow: theme => `0 0 0 2px ${theme.palette.primary.main}`,
+            bgcolor: theme => alpha(theme.palette.primary.light, 0.1)
+          })
         }}
       >
         <Box
@@ -157,18 +235,36 @@ function ChatInput({
                 borderColor: 'divider',
                 display: 'flex',
                 alignItems: 'flex-start',
-                justifyContent: 'space-between'
+                position: 'relative',
               }}
             >
-              <Box>
+              <Box sx={{ width: '90%', pr: 4 }}>
                 <Typography variant="caption" sx={{ fontWeight: 600, color: 'primary.main' }}>
                   Reply to {replyingTo.sender_object?.username || 'User'}
                 </Typography>
-                <Typography noWrap sx={{ fontSize: '0.85rem', color: 'text.secondary', maxWidth: '80%' }}>
+                <Typography
+                  sx={{
+                    fontSize: '0.85rem',
+                    color: 'text.secondary',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    display: '-webkit-box',
+                    WebkitLineClamp: 2,
+                    WebkitBoxOrient: 'vertical'
+                  }}
+                >
                   {replyingTo.text}
                 </Typography>
               </Box>
-              <IconButton size="small" onClick={onCancelReply}>
+              <IconButton
+                size="small"
+                onClick={onCancelReply}
+                sx={{
+                  position: 'absolute',
+                  right: 8,
+                  top: 8,
+                }}
+              >
                 <CloseIcon fontSize="small" />
               </IconButton>
             </Box>

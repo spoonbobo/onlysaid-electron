@@ -137,7 +137,7 @@ function setupAuthHandlers() {
 
         // If we already have a session cookie, try to get session data immediately
         if (sessionCookie) {
-          // Try a direct fetch to the session endpoint
+          // DON'T complete auth here, just store the data
           await authWindow?.webContents.executeJavaScript(`
             fetch('/api/auth/session')
               .then(res => res.json())
@@ -148,35 +148,8 @@ function setupAuthHandlers() {
               .catch(err => console.error('Initial fetch error:', err));
           `);
 
-          // Give it a moment to process
-          setTimeout(async () => {
-            const sessionData = await authWindow?.webContents.executeJavaScript('window.checkForSessionData()');
-
-            if (sessionData && sessionData.user) {
-              console.log('Retrieved session data on initial load!', sessionData);
-
-              // Send the data back to the renderer
-              event.reply('auth:signed-in', {
-                success: true,
-                token: sessionCookie.value,
-                cookieName: sessionCookie.name,
-                userData: sessionData.user
-              });
-
-              authCompleted = true;
-
-              // Close the auth window
-              setTimeout(() => {
-                if (authWindow) {
-                  authWindow.close();
-                  authWindow = null;
-                }
-              }, 1000);
-            } else {
-              // Start polling if we didn't get data right away
-              startPolling(sessionCookie);
-            }
-          }, 1000);
+          console.log("Session cookie found, waiting for navigation to main page...");
+          // Don't trigger auth completion here, let the navigation handle it
         }
       } catch (e) {
         console.error('Error setting up network monitoring:', e);
@@ -274,12 +247,17 @@ function setupAuthHandlers() {
     console.log('Loading auth page:', ONLYSAID_DOMAIN + '/zh-HK/signin');
     authWindow.loadURL(ONLYSAID_DOMAIN + '/zh-HK/signin');
 
-    // Watch for URL changes - simplified to just detect when we leave the signin page
+    // Watch for URL changes - wait for main page navigation
     authWindow.webContents.on('did-navigate', async (_, url) => {
       console.log('Navigation to:', url);
 
-      // If we've navigated away from the signin page, we might be logged in
-      if (!url.includes('/signin') && !authCompleted) {
+      // Check if we've navigated AWAY from the signin page
+      const isSigninPage = url.includes('/signin');
+      const isMainPage = !isSigninPage;
+
+      if (isMainPage && !authCompleted) {
+        console.log('Navigated to main page, checking for session...');
+
         // Check for session cookie
         const cookies = await authWindow?.webContents.session.cookies.get({
           url: ONLYSAID_DOMAIN
@@ -291,11 +269,55 @@ function setupAuthHandlers() {
         );
 
         if (sessionCookie) {
-          // Start polling for session data
-          startPolling(sessionCookie);
+          // Complete the auth process
+          completeAuthentication(sessionCookie, event);
         }
       }
     });
+
+    // Helper function to complete authentication
+    const completeAuthentication = async (sessionCookie: any, event: any) => {
+      // Try to fetch the session data directly
+      await authWindow?.webContents.executeJavaScript(`
+        fetch('/api/auth/session')
+          .then(res => res.json())
+          .then(data => {
+            console.log('Main page session data:', data);
+            window.__authSessionData = data;
+          })
+          .catch(err => console.error('Main page session fetch error:', err));
+      `);
+
+      // Give it a moment to process
+      setTimeout(async () => {
+        const sessionData = await authWindow?.webContents.executeJavaScript('window.checkForSessionData()');
+
+        if (sessionData && sessionData.user) {
+          console.log('Retrieved final session data!', sessionData);
+
+          // Send the data back to the renderer
+          event.reply('auth:signed-in', {
+            success: true,
+            token: sessionCookie.value,
+            cookieName: sessionCookie.name,
+            userData: sessionData.user
+          });
+
+          authCompleted = true;
+
+          // Close the auth window
+          setTimeout(() => {
+            if (authWindow) {
+              authWindow.close();
+              authWindow = null;
+            }
+          }, 1000);
+        } else {
+          // Start polling if we didn't get data right away
+          startPolling(sessionCookie);
+        }
+      }, 1000);
+    };
 
     // Handle auth window closed
     authWindow.on('closed', () => {

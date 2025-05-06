@@ -60,7 +60,14 @@ export const setupChatroomHandlers = () => {
 
   ipcMain.handle('chat:delete', async (event, args) => {
     try {
-      const response = await onlysaidServiceInstance.delete<null>(`/chat/${args.id}`);
+      const response = await onlysaidServiceInstance.delete<null>(
+        `/chat?id=${args.id}`,
+        {
+          headers: {
+            Authorization: `Bearer ${args.token}`
+          }
+        }
+      );
       return { data: response.data };
     } catch (error: any) {
       console.error('Error in main process API call (delete_room):', error.message);

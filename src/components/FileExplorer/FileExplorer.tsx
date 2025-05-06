@@ -20,6 +20,7 @@ interface FileExplorerProps {
 function FileNodeItem({ node, level = 0 }: { node: any, level?: number }) {
   const { loadFolder, toggleFolder, selectItem } = useFilesStore();
   const isLoading = useFilesStore(selectors.selectIsNodeLoading(node.path));
+  const [isDragging, setIsDragging] = useState(false);
 
   const handleClick = () => {
     if (isLoading) return;
@@ -37,21 +38,67 @@ function FileNodeItem({ node, level = 0 }: { node: any, level?: number }) {
     }
   };
 
+  // Handle drag start
+  const handleDragStart = (e: React.DragEvent<HTMLDivElement>) => {
+    setIsDragging(true);
+    e.dataTransfer.setData('text/plain', node.path);
+    // Set the drag image (optional - can customize this)
+    if (e.dataTransfer.setDragImage && e.currentTarget) {
+      e.dataTransfer.setDragImage(e.currentTarget, 0, 0);
+    }
+    // Add some visual feedback
+    if (e.currentTarget) {
+      e.currentTarget.style.opacity = '0.4';
+    }
+  };
+
+  // Handle drag end
+  const handleDragEnd = (e: React.DragEvent<HTMLDivElement>) => {
+    setIsDragging(false);
+    if (e.currentTarget) {
+      e.currentTarget.style.opacity = '1';
+    }
+  };
+
+  // Handle drag over
+  const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+  };
+
+  // Handle drop
+  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    const draggedNodePath = e.dataTransfer.getData('text/plain');
+    // You would need to add a function to the store to handle reordering
+    // For now, just log the action
+    console.log(`Dropped ${draggedNodePath} onto ${node.path}`);
+  };
+
   // Simple rendering without collapse animation
   return (
     <div>
       <ListItem
         component="div"
         onClick={handleClick}
+        draggable
+        onDragStart={handleDragStart}
+        onDragEnd={handleDragEnd}
+        onDragOver={handleDragOver}
+        onDrop={handleDrop}
         sx={{
           pl: 2 + level * 2,
           py: 0.5,
-          cursor: isLoading ? 'default' : 'pointer',
-          opacity: isLoading ? 0.7 : 1,
+          cursor: isLoading ? 'default' : 'grab',
+          opacity: isLoading ? 0.7 : (isDragging ? 0.4 : 1),
           '&:hover': { bgcolor: isLoading ? 'transparent' : 'action.hover' },
           height: 36,
           minHeight: 36,
-          boxSizing: 'border-box'
+          boxSizing: 'border-box',
+          userSelect: 'none', // Prevent text selection
+          WebkitUserSelect: 'none', // For Safari
+          MozUserSelect: 'none', // For Firefox
+          msUserSelect: 'none', // For IE/Edge
         }}
       >
         <ListItemIcon sx={{ minWidth: 36 }}>
@@ -95,7 +142,8 @@ function FileNodeItem({ node, level = 0 }: { node: any, level?: number }) {
                 py: 0.5,
                 height: 36,
                 minHeight: 36,
-                boxSizing: 'border-box'
+                boxSizing: 'border-box',
+                userSelect: 'none',
               }}
             >
               <Typography variant="body2" color="text.secondary">

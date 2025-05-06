@@ -7,6 +7,7 @@ interface StreamMessage {
   timestamp: number;
 }
 
+
 interface StreamState {
   // State
   connections: Record<string, EventSource | null>;
@@ -19,6 +20,9 @@ interface StreamState {
   disconnect: (id: string) => void;
   disconnectAll: () => void;
   clearMessages: (id: string) => void;
+
+  // Add new abort action
+  abortStream: (streamId: string) => void;
 
   // OpenAI Streaming via IPC
   streamChatCompletion: (
@@ -35,7 +39,7 @@ interface StreamState {
   ) => Promise<string | undefined>;
 }
 
-interface OpenAIMessage {
+export interface OpenAIMessage {
   role: 'user' | 'assistant' | 'system';
   content: string;
 }
@@ -182,6 +186,34 @@ export const useStreamStore = create<StreamState>((set, get) => {
       set((state) => ({
         messages: { ...state.messages, [id]: [] }
       }));
+    },
+
+    abortStream: (streamId: string) => {
+      if (typeof window !== 'undefined' && window.electron) {
+        console.log("abortStream", streamId);
+
+        // Call the backend abort function
+        window.electron.sse.abort_stream({ streamId })
+          .then(result => {
+            console.log("abortStream result", result);
+
+            // Set isConnecting to false regardless of result
+            set((state) => ({
+              isConnecting: { ...state.isConnecting, [streamId]: false }
+            }));
+
+            // Also clear the prefixed stream state just in case
+            set((state) => ({
+              isConnecting: {
+                ...state.isConnecting,
+                [`stream-${streamId}`]: false
+              }
+            }));
+          })
+          .catch(err => {
+            console.error("Error aborting stream:", err);
+          });
+      }
     },
 
     streamChatCompletion: async (messages, options) => {

@@ -1,5 +1,4 @@
-import { Box, Typography, CircularProgress } from "@mui/material";
-import Avatar from '@mui/material/Avatar';
+import { Box, Typography } from "@mui/material";
 import { useRef, useEffect, useState, useCallback } from "react";
 import { IChatMessage } from "@/models/Chat/Message";
 import { getUserFromStore } from "@/utils/user";
@@ -7,6 +6,7 @@ import { useChatStore } from "@/stores/Chat/chatStore";
 import { useTopicStore } from "@/stores/Topic/TopicStore";
 import { useStreamStore } from "@/stores/SSE/StreamStore";
 import ChatBubble from "./ChatBubble";
+import { useCurrentTopicContext } from "@/stores/Topic/TopicStore";
 
 interface ChatUIProps {
   messages: IChatMessage[];
@@ -25,13 +25,24 @@ function ChatUI({ messages, onReply, streamingMessageId }: ChatUIProps) {
   const shouldScrollToBottom = useRef(true);
   const prevMessagesLength = useRef(0);
   const hasUserScrolled = useRef(false);
+  const [hoveredMessageId, setHoveredMessageId] = useState<string | null>(null);
 
   const { getCurrentContextTopics } = useTopicStore();
   const roomId = Object.values(getCurrentContextTopics())[0];
 
   const [streamContent, setStreamContent] = useState("");
-  const { messages: streamMessages, isConnecting } = useStreamStore();
-  const streamId = streamingMessageId ? `stream-${streamingMessageId}` : null;
+  const { messages: streamMessages, isConnecting, abortStream } = useStreamStore();
+  const streamPrefix = streamingMessageId ? `stream-${streamingMessageId}` : null;
+
+  const { streamingState, setStreamingState } = useCurrentTopicContext();
+
+  const handleMessageMouseEnter = useCallback((messageId: string) => {
+    setHoveredMessageId(messageId);
+  }, []);
+
+  const handleMessageMouseLeave = useCallback(() => {
+    setHoveredMessageId(null);
+  }, []);
 
   const scrollToBottom = useCallback(() => {
     if (messagesEndRef.current) {
@@ -112,8 +123,8 @@ function ChatUI({ messages, onReply, streamingMessageId }: ChatUIProps) {
   }, [roomId, scrollToBottom]);
 
   useEffect(() => {
-    if (streamingMessageId && streamId) {
-      const messages = streamMessages[streamId] || [];
+    if (streamingMessageId && streamPrefix) {
+      const messages = streamMessages[streamPrefix] || [];
       if (messages.length > 0) {
         const latestMessage = messages[messages.length - 1];
         setStreamContent(latestMessage.full || latestMessage.content);
@@ -121,10 +132,25 @@ function ChatUI({ messages, onReply, streamingMessageId }: ChatUIProps) {
     } else {
       setStreamContent("");
     }
-  }, [streamingMessageId, streamId, streamMessages]);
+  }, [streamingMessageId, streamPrefix, streamMessages]);
 
   useEffect(() => {
-  }, []);
+    if (streamContent && shouldScrollToBottom.current) {
+      requestAnimationFrame(() => {
+        scrollToBottom();
+      });
+    }
+  }, [streamContent, scrollToBottom]);
+
+  useEffect(() => {
+    const hasReactions = messages.some(msg => msg.reactions && msg.reactions.length > 0);
+
+    if (shouldScrollToBottom.current && hasReactions) {
+      requestAnimationFrame(() => {
+        scrollToBottom();
+      });
+    }
+  }, [messages, scrollToBottom]);
 
   useEffect(() => {
     const scrollAfterRender = () => {
@@ -146,6 +172,17 @@ function ChatUI({ messages, onReply, streamingMessageId }: ChatUIProps) {
 
     prevMessagesLength.current = messages.length;
   }, [messages, userId, scrollToBottom, isLoadingMore]);
+
+  const handleStopGeneration = useCallback(() => {
+    if (streamingMessageId) {
+      const fullStreamId = `stream-${streamingMessageId}`;
+      abortStream(fullStreamId);
+
+      setStreamingState(null, null);
+
+      console.log("Stopping generation for streamId:", fullStreamId);
+    }
+  }, [streamingMessageId, abortStream, setStreamingState]);
 
   return (
     <Box
@@ -200,9 +237,10 @@ function ChatUI({ messages, onReply, streamingMessageId }: ChatUIProps) {
 
         const messageKey = msg.id || `message-${index}-${Date.now()}`;
 
-        // Check if this message is currently streaming
         const isStreaming = streamingMessageId === msg.id;
-        const isCurrentlyConnecting = isStreaming && isConnecting[streamId || ""];
+        const isCurrentlyConnecting = isStreaming && isConnecting[`stream-${streamingMessageId}`];
+
+        const isHovered = hoveredMessageId === msg.id;
 
         return (
           <ChatBubble
@@ -216,11 +254,43 @@ function ChatUI({ messages, onReply, streamingMessageId }: ChatUIProps) {
             isStreaming={isStreaming}
             isConnecting={isCurrentlyConnecting}
             streamContent={isStreaming ? streamContent : ""}
+            isHovered={isHovered}
+            onMouseEnter={() => handleMessageMouseEnter(msg.id)}
+            onMouseLeave={handleMessageMouseLeave}
           />
         );
       })}
 
       <div ref={messagesEndRef} style={{ height: "1px", margin: 0, padding: 0 }} />
+
+      {streamingMessageId && isConnecting[`stream-${streamingMessageId}`] && (
+        <Box
+          sx={{
+            position: 'fixed',
+            bottom: 100,
+            left: '50%',
+            transform: 'translateX(-50%)',
+            zIndex: 1000,
+            bgcolor: 'background.paper',
+            boxShadow: 2,
+            padding: '5px 10px',
+            borderRadius: 1
+          }}
+        >
+          <Typography
+            onClick={handleStopGeneration}
+            color="error"
+            sx={{
+              cursor: 'pointer',
+              '&:hover': {
+                textDecoration: 'underline',
+              }
+            }}
+          >
+            Stop generation
+          </Typography>
+        </Box>
+      )}
     </Box>
   );
 }

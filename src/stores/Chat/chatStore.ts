@@ -7,6 +7,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { WindowTab } from "../Topic/WindowStore";
 import * as R from 'ramda';
 import { IUser } from "@/models/User/User";
+import { validate } from 'uuid';
 
 // Define the message limit
 const MESSAGE_FETCH_LIMIT = 50;
@@ -25,58 +26,47 @@ export const DeepSeekUser: IUser = {
   },
 }
 
+const defaultSenderId = "d8585d79-795d-4956-8061-ee082e202d98"
+
 interface ChatState {
-  // Track active room by tab ID
+  // State properties
   activeRoomByTab: Record<string, string>;
   messages: Record<string, IChatMessage[]>;
-  // Add state to track message offset per room
   messageOffsets: Record<string, number>;
   rooms: IChatRoom[];
-  // Store input state by tab-room combination
   inputByTabRoom: Record<string, string>;
   isLoading: boolean;
   error: string | null;
-
-  // chat
-  createChat: (userId: string, type: string, tabId?: string) => Promise<void>;
-  getChat: (userId: string, type: string) => Promise<void>;
-  updateChat: (roomId: string, data: Partial<IChatRoom>) => Promise<void>;
-  setActiveChat: (roomId: string, tabId?: string) => void;
-  markAsRead: (roomId: string) => void;
-
-  // message
-  sendMessage: (roomId: string, messageData: Partial<IChatMessage>) => Promise<string | void>;
-  updateMessage: (roomId: string, messageId: string, data: Partial<IChatMessage>) => Promise<void>;
-  // Modify fetchMessages to return a boolean indicating if messages were fetched
-  fetchMessages: (roomId: string, loadMore?: boolean, preserveHistory?: boolean) => Promise<boolean>;
-  deleteMessage: (roomId: string, messageId: string) => Promise<void>;
-  editMessage: (roomId: string, messageId: string, content: string) => Promise<void>;
-
-  // Input handling with tab context
-  setInput: (roomId: string, input: string, tabId?: string) => void;
-  getInput: (roomId: string, tabId?: string) => string;
-
-  // Helper to get active room in current tab context
-  getActiveRoomIdForTab: (tabId: string) => string | null;
-
-  // Add to interface
-  cleanupTabReferences: (tabId: string) => void;
-
-  // New function to clean up orphaned rooms
-  cleanupOrphanedRooms: () => void;
-
-  // Add to the ChatState interface
   isTyping: boolean;
+
+  // Room/Chat operations
+  createChat: (userId: string, type: string, tabId?: string) => Promise<void>;
+  deleteChat: (chatId: string) => Promise<void>;
+  getChat: (userId: string, type: string) => Promise<void>;
+  updateChat: (chatId: string, data: Partial<IChatRoom>) => Promise<void>;
+  setActiveChat: (chatId: string, tabId?: string) => void;
+  markAsRead: (chatId: string) => void;
+  getActiveRoomIdForTab: (tabId: string) => string | null;
+  cleanupTabReferences: (tabId: string) => void;
+  cleanupOrphanedRooms: () => void;
+  cleanupChatReferences: (chatId: string) => void;
+
+  // Message operations
+  sendMessage: (chatId: string, messageData: Partial<IChatMessage>) => Promise<string | void>;
+  updateMessage: (chatId: string, messageId: string, data: Partial<IChatMessage>) => Promise<void>;
+  fetchMessages: (chatId: string, loadMore?: boolean, preserveHistory?: boolean) => Promise<boolean>;
+  deleteMessage: (chatId: string, messageId: string) => Promise<void>;
+  editMessage: (chatId: string, messageId: string, content: string) => Promise<void>;
+  appendMessage: (chatId: string, message: IChatMessage) => void;
+  getMessageById: (chatId: string, messageId: string) => Promise<IChatMessage | null>;
+
+  // Input/UI operations
+  setInput: (chatId: string, input: string, tabId?: string) => void;
+  getInput: (chatId: string, tabId?: string) => string;
   setTyping: (typing: boolean) => void;
 
-  // Add this to ChatState interface
-  appendMessage: (roomId: string, message: IChatMessage) => void;
-
-  // Add to the ChatState interface
-  getMessageById: (roomId: string, messageId: string) => Promise<IChatMessage | null>;
-
-  // Add this to the ChatState interface
-  toggleReaction: (roomId: string, messageId: string, reaction: string) => Promise<void>;
+  // Reaction operations
+  toggleReaction: (chatId: string, messageId: string, reaction: string) => Promise<void>;
 }
 
 const NewChat = (userId: string, type: string) => {
@@ -95,7 +85,6 @@ export const useChatStore = create<ChatState>()(
     (set, get) => ({
       activeRoomByTab: {},
       messages: {},
-      // Initialize messageOffsets
       messageOffsets: {},
       rooms: [],
       inputByTabRoom: {},
@@ -107,17 +96,17 @@ export const useChatStore = create<ChatState>()(
         return get().activeRoomByTab[tabId] || null;
       },
 
-      setActiveChat: (roomId, tabId = '') => {
+      setActiveChat: (chatId, tabId = '') => {
         set(state => ({
           activeRoomByTab: {
             ...state.activeRoomByTab,
-            [tabId]: roomId
+            [tabId]: chatId
           }
         }));
-        get().markAsRead(roomId);
+        get().markAsRead(chatId);
       },
 
-      createChat: async (userId: string, type: string, tabId = '') => {
+      createChat: async (userId: string, type: string, tabId?: string) => {
         set({ isLoading: true, error: null });
         try {
           const newChat = NewChat(userId, type);
@@ -131,6 +120,24 @@ export const useChatStore = create<ChatState>()(
             get().setActiveChat(response.data.data[0].id, tabId);
           }
 
+        } catch (error: any) {
+          set({ error: error.message, isLoading: false });
+          console.error(error);
+        }
+      },
+
+      deleteChat: async (chatId: string) => {
+        console.log("deleteChat", chatId);
+        set({ isLoading: true, error: null });
+        try {
+          await window.electron.chat.delete({
+            token: getUserTokenFromStore(),
+            id: chatId
+          });
+
+          // Clean up chat references after successful deletion
+          get().cleanupChatReferences(chatId);
+          set({ isLoading: false });
         } catch (error: any) {
           set({ error: error.message, isLoading: false });
           console.error(error);
@@ -158,13 +165,13 @@ export const useChatStore = create<ChatState>()(
         }
       },
 
-      updateChat: async (roomId, data) => {
+      updateChat: async (chatId, data) => {
         set({ isLoading: true, error: null });
         try {
           // Update chatroom locally first
           set((state) => ({
             rooms: state.rooms.map(room =>
-              room.id === roomId
+              room.id === chatId
                 ? { ...room, ...data, last_updated: new Date().toISOString() }
                 : room
             )
@@ -177,7 +184,7 @@ export const useChatStore = create<ChatState>()(
         }
       },
 
-      sendMessage: async (roomId, messageData) => {
+      sendMessage: async (chatId, messageData) => {
         set({ isLoading: true, error: null });
         try {
           const messageId = uuidv4();
@@ -187,11 +194,11 @@ export const useChatStore = create<ChatState>()(
             insert into messages
             (id, room_id, sender, text, created_at, reply_to, files)
             values
-            (@id, @roomId, @sender, @text, @createdAt, @replyTo, @files)
+            (@id, @chatId, @sender, @text, @createdAt, @replyTo, @files)
             `,
             params: {
               id: messageId,
-              roomId,
+              chatId,
               sender: getUserFromStore()?.id || "",
               text: messageData.text || "",
               createdAt: messageData.created_at,
@@ -210,29 +217,28 @@ export const useChatStore = create<ChatState>()(
         }
       },
 
-      updateMessage: async (roomId, messageId, data) => {
+      updateMessage: async (chatId, messageId, data) => {
         set({ isLoading: true, error: null });
         try {
           // Update message locally first
           set((state) => ({
             messages: {
               ...state.messages,
-              [roomId]: (state.messages[roomId] || []).map(msg =>
+              [chatId]: (state.messages[chatId] || []).map(msg =>
                 msg.id === messageId ? { ...msg, ...data } : msg
               )
             }
           }));
-          console.log("updateMessage", data);
 
           // First check if message exists
           const checkQuery = `
             select count(*) as count from messages
-            where id = @messageId and room_id = @roomId
+            where id = @messageId and room_id = @chatId
           `;
 
           const result = await window.electron.db.query({
             query: checkQuery,
-            params: { messageId, roomId }
+            params: { messageId, chatId }
           });
 
           if (result && result[0] && result[0].count > 0) {
@@ -241,29 +247,29 @@ export const useChatStore = create<ChatState>()(
               update messages
               set text = @text, created_at = @createdAt
               where id = @messageId
-              and room_id = @roomId
+              and room_id = @chatId
             `;
 
             await window.electron.db.query({
               query: updateQuery,
-              params: { messageId, roomId, text: data.text, createdAt: data.created_at }
+              params: { messageId, chatId, text: data.text, createdAt: data.created_at }
             });
           } else {
             // Message doesn't exist, insert it
             const insertQuery = `
               insert into messages (id, room_id, sender, text, created_at)
-              values (@messageId, @roomId, @sender, @text, @createdAt)
+              values (@messageId, @chatId, @sender, @text, @createdAt)
             `;
 
             // Find the message in state to get the sender
-            const message = get().messages[roomId]?.find(msg => msg.id === messageId);
-            const sender = message?.sender || 'assistant';
+            const message = get().messages[chatId]?.find(msg => msg.id === messageId);
+            const sender = message?.sender || defaultSenderId;
 
             await window.electron.db.query({
               query: insertQuery,
               params: {
                 messageId,
-                roomId,
+                chatId,
                 sender,
                 text: data.text,
                 createdAt: data.created_at || new Date().toISOString()
@@ -279,12 +285,12 @@ export const useChatStore = create<ChatState>()(
         }
       },
 
-      fetchMessages: async (roomId, loadMore = false, preserveHistory = false) => {
+      fetchMessages: async (chatId, loadMore = false, preserveHistory = false) => {
         set({ isLoading: true, error: null });
         try {
-          const currentOffset = loadMore ? (get().messageOffsets[roomId] || 0) : 0;
+          const currentOffset = loadMore ? (get().messageOffsets[chatId] || 0) : 0;
           const existingMessages = (preserveHistory || loadMore) ?
-            (get().messages[roomId] || []) : [];
+            (get().messages[chatId] || []) : [];
 
           // Create a Set of existing message IDs for quick lookup
           const existingMessageIds = new Set(existingMessages.map(msg => msg.id));
@@ -292,11 +298,11 @@ export const useChatStore = create<ChatState>()(
           const response = await window.electron.db.query({
             query: `
               select * from messages
-              where room_id = @roomId
+              where room_id = @chatId
               order by created_at desc
               limit @limit offset @offset
             `,
-            params: { roomId, limit: MESSAGE_FETCH_LIMIT, offset: currentOffset }
+            params: { chatId, limit: MESSAGE_FETCH_LIMIT, offset: currentOffset }
           });
 
           if (response && Array.isArray(response)) {
@@ -326,13 +332,14 @@ export const useChatStore = create<ChatState>()(
             const reactionsByMessageId = R.groupBy(R.prop('message_id'), reactionData as IReaction[]);
 
             const uniqueSenderIds = R.uniq(R.pluck('sender', fetchedMessages));
+            const validUUIDs = uniqueSenderIds.filter(id => validate(id));
             let userMap: Record<string, IUser> = {};
 
             try {
               const userInfos = await window.electron.user.get({
                 token: getUserTokenFromStore(),
                 args: {
-                  ids: uniqueSenderIds
+                  ids: validUUIDs
                 }
               });
 
@@ -355,12 +362,12 @@ export const useChatStore = create<ChatState>()(
             }), fetchedMessages).filter(msg => !existingMessageIds.has(msg.id));
 
             set(state => {
-              const currentMessages = state.messages[roomId] || [];
+              const currentMessages = state.messages[chatId] || [];
 
               return {
                 messages: {
                   ...state.messages,
-                  [roomId]: loadMore
+                  [chatId]: loadMore
                     ? [...messagesWithUsersAndReactions, ...currentMessages]
                     : preserveHistory
                       ? [...currentMessages, ...messagesWithUsersAndReactions.filter(msg =>
@@ -369,7 +376,7 @@ export const useChatStore = create<ChatState>()(
                 },
                 messageOffsets: {
                   ...state.messageOffsets,
-                  [roomId]: currentOffset + numFetched
+                  [chatId]: currentOffset + numFetched
                 },
                 isLoading: false
               };
@@ -386,30 +393,30 @@ export const useChatStore = create<ChatState>()(
         }
       },
 
-      setInput: (roomId, input, tabId = '') => {
+      setInput: (chatId, input, tabId = '') => {
         set(state => ({
           inputByTabRoom: {
             ...state.inputByTabRoom,
-            [`${tabId}:${roomId}`]: input
+            [`${tabId}:${chatId}`]: input
           }
         }));
       },
 
-      getInput: (roomId, tabId = '') => {
-        return get().inputByTabRoom[`${tabId}:${roomId}`] || '';
+      getInput: (chatId, tabId = '') => {
+        return get().inputByTabRoom[`${tabId}:${chatId}`] || '';
       },
 
-      markAsRead: (roomId) => {
-        console.log("Dummy markAsRead function called with:", roomId);
+      markAsRead: (chatId) => {
+        console.log("Dummy markAsRead function called with:", chatId);
       },
 
-      deleteMessage: async (roomId, messageId) => {
-        console.log("Dummy deleteMessage function called with:", roomId, messageId);
+      deleteMessage: async (chatId, messageId) => {
+        console.log("Dummy deleteMessage function called with:", chatId, messageId);
         return;
       },
 
-      editMessage: async (roomId, messageId, content) => {
-        console.log("Dummy editMessage function called with:", roomId, messageId, content);
+      editMessage: async (chatId, messageId, content) => {
+        console.log("Dummy editMessage function called with:", chatId, messageId, content);
         return;
       },
 
@@ -440,9 +447,9 @@ export const useChatStore = create<ChatState>()(
 
         set((state) => {
           const newActiveRoomByTab: Record<string, string> = {};
-          Object.entries(state.activeRoomByTab).forEach(([tabId, roomId]) => {
+          Object.entries(state.activeRoomByTab).forEach(([tabId, chatId]) => {
             if (tabId === "" || validTabIds.includes(tabId)) {
-              newActiveRoomByTab[tabId] = roomId;
+              newActiveRoomByTab[tabId] = chatId;
             }
           });
 
@@ -455,8 +462,8 @@ export const useChatStore = create<ChatState>()(
           });
 
           const newMessageOffsets: Record<string, number> = {};
-          Object.entries(state.messageOffsets).forEach(([roomId, offset]) => {
-            newMessageOffsets[roomId] = offset;
+          Object.entries(state.messageOffsets).forEach(([chatId, offset]) => {
+            newMessageOffsets[chatId] = offset;
           });
 
           return {
@@ -469,9 +476,9 @@ export const useChatStore = create<ChatState>()(
 
       setTyping: (typing) => set({ isTyping: typing }),
 
-      appendMessage: (roomId, message) => {
+      appendMessage: (chatId, message) => {
         set(state => {
-          const currentMessages = state.messages[roomId] || [];
+          const currentMessages = state.messages[chatId] || [];
 
           // Check if message already exists
           if (currentMessages.some(msg => msg.id === message.id)) {
@@ -481,31 +488,31 @@ export const useChatStore = create<ChatState>()(
           return {
             messages: {
               ...state.messages,
-              [roomId]: [...currentMessages, message]
+              [chatId]: [...currentMessages, message]
             }
           };
         });
       },
 
       // Add the implementation
-      getMessageById: async (roomId, messageId) => {
+      getMessageById: async (chatId, messageId) => {
         const query = `
           select * from messages
           where id = @messageId
-          and room_id = @roomId
+          and room_id = @chatId
         `;
 
         const result = await window.electron.db.query({
           query,
-          params: { messageId, roomId }
+          params: { messageId, chatId }
         });
 
         return result.data[0] || null;
       },
 
       // Add this implementation inside the store
-      toggleReaction: async (roomId, messageId, reaction) => {
-        console.log("toggleReaction", roomId, messageId, reaction);
+      toggleReaction: async (chatId, messageId, reaction) => {
+        console.log("toggleReaction", chatId, messageId, reaction);
         try {
           const currentUser = getUserFromStore();
           if (!currentUser || !currentUser.id) return;
@@ -530,7 +537,7 @@ export const useChatStore = create<ChatState>()(
           const createdAt = new Date().toISOString();
 
           // Get current message for UI update
-          const messages = get().messages[roomId] || [];
+          const messages = get().messages[chatId] || [];
           const message = messages.find(m => m.id === messageId);
           if (!message) return;
 
@@ -538,7 +545,7 @@ export const useChatStore = create<ChatState>()(
 
           // Update local state
           set((state) => {
-            const messages = state.messages[roomId] || [];
+            const messages = state.messages[chatId] || [];
             const messageIndex = messages.findIndex(m => m.id === messageId);
 
             if (messageIndex === -1) return state;
@@ -562,7 +569,7 @@ export const useChatStore = create<ChatState>()(
             return {
               messages: {
                 ...state.messages,
-                [roomId]: updatedMessages
+                [chatId]: updatedMessages
               }
             };
           });
@@ -602,6 +609,39 @@ export const useChatStore = create<ChatState>()(
           console.error("Error toggling reaction:", error);
         }
       },
+
+      // Add this helper function to the store
+      cleanupChatReferences: (chatId: string) => {
+        set(state => {
+          const updatedRooms = state.rooms.filter(room => room.id !== chatId);
+
+          const { [chatId]: removedMessages, ...restMessages } = state.messages;
+
+          const { [chatId]: removedOffset, ...restOffsets } = state.messageOffsets;
+
+          const newActiveRoomByTab = { ...state.activeRoomByTab };
+          Object.entries(newActiveRoomByTab).forEach(([tabId, roomChatId]) => {
+            if (roomChatId === chatId) {
+              delete newActiveRoomByTab[tabId];
+            }
+          });
+
+          const newInputByTabRoom = { ...state.inputByTabRoom };
+          Object.keys(newInputByTabRoom).forEach(key => {
+            if (key.includes(`:${chatId}`)) {
+              delete newInputByTabRoom[key];
+            }
+          });
+
+          return {
+            rooms: updatedRooms,
+            messages: restMessages,
+            messageOffsets: restOffsets,
+            activeRoomByTab: newActiveRoomByTab,
+            inputByTabRoom: newInputByTabRoom
+          };
+        });
+      },
     }),
     {
       name: "chat-storage",
@@ -609,8 +649,8 @@ export const useChatStore = create<ChatState>()(
       partialize: (state) => {
         // Limit each room's messages to 100 most recent
         const limitedMessages: Record<string, IChatMessage[]> = {};
-        Object.entries(state.messages).forEach(([roomId, messages]) => {
-          limitedMessages[roomId] = messages.slice(-100);
+        Object.entries(state.messages).forEach(([chatId, messages]) => {
+          limitedMessages[chatId] = messages.slice(-100);
         });
 
         return {

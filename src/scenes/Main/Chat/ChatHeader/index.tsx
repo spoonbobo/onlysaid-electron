@@ -33,10 +33,10 @@ function ChatHeader({ selectedContext, selectedGroup, selectedTopic, parentTab }
     >
       {selectedContext && selectedGroup && selectedTopic ? (
         <Stack direction="column" spacing={0.5}>
-          <Typography variant="caption" sx={{ color: "text.secondary" }}>
+          {/* <Typography variant="caption" sx={{ color: "text.secondary" }}>
             # {intl.formatMessage({ id: "context.home", defaultMessage: "Home" })}
             / {intl.formatMessage({ id: `${selectedContext.type}.${selectedGroup}`, defaultMessage: selectedContext.type })}
-          </Typography>
+          </Typography> */}
           <Typography variant="subtitle1" sx={{ fontWeight: 500 }}>
             {chatName}
           </Typography>

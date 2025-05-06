@@ -7,6 +7,7 @@ type MenuListItemProps = {
   isSelected: boolean;
   textColor?: string;
   onClick: () => void;
+  onContextMenu?: (event: React.MouseEvent<HTMLElement>) => void;
   endIcon?: ReactNode;
   sx?: SxProps<Theme>;
 };
@@ -17,6 +18,7 @@ export default function MenuListItem({
   isSelected,
   textColor = "text.primary",
   onClick,
+  onContextMenu,
   endIcon,
   sx
 }: MenuListItemProps) {
@@ -32,6 +34,7 @@ export default function MenuListItem({
       }}
       selected={isSelected}
       onClick={onClick}
+      onContextMenu={onContextMenu}
     >
       {icon && (
         <ListItemIcon sx={{ minWidth: 36 }}>

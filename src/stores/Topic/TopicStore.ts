@@ -48,6 +48,14 @@ interface TopicStore {
   setAttachment: (type: string, file: any) => void;
   clearAttachments: () => void;
   getAttachments: () => Record<string, any>;
+
+  streamingStateByContext: Record<string, {
+    messageId: string | null;
+    roomId: string | null;
+    streamId: string | null;
+  }>;
+  setStreamingState: (messageId: string | null, roomId: string | null) => void;
+  getStreamingState: () => { messageId: string | null; roomId: string | null; streamId: string | null; };
 }
 
 export const useTopicStore = create<TopicStore>()(
@@ -394,6 +402,34 @@ export const useTopicStore = create<TopicStore>()(
           };
         });
       },
+
+      streamingStateByContext: {},
+
+      setStreamingState: (messageId, roomId) =>
+        set((state) => {
+          if (!state.selectedContext) return state;
+
+          const parentId = state.contextParents[`${state.selectedContext.name}:${state.selectedContext.type}`] || '';
+          const contextKey = `${parentId}-${state.selectedContext.name}:${state.selectedContext.type}`;
+          const streamId = messageId ? `stream-${messageId}` : null;
+
+          return {
+            streamingStateByContext: {
+              ...state.streamingStateByContext,
+              [contextKey]: { messageId, roomId, streamId }
+            }
+          };
+        }),
+
+      getStreamingState: () => {
+        const { selectedContext, streamingStateByContext, contextParents } = get();
+        if (!selectedContext) return { messageId: null, roomId: null, streamId: null };
+
+        const parentId = contextParents[`${selectedContext.name}:${selectedContext.type}`] || '';
+        const contextKey = `${parentId}-${selectedContext.name}:${selectedContext.type}`;
+
+        return streamingStateByContext[contextKey] || { messageId: null, roomId: null, streamId: null };
+      },
     }),
     {
       name: "topic-context-storage",
@@ -408,6 +444,7 @@ export const useTopicStore = create<TopicStore>()(
           trustModeByContext: persistedState.trustModeByContext || {},
           replyingToByContext: persistedState.replyingToByContext || {},
           attachmentsByContext: persistedState.attachmentsByContext || {},
+          streamingStateByContext: persistedState.streamingStateByContext || {},
         };
       },
     }
@@ -430,6 +467,8 @@ export const useCurrentTopicContext = () => {
     getAttachments,
     setAttachment,
     clearAttachments,
+    getStreamingState,
+    setStreamingState,
   } = useTopicStore();
 
   return {
@@ -459,5 +498,7 @@ export const useCurrentTopicContext = () => {
     attachments: getAttachments(),
     setAttachment,
     clearAttachments,
+    streamingState: getStreamingState(),
+    setStreamingState,
   };
 };

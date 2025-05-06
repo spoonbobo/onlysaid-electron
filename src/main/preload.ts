@@ -10,7 +10,7 @@ type MiscChannels = 'ipc-example';
 type DbChannels = 'db:initialize' | 'db:query' | 'db:transaction' | 'db:close';
 type SystemChannels = 'system:get-cpu-usage' | 'system:get-memory-usage' | 'system:get-storage-usage';
 
-type SSEChannels = 'sse:chat_stream_complete' | 'sse:chat_complete' | 'sse:generate_image' | 'sse:chunk';
+type SSEChannels = 'sse:abort_stream' | 'sse:chat_stream_complete' | 'sse:chat_complete' | 'sse:generate_image' | 'sse:chunk';
 
 type ApiChatChannels = 'chat:get' | 'chat:create' | 'chat:update' | 'chat:delete';
 type ApiUserChannels = 'user:auth' | 'user:get' | 'user:get_one';
@@ -72,6 +72,7 @@ const electronHandler = {
     chat_complete: (...args: unknown[]) => ipcRenderer.invoke('sse:chat_complete', ...args),
     generate_image: (...args: unknown[]) => ipcRenderer.invoke('sse:generate_image', ...args),
     chunk: (...args: unknown[]) => ipcRenderer.invoke('sse:chunk', ...args),
+    abort_stream: (...args: unknown[]) => ipcRenderer.invoke('sse:abort_stream', ...args),
   },
   window: {
     createTab: (...args: unknown[]) => ipcRenderer.invoke('window:create-tab', ...args),

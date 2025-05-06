@@ -11,13 +11,22 @@ import { getUserFromStore } from "@/utils/user";
 import { IUser } from "@/models/User/User";
 import { IFile } from "@/models/File/File";
 import { useSelectedModelStore } from "@/stores/LLM/SelectedModelStore";
-import { useStreamStore } from "@/stores/SSE/StreamStore";
+import { useStreamStore, OpenAIMessage } from "@/stores/SSE/StreamStore";
 import { DeepSeekUser } from "@/stores/Chat/chatStore";
 import { v4 as uuidv4 } from 'uuid';
+
 type SectionName = 'Friends' | 'Agents';
 
 function Chat() {
-  const { selectedContext, selectedTopics, parentId, replyingToId, setReplyingTo } = useCurrentTopicContext();
+  const {
+    selectedContext,
+    selectedTopics,
+    parentId,
+    replyingToId,
+    setReplyingTo,
+    streamingState,
+    setStreamingState
+  } = useCurrentTopicContext();
   const { tabs } = useWindowStore();
 
   // Get the parent window/tab
@@ -51,8 +60,8 @@ function Chat() {
   const messages = storeMessages[activeRoomId || ''] || [];
   const replyingToMessage = replyingToId ? messages.find(m => m.id === replyingToId) || null : null;
 
-  // Add state for tracking streaming
-  const [streamingMessageId, setStreamingMessageId] = useState<string | null>(null);
+  // Replace local streaming state with the persisted one
+  const streamingMessageId = streamingState.messageId;
 
   useEffect(() => {
     if (activeTopic && activeTopic !== activeRoomId) {
@@ -146,13 +155,22 @@ function Chat() {
             appendMessage(activeRoomId, assistantMessage);
 
             // Set streaming ID - use the actual message ID
-            setStreamingMessageId(assistantMessage.id);
+            setStreamingState(assistantMessage.id, activeRoomId);
 
             console.log("streaming", modelId, provider, assistantMessage.id);
             try {
-              // Start streaming
+              // Get last 10 messages from the chat history
+              const lastMessages = messages.slice(-10).map(msg => ({
+                role: msg.sender === currentUser?.id ? "user" : "assistant",
+                content: msg.text || ""
+              }));
+
+              // Add the current message
+              lastMessages.push({ role: "user", content: messageData.text || "" });
+
+              // Start streaming with conversation history
               const response = await streamChatCompletion(
-                [{ role: "user", content: messageData.text }],
+                lastMessages as OpenAIMessage[],
                 {
                   model: modelId,
                   streamId: `stream-${assistantMessage.id}`,
@@ -168,7 +186,7 @@ function Chat() {
                 text: "Error generating response. Please try again."
               });
             } finally {
-              setStreamingMessageId(null);
+              setStreamingState(null, null);
             }
           }
         }

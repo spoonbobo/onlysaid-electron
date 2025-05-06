@@ -16,6 +16,7 @@ export default function DbOverlay() {
   const { fetchMessages } = useChatStore();
 
   const executeQuery = async (queryId: string) => {
+    // ... existing code ...
     const activeRoomId = Object.values(selectedTopics)[0];
 
     if (!activeRoomId) {
@@ -54,26 +55,25 @@ export default function DbOverlay() {
   return (
     <Box sx={{
       width: '100%',
-      bgcolor: 'background.paper',
       borderRadius: 1,
       overflow: 'hidden',
-      border: '1px solid rgba(0, 0, 0, 0.08)'
+      border: '1px solid rgba(255, 255, 255, 0.12)'
     }}>
       <Box sx={{
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',
         p: 1,
-        bgcolor: 'primary.light',
-        color: 'primary.contrastText'
+        bgcolor: 'rgba(100, 120, 255, 0.2)',
+        color: 'text.primary'
       }}>
-        <Typography variant="caption" sx={{ fontWeight: 'bold' }}>
+        <Typography variant="caption" sx={{ fontWeight: 'bold', color: 'primary.main' }}>
           <FormattedMessage id="debug.database-tools" />
         </Typography>
         <IconButton
           size="small"
           onClick={() => setDbOverlayMinimized(!dbOverlayMinimized)}
-          sx={{ color: 'inherit', p: 0.2, height: 20, width: 20 }}
+          sx={{ color: 'primary.main', p: 0.2, height: 20, width: 20 }}
         >
           {dbOverlayMinimized ? "+" : "-"}
         </IconButton>
@@ -90,15 +90,15 @@ export default function DbOverlay() {
               sx={{
                 textTransform: 'none',
                 justifyContent: 'flex-start',
-                color: 'primary.main',
-                bgcolor: 'rgba(230, 235, 255, 0.4)',
-                border: '1px solid rgba(180, 190, 250, 0.3)',
+                color: 'text.primary',
+                bgcolor: 'rgba(100, 120, 255, 0.08)',
+                border: '1px solid rgba(100, 120, 255, 0.2)',
                 borderRadius: 1,
                 mb: 0.5,
                 py: 0.5,
                 fontSize: '0.75rem',
                 '&:hover': {
-                  bgcolor: 'rgba(230, 235, 255, 0.7)',
+                  bgcolor: 'rgba(100, 120, 255, 0.15)',
                 }
               }}
             >
@@ -113,7 +113,10 @@ export default function DbOverlay() {
                 mt: 0.5,
                 p: 1,
                 borderRadius: 1,
-                display: 'block'
+                display: 'block',
+                color: 'text.primary',
+                bgcolor: 'rgba(255, 255, 255, 0.05)',
+                border: '1px solid rgba(255, 255, 255, 0.1)'
               }}
             >
               {result}
@@ -124,4 +127,3 @@ export default function DbOverlay() {
     </Box>
   );
 }
-

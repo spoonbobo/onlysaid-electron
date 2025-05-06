@@ -1,6 +1,8 @@
 import { ipcMain } from 'electron';
 import OpenAI from 'openai';
 
+const activeStreams: Record<string, AbortController> = {};
+
 export function setupSSEHandlers() {
   // Handle chat completion streaming
   ipcMain.handle('sse:chat_stream_complete', async (event, { messages, options }) => {
@@ -11,6 +13,11 @@ export function setupSSEHandlers() {
       let stream;
       let openai;
 
+      // Create an AbortController for this stream
+      const controller = new AbortController();
+      activeStreams[streamId] = controller;
+
+      // OpenAI calls with abort signal
       switch (model) {
         case 'gpt-4':
           openai = new OpenAI({
@@ -23,6 +30,8 @@ export function setupSSEHandlers() {
             temperature,
             max_tokens: maxTokens,
             stream: true,
+          }, {
+            signal: controller.signal,
           });
           break;
         case 'deepseek-chat':
@@ -33,11 +42,12 @@ export function setupSSEHandlers() {
             apiKey: options.apiKeys.deepSeek,
             dangerouslyAllowBrowser: true
           });
-          console.log("deepseek", openai);
           stream = await openai.chat.completions.create({
             model: "deepseek-chat",
             messages: messages,
             stream: true
+          }, {
+            signal: controller.signal,
           });
           break;
         default:
@@ -51,6 +61,8 @@ export function setupSSEHandlers() {
             temperature,
             max_tokens: maxTokens,
             stream: true,
+          }, {
+            signal: controller.signal,
           });
           break;
       }
@@ -71,6 +83,7 @@ export function setupSSEHandlers() {
             timestamp: Date.now()
           };
 
+          console.log("chunk", chunkData);
           event.sender.send('sse:chunk', {
             streamId: options.streamId,
             chunk: chunkData
@@ -81,7 +94,16 @@ export function setupSSEHandlers() {
       // Return success when done
       return { success: true, fullResponse: accumulatedResponse };
     } catch (error: any) {
+      // Check if this is an abort error
+      if (error.name === 'AbortError') {
+        return { success: true, aborted: true };
+      }
       return { success: false, error: error.message };
+    } finally {
+      // Clean up the controller
+      if (activeStreams[options.streamId]) {
+        delete activeStreams[options.streamId];
+      }
     }
   });
 
@@ -163,5 +185,15 @@ export function setupSSEHandlers() {
     } catch (error: any) {
       return { success: false, error: error.message };
     }
+  });
+
+  ipcMain.handle('sse:abort_stream', (event, { streamId }) => {
+    if (activeStreams[streamId]) {
+      console.log("abortStream", streamId);
+      activeStreams[streamId].abort();
+      delete activeStreams[streamId];
+      return { success: true };
+    }
+    return { success: false, error: 'No active stream found' };
   });
 }

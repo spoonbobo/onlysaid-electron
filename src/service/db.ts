@@ -48,7 +48,8 @@ export const initializeDatabase = (): Database.Database => {
 
       // Open the database with WAL mode for better concurrency
       dbInstance = new Database(dbPath, {
-        verbose: process.env.NODE_ENV === 'development' ? console.log : undefined,
+        // verbose: process.env.NODE_ENV === 'development' ? console.log : undefined,
+        verbose: undefined,
         fileMustExist: false
       });
 
