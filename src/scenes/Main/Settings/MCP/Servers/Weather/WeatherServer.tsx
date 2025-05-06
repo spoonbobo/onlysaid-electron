@@ -14,15 +14,16 @@ const WeatherServer = ({ onConfigure, onReset }: WeatherServerProps) => {
 
     return (
         <ServerCard
-            title="weather-mcp-server"
-            description="Provides real-time weather data for your application from various weather APIs."
-            version="1.0.0"
+            title="mcp-weather"
+            description="A simple MCP server that provides hourly weather forecasts using the AccuWeather API."
+            version="unknown"
             isEnabled={weatherEnabled}
             isConfigured={isConfigured}
             onToggle={setWeatherEnabled}
             onConfigure={onConfigure}
             onReset={onReset}
             icon={<WbSunny />}
+            sourceUrl="https://github.com/adhikasp/mcp-weather"
         />
     );
 };

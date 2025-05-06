@@ -140,6 +140,8 @@
   "settings.mcp.category.development": "開發",
   "settings.mcp.itemsPerPage": "每頁項目數",
   "settings.mcp.filterByCategory": "按類別過濾",
+  "settings.mcp.category.weather": "天氣",
+
   "help.general": "一般",
   "help.home": "首頁",
   "help.team": "團隊",

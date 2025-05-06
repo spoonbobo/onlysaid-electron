@@ -43,12 +43,12 @@ import SearchIcon from "@mui/icons-material/Search";
 function MCPSettings() {
     // Get state and actions from MCP store
     const {
-        weatherEnabled, locationEnabled, ipLocationEnabled,
-        weatherConfig, locationConfig, ipLocationConfig,
+        weatherEnabled, locationEnabled, ipLocationEnabled, weatherForecastEnabled,
+        weatherConfig, locationConfig, ipLocationConfig, weatherForecastConfig,
         nearbySearchEnabled, web3ResearchEnabled, doorDashEnabled, whatsAppEnabled, gitHubEnabled,
         nearbySearchConfig, web3ResearchConfig, doorDashConfig, whatsAppConfig, gitHubConfig,
-        setWeatherEnabled, setLocationEnabled, setIPLocationEnabled,
-        setWeatherConfig, setLocationConfig, setIPLocationConfig,
+        setWeatherEnabled, setLocationEnabled, setIPLocationEnabled, setWeatherForecastEnabled,
+        setWeatherConfig, setLocationConfig, setIPLocationConfig, setWeatherForecastConfig,
         setNearbySearchConfig, setWeb3ResearchConfig, setDoorDashConfig, setWhatsAppConfig, setGitHubConfig,
         initializeClient
     } = useMCPStore();
@@ -77,7 +77,8 @@ function MCPSettings() {
         { value: "communication", label: "Communication Services" },
         { value: "research", label: "Research Services" },
         { value: "delivery", label: "Delivery Services" },
-        { value: "development", label: "Development Services" }
+        { value: "development", label: "Development Services" },
+        { value: "weather", label: "Weather Services" }
     ];
 
     // Service configuration map to connect service types with their config objects and state variables
@@ -87,7 +88,14 @@ function MCPSettings() {
             enabledFlag: weatherEnabled,
             config: weatherConfig,
             humanName: "Weather",
-            category: "research"
+            category: "weather"
+        },
+        {
+            type: "weather-forecast",
+            enabledFlag: weatherForecastEnabled,
+            config: weatherForecastConfig,
+            humanName: "Weather Forecast",
+            category: "weather"
         },
         {
             type: "location",
@@ -205,6 +213,7 @@ function MCPSettings() {
         doorDashEnabled, doorDashConfig,
         whatsAppEnabled, whatsAppConfig,
         gitHubEnabled, gitHubConfig,
+        weatherForecastEnabled, weatherForecastConfig,
         initializeClient
     ]);
 
@@ -248,6 +257,11 @@ function MCPSettings() {
         setDialogOpen(true);
     };
 
+    const openWeatherForecastDialog = () => {
+        setServiceType("weather-forecast");
+        setDialogOpen(true);
+    };
+
     const handleCloseDialog = () => {
         setDialogOpen(false);
     };
@@ -256,6 +270,9 @@ function MCPSettings() {
         switch (serviceType) {
             case "weather":
                 setWeatherConfig(data);
+                break;
+            case "weather-forecast":
+                setWeatherForecastConfig(data);
                 break;
             case "location":
                 setLocationConfig(data);
@@ -278,6 +295,9 @@ function MCPSettings() {
             case "ip-location":
                 setIPLocationConfig(data);
                 break;
+            case "weather-forecast":
+                setWeatherForecastConfig(data);
+                break;
         }
         setDialogOpen(false);
     };
@@ -292,6 +312,7 @@ function MCPSettings() {
         if (whatsAppEnabled) initializeClient("whatsapp");
         if (gitHubEnabled) initializeClient("github");
         if (ipLocationEnabled) initializeClient("ip-location");
+        if (weatherForecastEnabled) initializeClient("weather-forecast");
     };
 
     // Mapping of service types to their configure handlers
@@ -303,7 +324,8 @@ function MCPSettings() {
         "doordash": openDoorDashDialog,
         "whatsapp": openWhatsAppDialog,
         "github": openGitHubDialog,
-        "ip-location": openIPLocationDialog
+        "ip-location": openIPLocationDialog,
+        "weather-forecast": openWeatherForecastDialog
     };
 
     return (
@@ -411,6 +433,7 @@ function MCPSettings() {
                         case "whatsapp": return whatsAppConfig;
                         case "github": return gitHubConfig;
                         case "ip-location": return ipLocationConfig;
+                        case "weather-forecast": return weatherForecastConfig;
                         default: return {};
                     }
                 })()}

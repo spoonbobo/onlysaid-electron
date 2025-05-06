@@ -8,7 +8,7 @@ import WhatsAppServer from "./WhatsApp/WhatsAppServer";
 import GitHubServer from "./GitHub/GitHubServer";
 import IPLocationServer from "./Location/IPLocation";
 import { FormattedMessage } from "react-intl";
-
+import WeatherForecastServer from "./Weather/WeatherForecast";
 // Service configuration interface
 interface ServiceConfig {
     type: string;
@@ -48,6 +48,8 @@ const Servers = ({
                 return <GitHubServer key={service.type} onConfigure={configHandler} />;
             case "ip-location":
                 return <IPLocationServer key={service.type} onConfigure={configHandler} />;
+            case "weather-forecast":
+                return <WeatherForecastServer key={service.type} onConfigure={configHandler} />;
             default:
                 return null;
         }

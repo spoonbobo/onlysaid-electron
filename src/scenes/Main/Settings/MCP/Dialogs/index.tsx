@@ -7,6 +7,7 @@ import DoorDashDialog from "./DoorDashDialog";
 import WhatsAppDialog from "./WhatsAppDialog";
 import GitHubDialog from "./GitHubDialog";
 import IPLocationDialog from "./IPLocation";
+import WeatherForecastDialog from "./WeatherForecastDialog";
 
 interface ServiceDialogProps {
     open: boolean;
@@ -36,6 +37,8 @@ const ServiceDialog = ({ open, serviceType, initialData, onClose, onSave }: Serv
                 return GitHubDialog;
             case "ip-location":
                 return IPLocationDialog;
+            case "weather-forecast":
+                return WeatherForecastDialog;
             default:
                 return null;
         }

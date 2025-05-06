@@ -10,7 +10,8 @@ type ServiceType =
     | "doordash"
     | "whatsapp"
     | "github"
-    | "ip-location";
+    | "ip-location"
+    | "weather-forecast";
 
 // Define the props interface for components that can be enhanced
 interface ConfigurableComponentProps {
@@ -60,9 +61,7 @@ const withReset = <P extends ConfigurableComponentProps>(
                     break;
                 case "location":
                     setLocationConfig({
-                        apiKey: "",
-                        endpoint: "",
-                        updateInterval: 60
+                        path: "",
                     });
                     setLocationEnabled(false);
                     break;
@@ -91,9 +90,7 @@ const withReset = <P extends ConfigurableComponentProps>(
                     break;
                 case "whatsapp":
                     setWhatsAppConfig({
-                        apiKey: "",
-                        phoneId: "",
-                        endpoint: ""
+                        path: ""
                     });
                     setWhatsAppEnabled(false);
                     break;

@@ -19,6 +19,11 @@ interface NearbySearchConfig {
     defaultRadius: number;
 }
 
+interface WeatherForecastConfig {
+    apiKey: string;
+    path: string;
+}
+
 interface Web3ResearchConfig {
     apiKey: string;
     endpoint: string;
@@ -47,10 +52,12 @@ interface MCPState {
     weatherEnabled: boolean;
     locationEnabled: boolean;
     ipLocationEnabled: boolean;
+    weatherForecastEnabled: boolean;
 
     // Service configurations
     weatherConfig: WeatherServiceConfig;
     locationConfig: LocationServiceConfig;
+    weatherForecastConfig: WeatherForecastConfig;
 
     // New services
     nearbySearchEnabled: boolean;
@@ -71,6 +78,8 @@ interface MCPState {
     setLocationEnabled: (enabled: boolean) => void;
     setWeatherConfig: (config: Partial<WeatherServiceConfig>) => void;
     setLocationConfig: (config: Partial<LocationServiceConfig>) => void;
+    setWeatherForecastEnabled: (enabled: boolean) => void;
+    setWeatherForecastConfig: (config: Partial<WeatherForecastConfig>) => void;
     setNearbySearchEnabled: (enabled: boolean) => void;
     setWeb3ResearchEnabled: (enabled: boolean) => void;
     setDoorDashEnabled: (enabled: boolean) => void;
@@ -91,6 +100,7 @@ interface MCPState {
     // Add validation functions
     isWeatherConfigured: () => boolean;
     isLocationConfigured: () => boolean;
+    isWeatherForecastConfigured: () => boolean;
     isNearbySearchConfigured: () => boolean;
     isWeb3ResearchConfigured: () => boolean;
     isDoorDashConfigured: () => boolean;
@@ -112,6 +122,7 @@ const DEFAULT_CONFIG = {
     weatherEnabled: false,
     locationEnabled: false,
     ipLocationEnabled: false,
+    weatherForecastEnabled: false,
     weatherConfig: {
         apiKey: "",
         endpoint: "",
@@ -119,6 +130,10 @@ const DEFAULT_CONFIG = {
     },
     locationConfig: {
         path: "",
+    },
+    weatherForecastConfig: {
+        apiKey: "",
+        path: ""
     },
     nearbySearchEnabled: false,
     web3ResearchEnabled: false,
@@ -160,6 +175,10 @@ const isLocationConfigured = (config: LocationServiceConfig): boolean => {
 };
 
 // Validation functions
+const isWeatherForecastConfigured = (config: WeatherForecastConfig): boolean => {
+    return !!config.apiKey && !!config.path;
+};
+
 const isNearbySearchConfigured = (config: NearbySearchConfig): boolean => {
     return !!config.apiKey && !!config.endpoint;
 };
@@ -213,6 +232,16 @@ export const useMCPStore = create<MCPState>()(
 
             setLocationConfig: (config) => set((state) => ({
                 locationConfig: { ...state.locationConfig, ...config }
+            })),
+
+            setWeatherForecastEnabled: (enabled) => {
+                const state = get();
+                if (enabled && !isWeatherForecastConfigured(state.weatherForecastConfig)) return;
+                set({ weatherForecastEnabled: enabled });
+            },
+
+            setWeatherForecastConfig: (config) => set((state) => ({
+                weatherForecastConfig: { ...state.weatherForecastConfig, ...config }
             })),
 
             setNearbySearchEnabled: (enabled) => {
@@ -310,6 +339,20 @@ export const useMCPStore = create<MCPState>()(
                                     "osm-mcp-server"
                                 ],
                                 clientName: "onlysaid-location-client",
+                                clientVersion: "1.0.0"
+                            };
+                            break;
+                        case "weather-forecast":
+                            config = {
+                                enabled: state.weatherForecastEnabled,
+                                command: "python3",
+                                args: [
+                                    state.weatherForecastConfig.path,
+                                ],
+                                env: {
+                                    "OPENWEATHER_API_KEY": state.weatherForecastConfig.apiKey
+                                },
+                                clientName: "weather-forecast-client",
                                 clientVersion: "1.0.0"
                             };
                             break;
@@ -434,6 +477,11 @@ export const useMCPStore = create<MCPState>()(
                 return isLocationConfigured(locationConfig);
             },
 
+            isWeatherForecastConfigured: () => {
+                const { weatherForecastConfig } = get();
+                return isWeatherForecastConfigured(weatherForecastConfig);
+            },
+
             isNearbySearchConfigured: () => {
                 const { nearbySearchConfig } = get();
                 return isNearbySearchConfigured(nearbySearchConfig);
@@ -477,6 +525,11 @@ export const useMCPStore = create<MCPState>()(
                         enabled: state.locationEnabled,
                         configured: state.isLocationConfigured(),
                         config: state.locationConfig
+                    },
+                    weatherForecast: {
+                        enabled: state.weatherForecastEnabled,
+                        configured: state.isWeatherForecastConfigured(),
+                        config: state.weatherForecastConfig
                     },
                     nearbySearch: {
                         enabled: state.nearbySearchEnabled,

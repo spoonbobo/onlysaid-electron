@@ -9,9 +9,17 @@ interface WeatherDialogProps {
 
 const WeatherDialog = ({ open, initialData, onClose, onSave }: WeatherDialogProps) => {
     const fields: Field[] = [
-        { key: "apiKey", label: "API Key", type: "password", required: true },
-        { key: "endpoint", label: "Service Endpoint", type: "text", required: true },
-        { key: "units", label: "Units", type: "select", options: ["metric", "imperial"], required: true }
+        {
+            key: "apiKey",
+            label: "AccuWeather API Key",
+            type: "password",
+            required: true,
+            description: "The API key for the AccuWeather service",
+            descriptionLink: {
+                text: "Get API Key",
+                url: "https://developer.accuweather.com/user/me"
+            }
+        }
     ];
 
     return (
