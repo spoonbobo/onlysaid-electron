@@ -10,7 +10,7 @@ import LLMSettings from "./LLMSettings";
 import DebugMode from "./UserSettings/DebugMode";
 import { FormattedMessage } from "react-intl";
 import MCPSettings from "./MCP/index";
-
+import MCPConfiguration from "./MCP/MCPSettings";
 function Settings() {
     const { selectedTopics } = useCurrentTopicContext();
 
@@ -45,6 +45,10 @@ function Settings() {
 
             case UserSettingsSubcategories.MCP:
                 return <MCPSettings />;
+
+            case UserSettingsSubcategories.MCPConfiguration:
+                return <MCPConfiguration />;
+
 
             default:
                 return (

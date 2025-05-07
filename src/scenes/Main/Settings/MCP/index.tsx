@@ -6,28 +6,14 @@
  * === Adding a New MCP Server ===
  *
  * 1. Create server component in Servers/{YourServerName}/ directory
- *    - Create a new component that extends ServerCard with server-specific details
  *
  * 2. Create dialog component in Dialogs/ directory
- *    - Create {YourServerName}Dialog.tsx with fields for configuration
- *    - Add the dialog to the switch statement in Dialogs/index.tsx
  *
  * 3. Update MCPStore.ts
- *    - Add interface for server configuration
- *    - Add enabled flag, config state and actions
- *    - Add validation function
- *    - Update initializeClient to handle your server type
  *
  * 4. Update this file (index.tsx)
- *    - Add dialog open handler function (open{YourServerName}Dialog)
- *    - Add case to handleSaveDialog
- *    - Add initialData case
- *    - Update Servers component props to include your handler
- *
+
  * 5. Update Servers/index.tsx
- *    - Import your server component
- *    - Add it to the ServersProps interface
- *    - Add it to the JSX return
  */
 
 import { Box, Button, FormControl, InputLabel, Select, MenuItem, Pagination, SelectChangeEvent, TextField, InputAdornment } from "@mui/material";
@@ -45,11 +31,13 @@ function MCPSettings() {
     const {
         weatherEnabled, locationEnabled, ipLocationEnabled, weatherForecastEnabled,
         weatherConfig, locationConfig, ipLocationConfig, weatherForecastConfig,
-        nearbySearchEnabled, web3ResearchEnabled, doorDashEnabled, whatsAppEnabled, gitHubEnabled,
+        nearbySearchEnabled, web3ResearchEnabled, doorDashEnabled, whatsAppEnabled, gitHubEnabled, airbnbEnabled,
         nearbySearchConfig, web3ResearchConfig, doorDashConfig, whatsAppConfig, gitHubConfig,
         setWeatherEnabled, setLocationEnabled, setIPLocationEnabled, setWeatherForecastEnabled,
         setWeatherConfig, setLocationConfig, setIPLocationConfig, setWeatherForecastConfig,
         setNearbySearchConfig, setWeb3ResearchConfig, setDoorDashConfig, setWhatsAppConfig, setGitHubConfig,
+        setNearbySearchEnabled, setWeb3ResearchEnabled, setDoorDashEnabled, setWhatsAppEnabled, setGitHubEnabled,
+        setAirbnbEnabled,
         initializeClient
     } = useMCPStore();
 
@@ -78,7 +66,8 @@ function MCPSettings() {
         { value: "research", label: "Research Services" },
         { value: "delivery", label: "Delivery Services" },
         { value: "development", label: "Development Services" },
-        { value: "weather", label: "Weather Services" }
+        { value: "weather", label: "Weather Services" },
+        { value: "accommodation", label: "Accommodation Services" }
     ];
 
     // Service configuration map to connect service types with their config objects and state variables
@@ -145,6 +134,13 @@ function MCPSettings() {
             config: gitHubConfig,
             humanName: "GitHub",
             category: "development"
+        },
+        {
+            type: "airbnb",
+            enabledFlag: airbnbEnabled,
+            config: {},
+            humanName: "Airbnb",
+            category: "accommodation"
         }
     ];
 
@@ -196,6 +192,20 @@ function MCPSettings() {
                     if (!result.success) {
                         console.error(`Failed to initialize ${service.type} client:`, result.error);
                         toast.error(`${service.humanName} service error: ${result.error}`);
+
+                        // Disable service on initialization failure
+                        switch (service.type) {
+                            case "weather": setWeatherEnabled(false); break;
+                            case "location": setLocationEnabled(false); break;
+                            case "ip-location": setIPLocationEnabled(false); break;
+                            case "weather-forecast": setWeatherForecastEnabled(false); break;
+                            case "nearby-search": setNearbySearchEnabled(false); break;
+                            case "web3-research": setWeb3ResearchEnabled(false); break;
+                            case "doordash": setDoorDashEnabled(false); break;
+                            case "whatsapp": setWhatsAppEnabled(false); break;
+                            case "github": setGitHubEnabled(false); break;
+                            case "airbnb": setAirbnbEnabled(false); break;
+                        }
                     } else {
                         toast.success(`${service.humanName} service initialized`);
                     }
@@ -213,6 +223,7 @@ function MCPSettings() {
         doorDashEnabled, doorDashConfig,
         whatsAppEnabled, whatsAppConfig,
         gitHubEnabled, gitHubConfig,
+        airbnbEnabled,
         weatherForecastEnabled, weatherForecastConfig,
         initializeClient
     ]);
@@ -262,6 +273,11 @@ function MCPSettings() {
         setDialogOpen(true);
     };
 
+    const openAirbnbDialog = () => {
+        setServiceType("airbnb");
+        setDialogOpen(true);
+    };
+
     const handleCloseDialog = () => {
         setDialogOpen(false);
     };
@@ -298,6 +314,9 @@ function MCPSettings() {
             case "weather-forecast":
                 setWeatherForecastConfig(data);
                 break;
+            case "airbnb":
+                setAirbnbEnabled(true);
+                break;
         }
         setDialogOpen(false);
     };
@@ -313,6 +332,7 @@ function MCPSettings() {
         if (gitHubEnabled) initializeClient("github");
         if (ipLocationEnabled) initializeClient("ip-location");
         if (weatherForecastEnabled) initializeClient("weather-forecast");
+        if (airbnbEnabled) initializeClient("airbnb");
     };
 
     // Mapping of service types to their configure handlers
@@ -325,7 +345,8 @@ function MCPSettings() {
         "whatsapp": openWhatsAppDialog,
         "github": openGitHubDialog,
         "ip-location": openIPLocationDialog,
-        "weather-forecast": openWeatherForecastDialog
+        "weather-forecast": openWeatherForecastDialog,
+        "airbnb": openAirbnbDialog
     };
 
     return (
@@ -434,6 +455,7 @@ function MCPSettings() {
                         case "github": return gitHubConfig;
                         case "ip-location": return ipLocationConfig;
                         case "weather-forecast": return weatherForecastConfig;
+                        case "airbnb": return {};
                         default: return {};
                     }
                 })()}

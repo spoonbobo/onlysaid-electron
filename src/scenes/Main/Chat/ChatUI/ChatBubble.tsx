@@ -1,6 +1,6 @@
 import { Box, Typography, Avatar, IconButton, Menu, MenuItem } from "@mui/material";
 import { IChatMessage } from "@/models/Chat/Message";
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback, memo } from "react";
 import ThumbUpIcon from '@mui/icons-material/ThumbUp';
 import FavoriteIcon from '@mui/icons-material/Favorite';
 import EmojiEmotionsIcon from '@mui/icons-material/EmojiEmotions';
@@ -30,7 +30,7 @@ interface ChatBubbleProps {
     onMouseLeave?: () => void;
 }
 
-const ChatBubble = ({
+const ChatBubble = memo(({
     message: msg,
     isCurrentUser,
     isContinuation = false,
@@ -58,36 +58,33 @@ const ChatBubble = ({
         return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
     };
 
-    const handleReplyClick = () => {
+    // Use useCallback for event handlers to prevent unnecessary re-renders
+    const handleReplyClick = useCallback(() => {
         if (onReply) {
             onReply(msg);
         }
-    };
+    }, [onReply, msg]);
 
-    const handleReaction = (reaction: string) => {
+    const handleReaction = useCallback((reaction: string) => {
         if (activeRoomId) {
             toggleReaction(activeRoomId, msg.id, reaction);
         }
-    };
+    }, [activeRoomId, msg.id, toggleReaction]);
 
-    const handleContextMenu = (event: React.MouseEvent) => {
-        event.preventDefault(); // Prevent default context menu
-
-        // Close any existing menu first
+    const handleContextMenu = useCallback((event: React.MouseEvent) => {
+        event.preventDefault();
         handleMenuClose();
-
-        // Set the new position in the next tick to ensure proper re-rendering
         setTimeout(() => {
             setMenuPosition({
                 top: event.clientY,
                 left: event.clientX,
             });
         }, 0);
-    };
+    }, []);
 
-    const handleMenuClose = () => {
+    const handleMenuClose = useCallback(() => {
         setMenuPosition(null);
-    };
+    }, []);
 
     // Handle clicks outside to close the menu
     useEffect(() => {
@@ -104,22 +101,20 @@ const ChatBubble = ({
         };
     }, [menuPosition]);
 
-    const handleCopyText = () => {
+    const handleCopyText = useCallback(() => {
         navigator.clipboard.writeText(msg.text);
         handleMenuClose();
-    };
+    }, [msg.text, handleMenuClose]);
 
-    const handleDelete = () => {
-        // Placeholder for delete functionality
+    const handleDelete = useCallback(() => {
         console.log('Delete message:', msg.id);
         handleMenuClose();
-    };
+    }, [msg.id, handleMenuClose]);
 
-    const handleReport = () => {
-        // Placeholder for report functionality
+    const handleReport = useCallback(() => {
         console.log('Report message:', msg.id);
         handleMenuClose();
-    };
+    }, [msg.id, handleMenuClose]);
 
     return (
         <Box
@@ -232,14 +227,18 @@ const ChatBubble = ({
                     </Box>
                 )}
 
-                <MarkdownRenderer
-                    content={msg.text}
-                    isStreaming={isStreaming}
-                    isConnecting={isConnecting}
-                    streamContent={streamContent}
-                />
+                {/* Only show MarkdownRenderer when there's content to display */}
+                {(msg.text || (isStreaming && streamContent)) && (
+                    <MarkdownRenderer
+                        content={msg.text}
+                        isStreaming={isStreaming}
+                        isConnecting={isConnecting}
+                        streamContent={streamContent}
+                    />
+                )}
 
-                {isStreaming && isConnecting && !streamContent && (
+                {/* Keep showing loading indicator until stream completes */}
+                {isStreaming && isConnecting && (
                     <Box sx={{ display: 'flex', mt: 1, alignItems: 'center' }}>
                         <CircularProgress
                             size={16}
@@ -249,7 +248,7 @@ const ChatBubble = ({
                             }}
                         />
                         <Typography sx={{ ml: 1, fontSize: '0.85rem', color: 'text.secondary' }}>
-                            Loading...
+                            {streamContent ? 'Generating...' : 'Loading...'}
                         </Typography>
                     </Box>
                 )}
@@ -353,6 +352,6 @@ const ChatBubble = ({
             </Menu>
         </Box>
     );
-};
+});
 
 export default ChatBubble;

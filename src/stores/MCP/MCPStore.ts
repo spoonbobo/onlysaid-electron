@@ -47,6 +47,10 @@ interface IPLocationConfig {
     apiKey: string;
 }
 
+interface AirbnbConfig {
+
+}
+
 interface MCPState {
     // Service states
     weatherEnabled: boolean;
@@ -65,6 +69,7 @@ interface MCPState {
     doorDashEnabled: boolean;
     whatsAppEnabled: boolean;
     gitHubEnabled: boolean;
+    airbnbEnabled: boolean;
 
     nearbySearchConfig: NearbySearchConfig;
     web3ResearchConfig: Web3ResearchConfig;
@@ -72,6 +77,7 @@ interface MCPState {
     whatsAppConfig: WhatsAppConfig;
     gitHubConfig: GitHubConfig;
     ipLocationConfig: IPLocationConfig;
+    airbnbConfig: AirbnbConfig;
 
     // Actions
     setWeatherEnabled: (enabled: boolean) => void;
@@ -92,6 +98,8 @@ interface MCPState {
     setWhatsAppConfig: (config: Partial<WhatsAppConfig>) => void;
     setGitHubConfig: (config: Partial<GitHubConfig>) => void;
     setIPLocationConfig: (config: Partial<IPLocationConfig>) => void;
+    setAirbnbEnabled: (enabled: boolean) => void;
+    setAirbnbConfig: (config: Partial<AirbnbConfig>) => void;
     resetToDefaults: () => void;
 
     // Generic IPC action
@@ -107,6 +115,7 @@ interface MCPState {
     isWhatsAppConfigured: () => boolean;
     isGitHubConfigured: () => boolean;
     isIPLocationConfigured: () => boolean;
+    isAirbnbConfigured: () => boolean;
 
     // Add new action
     getAllConfiguredServers: () => {
@@ -140,6 +149,7 @@ const DEFAULT_CONFIG = {
     doorDashEnabled: false,
     whatsAppEnabled: false,
     gitHubEnabled: false,
+    airbnbEnabled: false,
     nearbySearchConfig: {
         apiKey: "",
         endpoint: "",
@@ -162,6 +172,11 @@ const DEFAULT_CONFIG = {
     },
     ipLocationConfig: {
         apiKey: ""
+    },
+    airbnbConfig: {
+        apiKey: "",
+        endpoint: "",
+        region: "us"
     }
 };
 
@@ -201,6 +216,10 @@ const isGitHubConfigured = (config: GitHubConfig): boolean => {
 
 const isIPLocationConfigured = (config: IPLocationConfig): boolean => {
     return !!config.apiKey;
+};
+
+const isAirbnbConfigured = (config: AirbnbConfig): boolean => {
+    return true;
 };
 
 export const useMCPStore = create<MCPState>()(
@@ -304,6 +323,14 @@ export const useMCPStore = create<MCPState>()(
                 ipLocationConfig: { ...state.ipLocationConfig, ...config }
             })),
 
+            setAirbnbEnabled: (enabled) => {
+                set({ airbnbEnabled: enabled });
+            },
+
+            setAirbnbConfig: (config) => set((state) => ({
+                airbnbConfig: { ...state.airbnbConfig, ...config }
+            })),
+
             resetToDefaults: () => set(DEFAULT_CONFIG),
 
             // Generic initialize client action
@@ -398,8 +425,6 @@ export const useMCPStore = create<MCPState>()(
                             };
                             break;
                         case "whatsapp":
-                            console.log(`${window.electron.homedir()}/.local/bin/uv`);
-                            console.log("/home/spoonbobo/.local/bin/uv");
                             config = {
                                 enabled: state.whatsAppEnabled,
                                 command: `${window.electron.homedir()}/.local/bin/uv`,
@@ -446,6 +471,19 @@ export const useMCPStore = create<MCPState>()(
                                     "IPINFO_API_TOKEN": state.ipLocationConfig.apiKey
                                 },
                                 clientName: "ip-location-client",
+                                clientVersion: "1.0.0"
+                            };
+                            break;
+                        // TODO: not working atm.
+                        case "airbnb":
+                            config = {
+                                enabled: state.airbnbEnabled,
+                                command: "npx",
+                                args: [
+                                    "-y",
+                                    "@openbnb/mcp-server-airbnb"
+                                ],
+                                clientName: "airbnb-client",
                                 clientVersion: "1.0.0"
                             };
                             break;
@@ -512,6 +550,10 @@ export const useMCPStore = create<MCPState>()(
                 return isIPLocationConfigured(ipLocationConfig);
             },
 
+            isAirbnbConfigured: () => {
+                return true;
+            },
+
             getAllConfiguredServers: () => {
                 const state = get();
 
@@ -560,6 +602,11 @@ export const useMCPStore = create<MCPState>()(
                         enabled: state.ipLocationEnabled,
                         configured: state.isIPLocationConfigured(),
                         config: state.ipLocationConfig
+                    },
+                    airbnb: {
+                        enabled: state.airbnbEnabled,
+                        configured: true,
+                        config: {}
                     }
                 };
             }

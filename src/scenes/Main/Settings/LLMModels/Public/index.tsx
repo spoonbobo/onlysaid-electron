@@ -6,10 +6,12 @@ import { useLLMConfigurationStore } from "@/stores/LLM/LLMConfiguration";
 import { LLMService } from "@/service/llm";
 import { useMemo, useState, useEffect } from "react";
 import TextFieldWithOptions from "@/components/Text/TextFieldWithOptions";
+import { useIntl } from "react-intl";
 
 function PublicLLMConfiguration() {
     // First get the store
     const llmStore = useLLMConfigurationStore();
+    const intl = useIntl();
     const {
         openAIKey,
         deepSeekKey,
@@ -60,8 +62,6 @@ function PublicLLMConfiguration() {
             const isVerified = await llmService.VerifyLLM("deepseek", deepSeekKey);
             setDeepSeekVerified(isVerified);
 
-            // Show verification result
-            console.log(`DeepSeek API key verification ${isVerified ? 'succeeded' : 'failed'}`);
         } catch (error) {
             console.error("Error verifying DeepSeek API key:", error);
             setDeepSeekVerified(false);
@@ -76,8 +76,6 @@ function PublicLLMConfiguration() {
             const isVerified = await llmService.VerifyLLM("openai", openAIKey);
             setOpenAIVerified(isVerified);
 
-            // Show verification result
-            console.log(`OpenAI API key verification ${isVerified ? 'succeeded' : 'failed'}`);
         } catch (error) {
             console.error("Error verifying OpenAI API key:", error);
             setOpenAIVerified(false);
@@ -111,8 +109,8 @@ function PublicLLMConfiguration() {
 
     return (
         <>
-            <SettingsSection title="DeepSeek Configuration" sx={{ mb: 3 }}>
-                <SettingsFormField label="API Key">
+            <SettingsSection title={intl.formatMessage({ id: "settings.llmModels.public.deepSeekConfiguration" })} sx={{ mb: 3 }}>
+                <SettingsFormField label={intl.formatMessage({ id: "settings.llmModels.public.deepSeekKey" })}>
                     <Box sx={{ display: 'flex', gap: 1 }}>
                         <TextFieldWithOptions
                             fullWidth
@@ -120,10 +118,10 @@ function PublicLLMConfiguration() {
                             value={deepSeekKey}
                             onChange={handleDeepSeekKeyChange}
                             onClear={handleClearDeepSeek}
-                            placeholder="Enter your DeepSeek API key"
+                            placeholder={intl.formatMessage({ id: "settings.llmModels.public.deepSeekKeyPlaceholder" })}
                             isPassword
                             error={deepSeekEnabled && !deepSeekVerified && !!deepSeekKey}
-                            helperText={deepSeekEnabled && !deepSeekVerified && !!deepSeekKey ? "API key needs verification" : ""}
+                            helperText={deepSeekEnabled && !deepSeekVerified && !!deepSeekKey ? intl.formatMessage({ id: "settings.llmModels.public.deepSeekKeyError" }) : ""}
                         />
                         <Button
                             variant="outlined"
@@ -133,7 +131,7 @@ function PublicLLMConfiguration() {
                             color={deepSeekVerified ? "success" : "primary"}
                             sx={{ whiteSpace: 'nowrap', width: '90px' }}
                         >
-                            {verifyingDeepSeek ? "Verifying..." : deepSeekVerified ? "Verified" : "Verify"}
+                            {verifyingDeepSeek ? intl.formatMessage({ id: "settings.llmModels.public.verifying" }) : deepSeekVerified ? intl.formatMessage({ id: "settings.llmModels.public.verified" }) : intl.formatMessage({ id: "settings.llmModels.public.verify" })}
                         </Button>
                     </Box>
                 </SettingsFormField>
@@ -147,10 +145,10 @@ function PublicLLMConfiguration() {
                     }
                     label={
                         <Box component="span" sx={{ display: 'flex', alignItems: 'center' }}>
-                            Enable DeepSeek models
+                            {intl.formatMessage({ id: "settings.llmModels.public.enableDeepSeekModels" })}
                             {!deepSeekVerified && deepSeekKey && (
                                 <Typography variant="caption" color="error" sx={{ ml: 1 }}>
-                                    (Requires verification)
+                                    {intl.formatMessage({ id: "settings.llmModels.public.requiresVerification" })}
                                 </Typography>
                             )}
                         </Box>
@@ -159,8 +157,8 @@ function PublicLLMConfiguration() {
                 />
             </SettingsSection>
 
-            <SettingsSection title="OpenAI Configuration" sx={{ mb: 3 }}>
-                <SettingsFormField label="API Key">
+            <SettingsSection title={intl.formatMessage({ id: "settings.llmModels.public.openAIConfiguration" })} sx={{ mb: 3 }}>
+                <SettingsFormField label={intl.formatMessage({ id: "settings.llmModels.public.openAIKey" })}>
                     <Box sx={{ display: 'flex', gap: 1 }}>
                         <TextFieldWithOptions
                             fullWidth
@@ -168,7 +166,7 @@ function PublicLLMConfiguration() {
                             value={openAIKey}
                             onChange={handleOpenAIKeyChange}
                             onClear={handleClearOpenAI}
-                            placeholder="Enter your OpenAI API key"
+                            placeholder={intl.formatMessage({ id: "settings.llmModels.public.openAIKeyPlaceholder" })}
                             isPassword
                             error={openAIEnabled && !openAIVerified && !!openAIKey}
                             helperText={openAIEnabled && !openAIVerified && !!openAIKey ? "API key needs verification" : ""}
@@ -181,7 +179,7 @@ function PublicLLMConfiguration() {
                             color={openAIVerified ? "success" : "primary"}
                             sx={{ whiteSpace: 'nowrap', width: '90px' }}
                         >
-                            {verifyingOpenAI ? "Verifying..." : openAIVerified ? "Verified" : "Verify"}
+                            {verifyingOpenAI ? intl.formatMessage({ id: "settings.llmModels.public.verifying" }) : openAIVerified ? intl.formatMessage({ id: "settings.llmModels.public.verified" }) : intl.formatMessage({ id: "settings.llmModels.public.verify" })}
                         </Button>
                     </Box>
                 </SettingsFormField>
@@ -195,10 +193,10 @@ function PublicLLMConfiguration() {
                     }
                     label={
                         <Box component="span" sx={{ display: 'flex', alignItems: 'center' }}>
-                            Enable OpenAI models
+                            {intl.formatMessage({ id: "settings.llmModels.public.enableOpenAIModels" })}
                             {!openAIVerified && openAIKey && (
                                 <Typography variant="caption" color="error" sx={{ ml: 1 }}>
-                                    (Requires verification)
+                                    {intl.formatMessage({ id: "settings.llmModels.public.requiresVerification" })}
                                 </Typography>
                             )}
                         </Box>
@@ -208,7 +206,7 @@ function PublicLLMConfiguration() {
             </SettingsSection>
 
             <SettingsActionBar>
-                <Button variant="contained" onClick={handleSave}>Save</Button>
+                <Button variant="contained" onClick={handleSave}>{intl.formatMessage({ id: "settings.savePreferences" })}</Button>
             </SettingsActionBar>
         </>
     );
