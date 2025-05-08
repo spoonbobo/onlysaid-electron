@@ -23,7 +23,7 @@ import { setupUserHandlers } from './api/v2/user';
 import { setupFileSystemHandlers } from './filesystem';
 import { setupWindowHandlers } from './window';
 import { setupResourceHandlers } from './resource';
-import { setupSSEHandlers } from './sse';
+import { setupSSEHandlers } from './streaming';
 import { setupMCPHandlers } from './mcp/mcp';
 dotenv.config();
 

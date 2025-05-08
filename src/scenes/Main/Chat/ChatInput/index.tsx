@@ -3,9 +3,9 @@ import { Box, Typography, alpha, IconButton } from "@mui/material";
 import MessageTextField from "./TextField/MessageTextField";
 import ActionButtons from "./ActionButtons/ActionButtons";
 import AttachmentPreview from "./Attachments";
-import { IChatMessage } from "@/models/Chat/Message";
+import { IChatMessage } from "@/types/Chat/Message";
 import CloseIcon from '@mui/icons-material/Close';
-import { IFile } from "@/models/File/File";
+import { IFile } from "@/types/File/File";
 import { useCurrentTopicContext } from "@/stores/Topic/TopicStore";
 import { useSelectedModelStore } from "@/stores/LLM/SelectedModelStore";
 

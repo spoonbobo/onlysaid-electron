@@ -1,6 +1,6 @@
 import { ipcMain } from 'electron';
 import onlysaidServiceInstance from './service';
-import { IChatRoom, ICreateChatArgs, IGetChatArgs } from '@/models/Chat/Chatroom';
+import { IChatRoom, ICreateChatArgs, IGetChatArgs } from '@/types/Chat/Chatroom';
 
 export const setupChatroomHandlers = () => {
   ipcMain.handle('chat:create', async (event, args: ICreateChatArgs) => {

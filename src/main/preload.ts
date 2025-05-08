@@ -30,7 +30,7 @@ type MiscChannels = 'ipc-example';
 type DbChannels = 'db:initialize' | 'db:query' | 'db:transaction' | 'db:close';
 type SystemChannels = 'system:get-cpu-usage' | 'system:get-memory-usage' | 'system:get-storage-usage';
 
-type SSEChannels = 'sse:abort_stream' | 'sse:chat_stream_complete' | 'sse:chat_complete' | 'sse:generate_image' | 'sse:chunk';
+type SSEChannels = 'streaming:abort_stream' | 'streaming:chat_stream_complete' | 'streaming:chunk';
 type MCPChannels = 'mcp:initialize_client';
 
 type ApiChatChannels = 'chat:get' | 'chat:create' | 'chat:update' | 'chat:delete';
@@ -89,12 +89,10 @@ const electronHandler = {
         update: (...args: unknown[]) => ipcRenderer.invoke('chat:update', ...args),
         delete: (...args: unknown[]) => ipcRenderer.invoke('chat:delete', ...args),
     },
-    sse: {
-        chat_stream_complete: (...args: unknown[]) => ipcRenderer.invoke('sse:chat_stream_complete', ...args),
-        chat_complete: (...args: unknown[]) => ipcRenderer.invoke('sse:chat_complete', ...args),
-        generate_image: (...args: unknown[]) => ipcRenderer.invoke('sse:generate_image', ...args),
-        chunk: (...args: unknown[]) => ipcRenderer.invoke('sse:chunk', ...args),
-        abort_stream: (...args: unknown[]) => ipcRenderer.invoke('sse:abort_stream', ...args),
+    streaming: {
+        chat_stream_complete: (...args: unknown[]) => ipcRenderer.invoke('streaming:chat_stream_complete', ...args),
+        chunk: (...args: unknown[]) => ipcRenderer.invoke('streaming:chunk', ...args),
+        abort_stream: (...args: unknown[]) => ipcRenderer.invoke('streaming:abort_stream', ...args),
     },
     window: {
         // Tab operations

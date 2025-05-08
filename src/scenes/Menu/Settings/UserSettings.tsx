@@ -112,15 +112,9 @@ export default function UserSettings() {
                             sx={{ pl: 4, py: 0.25, minHeight: 28 }}
                         />
                         <MenuListItem
-                            label={<FormattedMessage id="settings.publicLLMs" />}
-                            isSelected={selectedSubcategory === UserSettingsSubcategories.PublicLLM}
-                            onClick={() => setSelectedSubcategory(UserSettingsSubcategories.PublicLLM)}
-                            sx={{ pl: 4, py: 0.25, minHeight: 28 }}
-                        />
-                        <MenuListItem
-                            label={<FormattedMessage id="settings.privateLLMs" />}
-                            isSelected={selectedSubcategory === UserSettingsSubcategories.PrivateLLM}
-                            onClick={() => setSelectedSubcategory(UserSettingsSubcategories.PrivateLLM)}
+                            label={<FormattedMessage id="settings.llm.apiKeys" />}
+                            isSelected={selectedSubcategory === UserSettingsSubcategories.LLMModels}
+                            onClick={() => setSelectedSubcategory(UserSettingsSubcategories.LLMModels)}
                             sx={{ pl: 4, py: 0.25, minHeight: 28 }}
                         />
                     </MenuCollapsibleSection>
@@ -148,15 +142,9 @@ export default function UserSettings() {
                             sx={{ pl: 4, py: 0.25, minHeight: 28 }}
                         />
                         <MenuListItem
-                            label={<FormattedMessage id="settings.cloudKb" />}
-                            isSelected={selectedSubcategory === UserSettingsSubcategories.CloudKB}
-                            onClick={() => setSelectedSubcategory(UserSettingsSubcategories.CloudKB)}
-                            sx={{ pl: 4, py: 0.25, minHeight: 28 }}
-                        />
-                        <MenuListItem
-                            label={<FormattedMessage id="settings.privateKb" />}
-                            isSelected={selectedSubcategory === UserSettingsSubcategories.PrivateKB}
-                            onClick={() => setSelectedSubcategory(UserSettingsSubcategories.PrivateKB)}
+                            label={<FormattedMessage id="settings.kb" />}
+                            isSelected={selectedSubcategory === UserSettingsSubcategories.KB}
+                            onClick={() => setSelectedSubcategory(UserSettingsSubcategories.KB)}
                             sx={{ pl: 4, py: 0.25, minHeight: 28 }}
                         />
                     </MenuCollapsibleSection>

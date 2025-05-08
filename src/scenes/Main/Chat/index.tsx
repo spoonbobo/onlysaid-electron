@@ -4,11 +4,11 @@ import { useCurrentTopicContext } from "@/stores/Topic/TopicStore";
 import ChatHeader from "./ChatHeader";
 import ChatUI from "./ChatUI";
 import ChatInput from "./ChatInput";
-import { IChatMessage } from "@/models/Chat/Message";
+import { IChatMessage } from "@/types/Chat/Message";
 import { useChatStore } from "@/stores/Chat/chatStore";
 import { getUserFromStore } from "@/utils/user";
-import { IUser } from "@/models/User/User";
-import { IFile } from "@/models/File/File";
+import { IUser } from "@/types/User/User";
+import { IFile } from "@/types/File/File";
 import { useSelectedModelStore } from "@/stores/LLM/SelectedModelStore";
 import { useStreamStore, OpenAIMessage } from "@/stores/SSE/StreamStore";
 import { DeepSeekUser } from "@/stores/Chat/chatStore";
@@ -67,9 +67,12 @@ function Chat() {
     const replyingToMessage = replyingToId ? messages.find(m => m.id === replyingToId) || null : null;
 
     const [currentStreamContent, setCurrentStreamContent] = useState("");
+    const [prevContentLength, setPrevContentLength] = useState(0);
+    const lastUpdateTimeRef = useRef<number | null>(null);
     const [tokenRate, setTokenRate] = useState(0);
     const streamStartTimeRef = useRef<number | null>(null);
     const tokenCountRef = useRef(0);
+    const tokenRateHistoryRef = useRef<number[]>([]);
 
     const activeStreamIdForUI = streamingState.messageId ? `stream-${streamingState.messageId}` : null;
     const isCurrentlyConnectingForUI = activeStreamIdForUI ? storeIsConnecting[activeStreamIdForUI] : false;
@@ -136,46 +139,63 @@ function Chat() {
         const latestStreamObject = activeStreamIdForUI ? streamDataForId[activeStreamIdForUI] : null;
 
         if (streamingState.messageId && latestStreamObject) {
+            const now = Date.now();
+
             if (streamStartTimeRef.current === null) {
-                streamStartTimeRef.current = Date.now();
-                // Reset tokenCountRef only when a new stream effectively starts or new object arrives
+                streamStartTimeRef.current = now;
+                lastUpdateTimeRef.current = now;
                 tokenCountRef.current = 0;
+                tokenRateHistoryRef.current = [];
             }
 
             const newContent = latestStreamObject.full || latestStreamObject.content;
 
             // Only update state if content has actually changed
             if (newContent !== currentStreamContent) {
+                // Calculate new tokens since last update
+                const currentLength = newContent.length;
+                const newTokens = Math.max(0, currentLength - prevContentLength);
+
+                if (newTokens > 0 && lastUpdateTimeRef.current) {
+                    const timeDelta = (now - lastUpdateTimeRef.current) / 1000; // in seconds
+
+                    if (timeDelta > 0) {
+                        // Calculate instantaneous token rate
+                        const instantRate = Math.round(newTokens / timeDelta);
+
+                        // Add to history (keep last 5 measurements for smoothing)
+                        tokenRateHistoryRef.current.push(instantRate);
+                        if (tokenRateHistoryRef.current.length > 5) {
+                            tokenRateHistoryRef.current.shift();
+                        }
+
+                        // Calculate moving average for smoother display
+                        const avgRate = Math.round(
+                            tokenRateHistoryRef.current.reduce((sum, rate) => sum + rate, 0) /
+                            tokenRateHistoryRef.current.length
+                        );
+
+                        setTokenRate(avgRate);
+                    }
+
+                    lastUpdateTimeRef.current = now;
+                }
+
+                setPrevContentLength(currentLength);
                 setCurrentStreamContent(newContent);
+                tokenCountRef.current += newTokens;
             }
-
-            // Calculate new token rate
-            // Assuming tokenCountRef should be based on the length of newContent
-            const newTokens = newContent.split(/\s+/).length;
-            tokenCountRef.current = newTokens; // Update token count based on the latest full content
-
-            const elapsedSeconds = (Date.now() - (streamStartTimeRef.current || Date.now())) / 1000;
-            let newRate = 0;
-            if (elapsedSeconds > 0) {
-                newRate = Math.round(tokenCountRef.current / elapsedSeconds);
-            }
-
-            if (newRate !== tokenRate) {
-                setTokenRate(newRate);
-            }
-
         } else if (!streamingState.messageId) {
-            // Reset states only if they are not already in the reset state
-            if (currentStreamContent !== "") {
-                setCurrentStreamContent("");
-            }
-            if (tokenRate !== 0) {
-                setTokenRate(0);
-            }
+            // Reset states
+            setCurrentStreamContent("");
+            setTokenRate(0);
+            setPrevContentLength(0);
             streamStartTimeRef.current = null;
+            lastUpdateTimeRef.current = null;
             tokenCountRef.current = 0;
+            tokenRateHistoryRef.current = [];
         }
-    }, [streamingState.messageId, activeStreamIdForUI, streamDataForId, currentStreamContent, tokenRate]); // Add currentStreamContent and tokenRate to dependencies
+    }, [streamingState.messageId, activeStreamIdForUI, streamDataForId, currentStreamContent]);
 
     const handleReply = (message: IChatMessage) => {
         setReplyingTo(message.id);
@@ -342,19 +362,58 @@ function Chat() {
                     display: "flex",
                     flexDirection: "column",
                     overflow: "hidden",
-                    minHeight: 0
+                    minHeight: 0,
+                    position: "relative"
                 }}
             >
                 {(() => {
                     try {
                         return (
-                            <ChatUI
-                                messages={messages}
-                                onReply={handleReply}
-                                streamingMessageId={streamingState.messageId}
-                                streamContentForBubble={currentStreamContent}
-                                isConnectingForBubble={isCurrentlyConnectingForUI}
-                            />
+                            <>
+                                <ChatUI
+                                    messages={messages}
+                                    onReply={handleReply}
+                                    streamingMessageId={streamingState.messageId}
+                                    streamContentForBubble={currentStreamContent}
+                                    isConnectingForBubble={isCurrentlyConnectingForUI}
+                                />
+
+                                {streamingState.messageId && isCurrentlyConnectingForUI && (
+                                    <Box
+                                        sx={{
+                                            position: 'absolute',
+                                            bottom: 16,
+                                            left: '50%',
+                                            transform: 'translateX(-50%)',
+                                            zIndex: 1000,
+                                            bgcolor: 'background.paper',
+                                            boxShadow: 3,
+                                            padding: '4px 10px',
+                                            borderRadius: 2,
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                        }}
+                                    >
+                                        <Typography
+                                            onClick={handleStopGeneration}
+                                            color="error"
+                                            variant="button"
+                                            sx={{
+                                                cursor: 'pointer',
+                                                '&:hover': { textDecoration: 'underline' },
+                                                mr: 1,
+                                                fontSize: '0.75rem',
+                                                fontWeight: 'medium',
+                                            }}
+                                        >
+                                            Stop
+                                        </Typography>
+                                        <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem' }}>
+                                            ({tokenRate} t/s)
+                                        </Typography>
+                                    </Box>
+                                )}
+                            </>
                         );
                     } catch (e) {
                         console.error("Error rendering ChatUI:", e);
@@ -369,42 +428,6 @@ function Chat() {
                 replyingTo={replyingToMessage}
                 onCancelReply={handleCancelReply}
             />
-
-            {streamingState.messageId && isCurrentlyConnectingForUI && (
-                <Box
-                    sx={{
-                        position: 'absolute',
-                        bottom: 70,
-                        left: '50%',
-                        transform: 'translateX(-50%)',
-                        zIndex: 1000,
-                        bgcolor: 'background.paper',
-                        boxShadow: 3,
-                        padding: '6px 12px',
-                        borderRadius: 2,
-                        display: 'flex',
-                        alignItems: 'center',
-                    }}
-                >
-                    <Typography
-                        onClick={handleStopGeneration}
-                        color="error"
-                        variant="button"
-                        sx={{
-                            cursor: 'pointer',
-                            '&:hover': { textDecoration: 'underline' },
-                            mr: 1.5,
-                            fontSize: '0.8rem',
-                            fontWeight: 'medium',
-                        }}
-                    >
-                        Stop
-                    </Typography>
-                    <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.75rem' }}>
-                        ({tokenRate} t/s)
-                    </Typography>
-                </Box>
-            )}
         </Box>
     );
 }

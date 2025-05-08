@@ -111,13 +111,13 @@ export const useStreamStore = create<StreamState>((set, get) => {
     };
 
     if (typeof window !== 'undefined' && window.electron) {
-        window.electron.ipcRenderer.on('sse:chunk', (...args) => {
+        window.electron.ipcRenderer.on('streaming:chunk', (...args) => {
             if (!args || args.length === 0) return;
 
             const payload = args[0];
             if (!payload || typeof payload !== 'object' ||
                 !('streamId' in payload) || !('chunk' in payload)) {
-                console.error('Invalid sse:chunk payload:', payload);
+                console.error('Invalid streaming:chunk payload:', payload);
                 return;
             }
 
@@ -243,7 +243,7 @@ export const useStreamStore = create<StreamState>((set, get) => {
         abortStream: (streamId: string) => {
             if (typeof window !== 'undefined' && window.electron) {
                 console.log("abortStream", streamId);
-                window.electron.sse.abort_stream({ streamId })
+                window.electron.streaming.abort_stream({ streamId })
                     .then(result => {
                         console.log("abortStream result", result);
                         flushAndFinalizeStream(streamId);
@@ -269,7 +269,7 @@ export const useStreamStore = create<StreamState>((set, get) => {
 
             try {
                 // Include streamId in the options
-                const result = await window.electron.sse.chat_stream_complete({
+                const result = await window.electron.streaming.chat_stream_complete({
                     messages,
                     options: {
                         model,
@@ -313,7 +313,7 @@ export const useStreamStore = create<StreamState>((set, get) => {
             const { model = 'gpt-4', temperature, maxTokens, provider = "openai" } = options;
             const config = useLLMConfigurationStore.getState();
 
-            const result = await window.electron.sse.chat_complete({
+            const result = await window.electron.streaming.chat_complete({
                 messages,
                 options: {
                     model,
@@ -347,7 +347,7 @@ export const useStreamStore = create<StreamState>((set, get) => {
         generateImage: async (prompt, options = {}) => {
             const config = useLLMConfigurationStore.getState();
 
-            const result = await window.electron.sse.generate_image({
+            const result = await window.electron.streaming.generate_image({
                 prompt,
                 options: {
                     ...options,

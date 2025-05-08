@@ -1,7 +1,7 @@
 import onlysaidServiceInstance from "./service";
 import { ipcMain } from "electron";
-import { IUser } from "@/models/User/User";
-import { IUserGet } from "@/models/User/User";
+import { IUser } from "@/types/User/User";
+import { IUserGet } from "@/types/User/User";
 
 export const setupUserHandlers = () => {
   ipcMain.handle('user:auth', async (event, args) => {

@@ -4,13 +4,15 @@ import { useCurrentTopicContext } from "@/stores/Topic/TopicStore";
 import SettingsSection from "@/components/Settings/SettingsSection";
 import UserPreferences from "./UserSettings/UserPreference";
 import DeleteAccount from "./UserSettings/DeleteAccount";
-import PublicLLMConfiguration from "./LLMModels/Public";
-import PrivateLLMConfiguration from "./LLMModels/Private";
+import LLMConfiguration from "./LLMAPI";
 import LLMSettings from "./LLMSettings";
 import DebugMode from "./UserSettings/DebugMode";
 import { FormattedMessage } from "react-intl";
 import MCPSettings from "./MCP/index";
 import MCPConfiguration from "./MCP/MCPSettings";
+import PrivateKB from "./KnowledgeBase";
+import KBSettings from "./KnowledgeBase/KBSettings";
+
 function Settings() {
     const { selectedTopics } = useCurrentTopicContext();
 
@@ -24,11 +26,8 @@ function Settings() {
             case UserSettingsSubcategories.DeleteAccount:
                 return <DeleteAccount />;
 
-            case UserSettingsSubcategories.PublicLLM:
-                return <PublicLLMConfiguration />;
-
-            case UserSettingsSubcategories.PrivateLLM:
-                return <PrivateLLMConfiguration />;
+            case UserSettingsSubcategories.LLMModels:
+                return <LLMConfiguration />;
 
             case UserSettingsSubcategories.LLMSettings:
                 return <LLMSettings />;
@@ -36,19 +35,17 @@ function Settings() {
             case UserSettingsSubcategories.DebugMode:
                 return <DebugMode />;
 
-            case UserSettingsSubcategories.KnowledgeBase:
-                return (
-                    <SettingsSection title="Knowledge Base">
-                        <Typography>Knowledge Base settings</Typography>
-                    </SettingsSection>
-                );
+            case UserSettingsSubcategories.KBSettings:
+                return <KBSettings />;
+
+            case UserSettingsSubcategories.KB:
+                return <PrivateKB />;
 
             case UserSettingsSubcategories.MCP:
                 return <MCPSettings />;
 
             case UserSettingsSubcategories.MCPConfiguration:
                 return <MCPConfiguration />;
-
 
             default:
                 return (

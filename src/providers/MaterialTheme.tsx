@@ -43,9 +43,9 @@ export function ThemeContextProvider({ children }: ThemeContextProviderProps) {
                     dark: mode === 'light' ? '#1976d2' : '#0288d1',
                 },
                 success: {
-                    main: mode === 'light' ? '#4caf50' : '#66bb6a',
-                    light: mode === 'light' ? '#81c784' : '#a5d6a7',
-                    dark: mode === 'light' ? '#388e3c' : '#2e7d32',
+                    main: mode === 'light' ? '#4CAF50' : '#66BB6A',
+                    light: mode === 'light' ? '#80E27E' : '#A5D6A7',
+                    dark: mode === 'light' ? '#2E7D32' : '#1B5E20',
                 },
                 background: {
                     default: mode === 'light' ? '#f5f7fa' : '#121212',

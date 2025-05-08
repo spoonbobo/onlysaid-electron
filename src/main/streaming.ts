@@ -5,7 +5,7 @@ const activeStreams: Record<string, AbortController> = {};
 
 export function setupSSEHandlers() {
     // Handle chat completion streaming
-    ipcMain.handle('sse:chat_stream_complete', async (event, { messages, options }) => {
+    ipcMain.handle('streaming:chat_stream_complete', async (event, { messages, options }) => {
         try {
             const { model = 'gpt-4', temperature = 0.7, maxTokens, streamId } = options;
             console.log("chat_stream_complete", model, temperature, maxTokens);
@@ -78,7 +78,7 @@ export function setupSSEHandlers() {
 
                     // Send in smaller chunks (e.g., 5)
                     if (buffer.length >= 5) { // Changed from 20
-                        event.sender.send('sse:chunk', {
+                        event.sender.send('streaming:chunk', {
                             streamId: options.streamId,
                             chunk: {
                                 content: buffer,
@@ -93,7 +93,7 @@ export function setupSSEHandlers() {
 
             // Send any remaining buffered content when the stream ends
             if (buffer.length > 0) {
-                event.sender.send('sse:chunk', {
+                event.sender.send('streaming:chunk', {
                     streamId: options.streamId,
                     chunk: {
                         content: buffer,
@@ -120,87 +120,8 @@ export function setupSSEHandlers() {
         }
     });
 
-    // Regular chat completion
-    ipcMain.handle('sse:chat_complete', async (event, { messages, options }) => {
-        try {
-            const { model = 'gpt-4', temperature = 0.7, maxTokens } = options;
 
-            let openai;
-
-            switch (model) {
-                case 'gpt-4':
-                    openai = new OpenAI({
-                        baseURL: process.env.OPENAI_API_BASE_URL,
-                        apiKey: options.apiKeys.openAI,
-                    });
-                    break;
-                case 'deepseek-chat':
-                    openai = new OpenAI({
-                        baseURL: "https://api.deepseek.com",
-                        apiKey: options.apiKeys.deepSeek,
-                    });
-                    break;
-                default:
-                    openai = new OpenAI({
-                        baseURL: options.ollamaConfig.baseUrl,
-                        apiKey: options.apiKeys.ollama,
-                    });
-                    break;
-            }
-
-            const response = await openai.chat.completions.create({
-                model,
-                messages,
-                temperature,
-                max_tokens: maxTokens,
-            });
-
-            return {
-                success: true,
-                content: response.choices[0]?.message.content || ''
-            };
-        } catch (error: any) {
-            return { success: false, error: error.message };
-        }
-    });
-
-    // Image generation
-    ipcMain.handle('sse:generate_image', async (event, { prompt, options = {} }) => {
-        try {
-            const { model = 'gpt-4', size = '1024x1024' } = options;
-
-            let openai;
-
-            switch (model) {
-                case 'gpt-4':
-                    openai = new OpenAI({
-                        baseURL: process.env.OPENAI_API_BASE_URL,
-                        apiKey: options.apiKeys.openAI,
-                    });
-                    break;
-                default:
-                    openai = new OpenAI({
-                        baseURL: options.ollamaConfig.baseUrl,
-                        apiKey: options.apiKeys.ollama,
-                    });
-                    break;
-            }
-
-
-            const response = await openai.images.generate({
-                model: 'dall-e-3',
-                prompt,
-                size,
-                n: 1,
-            });
-
-            return { success: true, url: response.data?.[0]?.url };
-        } catch (error: any) {
-            return { success: false, error: error.message };
-        }
-    });
-
-    ipcMain.handle('sse:abort_stream', (event, { streamId }) => {
+    ipcMain.handle('streaming:abort_stream', (event, { streamId }) => {
         if (activeStreams[streamId]) {
             console.log("abortStream", streamId);
             activeStreams[streamId].abort();

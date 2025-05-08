@@ -1,11 +1,11 @@
-import { IChatRoom } from "@/models/Chat/Chatroom";
+import { IChatRoom } from "@/types/Chat/Chatroom";
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 
 export interface TopicContext {
     id?: string;
     name: string;
-    type: "home" | "team" | "settings";
+    type: "home" | "team" | "settings" | "file";
     section?: string;
 }
 
@@ -47,7 +47,8 @@ export const useTopicStore = create<TopicStore>()(
             contexts: [
                 { name: "home", type: "home" },
                 { name: "team", type: "team" },
-                { name: "settings", type: "settings" }
+                { name: "settings", type: "settings" },
+                { name: "file", type: "file" }
             ],
             selectedContext: { name: "home", type: "home" },
 

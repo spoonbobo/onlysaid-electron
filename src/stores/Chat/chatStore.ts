@@ -1,11 +1,11 @@
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
-import { IChatMessage, IReaction } from "@/models/Chat/Message";
-import { IChatRoom } from "@/models/Chat/Chatroom";
+import { IChatMessage, IReaction } from "@/types/Chat/Message";
+import { IChatRoom } from "@/types/Chat/Chatroom";
 import { getUserTokenFromStore, getUserFromStore } from "@/utils/user";
 import { v4 as uuidv4 } from 'uuid';
 import * as R from 'ramda';
-import { IUser } from "@/models/User/User";
+import { IUser } from "@/types/User/User";
 import { validate } from 'uuid';
 
 // Define the message limit

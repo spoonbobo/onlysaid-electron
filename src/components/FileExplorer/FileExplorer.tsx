@@ -12,6 +12,8 @@ import MenuSection from "@/components/Navigation/MenuSection";
 import { useFileExplorerStore } from "@/stores/Layout/FileExplorerResize";
 import { useFileExplorerStore as useFilesStore, selectors } from "@/stores/File/FileExplorerStore";
 import { FormattedMessage } from "react-intl";
+import FileDropDialog from "@/components/Dialog/File";
+import FileClickDialog from "@/components/Dialog/File/FileClickDialog";
 
 // Define props interface
 interface FileExplorerProps {
@@ -19,12 +21,24 @@ interface FileExplorerProps {
 }
 
 function FileNodeItem({ node, level = 0 }: { node: any, level?: number }) {
-    const { loadFolder, toggleFolder, selectItem, removeRootFolder } = useFilesStore();
+    const { loadFolder, toggleFolder, selectItem, removeRootFolder, selectedPath } = useFilesStore();
     const isLoading = useFilesStore(selectors.selectIsNodeLoading(node.path));
     const [isDragging, setIsDragging] = useState(false);
     // Add state for context menu
     const [menuAnchorEl, setMenuAnchorEl] = useState<null | HTMLElement>(null);
     const menuOpen = Boolean(menuAnchorEl);
+
+    // Add state for dialogs
+    const [showFileDropDialog, setShowFileDropDialog] = useState(false);
+    const [showFileClickDialog, setShowFileClickDialog] = useState(false);
+    const [draggedPath, setDraggedPath] = useState("");
+
+    const isRootFile = level === 0 && node.type === 'file';
+    const isSelected = selectedPath === node.path;
+    const isLeafFile = level > 0 && node.type === 'file'; // Add check for leaf file
+
+    // Make all files draggable, not just root files
+    const isDraggable = node.type === 'file';
 
     const handleClick = () => {
         if (isLoading) return;
@@ -39,10 +53,17 @@ function FileNodeItem({ node, level = 0 }: { node: any, level?: number }) {
             }
         } else {
             selectItem(node.path);
+
+            // Show dialog when clicking on a leaf file
+            if (isLeafFile) {
+                setShowFileClickDialog(true);
+            }
         }
     };
 
     const handleDragStart = (e: React.DragEvent<HTMLDivElement>) => {
+        if (!isDraggable) return;
+
         setIsDragging(true);
         e.dataTransfer.setData('text/plain', node.path);
         if (e.dataTransfer.setDragImage && e.currentTarget) {
@@ -54,6 +75,8 @@ function FileNodeItem({ node, level = 0 }: { node: any, level?: number }) {
     };
 
     const handleDragEnd = (e: React.DragEvent<HTMLDivElement>) => {
+        if (!isDraggable) return;
+
         setIsDragging(false);
         if (e.currentTarget) {
             e.currentTarget.style.opacity = '1';
@@ -69,11 +92,15 @@ function FileNodeItem({ node, level = 0 }: { node: any, level?: number }) {
         e.preventDefault();
         const draggedNodePath = e.dataTransfer.getData('text/plain');
         console.log(`Dropped ${draggedNodePath} onto ${node.path}`);
+
+        // Show file drop dialog
+        setDraggedPath(draggedNodePath);
+        setShowFileDropDialog(true);
     };
 
     // Add context menu handler
     const handleContextMenu = (e: React.MouseEvent<HTMLDivElement>) => {
-        if (level === 0) { // Only show context menu for root level folders
+        if (level === 0) { // Only show context menu for root level items
             e.preventDefault();
             e.stopPropagation();
             setMenuAnchorEl(e.currentTarget);
@@ -95,24 +122,25 @@ function FileNodeItem({ node, level = 0 }: { node: any, level?: number }) {
                 component="div"
                 onClick={handleClick}
                 onContextMenu={handleContextMenu}
-                draggable
-                onDragStart={handleDragStart}
-                onDragEnd={handleDragEnd}
+                draggable={isDraggable}
+                onDragStart={isDraggable ? handleDragStart : undefined}
+                onDragEnd={isDraggable ? handleDragEnd : undefined}
                 onDragOver={handleDragOver}
                 onDrop={handleDrop}
                 sx={{
                     pl: 2 + level * 2,
                     py: 0.5,
-                    cursor: isLoading ? 'default' : 'grab',
+                    cursor: isLoading ? 'default' : (isDraggable ? 'grab' : 'pointer'),
                     opacity: isLoading ? 0.7 : (isDragging ? 0.4 : 1),
-                    '&:hover': { bgcolor: isLoading ? 'transparent' : 'action.hover' },
+                    bgcolor: isSelected ? 'action.selected' : 'transparent',
+                    '&:hover': { bgcolor: isLoading ? 'transparent' : (isSelected ? 'action.selected' : 'action.hover') },
                     height: 36,
                     minHeight: 36,
                     boxSizing: 'border-box',
-                    userSelect: 'none', // Prevent text selection
-                    WebkitUserSelect: 'none', // For Safari
-                    MozUserSelect: 'none', // For Firefox
-                    msUserSelect: 'none', // For IE/Edge
+                    userSelect: 'none',
+                    WebkitUserSelect: 'none',
+                    MozUserSelect: 'none',
+                    msUserSelect: 'none',
                 }}
             >
                 <ListItemIcon sx={{ minWidth: 36 }}>
@@ -125,7 +153,7 @@ function FileNodeItem({ node, level = 0 }: { node: any, level?: number }) {
                             <FolderIcon fontSize="small" color="primary" />
                         )
                     ) : (
-                        <InsertDriveFileIcon fontSize="small" />
+                        <InsertDriveFileIcon fontSize="small" color={isSelected ? "primary" : "inherit"} />
                     )}
                 </ListItemIcon>
                 <ListItemText
@@ -134,7 +162,11 @@ function FileNodeItem({ node, level = 0 }: { node: any, level?: number }) {
                         primary: {
                             fontSize: '0.875rem',
                             noWrap: true,
-                            sx: { lineHeight: 1.1 }
+                            sx: {
+                                lineHeight: 1.1,
+                                color: isSelected ? 'primary.main' : 'inherit',
+                                fontWeight: isSelected ? 500 : 'inherit'
+                            }
                         }
                     }}
                 />
@@ -172,6 +204,21 @@ function FileNodeItem({ node, level = 0 }: { node: any, level?: number }) {
                     />
                 </MenuItem>
             </Menu>
+
+            {/* File Drop Dialog */}
+            <FileDropDialog
+                open={showFileDropDialog}
+                onClose={() => setShowFileDropDialog(false)}
+                sourcePath={draggedPath}
+                targetPath={node.path}
+            />
+
+            {/* File Click Dialog */}
+            <FileClickDialog
+                open={showFileClickDialog}
+                onClose={() => setShowFileClickDialog(false)}
+                filePath={node.path}
+            />
 
             {node.type === 'directory' && node.isExpanded && node.children && (
                 node.children.length > 0 ? (

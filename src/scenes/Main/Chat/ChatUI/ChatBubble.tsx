@@ -1,5 +1,5 @@
 import { Box, Typography, Avatar, IconButton, Menu, MenuItem } from "@mui/material";
-import { IChatMessage } from "@/models/Chat/Message";
+import { IChatMessage } from "@/types/Chat/Message";
 import { useState, useRef, useEffect, useCallback, memo } from "react";
 import ThumbUpIcon from '@mui/icons-material/ThumbUp';
 import FavoriteIcon from '@mui/icons-material/Favorite';

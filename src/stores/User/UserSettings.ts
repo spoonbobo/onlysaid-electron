@@ -2,19 +2,27 @@ import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 
 export const UserSettingsSubcategories = {
+    // General
     User: "user",
+    DebugMode: "debug_mode",
+
+    // LLM
     LLMSettings: "llmSettings",
-    PublicLLM: "publicLLMs",
-    PrivateLLM: "privateLLMs",
-    KnowledgeBase: "knowledgeBase",
+    LLMModels: "llm.apiKeys",
+
+    // KnowledgeBase
     KBSettings: "kbSettings",
-    CloudKB: "cloudKb",
-    PrivateKB: "privateKb",
+    KB: "kb",
+
+    // MCP
     MCPConfiguration: "mcpConfiguration",
     MCP: "mcp",
+
+    // Developer
     DeveloperAPI: "developerAPI",
+
+    // DangerZone
     DeleteAccount: "deleteAccount",
-    DebugMode: "debug_mode",
 } as const;
 
 type UserSettingsSubcategory = typeof UserSettingsSubcategories[keyof typeof UserSettingsSubcategories];
