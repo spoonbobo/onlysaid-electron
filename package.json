@@ -117,8 +117,6 @@
     "@mui/icons-material": "^7.0.2",
     "@mui/material": "^7.0.2",
     "@mui/x-date-pickers": "^8.1.0",
-    "@openbnb/mcp-server-airbnb": "^0.1.1",
-    "@smithery/sdk": "^1.2.2",
     "add": "^2.0.6",
     "cors-anywhere": "^0.4.4",
     "date-fns": "^4.1.0",
