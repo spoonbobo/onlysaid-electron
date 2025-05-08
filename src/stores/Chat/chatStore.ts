@@ -4,13 +4,12 @@ import { IChatMessage, IReaction } from "@/models/Chat/Message";
 import { IChatRoom } from "@/models/Chat/Chatroom";
 import { getUserTokenFromStore, getUserFromStore } from "@/utils/user";
 import { v4 as uuidv4 } from 'uuid';
-import { WindowTab } from "../Topic/WindowStore";
 import * as R from 'ramda';
 import { IUser } from "@/models/User/User";
 import { validate } from 'uuid';
 
 // Define the message limit
-const MESSAGE_FETCH_LIMIT = 50;
+const MESSAGE_FETCH_LIMIT = 30;
 
 // update to be dynamic later -- TODO:
 export const DeepSeekUser: IUser = {
