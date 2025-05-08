@@ -1,9 +1,9 @@
 import { Box, Typography, IconButton, Button } from "@mui/material";
-import { useDebugStore } from "../../../stores/Debug/DebugStore";
+import { useDebugStore } from "@/stores/Debug/DebugStore";
 import { useState } from "react";
-import { useTopicStore } from "../../../stores/Topic/TopicStore";
+import { useCurrentTopicContext } from "@/stores/Topic/TopicStore";
 import { databaseQueries } from '../TestQueries/Queries';
-import { useChatStore } from "../../../stores/Chat/chatStore";
+import { useChatStore } from "@/stores/Chat/chatStore";
 import { FormattedMessage } from "react-intl";
 
 export default function DbOverlay() {
@@ -11,12 +11,10 @@ export default function DbOverlay() {
     const [isLoading, setIsLoading] = useState(false);
     const [result, setResult] = useState<string | null>(null);
 
-    const { getCurrentContextTopics } = useTopicStore();
-    const selectedTopics = getCurrentContextTopics();
+    const { selectedTopics } = useCurrentTopicContext();
     const { fetchMessages } = useChatStore();
 
     const executeQuery = async (queryId: string) => {
-        // ... existing code ...
         const activeRoomId = Object.values(selectedTopics)[0];
 
         if (!activeRoomId) {

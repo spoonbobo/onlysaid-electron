@@ -24,14 +24,13 @@ export default function UserSettings() {
         setSelectedTopic,
         selectedContext,
         expandedGroups,
-        setGroupExpanded,
-        parentId
+        setGroupExpanded
     } = useCurrentTopicContext();
 
     const { debugMode } = useUserSettingsStore();
 
-    // Create key for component instance
-    const settingsKey = `${parentId || "no-parent"}-settings`;
+    // Create key for component instance based on context
+    const settingsKey = `settings-${selectedContext?.name || "unknown"}`;
 
     // Only initialize expanded groups if not already set
     useEffect(() => {
@@ -41,7 +40,7 @@ export default function UserSettings() {
                 setGroupExpanded(section as UserSectionName, false);
             });
         }
-    }, [parentId, selectedContext, expandedGroups]);
+    }, [selectedContext, expandedGroups]);
 
     const selectedSubcategory = selectedTopics['settings'] || UserSettingsSubcategories.User;
 

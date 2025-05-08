@@ -1,12 +1,10 @@
 import { Box, Typography, IconButton } from "@mui/material";
 import { useDebugStore } from "../../../stores/Debug/DebugStore";
-import { useWindowStore } from "../../../stores/Topic/WindowStore";
 import { useTopicStore } from "../../../stores/Topic/TopicStore";
 import { useRef, useState } from "react";
 
 export default function DebugOverlay() {
-    const { tabs, activeTabId } = useWindowStore();
-    const { selectedContext, contextParents } = useTopicStore();
+    const { selectedContext } = useTopicStore();
     const { debugOverlayMinimized, setDebugOverlayMinimized } = useDebugStore();
 
     const renderCountRef = useRef(0);
@@ -15,9 +13,7 @@ export default function DebugOverlay() {
     // Increment render counter without causing re-renders
     renderCountRef.current += 1;
 
-    const activeTab = tabs.find(tab => tab.id === activeTabId);
     const contextId = selectedContext ? `${selectedContext.name}:${selectedContext.type}` : 'none';
-    const parentId = selectedContext ? contextParents[contextId] || 'none' : 'none';
     const uptime = Math.floor((Date.now() - startTime) / 1000);
 
     return (
@@ -50,10 +46,8 @@ export default function DebugOverlay() {
 
             {!debugOverlayMinimized && (
                 <Box sx={{ p: 1 }}>
-                    <InfoRow label="Active Tab" value={activeTab ? `${activeTab.title} (${activeTab.id.substring(0, 8)}...)` : 'None'} />
-                    <InfoRow label="Context" value={selectedContext ? `${selectedContext.name}:${selectedContext.type}` : 'None'} />
-                    <InfoRow label="Parent ID" value={parentId !== 'none' ? `${parentId.substring(0, 8)}...` : 'None'} />
-                    <InfoRow label="Tabs" value={`${tabs.length}`} />
+                    <InfoRow label="Current Context" value={selectedContext ? `${selectedContext.name}:${selectedContext.type}` : 'None'} />
+                    <InfoRow label="Context ID" value={selectedContext?.id || contextId || 'None'} />
                     <InfoRow label="Renders" value={`${renderCountRef.current}`} />
                     <InfoRow label="Uptime" value={`${uptime}s`} />
                 </Box>

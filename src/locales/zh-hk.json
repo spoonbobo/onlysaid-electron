@@ -221,5 +221,6 @@
 
   "debug.clean-messages": "清理聊天室訊息",
   "debug.bot-message": "模擬機器人訊息",
-  "debug.database-tools": "資料庫工具"
+  "debug.database-tools": "資料庫工具",
+  "debug.sample-markdown": "範例 Markdown"
 }

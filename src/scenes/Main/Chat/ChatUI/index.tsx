@@ -31,8 +31,8 @@ function ChatUI({ messages, onReply, streamingMessageId }: ChatUIProps) {
     const hasUserScrolled = useRef(false);
     const [hoveredMessageId, setHoveredMessageId] = useState<string | null>(null);
 
-    const { getCurrentContextTopics } = useTopicStore();
-    const roomId = Object.values(getCurrentContextTopics())[0];
+    const { selectedTopics } = useCurrentTopicContext();
+    const roomId = Object.values(selectedTopics)[0];
 
     const [streamContent, setStreamContent] = useState("");
     const { messages: streamMessages, isConnecting, abortStream } = useStreamStore();
