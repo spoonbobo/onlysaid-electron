@@ -67,25 +67,41 @@ export function setupSSEHandlers() {
 
             // Set up variables to track response
             let accumulatedResponse = '';
+            let buffer = '';
 
             // Start streaming chunks in real-time
             for await (const chunk of stream) {
                 const content = chunk.choices[0]?.delta?.content || '';
                 if (content) {
+                    buffer += content;
                     accumulatedResponse += content;
 
-                    // Explicitly send with streamId
-                    const chunkData = {
-                        content,
+                    // Send in smaller chunks (e.g., 5)
+                    if (buffer.length >= 5) { // Changed from 20
+                        event.sender.send('sse:chunk', {
+                            streamId: options.streamId,
+                            chunk: {
+                                content: buffer,
+                                full: accumulatedResponse,
+                                timestamp: Date.now()
+                            }
+                        });
+                        buffer = '';
+                    }
+                }
+            }
+
+            // Send any remaining buffered content when the stream ends
+            if (buffer.length > 0) {
+                event.sender.send('sse:chunk', {
+                    streamId: options.streamId,
+                    chunk: {
+                        content: buffer,
                         full: accumulatedResponse,
                         timestamp: Date.now()
-                    };
-
-                    event.sender.send('sse:chunk', {
-                        streamId: options.streamId,
-                        chunk: chunkData
-                    });
-                }
+                    }
+                });
+                buffer = ''; // Clear buffer after sending
             }
 
             // Return success when done

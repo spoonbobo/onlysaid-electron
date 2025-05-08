@@ -4,7 +4,6 @@ import { IChatMessage } from "@/models/Chat/Message";
 import { getUserFromStore } from "@/utils/user";
 import { useChatStore } from "@/stores/Chat/chatStore";
 import { useTopicStore } from "@/stores/Topic/TopicStore";
-import { useStreamStore } from "@/stores/SSE/StreamStore";
 import ChatBubble from "./ChatBubble";
 import { useCurrentTopicContext } from "@/stores/Topic/TopicStore";
 import * as R from 'ramda';
@@ -15,12 +14,14 @@ interface ChatUIProps {
     messagesEndRef?: React.RefObject<HTMLDivElement>;
     onReply?: (message: IChatMessage) => void;
     streamingMessageId?: string | null;
+    streamContentForBubble?: string;
+    isConnectingForBubble?: boolean;
 }
 
 // Memoize the individual message to prevent re-renders
 const MemoizedChatBubble = memo(ChatBubble);
 
-function ChatUI({ messages, onReply, streamingMessageId }: ChatUIProps) {
+function ChatUI({ messages, onReply, streamingMessageId, streamContentForBubble, isConnectingForBubble }: ChatUIProps) {
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const scrollContainerRef = useRef<HTMLDivElement>(null);
     const userId = getUserFromStore()?.id;
@@ -33,12 +34,6 @@ function ChatUI({ messages, onReply, streamingMessageId }: ChatUIProps) {
 
     const { selectedTopics } = useCurrentTopicContext();
     const roomId = Object.values(selectedTopics)[0];
-
-    const [streamContent, setStreamContent] = useState("");
-    const { messages: streamMessages, isConnecting, abortStream } = useStreamStore();
-    const streamPrefix = streamingMessageId ? `stream-${streamingMessageId}` : null;
-
-    const { streamingState, setStreamingState } = useCurrentTopicContext();
 
     const handleMessageMouseEnter = useCallback((messageId: string) => {
         setHoveredMessageId(messageId);
@@ -58,6 +53,10 @@ function ChatUI({ messages, onReply, streamingMessageId }: ChatUIProps) {
     }, []);
 
     const handleScroll = useCallback(() => {
+        if (streamingMessageId && isConnectingForBubble) {
+            shouldScrollToBottom.current = false;
+        }
+
         if (!scrollContainerRef.current) return;
 
         const { scrollTop, scrollHeight, clientHeight } = scrollContainerRef.current;
@@ -79,7 +78,7 @@ function ChatUI({ messages, onReply, streamingMessageId }: ChatUIProps) {
         ) {
             loadOlderMessages();
         }
-    }, [hasMoreMessages, isLoadingMore, roomId]);
+    }, [hasMoreMessages, isLoadingMore, roomId, streamingMessageId, isConnectingForBubble]);
 
     const loadOlderMessages = async () => {
         if (!roomId || isLoadingMore || !hasMoreMessages) return;
@@ -120,41 +119,19 @@ function ChatUI({ messages, onReply, streamingMessageId }: ChatUIProps) {
 
             const fetchInitial = async () => {
                 await useChatStore.getState().fetchMessages(roomId, false);
-                setTimeout(scrollToBottom, 0);
+                setTimeout(scrollToBottom, 50);
             };
             fetchInitial();
         }
     }, [roomId, scrollToBottom]);
 
     useEffect(() => {
-        if (streamingMessageId && streamPrefix) {
-            const messages = streamMessages[streamPrefix] || [];
-            if (messages.length > 0) {
-                const latestMessage = messages[messages.length - 1];
-                setStreamContent(latestMessage.full || latestMessage.content);
-            }
-        } else {
-            setStreamContent("");
-        }
-    }, [streamingMessageId, streamPrefix, streamMessages]);
-
-    useEffect(() => {
-        if (streamContent && shouldScrollToBottom.current) {
+        if (streamContentForBubble && shouldScrollToBottom.current) {
             requestAnimationFrame(() => {
                 scrollToBottom();
             });
         }
-    }, [streamContent, scrollToBottom]);
-
-    useEffect(() => {
-        const hasReactions = messages.some(msg => msg.reactions && msg.reactions.length > 0);
-
-        if (shouldScrollToBottom.current && hasReactions) {
-            requestAnimationFrame(() => {
-                scrollToBottom();
-            });
-        }
-    }, [messages, scrollToBottom]);
+    }, [streamContentForBubble, scrollToBottom]);
 
     useEffect(() => {
         const scrollAfterRender = () => {
@@ -163,7 +140,7 @@ function ChatUI({ messages, onReply, streamingMessageId }: ChatUIProps) {
             });
         };
 
-        if (messages.length > 0 && prevMessagesLength.current === 0) {
+        if (messages.length > 0 && prevMessagesLength.current === 0 && shouldScrollToBottom.current) {
             scrollAfterRender();
         }
 
@@ -177,18 +154,6 @@ function ChatUI({ messages, onReply, streamingMessageId }: ChatUIProps) {
         prevMessagesLength.current = messages.length;
     }, [messages, userId, scrollToBottom, isLoadingMore]);
 
-    const handleStopGeneration = useCallback(() => {
-        if (streamingMessageId) {
-            const fullStreamId = `stream-${streamingMessageId}`;
-            abortStream(fullStreamId);
-
-            setStreamingState(null, null);
-
-            console.log("Stopping generation for streamId:", fullStreamId);
-        }
-    }, [streamingMessageId, abortStream, setStreamingState]);
-
-    // Memoize message processing to avoid recalculating on every render
     const processedMessages = useMemo(() => {
         return messages.map((msg, index) => {
             const isCurrentUser = msg.sender === userId;
@@ -253,9 +218,7 @@ function ChatUI({ messages, onReply, streamingMessageId }: ChatUIProps) {
             )}
 
             {processedMessages.map(({ msg, isCurrentUser, isContinuation, isLastInSequence, replyToMessage, messageKey }) => {
-                const isStreaming = streamingMessageId === msg.id;
-                const isCurrentlyConnecting = isStreaming && isConnecting[`stream-${streamingMessageId}`];
-                const isHovered = hoveredMessageId === msg.id;
+                const isThisMessageStreaming = streamingMessageId === msg.id;
 
                 return (
                     <MemoizedChatBubble
@@ -266,10 +229,10 @@ function ChatUI({ messages, onReply, streamingMessageId }: ChatUIProps) {
                         isLastInSequence={isLastInSequence}
                         onReply={onReply}
                         replyToMessage={replyToMessage}
-                        isStreaming={isStreaming}
-                        isConnecting={isCurrentlyConnecting}
-                        streamContent={isStreaming ? streamContent : ""}
-                        isHovered={isHovered}
+                        isStreaming={isThisMessageStreaming}
+                        isConnecting={isThisMessageStreaming ? isConnectingForBubble : false}
+                        streamContent={isThisMessageStreaming ? (streamContentForBubble || "") : ""}
+                        isHovered={hoveredMessageId === msg.id}
                         onMouseEnter={() => handleMessageMouseEnter(msg.id)}
                         onMouseLeave={handleMessageMouseLeave}
                     />
@@ -277,35 +240,6 @@ function ChatUI({ messages, onReply, streamingMessageId }: ChatUIProps) {
             })}
 
             <div ref={messagesEndRef} style={{ height: "1px", margin: 0, padding: 0 }} />
-
-            {streamingMessageId && isConnecting[`stream-${streamingMessageId}`] && (
-                <Box
-                    sx={{
-                        position: 'fixed',
-                        bottom: 100,
-                        left: '50%',
-                        transform: 'translateX(-50%)',
-                        zIndex: 1000,
-                        bgcolor: 'background.paper',
-                        boxShadow: 2,
-                        padding: '5px 10px',
-                        borderRadius: 1
-                    }}
-                >
-                    <Typography
-                        onClick={handleStopGeneration}
-                        color="error"
-                        sx={{
-                            cursor: 'pointer',
-                            '&:hover': {
-                                textDecoration: 'underline',
-                            }
-                        }}
-                    >
-                        Stop generation
-                    </Typography>
-                </Box>
-            )}
         </Box>
     );
 }

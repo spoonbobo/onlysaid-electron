@@ -1,3 +1,4 @@
+import { IChatRoom } from "@/models/Chat/Chatroom";
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 
@@ -143,3 +144,4 @@ export const useTopicStore = create<TopicStore>()(
 );
 
 export const useCurrentTopicContext = () => useTopicStore();
+

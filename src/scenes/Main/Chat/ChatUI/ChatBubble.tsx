@@ -229,12 +229,14 @@ const ChatBubble = memo(({
 
                 {/* Only show MarkdownRenderer when there's content to display */}
                 {(msg.text || (isStreaming && streamContent)) && (
-                    <MarkdownRenderer
-                        content={msg.text}
-                        isStreaming={isStreaming}
-                        isConnecting={isConnecting}
-                        streamContent={streamContent}
-                    />
+                    <>
+                        <MarkdownRenderer
+                            content={msg.text}
+                            isStreaming={isStreaming}
+                            isConnecting={isConnecting}
+                            streamContent={streamContent}
+                        />
+                    </>
                 )}
 
                 {/* Keep showing loading indicator until stream completes */}
@@ -248,7 +250,7 @@ const ChatBubble = memo(({
                             }}
                         />
                         <Typography sx={{ ml: 1, fontSize: '0.85rem', color: 'text.secondary' }}>
-                            {streamContent ? 'Generating...' : 'Loading...'}
+                            {streamContent && typeof streamContent === 'string' ? 'Generating...' : 'Loading...'}
                         </Typography>
                     </Box>
                 )}
@@ -352,6 +354,26 @@ const ChatBubble = memo(({
             </Menu>
         </Box>
     );
+}, (prevProps, nextProps) => {
+    // If any of these critical props change, they are NOT equal, so return false (re-render).
+    if (prevProps.isStreaming !== nextProps.isStreaming ||
+        prevProps.isConnecting !== nextProps.isConnecting ||
+        (nextProps.isStreaming && prevProps.streamContent !== nextProps.streamContent) ||
+        (!nextProps.isStreaming && prevProps.message.text !== nextProps.message.text) ||
+        prevProps.message.id !== nextProps.message.id ||
+        !R.equals(prevProps.message.reactions, nextProps.message.reactions) ||
+        prevProps.isHovered !== nextProps.isHovered ||
+        prevProps.isCurrentUser !== nextProps.isCurrentUser ||
+        prevProps.isContinuation !== nextProps.isContinuation ||
+        prevProps.isLastInSequence !== nextProps.isLastInSequence ||
+        (prevProps.replyToMessage?.id !== nextProps.replyToMessage?.id) ||
+        // Also consider changes in sender object if they can affect rendering
+        (prevProps.message.sender_object?.avatar !== nextProps.message.sender_object?.avatar) ||
+        (prevProps.message.sender_object?.username !== nextProps.message.sender_object?.username)
+    ) {
+        return false; // Props are different, re-render
+    }
+    return true; // Props are the same, skip re-render
 });
 
 export default ChatBubble;

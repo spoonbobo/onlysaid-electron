@@ -7,24 +7,22 @@ import { useCurrentTopicContext } from "@/stores/Topic/TopicStore";
 import { useWindowStore } from "@/stores/Topic/WindowStore";
 
 function Calendar() {
-  const [value, setValue] = React.useState<Dayjs | null>(dayjs());
-  const { selectedContext, parentId } = useCurrentTopicContext();
-  const { tabs } = useWindowStore();
+    const [value, setValue] = React.useState<Dayjs | null>(dayjs());
+    const { tabs } = useWindowStore();
 
-  // Get the parent window/tab
-  const parentTab = tabs.find(tab => tab.id === parentId);
+    // Get the parent window/tab
 
-  // Use the hierarchy information if needed
-  // console.log(`Window: ${parentTab?.title} > Context: ${selectedContext?.name} > Calendar`);
+    // Use the hierarchy information if needed
+    // console.log(`Window: ${parentTab?.title} > Context: ${selectedContext?.name} > Calendar`);
 
-  return (
-    <LocalizationProvider dateAdapter={AdapterDayjs}>
-      <DateCalendar
-        value={value}
-        onChange={setValue}
-      />
-    </LocalizationProvider>
-  );
+    return (
+        <LocalizationProvider dateAdapter={AdapterDayjs}>
+            <DateCalendar
+                value={value}
+                onChange={setValue}
+            />
+        </LocalizationProvider>
+    );
 }
 
 export default Calendar;

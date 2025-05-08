@@ -13,6 +13,7 @@ import { useSelectedModelStore } from "@/stores/LLM/SelectedModelStore";
 import { useStreamStore, OpenAIMessage } from "@/stores/SSE/StreamStore";
 import { DeepSeekUser } from "@/stores/Chat/chatStore";
 import { v4 as uuidv4 } from 'uuid';
+import { Typography } from "@mui/material";
 
 type SectionName = 'Friends' | 'Agents';
 
@@ -23,7 +24,8 @@ function Chat() {
         replyingToId,
         setReplyingTo,
         streamingState,
-        setStreamingState
+        setStreamingState,
+        clearSelectedTopic
     } = useCurrentTopicContext();
 
     // Create a unique chat instance ID
@@ -41,35 +43,76 @@ function Chat() {
         updateMessage
     } = useChatStore();
 
+
     const { modelId, provider, modelName } = useSelectedModelStore();
-    const { streamChatCompletion } = useStreamStore();
+    const {
+        messages: streamDataForId,
+        isConnecting: storeIsConnecting,
+        abortStream,
+        streamChatCompletion
+    } = useStreamStore();
 
     // Use context ID instead of tab ID
     const contextId = selectedContext ? `${selectedContext.name}:${selectedContext.type}` : '';
     const activeRoomId = activeRoomByContext[contextId] || null;
     const input = getInput(activeRoomId || '', contextId);
 
+    // Get the first section with a selected topic directly
     const activeSection = Object.keys(selectedTopics).find(
-        section => selectedTopics[section] === activeRoomId
+        section => selectedTopics[section]
     ) as SectionName | undefined;
-
     const activeTopic = activeSection ? selectedTopics[activeSection] : null;
 
     const messages = storeMessages[activeRoomId || ''] || [];
     const replyingToMessage = replyingToId ? messages.find(m => m.id === replyingToId) || null : null;
 
-    // Replace local streaming state with the persisted one
-    const streamingMessageId = streamingState.messageId;
+    const [currentStreamContent, setCurrentStreamContent] = useState("");
+    const [tokenRate, setTokenRate] = useState(0);
+    const streamStartTimeRef = useRef<number | null>(null);
+    const tokenCountRef = useRef(0);
+
+    const activeStreamIdForUI = streamingState.messageId ? `stream-${streamingState.messageId}` : null;
+    const isCurrentlyConnectingForUI = activeStreamIdForUI ? storeIsConnecting[activeStreamIdForUI] : false;
 
     useEffect(() => {
-        if (activeTopic && activeTopic !== activeRoomId) {
-            setActiveChat(activeTopic, contextId);
+        // Safely handle invalid references
+        if (activeRoomId && contextId) {
+            const { rooms } = useChatStore.getState();
+            const roomExists = rooms.some(room => room.id === activeRoomId);
+
+            if (!roomExists) {
+                // If room doesn't exist, clear the selection
+                useChatStore.getState().setActiveChat('', contextId);
+            }
         }
-    }, [activeTopic, activeRoomId, setActiveChat, contextId]);
+    }, [activeRoomId, contextId]);
+
+    useEffect(() => {
+        // Get the first section with a selected topic
+        const firstSection = Object.keys(selectedTopics).find(section => selectedTopics[section]);
+
+        // If we have a selected topic and it's different from the current activeRoomId
+        if (firstSection && selectedTopics[firstSection] &&
+            selectedTopics[firstSection] !== activeRoomId) {
+
+            const topicId = selectedTopics[firstSection];
+            const { rooms } = useChatStore.getState();
+
+            // Only set active chat if room exists
+            if (rooms.some(room => room.id === topicId)) {
+                setActiveChat(topicId, contextId);
+            } else {
+                console.warn(`Cannot set active chat to non-existent room: ${topicId}`);
+
+                // Use the setter function provided by the hook
+                clearSelectedTopic(firstSection);
+            }
+        }
+    }, [selectedTopics, activeRoomId, contextId, setActiveChat, clearSelectedTopic]);
 
     // Fetch messages when active room changes
     useEffect(() => {
-        if (activeRoomId) {
+        if (activeRoomId && useChatStore.getState().rooms.some(room => room.id === activeRoomId)) {
             fetchMessages(activeRoomId);
         }
     }, [activeRoomId, fetchMessages]);
@@ -88,6 +131,51 @@ function Chat() {
         previousActiveRoomIdRef.current = activeRoomId;
         previousContextIdRef.current = contextId;
     }, [activeRoomId, contextId, setReplyingTo]);
+
+    useEffect(() => {
+        const latestStreamObject = activeStreamIdForUI ? streamDataForId[activeStreamIdForUI] : null;
+
+        if (streamingState.messageId && latestStreamObject) {
+            if (streamStartTimeRef.current === null) {
+                streamStartTimeRef.current = Date.now();
+                // Reset tokenCountRef only when a new stream effectively starts or new object arrives
+                tokenCountRef.current = 0;
+            }
+
+            const newContent = latestStreamObject.full || latestStreamObject.content;
+
+            // Only update state if content has actually changed
+            if (newContent !== currentStreamContent) {
+                setCurrentStreamContent(newContent);
+            }
+
+            // Calculate new token rate
+            // Assuming tokenCountRef should be based on the length of newContent
+            const newTokens = newContent.split(/\s+/).length;
+            tokenCountRef.current = newTokens; // Update token count based on the latest full content
+
+            const elapsedSeconds = (Date.now() - (streamStartTimeRef.current || Date.now())) / 1000;
+            let newRate = 0;
+            if (elapsedSeconds > 0) {
+                newRate = Math.round(tokenCountRef.current / elapsedSeconds);
+            }
+
+            if (newRate !== tokenRate) {
+                setTokenRate(newRate);
+            }
+
+        } else if (!streamingState.messageId) {
+            // Reset states only if they are not already in the reset state
+            if (currentStreamContent !== "") {
+                setCurrentStreamContent("");
+            }
+            if (tokenRate !== 0) {
+                setTokenRate(0);
+            }
+            streamStartTimeRef.current = null;
+            tokenCountRef.current = 0;
+        }
+    }, [streamingState.messageId, activeStreamIdForUI, streamDataForId, currentStreamContent, tokenRate]); // Add currentStreamContent and tokenRate to dependencies
 
     const handleReply = (message: IChatMessage) => {
         setReplyingTo(message.id);
@@ -155,6 +243,12 @@ function Chat() {
                         // Set streaming ID - use the actual message ID
                         setStreamingState(assistantMessage.id, activeRoomId);
 
+                        // Reset stream-specific UI state for the new stream
+                        setCurrentStreamContent("");
+                        streamStartTimeRef.current = null;
+                        tokenCountRef.current = 0;
+                        setTokenRate(0);
+
                         console.log("streaming", modelId, provider, assistantMessage.id);
                         try {
                             // Get last 10 messages from the chat history
@@ -184,6 +278,7 @@ function Chat() {
                                 text: "Error generating response. Please try again."
                             });
                         } finally {
+                            // Crucial: Signal that streaming has stopped for this messageId
                             setStreamingState(null, null);
                         }
                     }
@@ -215,6 +310,16 @@ function Chat() {
         }
     }, [messages.length, scrollToBottom]);
 
+    const handleStopGeneration = useCallback(() => {
+        if (streamingState.messageId) {
+            const fullStreamIdToAbort = `stream-${streamingState.messageId}`;
+            abortStream(fullStreamIdToAbort);
+            setStreamingState(null, null);
+            console.log("Stopping generation for streamId:", fullStreamIdToAbort);
+        }
+    }, [streamingState.messageId, abortStream, setStreamingState]);
+
+
     return (
         <Box
             key={chatInstanceId}
@@ -222,13 +327,14 @@ function Chat() {
                 height: "100%",
                 display: "flex",
                 flexDirection: "column",
-                overflow: "hidden"
+                overflow: "hidden",
+                position: "relative",
             }}
         >
             <ChatHeader
                 selectedContext={selectedContext}
                 selectedGroup={activeSection}
-                selectedTopic={activeTopic}
+                selectedTopic={activeTopic || (selectedTopics[activeSection || ''] || null)}
             />
             <Box
                 sx={{
@@ -239,11 +345,22 @@ function Chat() {
                     minHeight: 0
                 }}
             >
-                <ChatUI
-                    messages={messages}
-                    onReply={handleReply}
-                    streamingMessageId={streamingMessageId}
-                />
+                {(() => {
+                    try {
+                        return (
+                            <ChatUI
+                                messages={messages}
+                                onReply={handleReply}
+                                streamingMessageId={streamingState.messageId}
+                                streamContentForBubble={currentStreamContent}
+                                isConnectingForBubble={isCurrentlyConnectingForUI}
+                            />
+                        );
+                    } catch (e) {
+                        console.error("Error rendering ChatUI:", e);
+                        return <Box p={2}>Error loading messages</Box>;
+                    }
+                })()}
             </Box>
             <ChatInput
                 input={input}
@@ -252,6 +369,42 @@ function Chat() {
                 replyingTo={replyingToMessage}
                 onCancelReply={handleCancelReply}
             />
+
+            {streamingState.messageId && isCurrentlyConnectingForUI && (
+                <Box
+                    sx={{
+                        position: 'absolute',
+                        bottom: 70,
+                        left: '50%',
+                        transform: 'translateX(-50%)',
+                        zIndex: 1000,
+                        bgcolor: 'background.paper',
+                        boxShadow: 3,
+                        padding: '6px 12px',
+                        borderRadius: 2,
+                        display: 'flex',
+                        alignItems: 'center',
+                    }}
+                >
+                    <Typography
+                        onClick={handleStopGeneration}
+                        color="error"
+                        variant="button"
+                        sx={{
+                            cursor: 'pointer',
+                            '&:hover': { textDecoration: 'underline' },
+                            mr: 1.5,
+                            fontSize: '0.8rem',
+                            fontWeight: 'medium',
+                        }}
+                    >
+                        Stop
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.75rem' }}>
+                        ({tokenRate} t/s)
+                    </Typography>
+                </Box>
+            )}
         </Box>
     );
 }

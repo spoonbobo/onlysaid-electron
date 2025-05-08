@@ -12,7 +12,7 @@ import MenuCollapsibleSection from "@/components/Navigation/MenuCollapsibleSecti
 import { useChatStore } from "@/stores/Chat/chatStore";
 import { useUserStore } from "@/stores/User/UserStore";
 import { useCurrentTopicContext } from "@/stores/Topic/TopicStore";
-
+import { TopicContext } from "@/stores/Topic/TopicStore";
 type SectionName = 'Friends' | 'Agents';
 
 export default function HomeMenu() {
@@ -22,6 +22,7 @@ export default function HomeMenu() {
         selectedContext,
         expandedGroups,
         setGroupExpanded,
+        clearSelectedTopic,
     } = useCurrentTopicContext();
 
     const { setActiveChat } = useChatStore();
@@ -34,7 +35,12 @@ export default function HomeMenu() {
     const [selectedChatId, setSelectedChatId] = useState<string>('');
     const menuOpen = Boolean(menuAnchorEl);
 
-    const contextId = selectedContext ? `${selectedContext.name}:${selectedContext.type}` : '';
+    const getCleanContextId = (context: TopicContext | null) => {
+        if (!context) return '';
+        return `${context.name}:${context.type}`;
+    };
+
+    const contextId = getCleanContextId(selectedContext);
     const menuInstanceKey = `${contextId}`;
 
     useEffect(() => {
@@ -56,15 +62,82 @@ export default function HomeMenu() {
         );
 
         if (activeSection && selectedTopics[activeSection] && contextId) {
-            setActiveChat(selectedTopics[activeSection], contextId);
+            const topicId = selectedTopics[activeSection];
+            const rooms = useChatStore.getState().rooms;
+
+            // Only set active chat if the topic ID exists in rooms
+            if (rooms.some(room => room.id === topicId)) {
+                setActiveChat(topicId, contextId);
+            } else {
+                console.warn(`Selected topic ${topicId} does not exist in rooms`);
+
+                // Remove invalid topic ID from selectedTopics
+                clearSelectedTopic(activeSection);
+            }
         }
-    }, [contextId, selectedTopics, setActiveChat]);
+    }, [contextId, selectedTopics, setActiveChat, clearSelectedTopic]);
 
     useEffect(() => {
         if (user?.id) {
             getChat(user.id, 'agent');
         }
     }, [user?.id, getChat]);
+
+    useEffect(() => {
+        if (contextId) {
+            const { activeRoomByContext, rooms } = useChatStore.getState();
+            const currentActiveRoom = activeRoomByContext[contextId];
+
+            if (currentActiveRoom && !rooms.some(room => room.id === currentActiveRoom)) {
+                const validAgentRoom = rooms.find(room => room.type === 'agent');
+                if (validAgentRoom) {
+                    setActiveChat(validAgentRoom.id, contextId);
+                }
+            }
+
+            if (activeRoomByContext[""] && contextId !== "") {
+                const chatStore = useChatStore.getState();
+                const emptyContextRoom = activeRoomByContext[""];
+
+                chatStore.setActiveChat(emptyContextRoom, contextId);
+
+                const cleanupEmptyContext = () => {
+                    const state = useChatStore.getState();
+                    const newActiveRoomByContext = { ...state.activeRoomByContext };
+                    delete newActiveRoomByContext[""];
+
+                    useChatStore.setState({
+                        activeRoomByContext: newActiveRoomByContext
+                    });
+                };
+
+                cleanupEmptyContext();
+            }
+        }
+    }, [contextId, setActiveChat]);
+
+    useEffect(() => {
+        // Clean up any invalid references in the chat store
+        const cleanupInvalidReferences = () => {
+            const { activeRoomByContext, rooms } = useChatStore.getState();
+            let hasInvalidReferences = false;
+            const newActiveRoomByContext = { ...activeRoomByContext };
+
+            // Remove any references to non-existent rooms
+            Object.entries(newActiveRoomByContext).forEach(([contextKey, roomId]) => {
+                if (roomId && !rooms.some(room => room.id === roomId)) {
+                    delete newActiveRoomByContext[contextKey];
+                    hasInvalidReferences = true;
+                }
+            });
+
+            if (hasInvalidReferences) {
+                useChatStore.setState({ activeRoomByContext: newActiveRoomByContext });
+            }
+        };
+
+        cleanupInvalidReferences();
+    }, []);
 
     const selectedSubcategory = selectedTopics['Agents'] || '';
 
@@ -78,8 +151,15 @@ export default function HomeMenu() {
     };
 
     const selectTopic = (section: string, topicId: string) => {
-        setSelectedTopic(section, topicId);
-        setActiveChat(topicId, contextId);
+        // Validate the topic ID exists in rooms before setting it
+        const rooms = useChatStore.getState().rooms;
+
+        if (rooms.some(room => room.id === topicId)) {
+            setSelectedTopic(section, topicId);
+            setActiveChat(topicId, contextId);
+        } else {
+            console.warn(`Cannot select non-existent topic: ${topicId}`);
+        }
     };
 
     // Context menu handlers

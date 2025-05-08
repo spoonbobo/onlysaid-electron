@@ -29,7 +29,7 @@ const defaultSenderId = "d8585d79-795d-4956-8061-ee082e202d98"
 
 interface ChatState {
     // State properties
-    activeRoomByContext: Record<string, string>;
+    activeRoomByContext: Record<string, string | null>;
     messages: Record<string, IChatMessage[]>;
     messageOffsets: Record<string, number>;
     rooms: IChatRoom[];
@@ -95,13 +95,33 @@ export const useChatStore = create<ChatState>()(
             },
 
             setActiveChat: (chatId, contextId = '') => {
-                set(state => ({
-                    activeRoomByContext: {
-                        ...state.activeRoomByContext,
-                        [contextId]: chatId
-                    }
-                }));
-                get().markAsRead(chatId);
+                // First verify that the chatId exists in rooms
+                const { rooms } = get();
+
+                // Allow empty chatId to clear the active chat
+                if (!chatId) {
+                    set(state => ({
+                        activeRoomByContext: {
+                            ...state.activeRoomByContext,
+                            [contextId]: null
+                        }
+                    }));
+                    return;
+                }
+
+                const chatExists = rooms.some(room => room.id === chatId);
+
+                if (chatExists) {
+                    set(state => ({
+                        activeRoomByContext: {
+                            ...state.activeRoomByContext,
+                            [contextId]: chatId
+                        }
+                    }));
+                    get().markAsRead(chatId);
+                } else {
+                    console.warn(`Attempted to set active chat to non-existent room ID: ${chatId}`);
+                }
             },
 
             createChat: async (userId: string, type: string, contextId?: string) => {
@@ -584,9 +604,20 @@ export const useChatStore = create<ChatState>()(
 
                     const { [chatId]: removedOffset, ...restOffsets } = state.messageOffsets;
 
+                    // Create a new activeRoomByContext object with valid room references
                     const newActiveRoomByContext = { ...state.activeRoomByContext };
+
+                    // First pass: remove references to the deleted chat
                     Object.entries(newActiveRoomByContext).forEach(([contextId, roomChatId]) => {
                         if (roomChatId === chatId) {
+                            delete newActiveRoomByContext[contextId];
+                        }
+                    });
+
+                    // Second pass: validate all remaining references
+                    Object.entries(newActiveRoomByContext).forEach(([contextId, roomChatId]) => {
+                        // If roomId doesn't exist in rooms array, remove it
+                        if (!updatedRooms.some(room => room.id === roomChatId)) {
                             delete newActiveRoomByContext[contextId];
                         }
                     });
