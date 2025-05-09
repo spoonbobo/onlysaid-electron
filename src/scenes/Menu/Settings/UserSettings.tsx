@@ -23,7 +23,7 @@ export default function UserSettings() {
         selectedTopics,
         setSelectedTopic,
         selectedContext,
-        expandedGroups,
+        getGroupExpanded,
         setGroupExpanded
     } = useCurrentTopicContext();
 
@@ -34,13 +34,13 @@ export default function UserSettings() {
 
     // Only initialize expanded groups if not already set
     useEffect(() => {
-        if (selectedContext && Object.keys(expandedGroups).length === 0) {
-            setGroupExpanded('General', true);
-            ['LLM', 'KnowledgeBase', 'MCP', 'Developer', 'DangerZone'].forEach(section => {
-                setGroupExpanded(section as UserSectionName, false);
-            });
+        if (selectedContext) {
+            // Check if General is expanded, if not, expand it
+            if (!getGroupExpanded('General')) {
+                setGroupExpanded('General', true);
+            }
         }
-    }, [selectedContext, expandedGroups]);
+    }, [selectedContext]);
 
     const selectedSubcategory = selectedTopics['settings'] || UserSettingsSubcategories.User;
 
@@ -53,14 +53,13 @@ export default function UserSettings() {
 
     // Use the store to toggle section expansion
     const toggleSection = (section: UserSectionName) => {
-        const isCurrentlyExpanded = expandedGroups[section] || false;
+        const isCurrentlyExpanded = getGroupExpanded(section);
         setGroupExpanded(section, !isCurrentlyExpanded);
     };
 
-    // Get expansion state from the store with fallbacks
+    // Replace this with the new getGroupExpanded function
     const isSectionExpanded = (section: UserSectionName) => {
-        return expandedGroups ? (expandedGroups[section] || false) :
-            section === 'General'; // Default General to open if nothing is stored
+        return getGroupExpanded(section);
     };
 
     return (

@@ -12,43 +12,43 @@ import { useState } from "react";
 import { useTopicStore, TopicContext } from "@/stores/Topic/TopicStore";
 import { FormattedMessage } from "react-intl";
 
-interface AddTeamDialogProps {
+interface AddWorkspaceDialogProps {
     open: boolean;
     onClose: () => void;
 }
 
-function AddTeamDialog({ open, onClose }: AddTeamDialogProps) {
-    const [teamName, setTeamName] = useState("");
+function AddWorkspaceDialog({ open, onClose }: AddWorkspaceDialogProps) {
+    const [workspaceName, setWorkspaceName] = useState("");
     const [error, setError] = useState("");
     const { addContext, setSelectedContext } = useTopicStore();
 
-    const handleCreateTeam = () => {
+    const handleCreateWorkspace = () => {
         // Validate
-        if (!teamName.trim()) {
-            setError("Team name is required");
+        if (!workspaceName.trim()) {
+            setError("Workspace name is required");
             return;
         }
 
-        // Create the new team context
-        const newTeamContext: TopicContext = {
-            name: teamName.trim().toLowerCase(),
-            type: "team" as const
+        // Create the new workspace context
+        const newWorkspaceContext: TopicContext = {
+            name: workspaceName.trim().toLowerCase(),
+            type: "workspace" as const
         };
 
         // Add to contexts
-        addContext(newTeamContext);
+        addContext(newWorkspaceContext);
 
         // Set as selected context
-        setSelectedContext(newTeamContext);
+        setSelectedContext(newWorkspaceContext);
 
         // Close the dialog
-        setTeamName("");
+        setWorkspaceName("");
         setError("");
         onClose();
     };
 
     const handleCancel = () => {
-        setTeamName("");
+        setWorkspaceName("");
         setError("");
         onClose();
     };
@@ -56,17 +56,17 @@ function AddTeamDialog({ open, onClose }: AddTeamDialogProps) {
     return (
         <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
             <DialogTitle>
-                <FormattedMessage id="team.create.title" />
+                <FormattedMessage id="workspace.create.title" defaultMessage="Create Workspace" />
             </DialogTitle>
             <DialogContent>
                 <Box sx={{ mt: 1 }}>
                     <TextField
                         autoFocus
-                        label={<FormattedMessage id="team.create.name" />}
+                        label={<FormattedMessage id="workspace.create.name" defaultMessage="Workspace Name" />}
                         fullWidth
-                        value={teamName}
+                        value={workspaceName}
                         onChange={(e) => {
-                            setTeamName(e.target.value);
+                            setWorkspaceName(e.target.value);
                             setError("");
                         }}
                         error={!!error}
@@ -74,7 +74,7 @@ function AddTeamDialog({ open, onClose }: AddTeamDialogProps) {
                         sx={{ mb: 2 }}
                     />
                     <Typography variant="body2" color="text.secondary">
-                        <FormattedMessage id="team.create.description" />
+                        <FormattedMessage id="workspace.create.description" defaultMessage="Create a new workspace to organize your content and collaborate with others." />
                     </Typography>
                 </Box>
             </DialogContent>
@@ -82,7 +82,7 @@ function AddTeamDialog({ open, onClose }: AddTeamDialogProps) {
                 <Button onClick={handleCancel}>
                     <FormattedMessage id="common.close" />
                 </Button>
-                <Button onClick={handleCreateTeam} variant="contained" color="primary">
+                <Button onClick={handleCreateWorkspace} variant="contained" color="primary">
                     <FormattedMessage id="common.create" />
                 </Button>
             </DialogActions>
@@ -90,4 +90,4 @@ function AddTeamDialog({ open, onClose }: AddTeamDialogProps) {
     );
 }
 
-export default AddTeamDialog;
+export default AddWorkspaceDialog;

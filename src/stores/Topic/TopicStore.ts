@@ -4,7 +4,13 @@ import { persist, createJSONStorage } from "zustand/middleware";
 export interface TopicContext {
     id?: string;
     name: string;
-    type: "home" | "team" | "settings" | "file" | "playground";
+    type:
+    "home" |
+    "workspace" |
+    "settings" |
+    "file" |
+    "playground" |
+    "workspace:calendar"
     section?: string;
 }
 
@@ -19,8 +25,9 @@ interface TopicStore {
     setSelectedTopic: (sectionName: string, topicId: string) => void;
     clearSelectedTopic: (sectionName: string) => void;
 
-    expandedGroups: Record<string, boolean>;
+    expandedGroups: Record<string, Record<string, boolean>>;
     setGroupExpanded: (sectionName: string, expanded: boolean) => void;
+    getGroupExpanded: (sectionName: string) => boolean;
 
     trustMode: boolean;
     setTrustMode: (trustMode: boolean) => void;
@@ -45,7 +52,7 @@ export const useTopicStore = create<TopicStore>()(
         (set, get) => ({
             contexts: [
                 { name: "home", type: "home" },
-                { name: "team", type: "team" },
+                { name: "workspace", type: "workspace" },
                 { name: "settings", type: "settings" },
                 { name: "file", type: "file" },
                 { name: "playground", type: "playground" }
@@ -95,12 +102,33 @@ export const useTopicStore = create<TopicStore>()(
             expandedGroups: {},
 
             setGroupExpanded: (sectionName, expanded) =>
-                set((state) => ({
-                    expandedGroups: {
-                        ...state.expandedGroups,
-                        [sectionName]: expanded,
-                    },
-                })),
+                set((state) => {
+                    const contextKey = state.selectedContext ?
+                        `${state.selectedContext.type}:${state.selectedContext.name}` :
+                        'default';
+
+                    return {
+                        expandedGroups: {
+                            ...state.expandedGroups,
+                            [contextKey]: {
+                                ...(state.expandedGroups[contextKey] || {}),
+                                [sectionName]: expanded,
+                            },
+                        },
+                    };
+                }),
+
+            getGroupExpanded: (sectionName) => {
+                const state = get();
+                const contextKey = state.selectedContext ?
+                    `${state.selectedContext.type}:${state.selectedContext.name}` :
+                    'default';
+
+                // Return the expanded state for the current context and section
+                // Default to false, except for General section which defaults to true
+                return state.expandedGroups[contextKey]?.[sectionName] ??
+                    (sectionName === 'General');
+            },
 
             trustMode: false,
 
@@ -139,7 +167,7 @@ export const useTopicStore = create<TopicStore>()(
         {
             name: "topic-store",
             storage: createJSONStorage(() => localStorage),
-            version: 3,
+            version: 4, // Increment version due to store structure change
         }
     )
 );

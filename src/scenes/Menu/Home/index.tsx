@@ -22,8 +22,8 @@ export default function HomeMenu() {
         selectedTopics,
         setSelectedTopic,
         selectedContext,
-        expandedGroups,
         setGroupExpanded,
+        getGroupExpanded,
         clearSelectedTopic,
     } = useCurrentTopicContext();
 
@@ -49,17 +49,13 @@ export default function HomeMenu() {
     const menuInstanceKey = `${contextId}`;
 
     useEffect(() => {
-        if (selectedContext && Object.keys(expandedGroups).length === 0) {
-            const updates = {
-                'Friends': true,
-                'Agents': true
-            };
-
-            Object.entries(updates).forEach(([section, expanded]) => {
-                setGroupExpanded(section as SectionName, expanded);
-            });
+        if (selectedContext) {
+            if (!getGroupExpanded('Friends') && !getGroupExpanded('Agents')) {
+                setGroupExpanded('Friends', true);
+                setGroupExpanded('Agents', true);
+            }
         }
-    }, [selectedContext, expandedGroups, setGroupExpanded]);
+    }, [selectedContext, setGroupExpanded, getGroupExpanded]);
 
     useEffect(() => {
         const activeSection = Object.keys(selectedTopics).find(
@@ -147,12 +143,12 @@ export default function HomeMenu() {
     const selectedSubcategory = selectedTopics['Agents'] || '';
 
     const toggleSection = (section: SectionName) => {
-        const isCurrentlyExpanded = expandedGroups[section] || false;
+        const isCurrentlyExpanded = getGroupExpanded(section);
         setGroupExpanded(section, !isCurrentlyExpanded);
     };
 
     const isSectionExpanded = (section: SectionName) => {
-        return expandedGroups ? (expandedGroups[section] || false) : true;
+        return getGroupExpanded(section);
     };
 
     const selectTopic = (section: string, topicId: string) => {

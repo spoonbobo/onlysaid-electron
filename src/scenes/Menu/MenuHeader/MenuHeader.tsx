@@ -6,11 +6,10 @@ import MoreVertIcon from "@mui/icons-material/MoreVert";
 import { useState } from "react";
 import AddNewFriend from "@/components/Dialog/AddNewFriend";
 import HomeMenuItems from "./MenuItems/HomeMenuItems";
-import TeamMenuItems from "./MenuItems/TeamMenuItems";
+import WorkspaceMenuItems from "./MenuItems/WorkspaceMenuItems";
 import SettingsMenuItems from "./MenuItems/SettingsMenuItems";
 import DefaultMenuItems from "./MenuItems/DefaultMenuItems";
 import { useUserStore } from "@/stores/User/UserStore";
-
 
 function MenuHeader() {
     const user = useUserStore((state) => state.user);
@@ -42,8 +41,8 @@ function MenuHeader() {
                     setShowAddFriendDialog={setShowAddFriendDialog}
                     handleCreateChat={handleCreateChat}
                 />;
-            case 'team':
-                return <TeamMenuItems
+            case 'workspace':
+                return <WorkspaceMenuItems
                     handleClose={handleClose}
                 />;
             case 'settings':
@@ -57,15 +56,43 @@ function MenuHeader() {
         }
     };
 
+    // Extract section name from the workspace:XXXX format
+    const getSectionDisplayName = () => {
+        if (selectedContext?.type === 'workspace' && selectedContext?.section) {
+            const section = selectedContext.section.split(':')[1];
+            if (section) {
+                return `menu.workspace.${section}`;
+            }
+        }
+        return null;
+    };
+
+    const sectionDisplayId = getSectionDisplayName();
+
+    // Use specific workspace name for display
+    const getHeaderText = () => {
+        if (selectedContext?.type === 'workspace') {
+            return selectedContext.name || 'workspace';
+        }
+        return selectedContext?.name;
+    };
+
     return (
         <Box sx={{ px: 2, py: 1, borderBottom: 1, borderColor: "divider", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <Typography variant="subtitle1" sx={{ fontWeight: 500 }}>
-                {/* {parentTab && (
-          <Typography component="span" variant="caption" color="text.secondary" sx={{ mr: 1 }}>
-            {parentTab.title}:
-          </Typography>
-        )} */}
-                <FormattedMessage id={`menu.${selectedContext?.name}`} />
+                {selectedContext?.type === 'workspace' ? (
+                    <>
+                        {getHeaderText()}
+                        {sectionDisplayId && (
+                            <>
+                                <span> / </span>
+                                <FormattedMessage id={sectionDisplayId} />
+                            </>
+                        )}
+                    </>
+                ) : (
+                    <FormattedMessage id={`menu.${selectedContext?.name}`} />
+                )}
             </Typography>
 
             <IconButton onClick={handleClick} size="small">
