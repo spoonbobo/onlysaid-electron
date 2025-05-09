@@ -9,7 +9,7 @@
  * `./src/main.js` using webpack. This gives us some performance wins.
  */
 import path from 'path';
-import { app, BrowserWindow, shell, ipcMain, dialog } from 'electron';
+import { app, BrowserWindow, shell, ipcMain, dialog, session, net } from 'electron';
 import { autoUpdater } from 'electron-updater';
 import log from 'electron-log';
 import MenuBuilder from './menu';
@@ -25,6 +25,7 @@ import { setupWindowHandlers } from './window';
 import { setupResourceHandlers } from './resource';
 import { setupSSEHandlers } from './streaming';
 import { setupMCPHandlers } from './mcp/mcp';
+import { initializeDeeplinkHandling } from './deeplink';
 dotenv.config();
 
 setupChatroomHandlers();
@@ -33,6 +34,7 @@ setupFileSystemHandlers();
 setupResourceHandlers();
 setupSSEHandlers();
 setupMCPHandlers();
+initializeDeeplinkHandling();
 initAuth(process.env.ONLYSAID_API_URL || '', process.env.ONLYSAID_DOMAIN || '');
 
 class AppUpdater {
@@ -94,6 +96,27 @@ ipcMain.handle('db:close', async () => {
     } catch (error) {
         console.error('Error closing database:', error);
         throw error;
+    }
+});
+
+// Handler to set a cookie
+ipcMain.handle('session:set-cookie', async (event, cookieDetails) => {
+    try {
+        await session.defaultSession.cookies.set({
+            url: cookieDetails.url,
+            name: cookieDetails.name,
+            value: cookieDetails.value,
+            httpOnly: cookieDetails.httpOnly,
+            secure: cookieDetails.secure,
+            path: cookieDetails.path || '/',
+            domain: cookieDetails.domain, // Optional
+            // expirationDate: ... // Optional
+        });
+        console.log(`[Main] Cookie "${cookieDetails.name}" set for ${cookieDetails.url}`);
+        return { success: true };
+    } catch (error) {
+        console.error('[Main] Failed to set cookie:', error);
+        return { success: false, error: error instanceof Error ? error.message : String(error) };
     }
 });
 

@@ -279,7 +279,13 @@
       "provider": "github",
       "owner": "onlysaid",
       "repo": "onlysaid-electron"
-    }
+    },
+    "protocols": [
+      {
+        "name": "Onlysaid Protocol",
+        "schemes": ["onlysaid-electron"]
+      }
+    ]
   },
   "collective": {
     "url": "https://opencollective.com/electron-react-boilerplate-594"

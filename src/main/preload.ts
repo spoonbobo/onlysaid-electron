@@ -50,24 +50,14 @@ export type Channels =
 
 const electronHandler = {
     ipcRenderer: {
-        sendMessage(channel: Channels, ...args: unknown[]) {
-            ipcRenderer.send(channel, ...args);
-        },
-        on(channel: Channels, func: (...args: unknown[]) => void) {
-            const subscription = (_event: IpcRendererEvent, ...args: unknown[]) =>
-                func(...args);
+        sendMessage: (channel: Channels, args: unknown[]) => ipcRenderer.send(channel, args),
+        on: (channel: Channels, func: (event: IpcRendererEvent, ...args: unknown[]) => void) => {
+            const subscription = (event: IpcRendererEvent, ...args: unknown[]) => func(event, ...args);
             ipcRenderer.on(channel, subscription);
-
-            return () => {
-                ipcRenderer.removeListener(channel, subscription);
-            };
+            return () => ipcRenderer.removeListener(channel, subscription);
         },
-        once(channel: Channels, func: (...args: unknown[]) => void) {
-            ipcRenderer.once(channel, (_event, ...args) => func(...args));
-        },
-        invoke(channel: Channels, ...args: unknown[]) {
-            return ipcRenderer.invoke(channel, ...args);
-        },
+        once: (channel: Channels, func: (event: IpcRendererEvent, ...args: unknown[]) => void) => ipcRenderer.once(channel, (event, ...args) => func(...args)),
+        invoke: (channel: Channels, ...args: unknown[]) => ipcRenderer.invoke(channel, ...args),
     },
     auth: {
         signIn: (...args: unknown[]) => ipcRenderer.invoke('auth:sign-in', ...args),
@@ -130,6 +120,9 @@ const electronHandler = {
         uploadFile: (...args: unknown[]) => ipcRenderer.invoke('upload-file', ...args),
     },
     homedir: () => os.homedir(),
+    session: {
+        setCookie: (cookieDetails: { url: string; name: string; value: string; httpOnly: boolean; secure: boolean; }) => ipcRenderer.invoke('session:set-cookie', cookieDetails),
+    },
 };
 
 contextBridge.exposeInMainWorld('electron', electronHandler);
