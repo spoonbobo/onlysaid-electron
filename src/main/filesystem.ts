@@ -8,6 +8,7 @@ import FormData from 'form-data';
 
 const readdir = promisify(fs.readdir);
 const stat = promisify(fs.stat);
+const readFile = promisify(fs.readFile);
 
 // Setup all file system related IPC handlers
 export function setupFileSystemHandlers() {
@@ -99,6 +100,23 @@ export function setupFileSystemHandlers() {
                 success: false,
                 error: error.message
             };
+        }
+    });
+}
+
+export function setupContentHandlers() {
+    // Handler to read file content
+    ipcMain.handle('get-file-content', async (event, filePath) => {
+        try {
+            // Resolve the path relative to the app's root directory
+            const absolutePath = path.resolve(process.cwd(), filePath);
+
+            // Read the file
+            const content = await readFile(absolutePath, 'utf8');
+            return content;
+        } catch (error) {
+            console.error(`Error reading file ${filePath}:`, error);
+            throw error;
         }
     });
 }

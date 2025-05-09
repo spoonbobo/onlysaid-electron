@@ -95,7 +95,8 @@ function MainInterface() {
                         width: 72 + menuWidth,
                         minWidth: 72 + menuWidth,
                         maxWidth: 72 + menuWidth,
-                        borderRight: "1px solid #eee",
+                        borderRight: "1px solid",
+                        borderColor: "divider",
                         bgcolor: "background.paper",
                         flexShrink: 0,
                         position: "relative",
@@ -105,7 +106,8 @@ function MainInterface() {
                         <Box
                             sx={{
                                 width: 72,
-                                borderRight: "1px solid #eee",
+                                borderRight: "1px solid",
+                                borderColor: "divider",
                                 flexShrink: 0,
                                 display: "flex",
                                 flexDirection: "column",

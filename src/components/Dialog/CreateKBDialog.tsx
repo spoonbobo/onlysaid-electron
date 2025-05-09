@@ -30,16 +30,7 @@ import { EmbeddingModel, EmbeddingService } from "@/service/ai";
 
 // Since we're in an Electron environment, we need to access the IPC renderer
 // This import would typically be configured in your electron app
-declare global {
-    interface Window {
-        electron: {
-            openDirectory: () => Promise<string | null>;
-            fileSystem: {
-                openFolderDialog: () => Promise<{ canceled: boolean; filePaths?: string[]; }>;
-            };
-        };
-    }
-}
+
 
 interface CreateKBDialogProps {
     open: boolean;

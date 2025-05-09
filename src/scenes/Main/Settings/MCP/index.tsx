@@ -38,7 +38,11 @@ function MCPSettings() {
         setNearbySearchConfig, setWeb3ResearchConfig, setDoorDashConfig, setWhatsAppConfig, setGitHubConfig,
         setNearbySearchEnabled, setWeb3ResearchEnabled, setDoorDashEnabled, setWhatsAppEnabled, setGitHubEnabled,
         setAirbnbEnabled,
-        initializeClient
+        tavilyEnabled, tavilyConfig,
+        setTavilyEnabled, setTavilyConfig,
+        initializeClient,
+        linkedInEnabled, linkedInConfig,
+        setLinkedInEnabled, setLinkedInConfig
     } = useMCPStore();
 
     // Get pagination state from page store
@@ -141,6 +145,20 @@ function MCPSettings() {
             config: {},
             humanName: "Airbnb",
             category: "accommodation"
+        },
+        {
+            type: "tavily",
+            enabledFlag: tavilyEnabled,
+            config: tavilyConfig,
+            humanName: "Tavily",
+            category: "research"
+        },
+        {
+            type: "linkedin",
+            enabledFlag: linkedInEnabled,
+            config: linkedInConfig,
+            humanName: "LinkedIn",
+            category: "communication"
         }
     ];
 
@@ -205,6 +223,8 @@ function MCPSettings() {
                             case "whatsapp": setWhatsAppEnabled(false); break;
                             case "github": setGitHubEnabled(false); break;
                             case "airbnb": setAirbnbEnabled(false); break;
+                            case "tavily": setTavilyEnabled(false); break;
+                            case "linkedin": setLinkedInEnabled(false); break;
                         }
                     } else {
                         toast.success(`${service.humanName} service initialized`);
@@ -225,6 +245,8 @@ function MCPSettings() {
         gitHubEnabled, gitHubConfig,
         airbnbEnabled,
         weatherForecastEnabled, weatherForecastConfig,
+        tavilyEnabled, tavilyConfig,
+        linkedInEnabled, linkedInConfig,
         initializeClient
     ]);
 
@@ -278,6 +300,16 @@ function MCPSettings() {
         setDialogOpen(true);
     };
 
+    const openTavilyDialog = () => {
+        setServiceType("tavily");
+        setDialogOpen(true);
+    };
+
+    const openLinkedInDialog = () => {
+        setServiceType("linkedin");
+        setDialogOpen(true);
+    };
+
     const handleCloseDialog = () => {
         setDialogOpen(false);
     };
@@ -317,6 +349,12 @@ function MCPSettings() {
             case "airbnb":
                 setAirbnbEnabled(true);
                 break;
+            case "tavily":
+                setTavilyConfig(data);
+                break;
+            case "linkedin":
+                setLinkedInConfig(data);
+                break;
         }
         setDialogOpen(false);
     };
@@ -333,6 +371,8 @@ function MCPSettings() {
         if (ipLocationEnabled) initializeClient("ip-location");
         if (weatherForecastEnabled) initializeClient("weather-forecast");
         if (airbnbEnabled) initializeClient("airbnb");
+        if (tavilyEnabled) initializeClient("tavily");
+        if (linkedInEnabled) initializeClient("linkedin");
     };
 
     // Mapping of service types to their configure handlers
@@ -346,7 +386,9 @@ function MCPSettings() {
         "github": openGitHubDialog,
         "ip-location": openIPLocationDialog,
         "weather-forecast": openWeatherForecastDialog,
-        "airbnb": openAirbnbDialog
+        "airbnb": openAirbnbDialog,
+        "tavily": openTavilyDialog,
+        "linkedin": openLinkedInDialog
     };
 
     return (
@@ -456,6 +498,8 @@ function MCPSettings() {
                         case "ip-location": return ipLocationConfig;
                         case "weather-forecast": return weatherForecastConfig;
                         case "airbnb": return {};
+                        case "tavily": return tavilyConfig;
+                        case "linkedin": return linkedInConfig;
                         default: return {};
                     }
                 })()}

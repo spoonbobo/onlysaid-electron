@@ -1,7 +1,6 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
-// Define service configuration interfaces
 interface WeatherServiceConfig {
     apiKey: string;
     endpoint: string;
@@ -12,7 +11,6 @@ interface LocationServiceConfig {
     path: string;
 }
 
-// Add new service configuration interfaces
 interface NearbySearchConfig {
     apiKey: string;
     endpoint: string;
@@ -51,6 +49,15 @@ interface AirbnbConfig {
 
 }
 
+interface TavilyConfig {
+    apiKey: string;
+}
+
+interface LinkedInConfig {
+    email: string;
+    password: string;
+}
+
 interface MCPState {
     // Service states
     weatherEnabled: boolean;
@@ -79,6 +86,14 @@ interface MCPState {
     ipLocationConfig: IPLocationConfig;
     airbnbConfig: AirbnbConfig;
 
+    // Add Tavily state
+    tavilyEnabled: boolean;
+    tavilyConfig: TavilyConfig;
+
+    // Add LinkedIn state
+    linkedInEnabled: boolean;
+    linkedInConfig: LinkedInConfig;
+
     // Actions
     setWeatherEnabled: (enabled: boolean) => void;
     setLocationEnabled: (enabled: boolean) => void;
@@ -100,6 +115,10 @@ interface MCPState {
     setIPLocationConfig: (config: Partial<IPLocationConfig>) => void;
     setAirbnbEnabled: (enabled: boolean) => void;
     setAirbnbConfig: (config: Partial<AirbnbConfig>) => void;
+    setTavilyEnabled: (enabled: boolean) => void;
+    setTavilyConfig: (config: Partial<TavilyConfig>) => void;
+    setLinkedInEnabled: (enabled: boolean) => void;
+    setLinkedInConfig: (config: Partial<LinkedInConfig>) => void;
     resetToDefaults: () => void;
 
     // Generic IPC action
@@ -116,6 +135,8 @@ interface MCPState {
     isGitHubConfigured: () => boolean;
     isIPLocationConfigured: () => boolean;
     isAirbnbConfigured: () => boolean;
+    isTavilyConfigured: () => boolean;
+    isLinkedInConfigured: () => boolean;
 
     // Add new action
     getAllConfiguredServers: () => {
@@ -177,6 +198,15 @@ const DEFAULT_CONFIG = {
         apiKey: "",
         endpoint: "",
         region: "us"
+    },
+    tavilyEnabled: false,
+    tavilyConfig: {
+        apiKey: "",
+    },
+    linkedInEnabled: false,
+    linkedInConfig: {
+        email: "",
+        password: ""
     }
 };
 
@@ -220,6 +250,14 @@ const isIPLocationConfigured = (config: IPLocationConfig): boolean => {
 
 const isAirbnbConfigured = (config: AirbnbConfig): boolean => {
     return true;
+};
+
+const isTavilyConfigured = (config: TavilyConfig): boolean => {
+    return !!config.apiKey;
+};
+
+const isLinkedInConfigured = (config: LinkedInConfig): boolean => {
+    return !!config.email && !!config.password;
 };
 
 export const useMCPStore = create<MCPState>()(
@@ -329,6 +367,26 @@ export const useMCPStore = create<MCPState>()(
 
             setAirbnbConfig: (config) => set((state) => ({
                 airbnbConfig: { ...state.airbnbConfig, ...config }
+            })),
+
+            setTavilyEnabled: (enabled) => {
+                const state = get();
+                if (enabled && !isTavilyConfigured(state.tavilyConfig)) return;
+                set({ tavilyEnabled: enabled });
+            },
+
+            setTavilyConfig: (config) => set((state) => ({
+                tavilyConfig: { ...state.tavilyConfig, ...config }
+            })),
+
+            setLinkedInEnabled: (enabled) => {
+                const state = get();
+                if (enabled && !isLinkedInConfigured(state.linkedInConfig)) return;
+                set({ linkedInEnabled: enabled });
+            },
+
+            setLinkedInConfig: (config) => set((state) => ({
+                linkedInConfig: { ...state.linkedInConfig, ...config }
             })),
 
             resetToDefaults: () => set(DEFAULT_CONFIG),
@@ -474,7 +532,8 @@ export const useMCPStore = create<MCPState>()(
                                 clientVersion: "1.0.0"
                             };
                             break;
-                        // TODO: not working atm.
+                        // TODO: need install globally
+                        // npx -y @smithery/cli install @openbnb-org/mcp-server-airbnb --client claude
                         case "airbnb":
                             config = {
                                 enabled: state.airbnbEnabled,
@@ -484,6 +543,39 @@ export const useMCPStore = create<MCPState>()(
                                     "@openbnb/mcp-server-airbnb"
                                 ],
                                 clientName: "airbnb-client",
+                                clientVersion: "1.0.0"
+                            };
+                            break;
+                        // TODO: need install tavily-mcp@0.1.4 globally.
+                        case "tavily":
+                            config = {
+                                enabled: state.tavilyEnabled,
+                                command: "node",
+                                args: [
+                                    "./node_modules/.bin/tavily-mcp"
+
+                                ],
+                                env: {
+                                    "TAVILY_API_KEY": state.tavilyConfig.apiKey
+                                },
+                                clientName: "tavily-client",
+                                clientVersion: "1.0.0"
+                            };
+                            break;
+                        case "linkedin":
+                            config = {
+                                enabled: state.linkedInEnabled,
+                                command: "uvx",
+                                args: [
+                                    "--from",
+                                    "git+https://github.com/adhikasp/mcp-linkedin",
+                                    "mcp-linkedin"
+                                ],
+                                env: {
+                                    "LINKEDIN_EMAIL": state.linkedInConfig.email,
+                                    "LINKEDIN_PASSWORD": state.linkedInConfig.password
+                                },
+                                clientName: "linkedin-client",
                                 clientVersion: "1.0.0"
                             };
                             break;
@@ -554,6 +646,16 @@ export const useMCPStore = create<MCPState>()(
                 return true;
             },
 
+            isTavilyConfigured: () => {
+                const { tavilyConfig } = get();
+                return isTavilyConfigured(tavilyConfig);
+            },
+
+            isLinkedInConfigured: () => {
+                const { linkedInConfig } = get();
+                return isLinkedInConfigured(linkedInConfig);
+            },
+
             getAllConfiguredServers: () => {
                 const state = get();
 
@@ -605,8 +707,18 @@ export const useMCPStore = create<MCPState>()(
                     },
                     airbnb: {
                         enabled: state.airbnbEnabled,
-                        configured: true,
-                        config: {}
+                        configured: state.isAirbnbConfigured(),
+                        config: state.airbnbConfig
+                    },
+                    tavily: {
+                        enabled: state.tavilyEnabled,
+                        configured: state.isTavilyConfigured(),
+                        config: state.tavilyConfig
+                    },
+                    linkedIn: {
+                        enabled: state.linkedInEnabled,
+                        configured: state.isLinkedInConfigured(),
+                        config: state.linkedInConfig
                     }
                 };
             }

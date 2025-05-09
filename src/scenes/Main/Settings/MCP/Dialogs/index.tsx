@@ -8,6 +8,8 @@ import WhatsAppDialog from "./WhatsAppDialog";
 import GitHubDialog from "./GitHubDialog";
 import IPLocationDialog from "./IPLocation";
 import WeatherForecastDialog from "./WeatherForecastDialog";
+import TavilyDialog from "./TavilyDialog";
+import LinkedInDialog from "./LinkedInDialog";
 
 interface ServiceDialogProps {
     open: boolean;
@@ -39,6 +41,10 @@ const ServiceDialog = ({ open, serviceType, initialData, onClose, onSave }: Serv
                 return IPLocationDialog;
             case "weather-forecast":
                 return WeatherForecastDialog;
+            case "tavily":
+                return TavilyDialog;
+            case "linkedin":
+                return LinkedInDialog;
             default:
                 return null;
         }

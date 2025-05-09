@@ -140,7 +140,7 @@ a:hover {
 }
 
 .markdown-body blockquote {
-  border-left: 4px solid #bdbdbd;
+  border-left: 4px solid var(--divider-color, #bdbdbd);
   background: #f7f7f7;
   color: #555;
   margin: 0.7em 0;
@@ -196,7 +196,7 @@ a:hover {
 
 .markdown-body th,
 .markdown-body td {
-  border: 1px solid #e0e0e0;
+  border: 1px solid var(--border-color, #e0e0e0);
   padding: 0.5em 0.8em;
   text-align: left;
 }

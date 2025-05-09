@@ -2,17 +2,18 @@ import Chat from "./Chat";
 import Settings from "./Settings";
 import { useTopicStore } from "@/stores/Topic/TopicStore";
 import { Box } from "@mui/material";
+import Playground from "@/components/Debug";
 
 const menuComponents: Record<string, React.ReactNode> = {
     team: <Chat />,
     settings: <Settings />,
     home: <Chat />,
+    playground: <Playground />,
 };
 
 function Main() {
     const { selectedContext } = useTopicStore();
 
-    // Use the selected context type or default to home
     const contextTypeToRender = selectedContext?.type || "home";
 
     return (

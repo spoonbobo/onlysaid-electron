@@ -29,6 +29,7 @@ type MenuChannels = 'menu:close-tab' | 'menu:new-tab';
 type MiscChannels = 'ipc-example';
 type DbChannels = 'db:initialize' | 'db:query' | 'db:transaction' | 'db:close';
 type SystemChannels = 'system:get-cpu-usage' | 'system:get-memory-usage' | 'system:get-storage-usage';
+type FileSystemChannels = 'get-file-content';
 
 type SSEChannels = 'streaming:abort_stream' | 'streaming:chat_stream_complete' | 'streaming:chunk';
 type MCPChannels = 'mcp:initialize_client';
@@ -36,6 +37,9 @@ type MCPChannels = 'mcp:initialize_client';
 type ApiChatChannels = 'chat:get' | 'chat:create' | 'chat:update' | 'chat:delete';
 type ApiUserChannels = 'user:auth' | 'user:get' | 'user:get_one';
 type ApiChannels = ApiChatChannels | ApiUserChannels;
+
+type RedisChannels = 'redis:connect' | 'redis:disconnect' | 'redis:get' | 'redis:set' |
+    'redis:del' | 'redis:publish' | 'redis:start-server' | 'redis:stop-server';
 
 export type Channels =
     | AuthChannels
@@ -46,7 +50,9 @@ export type Channels =
     | MiscChannels
     | SystemChannels
     | SSEChannels
-    | MCPChannels;
+    | MCPChannels
+    | FileSystemChannels
+    | RedisChannels;
 
 const electronHandler = {
     ipcRenderer: {
@@ -56,7 +62,7 @@ const electronHandler = {
             ipcRenderer.on(channel, subscription);
             return () => ipcRenderer.removeListener(channel, subscription);
         },
-        once: (channel: Channels, func: (event: IpcRendererEvent, ...args: unknown[]) => void) => ipcRenderer.once(channel, (event, ...args) => func(...args)),
+        once: (channel: Channels, func: (event: IpcRendererEvent, ...args: unknown[]) => void) => ipcRenderer.once(channel, (event, ...args) => func(event, ...args)),
         invoke: (channel: Channels, ...args: unknown[]) => ipcRenderer.invoke(channel, ...args),
     },
     auth: {
@@ -118,10 +124,15 @@ const electronHandler = {
         openFolderDialog: () => ipcRenderer.invoke('folder:open-dialog'),
         getFolderContents: (folderPath: string) => ipcRenderer.invoke('folder:get-contents', folderPath),
         uploadFile: (...args: unknown[]) => ipcRenderer.invoke('upload-file', ...args),
+        getFileContent: (...args: unknown[]) => ipcRenderer.invoke('get-file-content', ...args),
     },
     homedir: () => os.homedir(),
     session: {
         setCookie: (cookieDetails: { url: string; name: string; value: string; httpOnly: boolean; secure: boolean; }) => ipcRenderer.invoke('session:set-cookie', cookieDetails),
+    },
+    redis: {
+        startServer: (...args: unknown[]) => ipcRenderer.invoke('redis:start-server', ...args),
+        stopServer: (...args: unknown[]) => ipcRenderer.invoke('redis:stop-server', ...args),
     },
 };
 

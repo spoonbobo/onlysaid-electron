@@ -32,7 +32,6 @@ function KnowledgeBaseComponent() {
 
     const { queryEngineLLM, isKBUsable } = useKBSettingsStore();
 
-    // Dialog states
     const intl = useIntl();
     const [createDialogOpen, setCreateDialogOpen] = useState(false);
     const [editDialogOpen, setEditDialogOpen] = useState(false);
@@ -51,34 +50,28 @@ function KnowledgeBaseComponent() {
             });
     }, []);
 
-    // Filter databases by search term
     const filteredDatabases = databases.filter(db =>
         searchTerm === "" ||
         db.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         db.description.toLowerCase().includes(searchTerm.toLowerCase())
     );
 
-    // Calculate total pages
     const totalPages = Math.ceil(filteredDatabases.length / itemsPerPage);
 
-    // Get current page items
     const getCurrentPageItems = () => {
         const startIndex = (page - 1) * itemsPerPage;
         const endIndex = startIndex + itemsPerPage;
         return filteredDatabases.slice(startIndex, endIndex);
     };
 
-    // Handle page change
     const handlePageChange = (event: React.ChangeEvent<unknown>, value: number) => {
         setPage(value);
     };
 
-    // Handle search term change
     const handleSearchChange = (event: React.ChangeEvent<HTMLInputElement>) => {
         setSearchTerm(event.target.value);
     };
 
-    // Handle create dialog
     const handleOpenCreateDialog = () => {
         setCreateDialogOpen(true);
     };
@@ -87,7 +80,6 @@ function KnowledgeBaseComponent() {
         setCreateDialogOpen(false);
     };
 
-    // Handle edit dialog
     const handleOpenEditDialog = (id: string) => {
         setSelectedDbId(id);
         setEditDialogOpen(true);
@@ -98,7 +90,6 @@ function KnowledgeBaseComponent() {
         setSelectedDbId(null);
     };
 
-    // Handle delete dialog
     const handleOpenDeleteDialog = (id: string) => {
         setSelectedDbId(id);
         setDeleteDialogOpen(true);
@@ -116,17 +107,14 @@ function KnowledgeBaseComponent() {
         }
     };
 
-    // Handle toggle enabled status
     const handleToggleEnabled = (id: string, enabled: boolean) => {
         toggleDatabaseStatus(id, enabled);
     };
 
-    // Handle reinitialize
     const handleReinitialize = (id: string) => {
         reinitializeDatabase(id);
     };
 
-    // Handle create new database
     const handleCreateDatabase = (data: { name: string; description: string; path: string; sourceType: string; embeddingEngine: string; }) => {
         if (!data.embeddingEngine || data.embeddingEngine === "none") {
             toast.error(intl.formatMessage({
@@ -148,7 +136,6 @@ function KnowledgeBaseComponent() {
         setCreateDialogOpen(false);
     };
 
-    // Handle edit database
     const handleEditDatabase = (data: { name: string; description: string; path: string; sourceType: string }) => {
         if (selectedDbId) {
             updateDatabase(selectedDbId, {
@@ -162,13 +149,11 @@ function KnowledgeBaseComponent() {
         }
     };
 
-    // Get selected DB for edit dialog
     const getSelectedDb = () => {
         if (!selectedDbId) return null;
         return databases.find(db => db.id === selectedDbId) || null;
     };
 
-    // Get selected DB name for confirmation dialog
     const getSelectedDbName = () => {
         if (!selectedDbId) return "";
         const db = databases.find(db => db.id === selectedDbId);

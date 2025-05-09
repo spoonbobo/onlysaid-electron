@@ -13,6 +13,8 @@ import { useChatStore } from "@/stores/Chat/chatStore";
 import { useUserStore } from "@/stores/User/UserStore";
 import { useCurrentTopicContext } from "@/stores/Topic/TopicStore";
 import { TopicContext } from "@/stores/Topic/TopicStore";
+import ChatUpdate from '@/components/Dialog/ChatUpdate';
+import { IChatRoom } from '@/types/Chat/Chatroom';
 type SectionName = 'Friends' | 'Agents';
 
 export default function HomeMenu() {
@@ -34,6 +36,9 @@ export default function HomeMenu() {
     const [menuAnchorEl, setMenuAnchorEl] = useState<null | HTMLElement>(null);
     const [selectedChatId, setSelectedChatId] = useState<string>('');
     const menuOpen = Boolean(menuAnchorEl);
+
+    const [roomUpdateOpen, setRoomUpdateOpen] = useState(false);
+    const [selectedRoom, setSelectedRoom] = useState<IChatRoom | null>(null);
 
     const getCleanContextId = (context: TopicContext | null) => {
         if (!context) return '';
@@ -167,6 +172,11 @@ export default function HomeMenu() {
         event.preventDefault();
         event.stopPropagation();
         setSelectedChatId(chatId);
+
+        // Find and set the room object
+        const room = useChatStore.getState().rooms.find(r => r.id === chatId) || null;
+        setSelectedRoom(room);
+
         setMenuAnchorEl(event.currentTarget);
     };
 
@@ -182,8 +192,10 @@ export default function HomeMenu() {
         handleCloseMenu();
     };
 
-    const handleRenameChat = () => {
-        // Implement rename functionality
+    const handleRenameChat = (room: IChatRoom | null) => {
+        if (!room) return;
+        setSelectedRoom(room);
+        setRoomUpdateOpen(true);
         handleCloseMenu();
     };
 
@@ -276,13 +288,22 @@ export default function HomeMenu() {
                     horizontal: 'right',
                 }}
             >
-                <MenuItem onClick={handleRenameChat} sx={{ minHeight: 36, fontSize: 14 }}>
+                <MenuItem onClick={() => {
+                    const room = useChatStore.getState().rooms.find(r => r.id === selectedChatId) || null;
+                    handleRenameChat(room);
+                }} sx={{ minHeight: 36, fontSize: 14 }}>
                     <FormattedMessage id="menu.chat.rename" defaultMessage="Rename" />
                 </MenuItem>
                 <MenuItem onClick={() => handleDeleteChat(selectedChatId)} sx={{ minHeight: 36, fontSize: 14, color: 'error.main' }}>
                     <FormattedMessage id="menu.chat.delete" defaultMessage="Delete" />
                 </MenuItem>
             </Menu>
+
+            <ChatUpdate
+                open={roomUpdateOpen}
+                onClose={() => setRoomUpdateOpen(false)}
+                room={selectedRoom}
+            />
         </Box>
     );
 }

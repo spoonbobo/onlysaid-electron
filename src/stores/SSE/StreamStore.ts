@@ -114,7 +114,8 @@ export const useStreamStore = create<StreamState>((set, get) => {
         window.electron.ipcRenderer.on('streaming:chunk', (...args) => {
             if (!args || args.length === 0) return;
 
-            const payload = args[0];
+            const payload = args[1];
+
             if (!payload || typeof payload !== 'object' ||
                 !('streamId' in payload) || !('chunk' in payload)) {
                 console.error('Invalid streaming:chunk payload:', payload);

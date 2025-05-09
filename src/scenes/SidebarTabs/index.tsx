@@ -10,29 +10,21 @@ function SidebarTabs() {
     const { selectedContext, contexts, setSelectedContext } = useTopicStore();
     const [showAddTeamDialog, setShowAddTeamDialog] = useState(false);
 
-    // Find the home context or use the first context in the list
     const homeContext = contexts.find(context => context.name === "home" && context.type === "home") || contexts[0];
 
-    // Get all team contexts from API in the future
-    // For now, filter out any default team contexts since we want to leave it empty
     const teamContexts = contexts.filter(context =>
         context.type === "team" &&
-        // Filter out any default team context
         !(context.name === "team" && context.type === "team")
     );
 
-    // Handle navigation to a context
     const handleNavigate = (context: TopicContext) => {
-        // Don't update if it's already the current context
         if (selectedContext?.name === context.name && selectedContext?.type === context.type) {
-            return; // Prevent unnecessary updates
+            return;
         }
 
-        // Set the selected context
         setSelectedContext(context);
     };
 
-    // Handle add team button click
     const handleAddTeam = () => {
         setShowAddTeamDialog(true);
     };
@@ -44,7 +36,8 @@ function SidebarTabs() {
                     width: 72,
                     height: "100%",
                     bgcolor: "background.paper",
-                    borderRight: "1px solid #eee",
+                    borderRight: "1px solid",
+                    borderColor: "divider",
                     display: "flex",
                     flexDirection: "column",
                     alignItems: "center",
@@ -52,7 +45,6 @@ function SidebarTabs() {
                     gap: 2
                 }}
             >
-                {/* Home Icon */}
                 <Tooltip title="Home" placement="right">
                     <Box
                         sx={{
@@ -75,7 +67,6 @@ function SidebarTabs() {
                     </Box>
                 </Tooltip>
 
-                {/* Team Icons - Will be populated from API in the future */}
                 {teamContexts.map(teamContext => (
                     <Tooltip key={`team-${teamContext.name}`} title={`Team: ${teamContext.name}`} placement="right">
                         <Box
@@ -100,7 +91,6 @@ function SidebarTabs() {
                     </Tooltip>
                 ))}
 
-                {/* Add Team Button */}
                 <Tooltip title="Add Team" placement="right">
                     <Box>
                         <IconButton
@@ -114,7 +104,6 @@ function SidebarTabs() {
                 </Tooltip>
             </Box>
 
-            {/* Add Team Dialog */}
             <AddTeamDialog
                 open={showAddTeamDialog}
                 onClose={() => setShowAddTeamDialog(false)}

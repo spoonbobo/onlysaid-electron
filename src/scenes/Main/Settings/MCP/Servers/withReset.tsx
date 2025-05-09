@@ -12,7 +12,9 @@ type ServiceType =
     | "github"
     | "ip-location"
     | "weather-forecast"
-    | "airbnb";
+    | "airbnb"
+    | "tavily"
+    | "linkedin";
 
 // Define the props interface for components that can be enhanced
 interface ConfigurableComponentProps {
@@ -47,7 +49,11 @@ const withReset = <P extends ConfigurableComponentProps>(
             setWhatsAppEnabled,
             setGitHubEnabled,
             setIPLocationEnabled,
-            setAirbnbEnabled
+            setAirbnbEnabled,
+            setLinkedInEnabled,
+            setLinkedInConfig,
+            setTavilyEnabled,
+            setTavilyConfig
         } = useMCPStore();
 
         // Map service types to their default configurations
@@ -110,6 +116,12 @@ const withReset = <P extends ConfigurableComponentProps>(
                     break;
                 case "airbnb":
                     setAirbnbEnabled(false);
+                    break;
+                case "tavily":
+                    setTavilyEnabled(false);
+                    break;
+                case "linkedin":
+                    setLinkedInEnabled(false);
                     break;
             }
         };

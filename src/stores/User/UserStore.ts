@@ -33,6 +33,7 @@ export const useUserStore = create<UserStore>()(
                 setSignInError(null);
                 setSigningIn(true);
 
+                // @ts-ignore
                 window.electron.ipcRenderer.sendMessage('auth:sign-in');
 
                 const timeoutId = setTimeout(() => {
@@ -69,16 +70,17 @@ export const useUserStore = create<UserStore>()(
 
                         await setToken(input.token, effectiveCookieName);
 
+                        // @ts-ignore
                         await window.electron.session.setCookie({
                             url: 'http://onlysaid-dev.com',
                             name: effectiveCookieName,
                             value: input.token,
                             httpOnly: true,
                             secure: true,
-                            path: '/',
                         });
 
                         console.log('[UserStore] Cookie set, fetching user data...');
+                        // @ts-ignore
                         const userDataResponse = await window.electron.user.auth({
                             token: input.token,
                         });
@@ -108,6 +110,7 @@ export const useUserStore = create<UserStore>()(
                             }
 
                             if (response.userData) {
+                                // @ts-ignore
                                 const userData = await window.electron.user.auth({
                                     token: response.token,
                                 });
@@ -168,6 +171,7 @@ export const useUserStore = create<UserStore>()(
 );
 
 export const setupDeeplinkAuthListener = (intl?: any) => {
+    // @ts-ignore
     if (window.electron && window.electron.ipcRenderer) {
         const channel = 'deeplink:receive-auth-token';
         const handler = (event: any, data: any) => {
@@ -180,6 +184,7 @@ export const setupDeeplinkAuthListener = (intl?: any) => {
         };
 
         console.log(`[UserStore] Setting up IPC listener for "${channel}"`);
+        // @ts-ignore
         const removeListener = window.electron.ipcRenderer.on(channel, handler);
 
         return () => {

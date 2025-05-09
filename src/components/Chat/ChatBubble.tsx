@@ -8,12 +8,13 @@ import ReplyIcon from '@mui/icons-material/Reply';
 import MoreHorizIcon from '@mui/icons-material/MoreHoriz';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import DeleteIcon from '@mui/icons-material/Delete';
-import FlagIcon from '@mui/icons-material/Flag';
 import { useChatStore } from "@/stores/Chat/chatStore";
 import { useCurrentTopicContext } from "@/stores/Topic/TopicStore";
 import * as R from 'ramda';
 import CircularProgress from '@mui/material/CircularProgress';
-import MarkdownRenderer from "@/scenes/Main/Chat/ChatUI/MarkdownRenderer";
+import MarkdownRenderer from "@/components/Chat/MarkdownRenderer";
+import { FormattedMessage } from "react-intl";
+import DeleteMessageDialog from "@/components/Dialog/DeleteMessage";
 
 interface ChatBubbleProps {
     message: IChatMessage;
@@ -47,6 +48,7 @@ const ChatBubble = memo(({
     const [menuPosition, setMenuPosition] = useState<{ top: number, left: number } | null>(null);
     const { selectedTopics } = useCurrentTopicContext();
     const toggleReaction = useChatStore(state => state.toggleReaction);
+    const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
     // Get active room ID using selectedTopics approach
     const activeRoomId = Object.values(selectedTopics).find(Boolean) || null;
@@ -107,9 +109,13 @@ const ChatBubble = memo(({
     }, [msg.text, handleMenuClose]);
 
     const handleDelete = useCallback(() => {
-        console.log('Delete message:', msg.id);
+        setDeleteDialogOpen(true);
         handleMenuClose();
-    }, [msg.id, handleMenuClose]);
+    }, [handleMenuClose]);
+
+    const handleCloseDeleteDialog = useCallback(() => {
+        setDeleteDialogOpen(false);
+    }, []);
 
     const handleReport = useCallback(() => {
         console.log('Report message:', msg.id);
@@ -339,19 +345,20 @@ const ChatBubble = memo(({
             >
                 <MenuItem onClick={handleCopyText} dense>
                     <ContentCopyIcon fontSize="small" sx={{ mr: 1 }} />
-                    Copy text
+                    <FormattedMessage id="chat.copyText" />
                 </MenuItem>
-                {isCurrentUser && (
-                    <MenuItem onClick={handleDelete} dense>
-                        <DeleteIcon fontSize="small" sx={{ mr: 1 }} />
-                        Delete
-                    </MenuItem>
-                )}
-                <MenuItem onClick={handleReport} dense>
-                    <FlagIcon fontSize="small" sx={{ mr: 1 }} />
-                    Report
+                <MenuItem onClick={handleDelete} dense>
+                    <DeleteIcon fontSize="small" sx={{ mr: 1 }} />
+                    <FormattedMessage id="chat.delete" />
                 </MenuItem>
             </Menu>
+
+            <DeleteMessageDialog
+                open={deleteDialogOpen}
+                onClose={handleCloseDeleteDialog}
+                message={deleteDialogOpen ? msg : null}
+                chatId={activeRoomId || ''}
+            />
         </Box>
     );
 }, (prevProps, nextProps) => {

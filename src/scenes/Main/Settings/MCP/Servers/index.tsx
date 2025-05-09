@@ -10,6 +10,8 @@ import IPLocationServer from "./Location/IPLocation";
 import { FormattedMessage } from "react-intl";
 import WeatherForecastServer from "./Weather/WeatherForecast";
 import AirbnbServer from "./Accommodation/Airbnb";
+import TavilyServer from "./WebSearch/TavilyServer";
+import LinkedInServer from "./LinkedIn/LinkedIn";
 
 // Service configuration interface
 interface ServiceConfig {
@@ -54,6 +56,10 @@ const Servers = ({
                 return <WeatherForecastServer key={service.type} onConfigure={configHandler} />;
             case "airbnb":
                 return <AirbnbServer key={service.type} onConfigure={configHandler} />;
+            case "tavily":
+                return <TavilyServer key={service.type} onConfigure={configHandler} />;
+            case "linkedin":
+                return <LinkedInServer key={service.type} onConfigure={configHandler} />;
             default:
                 return null;
         }

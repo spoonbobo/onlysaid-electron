@@ -31,7 +31,8 @@ export default function UserInfoBar() {
                 display: "flex",
                 alignItems: "center",
                 p: 1,
-                borderTop: "1px solid #eee",
+                borderTop: "1px solid",
+                borderColor: "divider",
                 bgcolor: "background.paper",
                 justifyContent: "space-between",
             }}

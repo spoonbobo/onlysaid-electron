@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 import { IChatMessage, IReaction } from "@/types/Chat/Message";
-import { IChatRoom } from "@/types/Chat/Chatroom";
+import { IChatRoom, IUpdateChatArgs } from "@/types/Chat/Chatroom";
 import { getUserTokenFromStore, getUserFromStore } from "@/utils/user";
 import { v4 as uuidv4 } from 'uuid';
 import * as R from 'ramda';
@@ -128,6 +128,7 @@ export const useChatStore = create<ChatState>()(
                 set({ isLoading: true, error: null });
                 try {
                     const newChat = NewChat(userId, type);
+                    // @ts-ignore
                     const response = await window.electron.chat.create({
                         token: getUserTokenFromStore(),
                         request: newChat
@@ -148,6 +149,7 @@ export const useChatStore = create<ChatState>()(
                 console.log("deleteChat", chatId);
                 set({ isLoading: true, error: null });
                 try {
+                    // @ts-ignore
                     await window.electron.chat.delete({
                         token: getUserTokenFromStore(),
                         id: chatId
@@ -165,6 +167,7 @@ export const useChatStore = create<ChatState>()(
             getChat: async (userId: string, type: string) => {
                 set({ isLoading: true, error: null });
                 try {
+                    // @ts-ignore
                     const response = await window.electron.chat.get({
                         token: getUserTokenFromStore(),
                         userId: userId,
@@ -186,7 +189,6 @@ export const useChatStore = create<ChatState>()(
             updateChat: async (chatId, data) => {
                 set({ isLoading: true, error: null });
                 try {
-                    // Update chatroom locally first
                     set((state) => ({
                         rooms: state.rooms.map(room =>
                             room.id === chatId
@@ -194,6 +196,23 @@ export const useChatStore = create<ChatState>()(
                                 : room
                         )
                     }));
+
+                    const existingRoom = get().rooms.find(room => room.id === chatId);
+                    console.log("existingRoom", existingRoom);
+
+                    const updateChatArgs: IUpdateChatArgs = {
+                        token: getUserTokenFromStore() || "",
+                        request: {
+                            ...existingRoom,
+                            ...data,
+                            id: chatId,
+                            last_updated: new Date().toISOString()
+                        } as IChatRoom
+                    }
+
+                    // @ts-ignore
+                    const response = await window.electron.chat.update(updateChatArgs);
+                    console.log("response", response);
                     set({ isLoading: false });
                 } catch (error: any) {
                     set({ error: error.message, isLoading: false });
@@ -207,6 +226,7 @@ export const useChatStore = create<ChatState>()(
                 try {
                     const messageId = uuidv4();
 
+                    // @ts-ignore
                     await window.electron.db.query({
                         query: `
             insert into messages
@@ -254,6 +274,7 @@ export const useChatStore = create<ChatState>()(
             where id = @messageId and room_id = @chatId
           `;
 
+                    // @ts-ignore
                     const result = await window.electron.db.query({
                         query: checkQuery,
                         params: { messageId, chatId }
@@ -268,6 +289,7 @@ export const useChatStore = create<ChatState>()(
               and room_id = @chatId
             `;
 
+                        // @ts-ignore
                         await window.electron.db.query({
                             query: updateQuery,
                             params: { messageId, chatId, text: data.text, createdAt: data.created_at }
@@ -283,6 +305,7 @@ export const useChatStore = create<ChatState>()(
                         const message = get().messages[chatId]?.find(msg => msg.id === messageId);
                         const sender = message?.sender || defaultSenderId;
 
+                        // @ts-ignore
                         await window.electron.db.query({
                             query: insertQuery,
                             params: {
@@ -313,6 +336,7 @@ export const useChatStore = create<ChatState>()(
                     // Create a Set of existing message IDs for quick lookup
                     const existingMessageIds = new Set(existingMessages.map(msg => msg.id));
 
+                    // @ts-ignore
                     const response = await window.electron.db.query({
                         query: `
               select * from messages
@@ -336,6 +360,7 @@ export const useChatStore = create<ChatState>()(
                         const placeholders = msgIds.map((_, i) => `@id${i}`).join(',');
                         const params = msgIds.reduce((acc, id, i) => ({ ...acc, [`id${i}`]: id }), {});
 
+                        // @ts-ignore
                         const reactions = await window.electron.db.query({
                             query: `
               select * from reactions
@@ -354,6 +379,7 @@ export const useChatStore = create<ChatState>()(
                         let userMap: Record<string, IUser> = {};
 
                         try {
+                            // @ts-ignore
                             const userInfos = await window.electron.user.get({
                                 token: getUserTokenFromStore(),
                                 args: {
@@ -429,8 +455,44 @@ export const useChatStore = create<ChatState>()(
             },
 
             deleteMessage: async (chatId, messageId) => {
-                console.log("Dummy deleteMessage function called with:", chatId, messageId);
-                return;
+                set({ isLoading: true, error: null });
+                try {
+                    // Update local state to remove the message (this can happen first for UX responsiveness)
+                    set((state) => ({
+                        messages: {
+                            ...state.messages,
+                            [chatId]: (state.messages[chatId] || []).filter(msg => msg.id !== messageId)
+                        }
+                    }));
+
+                    await window.electron.db.query({
+                        query: `
+                            delete from reactions
+                            where message_id = @messageId
+                        `,
+                        params: {
+                            messageId
+                        }
+                    });
+
+                    await window.electron.db.query({
+                        query: `
+                            delete from messages
+                            where id = @messageId
+                            and room_id = @chatId
+                        `,
+                        params: {
+                            messageId,
+                            chatId
+                        }
+                    });
+
+                    set({ isLoading: false });
+                } catch (error: any) {
+                    set({ error: error.message, isLoading: false });
+                    console.error("Error deleting message:", error);
+                    throw error;
+                }
             },
 
             editMessage: async (chatId, messageId, content) => {
@@ -487,6 +549,7 @@ export const useChatStore = create<ChatState>()(
           and room_id = @chatId
         `;
 
+                // @ts-ignore
                 const result = await window.electron.db.query({
                     query,
                     params: { messageId, chatId }
@@ -503,6 +566,7 @@ export const useChatStore = create<ChatState>()(
                     if (!currentUser || !currentUser.id) return;
 
                     // Check if reaction already exists in database
+                    // @ts-ignore
                     const existingReaction = await window.electron.db.query({
                         query: `
               select id from reactions
@@ -560,6 +624,7 @@ export const useChatStore = create<ChatState>()(
                     });
 
                     if (!reactionExists) {
+                        // @ts-ignore
                         await window.electron.db.query({
                             query: `
                 insert into reactions
@@ -576,6 +641,7 @@ export const useChatStore = create<ChatState>()(
                             }
                         });
                     } else {
+                        // @ts-ignore
                         await window.electron.db.query({
                             query: `
                 delete from reactions

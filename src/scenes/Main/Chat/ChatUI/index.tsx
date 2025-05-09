@@ -3,10 +3,8 @@ import { useRef, useEffect, useState, useCallback, useMemo, memo } from "react";
 import { IChatMessage } from "@/types/Chat/Message";
 import { getUserFromStore } from "@/utils/user";
 import { useChatStore } from "@/stores/Chat/chatStore";
-import { useTopicStore } from "@/stores/Topic/TopicStore";
-import ChatBubble from "./ChatBubble";
+import ChatBubble from "@/components/Chat/ChatBubble";
 import { useCurrentTopicContext } from "@/stores/Topic/TopicStore";
-import * as R from 'ramda';
 
 interface ChatUIProps {
     messages: IChatMessage[];
