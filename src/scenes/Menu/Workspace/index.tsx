@@ -5,6 +5,7 @@ import ChatIcon from "@mui/icons-material/Chat";
 import ExitToAppIcon from "@mui/icons-material/ExitToApp";
 import { useMemo } from "react";
 import { useCurrentTopicContext } from "@/stores/Topic/TopicStore";
+import WorkspaceChatMenu from "./Chat";
 
 export default function WorkspaceMenu() {
     const { selectedContext } = useCurrentTopicContext();
@@ -24,29 +25,16 @@ export default function WorkspaceMenu() {
         if (section.includes('plans')) return <SettingsIcon fontSize="small" />;
         if (section.includes('chat')) return <ChatIcon fontSize="small" />;
         if (section.includes('exit')) return <ExitToAppIcon fontSize="small" />;
-        return undefined;
+        return null;
     };
 
     const sectionIcon = getSectionIcon();
 
     return (
         <Box key={menuKey} sx={{ mt: 2, px: 2 }}>
-            {sectionName && (
-                <Box sx={{ mb: 2, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <Chip
-                        {...sectionIcon ? { icon: sectionIcon } : {}}
-                        label={sectionName.charAt(0).toUpperCase() + sectionName.slice(1)}
-                        color="primary"
-                        variant="outlined"
-                        sx={{
-                            fontWeight: 'bold',
-                            textTransform: 'capitalize',
-                            px: 1,
-                            '& .MuiChip-label': { px: 1 }
-                        }}
-                    />
-                </Box>
-            )}
+
+
+            {section.includes('chat') && <WorkspaceChatMenu />}
         </Box>
     );
 }

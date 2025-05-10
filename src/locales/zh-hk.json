@@ -5,6 +5,8 @@
   "common.send": "發送",
   "common.save": "儲存",
   "common.resetToDefaults": "重置為預設值",
+  "common.exiting": "退出中...",
+  "common.exit": "退出",
 
   "home.friends": "朋友",
   "home.allFriends": "所有朋友",
@@ -64,6 +66,9 @@
   "workspace.create.description": "創建一個工作空間，讓您可以與其他人共享工作空間。",
   "workspace.create.title": "創建新工作空間",
   "workspace.create.name": "工作空間名稱",
+  "workspace.exit.title": "退出工作空間",
+  "workspace.exit.confirmation": "確定要退出工作空間「{name}」嗎？退出後您將無法再訪問此工作空間。",
+  "workspace.exit.warning": "如有需要，您可以稍後使用邀請碼重新加入此工作空間。",
 
   "menu.chatroom": "聊天室",
   "menu.plan": "計劃",
@@ -101,8 +106,12 @@
   "menu.home.messageDescription": "請輸入您想要新增的個人訊息。",
   "menu.chat.delete": "刪除",
   "menu.chat.rename": "重命名",
-
+  "menu.workspace.members": "成員",
+  "menu.workspace.knowledgeBase": "知識庫",
+  "menu.workspace.mcp": "MCP 伺服器",
+  "menu.workspace.chatroom": "聊天室",
   "file.emptyFolder": "這個資料夾是空的",
+  "menu.workspace.newChatroom": "新增聊天室",
 
   "settings.general": "一般",
   "settings.user": "用戶",
@@ -235,4 +244,5 @@
   "debug.bot-message": "模擬機器人訊息",
   "debug.database-tools": "資料庫工具",
   "debug.sample-markdown": "範例 Markdown"
+
 }

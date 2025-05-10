@@ -68,8 +68,6 @@ export function setupResourceHandlers() {
                         }
                         return stat.size;
                     } catch (err) {
-                        // Skip problematic files and continue
-                        console.log(`Skipping inaccessible file: ${path.join(dirPath, file)}`);
                         return 0;
                     }
                 })

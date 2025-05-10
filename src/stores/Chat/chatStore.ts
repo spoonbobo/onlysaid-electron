@@ -13,19 +13,16 @@ const MESSAGE_FETCH_LIMIT = 30;
 
 // update to be dynamic later -- TODO:
 export const DeepSeekUser: IUser = {
-    id: "d8585d79-795d-4956-8061-ee082e202d98",
+    id: "a0382833-7932-4d23-8094-75681edb7160",
     username: "DeepSeek",
     email: "deepseek@llm.com",
     avatar: "https://diplo-media.s3.eu-central-1.amazonaws.com/2025/01/deepseek-italy-ban-garante.png",
-    active_rooms: [],
-    archived_rooms: [],
-    teams: [],
     settings: {
         theme: "light",
     },
 }
 
-const defaultSenderId = "d8585d79-795d-4956-8061-ee082e202d98"
+const defaultSenderId = "a0382833-7932-4d23-8094-75681edb7160"
 
 interface ChatState {
     // State properties
@@ -39,9 +36,9 @@ interface ChatState {
     isTyping: boolean;
 
     // Room/Chat operations
-    createChat: (userId: string, type: string, contextId?: string) => Promise<void>;
+    createChat: (userId: string, type: string, contextId?: string) => Promise<IChatRoom | null>;
     deleteChat: (chatId: string) => Promise<void>;
-    getChat: (userId: string, type: string) => Promise<void>;
+    getChat: (userId: string, type: string, workspaceId?: string) => Promise<void>;
     updateChat: (chatId: string, data: Partial<IChatRoom>) => Promise<void>;
     setActiveChat: (chatId: string, contextId?: string) => void;
     markAsRead: (chatId: string) => void;
@@ -67,14 +64,15 @@ interface ChatState {
     toggleReaction: (chatId: string, messageId: string, reaction: string) => Promise<void>;
 }
 
-const NewChat = (userId: string, type: string) => {
+const NewChat = (userId: string, type: string, workspaceId?: string) => {
     return {
         name: `New Chat`,
         created_at: new Date().toISOString(),
         last_updated: new Date().toISOString(),
         unread: 0,
-        active_users: [userId],
+        workspace_id: workspaceId,
         type: type,
+        user_id: userId,
     }
 }
 
@@ -127,7 +125,7 @@ export const useChatStore = create<ChatState>()(
             createChat: async (userId: string, type: string, contextId?: string) => {
                 set({ isLoading: true, error: null });
                 try {
-                    const newChat = NewChat(userId, type);
+                    const newChat = NewChat(userId, type, contextId);
                     // @ts-ignore
                     const response = await window.electron.chat.create({
                         token: getUserTokenFromStore(),
@@ -135,13 +133,16 @@ export const useChatStore = create<ChatState>()(
                     });
 
                     await get().getChat(userId, type);
-                    if (response.data.data[0]?.id) {
+                    if (response.data?.data?.[0]?.id) {
                         get().setActiveChat(response.data.data[0].id, contextId);
                     }
 
+                    // Return the new chat data
+                    return response.data?.data?.[0];
                 } catch (error: any) {
                     set({ error: error.message, isLoading: false });
                     console.error(error);
+                    return null;
                 }
             },
 
@@ -164,14 +165,15 @@ export const useChatStore = create<ChatState>()(
                 }
             },
 
-            getChat: async (userId: string, type: string) => {
+            getChat: async (userId: string, type: string, workspaceId?: string) => {
                 set({ isLoading: true, error: null });
                 try {
                     // @ts-ignore
                     const response = await window.electron.chat.get({
                         token: getUserTokenFromStore(),
                         userId: userId,
-                        type: type
+                        type: type,
+                        workspaceId: workspaceId
                     });
 
                     if (response.data && response.data.data && Array.isArray(response.data.data)) {
@@ -198,7 +200,6 @@ export const useChatStore = create<ChatState>()(
                     }));
 
                     const existingRoom = get().rooms.find(room => room.id === chatId);
-                    console.log("existingRoom", existingRoom);
 
                     const updateChatArgs: IUpdateChatArgs = {
                         token: getUserTokenFromStore() || "",
@@ -210,9 +211,7 @@ export const useChatStore = create<ChatState>()(
                         } as IChatRoom
                     }
 
-                    // @ts-ignore
                     const response = await window.electron.chat.update(updateChatArgs);
-                    console.log("response", response);
                     set({ isLoading: false });
                 } catch (error: any) {
                     set({ error: error.message, isLoading: false });
@@ -230,7 +229,7 @@ export const useChatStore = create<ChatState>()(
                     await window.electron.db.query({
                         query: `
             insert into messages
-            (id, room_id, sender, text, created_at, reply_to, files)
+            (id, chat_id, sender, text, created_at, reply_to, files)
             values
             (@id, @chatId, @sender, @text, @createdAt, @replyTo, @files)
             `,
@@ -271,7 +270,7 @@ export const useChatStore = create<ChatState>()(
                     // First check if message exists
                     const checkQuery = `
             select count(*) as count from messages
-            where id = @messageId and room_id = @chatId
+            where id = @messageId and chat_id = @chatId
           `;
 
                     // @ts-ignore
@@ -286,7 +285,7 @@ export const useChatStore = create<ChatState>()(
               update messages
               set text = @text, created_at = @createdAt
               where id = @messageId
-              and room_id = @chatId
+              and chat_id = @chatId
             `;
 
                         // @ts-ignore
@@ -297,7 +296,7 @@ export const useChatStore = create<ChatState>()(
                     } else {
                         // Message doesn't exist, insert it
                         const insertQuery = `
-              insert into messages (id, room_id, sender, text, created_at)
+              insert into messages (id, chat_id, sender, text, created_at)
               values (@messageId, @chatId, @sender, @text, @createdAt)
             `;
 
@@ -340,7 +339,7 @@ export const useChatStore = create<ChatState>()(
                     const response = await window.electron.db.query({
                         query: `
               select * from messages
-              where room_id = @chatId
+              where chat_id = @chatId
               order by created_at desc
               limit @limit offset @offset
             `,
@@ -479,7 +478,7 @@ export const useChatStore = create<ChatState>()(
                         query: `
                             delete from messages
                             where id = @messageId
-                            and room_id = @chatId
+                            and chat_id = @chatId
                         `,
                         params: {
                             messageId,
@@ -546,7 +545,7 @@ export const useChatStore = create<ChatState>()(
                 const query = `
           select * from messages
           where id = @messageId
-          and room_id = @chatId
+          and chat_id = @chatId
         `;
 
                 // @ts-ignore

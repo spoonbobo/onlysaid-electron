@@ -30,7 +30,6 @@ function ChatInput({
     const { attachments, setAttachment, clearAttachments } = useCurrentTopicContext();
     const { modelName, provider, modelId } = useSelectedModelStore();
     const [isDragOver, setIsDragOver] = useState(false);
-    // console.log(modelName, provider, modelId);
 
     const handleAttachment = (type: string, value: string | File) => {
         if (value instanceof File) {
@@ -57,7 +56,6 @@ function ChatInput({
         try {
             setIsSending(true);
 
-            // Create message object with content
             const message: Partial<IChatMessage> = {
                 text: input.trim(),
                 reply_to: replyingTo?.id,
@@ -65,9 +63,6 @@ function ChatInput({
 
             for (const [type, file] of Object.entries(attachments)) {
                 try {
-                    // const result = await window.electron.fileSystem.uploadFile({
-                    //   file: file
-                    // });
                     const result = {
                         success: true,
                         id: '123',
@@ -75,7 +70,6 @@ function ChatInput({
                     }
 
                     if (result && result.success) {
-                        // Create IFile object with the returned data
                         const fileData: IFile = {
                             id: result.id,
                             created_at: new Date().toISOString(),
@@ -84,7 +78,6 @@ function ChatInput({
                             file_name: file.name
                         };
 
-                        // Add file URL to message based on type
                         if (type === 'image') {
                             message.files = [fileData];
                         } else if (type === 'video') {
@@ -92,8 +85,6 @@ function ChatInput({
                         } else if (type === 'audio') {
                             message.files = [fileData];
                         } else {
-                            // For generic files, you might need to extend IChatMessage
-                            // to include a files array or object
                             if (!message.files) message.files = [];
                             message.files.push(fileData);
                         }
@@ -103,10 +94,8 @@ function ChatInput({
                 }
             }
 
-            // Send the message with all attachments
             handleSend(message);
 
-            // Clear inputs after sending
             setInput('');
             clearAttachments();
         } catch (error) {
@@ -116,7 +105,6 @@ function ChatInput({
         }
     }, [input, attachments, disabled, handleSend, isSending, replyingTo, setInput, clearAttachments]);
 
-    // Handle drag events for file dropping
     const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
         e.preventDefault();
         e.stopPropagation();
@@ -134,20 +122,14 @@ function ChatInput({
         e.stopPropagation();
         setIsDragOver(false);
 
-        // Handle file drop from FileExplorer
         const filePath = e.dataTransfer.getData('text/plain');
 
         if (filePath) {
-            // Option 1: If file path is dragged from FileExplorer
-            // Create a File object from the path or request it from electron
             try {
-                // For simplicity - here we'd normally use IPC to get the actual file from path
-                // Mock implementation for now:
                 const fileName = filePath.split('/').pop() || 'file';
                 const fileType = fileName.includes('.') ?
                     fileName.split('.').pop()?.toLowerCase() : 'unknown';
 
-                // Determine file type category
                 let type = 'file';
                 if (['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(fileType || '')) {
                     type = 'image';
@@ -157,23 +139,14 @@ function ChatInput({
                     type = 'audio';
                 }
 
-                // In production, we would use electron to get the actual file from the path
-                // For now, we'll simulate it
-                // window.electron.fileSystem.getFileFromPath(filePath).then(file => {
-                //   setAttachment(type, file);
-                // });
-
-                // Mock implementation
                 const mockFile = new File([''], fileName, { type: `${type}/${fileType}` });
                 setAttachment(type, mockFile);
             } catch (error) {
                 console.error('Failed to handle dragged file:', error);
             }
         } else if (e.dataTransfer.files.length > 0) {
-            // Option 2: If files were dragged from outside the app
             const file = e.dataTransfer.files[0];
 
-            // Determine file type
             let type = 'file';
             if (file.type.startsWith('image/')) {
                 type = 'image';
@@ -225,7 +198,6 @@ function ChatInput({
                         width: "100%",
                     }}
                 >
-                    {/* Show reply preview if replying to a message */}
                     {replyingTo && (
                         <Box
                             sx={{
@@ -270,7 +242,6 @@ function ChatInput({
                         </Box>
                     )}
 
-                    {/* Use the new AttachmentPreview component */}
                     <AttachmentPreview
                         attachments={attachments}
                         onRemove={removeAttachment}

@@ -3,10 +3,10 @@ import { FormattedMessage } from "react-intl";
 import { useTopicStore } from "@/stores/Topic/TopicStore";
 import { useChatStore } from "@/stores/Chat/chatStore";
 import MoreVertIcon from "@mui/icons-material/MoreVert";
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import AddNewFriend from "@/components/Dialog/AddNewFriend";
 import HomeMenuItems, { renderCategoryActions } from "./MenuItems/HomeMenuItems";
-import WorkspaceMenuItems, { renderWorkspaceActions } from "./MenuItems/WorkspaceMenuItems";
+import WorkspaceMenuItems, { RenderWorkspaceActions } from "./MenuItems/WorkspaceMenuItems";
 import SettingsMenuItems, { renderSettingsActions } from "./MenuItems/SettingsMenuItems";
 import DefaultMenuItems from "./MenuItems/DefaultMenuItems";
 import { useUserStore } from "@/stores/User/UserStore";
@@ -15,28 +15,25 @@ function MenuHeader() {
     const user = useUserStore((state) => state.user);
     const selectedContext = useTopicStore((state) => state.selectedContext);
     const setSelectedContext = useTopicStore((state) => state.setSelectedContext);
+    const setSelectedTopic = useTopicStore((state) => state.setSelectedTopic);
     const createChat = useChatStore((state) => state.createChat);
+    const setActiveChat = useChatStore((state) => state.setActiveChat);
     const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
     const [menuPosition, setMenuPosition] = useState<{ top: number, left: number } | null>(null);
     const open = Boolean(anchorEl) || Boolean(menuPosition);
     const [showAddFriendDialog, setShowAddFriendDialog] = useState(false);
-    const [selectedCategory, setSelectedCategory] = useState<string | null>(
-        selectedContext?.type === 'home' ? selectedContext.section || null : null
-    );
 
-    useEffect(() => {
-        if (selectedContext?.type === 'home' && selectedContext.section) {
-            setSelectedCategory(selectedContext.section);
-        }
-    }, [selectedContext]);
-
+    // Parse section from the context
     const selectedSection = selectedContext?.type === 'workspace' ?
         selectedContext.section?.split(':')[1] || null :
         selectedContext?.type === 'settings' ?
             selectedContext.section || null : null;
 
+    // For home context, use section directly as category
+    const selectedCategory = selectedContext?.type === 'home' ?
+        selectedContext.section || null : null;
+
     const handleCategorySelect = (category: string) => {
-        setSelectedCategory(category);
         if (selectedContext) {
             setSelectedContext({
                 ...selectedContext,
@@ -57,7 +54,21 @@ function MenuHeader() {
 
     const handleCreateChat = async () => {
         if (user?.id) {
-            await createChat(user.id, 'agent');
+            // First, make sure we're in the agents section of home
+            setSelectedContext({
+                type: 'home',
+                name: 'home',
+                section: 'agents'
+            });
+
+            // Create the chat and get the new chat data
+            const newChat = await createChat(user.id, 'agent');
+
+            // Use the returned chat data directly
+            if (newChat?.id) {
+                setSelectedTopic('agents', newChat.id);
+                setActiveChat(newChat.id, 'home:home');
+            }
         }
     };
 
@@ -101,7 +112,7 @@ function MenuHeader() {
         if (selectedContext?.type === 'workspace') {
             return (
                 <>
-                    <FormattedMessage id="menu.workspace" />
+                    {selectedContext.name || <FormattedMessage id="menu.workspace" />}
                     {selectedSection && (
                         <> / <FormattedMessage id={`menu.workspace.${selectedSection}`} /></>
                     )}
@@ -174,7 +185,7 @@ function MenuHeader() {
                         }}
                         transformOrigin={{
                             vertical: 'top',
-                            horizontal: 'right',
+                            horizontal: 'left',
                         }}
                     >
                         {renderMenuItems()}
@@ -191,10 +202,10 @@ function MenuHeader() {
                             handleCreateChat
                         });
                     } else if (selectedContext?.type === 'workspace' && selectedSection) {
-                        actionContent = renderWorkspaceActions({
-                            selectedSection,
-                            handleAction: handleWorkspaceAction
-                        });
+                        actionContent = <RenderWorkspaceActions
+                            selectedSection={selectedSection}
+                            handleAction={handleWorkspaceAction}
+                        />;
                     } else if (selectedContext?.type === 'settings' && selectedSection) {
                         actionContent = renderSettingsActions({
                             selectedSection,

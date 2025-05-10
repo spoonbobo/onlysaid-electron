@@ -49,7 +49,7 @@ export default function UserSettings() {
             {activeSection === 'user' && (
                 <Box sx={{ mt: 1 }}>
                     <MenuListItem
-                        label={<FormattedMessage id="settings.apiKey" />}
+                        label={<FormattedMessage id="settings.general" />}
                         isSelected={selectedSubcategory === UserSettingsSubcategories.User}
                         onClick={() => setSelectedSubcategory(UserSettingsSubcategories.User)}
                         sx={{ pl: 4, py: 0.5, minHeight: 28, fontSize: 14 }}

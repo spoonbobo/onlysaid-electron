@@ -8,6 +8,7 @@ import { useRef, useEffect } from "react";
 import UserInfoBar from "./UserInfoBar";
 import LevelUp from "./LevelUp";
 import OverlaysContainer from "./Overlays/OverlaysContainer";
+import { LinearProgress } from "@mui/material";
 
 function MainInterface() {
     const { menuWidth, setMenuWidth } = useLayoutResize();
@@ -144,9 +145,14 @@ function MainInterface() {
                     />
                 </Box>
 
-                <Box sx={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-                    <Main />
-                    <LevelUp />
+                <Box sx={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", position: "relative" }}>
+                    <Box sx={{ flex: 1, overflow: "hidden" }}>
+                        <Main />
+                    </Box>
+                    {/* Absolute position to ensure visibility */}
+                    <Box sx={{ position: "absolute", bottom: 0, left: 0, right: 0, zIndex: 9999 }}>
+                        <LevelUp />
+                    </Box>
                 </Box>
             </Box>
 

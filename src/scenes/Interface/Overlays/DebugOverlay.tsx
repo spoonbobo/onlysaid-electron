@@ -46,7 +46,14 @@ export default function DebugOverlay() {
 
             {!debugOverlayMinimized && (
                 <Box sx={{ p: 1 }}>
-                    <InfoRow label="Current Context" value={selectedContext ? `${selectedContext.name}:${selectedContext.type}` : 'None'} />
+                    <InfoRow
+                        label="Current Context"
+                        value={selectedContext
+                            ? (selectedContext.type === "workspace"
+                                ? `${selectedContext.id}:workspace`
+                                : `${selectedContext.name}:${selectedContext.type}`)
+                            : 'None'}
+                    />
                     <InfoRow label="Context ID" value={selectedContext?.id || contextId || 'None'} />
                     <InfoRow label="Section" value={selectedContext?.section || 'None'} />
                     <InfoRow label="Last Section" value={selectedContext?.type ? lastSections[selectedContext.type] || 'None' : 'None'} />

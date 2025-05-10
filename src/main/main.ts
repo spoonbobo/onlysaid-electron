@@ -27,6 +27,7 @@ import { setupSSEHandlers } from './streaming';
 import { setupMCPHandlers } from './mcp';
 import { setupContentHandlers } from './filesystem';
 import { setupRedisHandlers } from './redis';
+import { setupWorkspaceHandlers } from './api/v2/workspace';
 import { initializeDeeplinkHandling } from './deeplink';
 dotenv.config();
 
@@ -38,6 +39,7 @@ setupSSEHandlers();
 setupMCPHandlers();
 setupContentHandlers();
 setupRedisHandlers();
+setupWorkspaceHandlers();
 initializeDeeplinkHandling();
 initAuth(process.env.ONLYSAID_API_URL || '', process.env.ONLYSAID_DOMAIN || '');
 

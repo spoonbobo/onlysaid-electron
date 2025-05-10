@@ -27,7 +27,7 @@ export const setupChatroomHandlers = () => {
     ipcMain.handle('chat:get', async (event, args: IGetChatArgs) => {
         try {
             const response = await onlysaidServiceInstance.get<IChatRoom[]>(
-                `/chat?userId=${args.userId}&type=${args.type}`,
+                `/chat?userId=${args.userId}&type=${args.type}&workspaceId=${args.workspaceId}`,
                 {
                     headers: {
                         Authorization: `Bearer ${args.token}`

@@ -532,7 +532,6 @@ export const useMCPStore = create<MCPState>()(
                                 clientVersion: "1.0.0"
                             };
                             break;
-                        // TODO: need install globally
                         // npx -y @smithery/cli install @openbnb-org/mcp-server-airbnb --client claude
                         case "airbnb":
                             config = {
@@ -546,13 +545,13 @@ export const useMCPStore = create<MCPState>()(
                                 clientVersion: "1.0.0"
                             };
                             break;
-                        // TODO: need install tavily-mcp@0.1.4 globally.
                         case "tavily":
                             config = {
                                 enabled: state.tavilyEnabled,
-                                command: "node",
+                                command: "npx",
                                 args: [
-                                    "./node_modules/.bin/tavily-mcp"
+                                    "-y",
+                                    "tavily-mcp@0.1.4"
 
                                 ],
                                 env: {

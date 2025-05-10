@@ -92,27 +92,35 @@ function Chat() {
     }, [activeRoomId, contextId]);
 
     useEffect(() => {
-        // Get the first section with a selected topic
         const firstSection = Object.keys(selectedTopics).find(section => selectedTopics[section]);
 
-        // If we have a selected topic and it's different from the current activeRoomId
-        if (firstSection && selectedTopics[firstSection] &&
-            selectedTopics[firstSection] !== activeRoomId) {
-
+        if (firstSection && selectedTopics[firstSection]) {
             const topicId = selectedTopics[firstSection];
-            const { rooms } = useChatStore.getState();
 
-            // Only set active chat if room exists
-            if (rooms.some(room => room.id === topicId)) {
+            // First make sure rooms are loaded
+            const { rooms, getChat } = useChatStore.getState();
+            const user = getUserFromStore();
+
+            // If no rooms loaded yet, fetch them first
+            if (rooms.length === 0 && user?.id) {
+                getChat(user.id, 'agent').then(() => {
+                    // After fetching, check if room exists
+                    const updatedRooms = useChatStore.getState().rooms;
+                    if (!updatedRooms.some(room => room.id === topicId)) {
+                        console.warn(`Room doesn't exist after fetch: ${topicId}`);
+                        clearSelectedTopic(firstSection);
+                    } else {
+                        setActiveChat(topicId, contextId);
+                    }
+                });
+            } else if (rooms.some(room => room.id === topicId)) {
                 setActiveChat(topicId, contextId);
             } else {
                 console.warn(`Cannot set active chat to non-existent room: ${topicId}`);
-
-                // Use the setter function provided by the hook
                 clearSelectedTopic(firstSection);
             }
         }
-    }, [selectedTopics, activeRoomId, contextId, setActiveChat, clearSelectedTopic]);
+    }, [selectedTopics, contextId, setActiveChat, clearSelectedTopic]);
 
     // Fetch messages when active room changes
     useEffect(() => {
@@ -351,7 +359,7 @@ function Chat() {
         <Box
             key={chatInstanceId}
             sx={{
-                height: "100%",
+                height: "calc(100% - 5px)",
                 display: "flex",
                 flexDirection: "column",
                 overflow: "hidden",
