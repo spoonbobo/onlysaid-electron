@@ -1,7 +1,7 @@
 import { Box, Avatar, Typography, IconButton } from "@mui/material";
 import SettingsIcon from "@mui/icons-material/Settings";
 import { useUserStore } from "@/stores/User/UserStore";
-import { IUser } from "@/types/User/User";
+import { IUser } from "@/../../types/User/User";
 import { FormattedMessage } from "react-intl";
 import { useUserLevelStore } from "@/stores/User/UserLevel";
 import { useTopicStore } from "@/stores/Topic/TopicStore";

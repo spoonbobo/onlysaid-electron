@@ -1,16 +1,21 @@
-import { Box, Tooltip, IconButton } from "@mui/material";
+import { Box, Tooltip, IconButton, Menu, MenuItem } from "@mui/material";
 import HomeIcon from "@mui/icons-material/Home";
 import AddIcon from "@mui/icons-material/Add";
 import GroupIcon from "@mui/icons-material/Group";
 import { useState, useEffect } from "react";
-import { useTopicStore, TopicContext } from "../../stores/Topic/TopicStore";
-import AddTeamDialog from "../../components/Dialog/AddTeamDialog";
+import { useTopicStore, TopicContext } from "@/stores/Topic/TopicStore";
+import { useWorkspaceStore } from "@/stores/Workspace/WorkspaceStore";
+import AddTeamDialog from "@/components/Dialog/AddWorkspaceDialog";
+import ExitWorkspaceDialog from "@/components/Dialog/ExitWorkspace";
 
 function SidebarTabs() {
-    const { selectedContext, contexts, setSelectedContext, selectedTopics } = useTopicStore();
+    const { selectedContext, contexts, setSelectedContext, removeContext } = useTopicStore();
+    const { exitWorkspace } = useWorkspaceStore();
     const [showAddTeamDialog, setShowAddTeamDialog] = useState(false);
-    // Track last visited section per workspace
+    const [showExitDialog, setShowExitDialog] = useState(false);
     const [workspaceLastSections, setWorkspaceLastSections] = useState<Record<string, string>>({});
+    const [menuAnchorEl, setMenuAnchorEl] = useState<null | HTMLElement>(null);
+    const [contextForMenu, setContextForMenu] = useState<TopicContext | null>(null);
 
     const homeContext = contexts.find(context => context.name === "home" && context.type === "home") || contexts[0];
 
@@ -19,10 +24,8 @@ function SidebarTabs() {
         !(context.name === "workspace" && context.type === "workspace")
     );
 
-    // Store the last visited section when context changes
     useEffect(() => {
         if (selectedContext?.type === "workspace" && selectedContext?.section) {
-            // Only store if section is defined and is a string
             setWorkspaceLastSections(prev => ({
                 ...prev,
                 [selectedContext.name]: selectedContext.section as string
@@ -35,15 +38,11 @@ function SidebarTabs() {
             return;
         }
 
-        // If this is a workspace context, check for the last visited section
         if (context.type === "workspace") {
-            // First check if we have a stored last section for this specific workspace
             const lastWorkspaceSection = workspaceLastSections[context.name];
 
-            // Use the remembered section, or context.section, or default to calendar
             const sectionToUse = lastWorkspaceSection || context.section || "workspace:calendar";
 
-            // Create a context with the section information
             const contextWithSection = {
                 ...context,
                 section: sectionToUse
@@ -57,6 +56,37 @@ function SidebarTabs() {
 
     const handleAddTeam = () => {
         setShowAddTeamDialog(true);
+    };
+
+    const handleContextMenu = (event: React.MouseEvent<HTMLElement>, context: TopicContext) => {
+        event.preventDefault();
+        setMenuAnchorEl(event.currentTarget);
+        setContextForMenu(context);
+    };
+
+    const handleCloseMenu = () => {
+        setMenuAnchorEl(null);
+        setContextForMenu(null);
+    };
+
+    const handleConfirmExit = async () => {
+        if (!contextForMenu?.id) return;
+
+        // Exit from workspace store
+        await exitWorkspace(contextForMenu.id);
+
+        // Remove from topic store
+        removeContext(contextForMenu);
+
+        // If we exited the currently selected context, go back to home
+        if (selectedContext?.id === contextForMenu.id) {
+            setSelectedContext(homeContext);
+        }
+    };
+
+    const handleExitWorkspaceClick = () => {
+        setShowExitDialog(true);
+        handleCloseMenu();
     };
 
     return (
@@ -101,6 +131,7 @@ function SidebarTabs() {
                     <Tooltip key={`workspace-${workspaceContext.name}`} title={`Workspace: ${workspaceContext.name}`} placement="right">
                         <Box
                             sx={{
+                                position: 'relative',
                                 borderBottom: selectedContext?.name === workspaceContext.name && selectedContext?.type === workspaceContext.type
                                     ? "3px solid"
                                     : "3px solid transparent",
@@ -109,6 +140,7 @@ function SidebarTabs() {
                                     : "transparent",
                                 borderRadius: 0,
                             }}
+                            onContextMenu={(e) => handleContextMenu(e, workspaceContext)}
                         >
                             <IconButton
                                 color="primary"
@@ -134,9 +166,25 @@ function SidebarTabs() {
                 </Tooltip>
             </Box>
 
+            {/* Context menu for workspace options */}
+            <Menu
+                anchorEl={menuAnchorEl}
+                open={Boolean(menuAnchorEl)}
+                onClose={handleCloseMenu}
+            >
+                <MenuItem onClick={handleExitWorkspaceClick}>Exit Workspace</MenuItem>
+            </Menu>
+
             <AddTeamDialog
                 open={showAddTeamDialog}
                 onClose={() => setShowAddTeamDialog(false)}
+            />
+
+            <ExitWorkspaceDialog
+                open={showExitDialog}
+                onClose={() => setShowExitDialog(false)}
+                onConfirm={handleConfirmExit}
+                workspace={contextForMenu}
             />
         </>
     );

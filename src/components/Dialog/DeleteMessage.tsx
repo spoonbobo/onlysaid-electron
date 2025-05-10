@@ -1,7 +1,7 @@
 import React from 'react';
 import { Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, Button, Typography, Box, Avatar } from '@mui/material';
 import { FormattedMessage } from 'react-intl';
-import { IChatMessage } from '@/types/Chat/Message';
+import { IChatMessage } from '@/../../types/Chat/Message';
 import { useChatStore } from '@/stores/Chat/chatStore';
 
 interface DeleteMessageDialogProps {

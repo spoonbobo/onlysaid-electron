@@ -1,9 +1,9 @@
-import { MenuItem, ListSubheader, Divider } from "@mui/material";
+import { MenuItem, ListSubheader, Divider, Tooltip, IconButton } from "@mui/material";
 import { FormattedMessage } from "react-intl";
-import AccountCircleIcon from "@mui/icons-material/AccountCircle";
 import SettingsIcon from "@mui/icons-material/Settings";
-import HelpIcon from "@mui/icons-material/Help";
 import ExitToAppIcon from "@mui/icons-material/ExitToApp";
+import CalendarMonthIcon from "@mui/icons-material/CalendarMonth";
+import AddCommentIcon from "@mui/icons-material/AddComment";
 import { useTopicStore } from "@/stores/Topic/TopicStore";
 
 type WorkspaceMenuItemsProps = {
@@ -32,7 +32,7 @@ function WorkspaceMenuItems({ handleClose }: WorkspaceMenuItemsProps) {
                 <FormattedMessage id="menu.workspace" />
             </ListSubheader>
             <MenuItem onClick={() => handleMenuItemClick('addNewChat')} sx={{ minHeight: 36, fontSize: 14 }}>
-                <AccountCircleIcon fontSize="small" sx={{ mr: 1.5, color: "text.secondary" }} />
+                <AddCommentIcon fontSize="small" sx={{ mr: 1.5, color: "text.secondary" }} />
                 <FormattedMessage id="menu.workspace.addNewChat" />
             </MenuItem>
 
@@ -46,7 +46,7 @@ function WorkspaceMenuItems({ handleClose }: WorkspaceMenuItemsProps) {
                 <FormattedMessage id="menu.workspace.plans" />
             </MenuItem>
             <MenuItem onClick={() => handleMenuItemClick('calendar')} sx={{ minHeight: 36, fontSize: 14 }}>
-                <HelpIcon fontSize="small" sx={{ mr: 1.5, color: "text.secondary" }} />
+                <CalendarMonthIcon fontSize="small" sx={{ mr: 1.5, color: "text.secondary" }} />
                 <FormattedMessage id="menu.workspace.calendar" />
             </MenuItem>
 
@@ -62,5 +62,32 @@ function WorkspaceMenuItems({ handleClose }: WorkspaceMenuItemsProps) {
         </>
     );
 }
+
+// Add actions that can be rendered elsewhere if needed
+export const renderWorkspaceActions = ({
+    selectedSection,
+    handleAction
+}: {
+    selectedSection: string | null,
+    handleAction?: (action: string) => void
+}) => {
+    if (!selectedSection) return null;
+
+    switch (selectedSection) {
+        case 'addNewChat':
+            return (
+                <Tooltip title={<FormattedMessage id="menu.workspace.newChat" />}>
+                    <IconButton
+                        size="small"
+                        onClick={() => handleAction?.('newChat')}
+                    >
+                        <AddCommentIcon fontSize="small" />
+                    </IconButton>
+                </Tooltip>
+            );
+        default:
+            return null;
+    }
+};
 
 export default WorkspaceMenuItems;

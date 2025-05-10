@@ -6,7 +6,7 @@ import ExitToAppIcon from "@mui/icons-material/ExitToApp";
 import { useMemo } from "react";
 import { useCurrentTopicContext } from "@/stores/Topic/TopicStore";
 
-export default function Workspace() {
+export default function WorkspaceMenu() {
     const { selectedContext } = useCurrentTopicContext();
 
     const contextId = selectedContext ? `${selectedContext.name}:${selectedContext.type}` : '';
@@ -22,7 +22,7 @@ export default function Workspace() {
     const getSectionIcon = () => {
         if (section.includes('calendar')) return <CalendarMonthIcon fontSize="small" />;
         if (section.includes('plans')) return <SettingsIcon fontSize="small" />;
-        if (section.includes('addNewChat')) return <ChatIcon fontSize="small" />;
+        if (section.includes('chat')) return <ChatIcon fontSize="small" />;
         if (section.includes('exit')) return <ExitToAppIcon fontSize="small" />;
         return undefined;
     };

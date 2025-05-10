@@ -1,3 +1,8 @@
+/*
+ Please be careful when changing this file. It is used in many places.
+ It impacts user's experience directly.
+*/
+
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 
@@ -17,6 +22,7 @@ export interface TopicContext {
 interface TopicStore {
     contexts: TopicContext[];
     selectedContext: TopicContext | null;
+    lastSections: Record<string, string | undefined>;
     addContext: (context: TopicContext) => void;
     removeContext: (context: TopicContext) => void;
     setSelectedContext: (context: TopicContext) => void;
@@ -24,10 +30,6 @@ interface TopicStore {
     selectedTopics: Record<string, string>;
     setSelectedTopic: (sectionName: string, topicId: string) => void;
     clearSelectedTopic: (sectionName: string) => void;
-
-    expandedGroups: Record<string, Record<string, boolean>>;
-    setGroupExpanded: (sectionName: string, expanded: boolean) => void;
-    getGroupExpanded: (sectionName: string) => boolean;
 
     trustMode: boolean;
     setTrustMode: (trustMode: boolean) => void;
@@ -58,6 +60,7 @@ export const useTopicStore = create<TopicStore>()(
                 { name: "playground", type: "playground" }
             ],
             selectedContext: { name: "home", type: "home" },
+            lastSections: {},
 
             addContext: (context) =>
                 set((state) => ({
@@ -80,7 +83,23 @@ export const useTopicStore = create<TopicStore>()(
                 })),
 
             setSelectedContext: (context) =>
-                set({ selectedContext: context }),
+                set((state) => {
+                    let lastSections = { ...state.lastSections };
+                    if (state.selectedContext?.section && state.selectedContext?.type) {
+                        lastSections[state.selectedContext.type] = state.selectedContext.section;
+                    }
+
+                    const updatedContext = { ...context };
+
+                    if (!updatedContext.section && lastSections[updatedContext.type]) {
+                        updatedContext.section = lastSections[updatedContext.type];
+                    }
+
+                    return {
+                        selectedContext: updatedContext,
+                        lastSections
+                    };
+                }),
 
             selectedTopics: {},
 
@@ -98,37 +117,6 @@ export const useTopicStore = create<TopicStore>()(
                     delete updatedTopics[sectionName];
                     return { selectedTopics: updatedTopics };
                 }),
-
-            expandedGroups: {},
-
-            setGroupExpanded: (sectionName, expanded) =>
-                set((state) => {
-                    const contextKey = state.selectedContext ?
-                        `${state.selectedContext.type}:${state.selectedContext.name}` :
-                        'default';
-
-                    return {
-                        expandedGroups: {
-                            ...state.expandedGroups,
-                            [contextKey]: {
-                                ...(state.expandedGroups[contextKey] || {}),
-                                [sectionName]: expanded,
-                            },
-                        },
-                    };
-                }),
-
-            getGroupExpanded: (sectionName) => {
-                const state = get();
-                const contextKey = state.selectedContext ?
-                    `${state.selectedContext.type}:${state.selectedContext.name}` :
-                    'default';
-
-                // Return the expanded state for the current context and section
-                // Default to false, except for General section which defaults to true
-                return state.expandedGroups[contextKey]?.[sectionName] ??
-                    (sectionName === 'General');
-            },
 
             trustMode: false,
 
@@ -167,10 +155,15 @@ export const useTopicStore = create<TopicStore>()(
         {
             name: "topic-store",
             storage: createJSONStorage(() => localStorage),
-            version: 4, // Increment version due to store structure change
+            partialize: (state) => ({
+                selectedContext: state.selectedContext,
+                lastSections: state.lastSections,
+                selectedTopics: state.selectedTopics,
+                contexts: state.contexts
+            }),
+            version: 6,
         }
     )
 );
 
 export const useCurrentTopicContext = () => useTopicStore();
-

@@ -4,7 +4,7 @@ import { useTopicStore } from "../../../stores/Topic/TopicStore";
 import { useRef, useState } from "react";
 
 export default function DebugOverlay() {
-    const { selectedContext } = useTopicStore();
+    const { selectedContext, lastSections, selectedTopics } = useTopicStore();
     const { debugOverlayMinimized, setDebugOverlayMinimized } = useDebugStore();
 
     const renderCountRef = useRef(0);
@@ -48,6 +48,9 @@ export default function DebugOverlay() {
                 <Box sx={{ p: 1 }}>
                     <InfoRow label="Current Context" value={selectedContext ? `${selectedContext.name}:${selectedContext.type}` : 'None'} />
                     <InfoRow label="Context ID" value={selectedContext?.id || contextId || 'None'} />
+                    <InfoRow label="Section" value={selectedContext?.section || 'None'} />
+                    <InfoRow label="Last Section" value={selectedContext?.type ? lastSections[selectedContext.type] || 'None' : 'None'} />
+                    <InfoRow label="Selected Topic" value={selectedContext?.section ? selectedTopics[selectedContext.section] || 'None' : 'None'} />
                     <InfoRow label="Renders" value={`${renderCountRef.current}`} />
                     <InfoRow label="Uptime" value={`${uptime}s`} />
                 </Box>

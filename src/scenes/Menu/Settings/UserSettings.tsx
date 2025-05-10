@@ -1,47 +1,31 @@
-import { Box } from "@mui/material";
+import { Box, Tooltip, IconButton } from "@mui/material";
 import PersonOutlineIcon from "@mui/icons-material/PersonOutline";
 import MenuBookIcon from "@mui/icons-material/MenuBook";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import SmartToyIcon from "@mui/icons-material/SmartToy";
 import BuildIcon from "@mui/icons-material/Build";
-import ExpandLess from "@mui/icons-material/ExpandLess";
-import ExpandMore from "@mui/icons-material/ExpandMore";
 import CodeIcon from "@mui/icons-material/Code";
-import { useEffect } from "react";
+import NotificationsIcon from "@mui/icons-material/Notifications";
+import LogoutIcon from "@mui/icons-material/Logout";
+import SettingsIcon from "@mui/icons-material/Settings";
 import { FormattedMessage } from "react-intl";
-import { UserSettingsSubcategories, UserSectionName } from "@/stores/User/UserSettings";
+import { UserSettingsSubcategories } from "@/stores/User/UserSettings";
 import { useCurrentTopicContext } from "@/stores/Topic/TopicStore";
 import MenuSection from "@/components/Navigation/MenuSection";
 import MenuListItem from "@/components/Navigation/MenuListItem";
-import MenuCollapsibleSection from "@/components/Navigation/MenuCollapsibleSection";
-import { useUserSettingsStore } from "@/stores/User/UserSettings";
-
-// Define the section names
 
 export default function UserSettings() {
     const {
         selectedTopics,
         setSelectedTopic,
         selectedContext,
-        getGroupExpanded,
-        setGroupExpanded
     } = useCurrentTopicContext();
-
-    const { debugMode } = useUserSettingsStore();
 
     // Create key for component instance based on context
     const settingsKey = `settings-${selectedContext?.name || "unknown"}`;
 
-    // Only initialize expanded groups if not already set
-    useEffect(() => {
-        if (selectedContext) {
-            // Check if General is expanded, if not, expand it
-            if (!getGroupExpanded('General')) {
-                setGroupExpanded('General', true);
-            }
-        }
-    }, [selectedContext]);
-
+    // Get the active section from context
+    const activeSection = selectedContext?.section || 'user';
     const selectedSubcategory = selectedTopics['settings'] || UserSettingsSubcategories.User;
 
     // Set the selected subcategory
@@ -51,189 +35,107 @@ export default function UserSettings() {
         }
     };
 
-    // Use the store to toggle section expansion
-    const toggleSection = (section: UserSectionName) => {
-        const isCurrentlyExpanded = getGroupExpanded(section);
-        setGroupExpanded(section, !isCurrentlyExpanded);
+    // Handle action for the settings (configure, etc)
+    const handleAction = (action: string) => {
+        // Implement configure action
     };
 
-    // Replace this with the new getGroupExpanded function
-    const isSectionExpanded = (section: UserSectionName) => {
-        return getGroupExpanded(section);
-    };
 
     return (
         <Box key={settingsKey} sx={{ mt: 2, px: 2 }}>
-            <MenuSection>
-                <Box>
+
+
+            {/* Show section-specific subitems only when a section is active */}
+            {activeSection === 'user' && (
+                <Box sx={{ mt: 1 }}>
                     <MenuListItem
-                        icon={<PersonOutlineIcon color="primary" fontSize="small" />}
-                        label={<FormattedMessage id="settings.general" />}
-                        isSelected={false}
-                        textColor="primary.main"
-                        onClick={() => toggleSection("General")}
-                        endIcon={isSectionExpanded("General") ? <ExpandLess /> : <ExpandMore />}
-                        sx={{
-                            fontWeight: 700,
-                            fontSize: "0.95rem"
-                        }}
+                        label={<FormattedMessage id="settings.apiKey" />}
+                        isSelected={selectedSubcategory === UserSettingsSubcategories.User}
+                        onClick={() => setSelectedSubcategory(UserSettingsSubcategories.User)}
+                        sx={{ pl: 4, py: 0.5, minHeight: 28, fontSize: 14 }}
                     />
-
-                    <MenuCollapsibleSection isOpen={isSectionExpanded("General")}>
-                        <MenuListItem
-                            label={<FormattedMessage id="settings.user" />}
-                            isSelected={selectedSubcategory === UserSettingsSubcategories.User}
-                            onClick={() => setSelectedSubcategory(UserSettingsSubcategories.User)}
-                            sx={{ pl: 4, py: 0.25, minHeight: 28 }}
-                        />
-                    </MenuCollapsibleSection>
                 </Box>
+            )}
 
-                <Box>
+            {activeSection === 'llmSettings' && (
+                <Box sx={{ mt: 1 }}>
                     <MenuListItem
-                        icon={<SmartToyIcon color="primary" fontSize="small" />}
-                        label={<FormattedMessage id="settings.models" />}
-                        isSelected={false}
-                        textColor="primary.main"
-                        onClick={() => toggleSection("LLM")}
-                        endIcon={isSectionExpanded("LLM") ? <ExpandLess /> : <ExpandMore />}
-                        sx={{
-                            fontWeight: 700,
-                            fontSize: "0.95rem"
-                        }}
+                        label={<FormattedMessage id="settings.llmSettings" />}
+                        isSelected={selectedSubcategory === UserSettingsSubcategories.LLMSettings}
+                        onClick={() => setSelectedSubcategory(UserSettingsSubcategories.LLMSettings)}
+                        sx={{ pl: 4, py: 0.5, minHeight: 28, fontSize: 14 }}
                     />
-
-                    <MenuCollapsibleSection isOpen={isSectionExpanded("LLM")}>
-                        <MenuListItem
-                            label={<FormattedMessage id="settings.llmSettings" />}
-                            isSelected={selectedSubcategory === UserSettingsSubcategories.LLMSettings}
-                            onClick={() => setSelectedSubcategory(UserSettingsSubcategories.LLMSettings)}
-                            sx={{ pl: 4, py: 0.25, minHeight: 28 }}
-                        />
-                        <MenuListItem
-                            label={<FormattedMessage id="settings.llm.apiKeys" />}
-                            isSelected={selectedSubcategory === UserSettingsSubcategories.LLMModels}
-                            onClick={() => setSelectedSubcategory(UserSettingsSubcategories.LLMModels)}
-                            sx={{ pl: 4, py: 0.25, minHeight: 28 }}
-                        />
-                    </MenuCollapsibleSection>
-                </Box>
-
-                <Box>
                     <MenuListItem
-                        icon={<MenuBookIcon color="primary" fontSize="small" />}
-                        label={<FormattedMessage id="settings.knowledgeBase" />}
-                        isSelected={false}
-                        textColor="primary.main"
-                        onClick={() => toggleSection("KnowledgeBase")}
-                        endIcon={isSectionExpanded("KnowledgeBase") ? <ExpandLess /> : <ExpandMore />}
-                        sx={{
-                            fontWeight: 700,
-                            fontSize: "0.95rem"
-                        }}
+                        label={<FormattedMessage id="settings.llm.apiKeys" />}
+                        isSelected={selectedSubcategory === UserSettingsSubcategories.LLMModels}
+                        onClick={() => setSelectedSubcategory(UserSettingsSubcategories.LLMModels)}
+                        sx={{ pl: 4, py: 0.5, minHeight: 28, fontSize: 14 }}
                     />
-
-                    <MenuCollapsibleSection isOpen={isSectionExpanded("KnowledgeBase")}>
-                        <MenuListItem
-                            label={<FormattedMessage id="settings.kbSettings" />}
-                            isSelected={selectedSubcategory === UserSettingsSubcategories.KBSettings}
-                            onClick={() => setSelectedSubcategory(UserSettingsSubcategories.KBSettings)}
-                            sx={{ pl: 4, py: 0.25, minHeight: 28 }}
-                        />
-                        <MenuListItem
-                            label={<FormattedMessage id="settings.kb" />}
-                            isSelected={selectedSubcategory === UserSettingsSubcategories.KB}
-                            onClick={() => setSelectedSubcategory(UserSettingsSubcategories.KB)}
-                            sx={{ pl: 4, py: 0.25, minHeight: 28 }}
-                        />
-                    </MenuCollapsibleSection>
                 </Box>
+            )}
 
-                <Box>
+            {activeSection === 'kb' && (
+                <Box sx={{ mt: 1 }}>
                     <MenuListItem
-                        icon={<BuildIcon color="primary" fontSize="small" />}
-                        label={<FormattedMessage id="settings.tools" />}
-                        isSelected={false}
-                        textColor="primary.main"
-                        onClick={() => toggleSection("MCP")}
-                        endIcon={isSectionExpanded("MCP") ? <ExpandLess /> : <ExpandMore />}
-                        sx={{
-                            fontWeight: 700,
-                            fontSize: "0.95rem"
-                        }}
+                        label={<FormattedMessage id="settings.kbSettings" />}
+                        isSelected={selectedSubcategory === UserSettingsSubcategories.KBSettings}
+                        onClick={() => setSelectedSubcategory(UserSettingsSubcategories.KBSettings)}
+                        sx={{ pl: 4, py: 0.5, minHeight: 28, fontSize: 14 }}
                     />
-
-                    <MenuCollapsibleSection isOpen={isSectionExpanded("MCP")}>
-                        <MenuListItem
-                            label={<FormattedMessage id="settings.mcpConfiguration" />}
-                            isSelected={selectedSubcategory === UserSettingsSubcategories.MCPConfiguration}
-                            onClick={() => setSelectedSubcategory(UserSettingsSubcategories.MCPConfiguration)}
-                            sx={{ pl: 4, py: 0.25, minHeight: 28 }}
-                        />
-                        <MenuListItem
-                            label={<FormattedMessage id="settings.mcp" />}
-                            isSelected={selectedSubcategory === UserSettingsSubcategories.MCP}
-                            onClick={() => setSelectedSubcategory(UserSettingsSubcategories.MCP)}
-                            sx={{ pl: 4, py: 0.25, minHeight: 28 }}
-                        />
-                    </MenuCollapsibleSection>
-                </Box>
-
-                <Box>
                     <MenuListItem
-                        icon={<CodeIcon color="primary" fontSize="small" />}
-                        label={<FormattedMessage id="settings.developer" />}
-                        isSelected={false}
-                        textColor="primary.main"
-                        onClick={() => toggleSection("Developer")}
-                        endIcon={isSectionExpanded("Developer") ? <ExpandLess /> : <ExpandMore />}
-                        sx={{
-                            fontWeight: 700,
-                            fontSize: "0.95rem"
-                        }}
+                        label={<FormattedMessage id="settings.kb" />}
+                        isSelected={selectedSubcategory === UserSettingsSubcategories.KB}
+                        onClick={() => setSelectedSubcategory(UserSettingsSubcategories.KB)}
+                        sx={{ pl: 4, py: 0.5, minHeight: 28, fontSize: 14 }}
                     />
-
-                    <MenuCollapsibleSection isOpen={isSectionExpanded("Developer")}>
-                        <MenuListItem
-                            label={<FormattedMessage id="settings.apiKey" />}
-                            isSelected={selectedSubcategory === UserSettingsSubcategories.DeveloperAPI}
-                            onClick={() => setSelectedSubcategory(UserSettingsSubcategories.DeveloperAPI)}
-                            sx={{ pl: 4, py: 0.25, minHeight: 28 }}
-                        />
-                        <MenuListItem
-                            label={<FormattedMessage id="settings.debugMode" />}
-                            isSelected={selectedSubcategory === UserSettingsSubcategories.DebugMode}
-                            onClick={() => setSelectedSubcategory(UserSettingsSubcategories.DebugMode)}
-                            sx={{ pl: 4, py: 0.25, minHeight: 28 }}
-                        />
-                    </MenuCollapsibleSection>
                 </Box>
+            )}
 
-                <Box>
+            {activeSection === 'tools' && (
+                <Box sx={{ mt: 1 }}>
                     <MenuListItem
-                        icon={<DeleteOutlineIcon color="error" fontSize="small" />}
-                        label={<FormattedMessage id="settings.dangerZone" />}
-                        isSelected={false}
+                        label={<FormattedMessage id="settings.mcpConfiguration" />}
+                        isSelected={selectedSubcategory === UserSettingsSubcategories.MCPConfiguration}
+                        onClick={() => setSelectedSubcategory(UserSettingsSubcategories.MCPConfiguration)}
+                        sx={{ pl: 4, py: 0.5, minHeight: 28, fontSize: 14 }}
+                    />
+                    <MenuListItem
+                        label={<FormattedMessage id="settings.mcp" />}
+                        isSelected={selectedSubcategory === UserSettingsSubcategories.MCP}
+                        onClick={() => setSelectedSubcategory(UserSettingsSubcategories.MCP)}
+                        sx={{ pl: 4, py: 0.5, minHeight: 28, fontSize: 14 }}
+                    />
+                </Box>
+            )}
+
+            {activeSection === 'developer' && (
+                <Box sx={{ mt: 1 }}>
+                    <MenuListItem
+                        label={<FormattedMessage id="settings.apiKey" />}
+                        isSelected={selectedSubcategory === UserSettingsSubcategories.DeveloperAPI}
+                        onClick={() => setSelectedSubcategory(UserSettingsSubcategories.DeveloperAPI)}
+                        sx={{ pl: 4, py: 0.5, minHeight: 28, fontSize: 14 }}
+                    />
+                    <MenuListItem
+                        label={<FormattedMessage id="settings.debugMode" />}
+                        isSelected={selectedSubcategory === UserSettingsSubcategories.DebugMode}
+                        onClick={() => setSelectedSubcategory(UserSettingsSubcategories.DebugMode)}
+                        sx={{ pl: 4, py: 0.5, minHeight: 28, fontSize: 14 }}
+                    />
+                </Box>
+            )}
+
+            {activeSection === 'dangerZone' && (
+                <Box sx={{ mt: 1 }}>
+                    <MenuListItem
+                        label={<FormattedMessage id="settings.deleteAccount" />}
                         textColor="error.main"
-                        onClick={() => toggleSection("DangerZone")}
-                        endIcon={isSectionExpanded("DangerZone") ? <ExpandLess /> : <ExpandMore />}
-                        sx={{
-                            fontWeight: 700,
-                            fontSize: "0.95rem"
-                        }}
+                        isSelected={selectedSubcategory === UserSettingsSubcategories.DeleteAccount}
+                        onClick={() => setSelectedSubcategory(UserSettingsSubcategories.DeleteAccount)}
+                        sx={{ pl: 4, py: 0.5, minHeight: 28, fontSize: 14, color: "error.main" }}
                     />
-
-                    <MenuCollapsibleSection isOpen={isSectionExpanded("DangerZone")}>
-                        <MenuListItem
-                            label={<FormattedMessage id="settings.deleteAccount" />}
-                            textColor="error.main"
-                            isSelected={selectedSubcategory === UserSettingsSubcategories.DeleteAccount}
-                            onClick={() => setSelectedSubcategory(UserSettingsSubcategories.DeleteAccount)}
-                            sx={{ pl: 4, py: 0.25, minHeight: 28 }}
-                        />
-                    </MenuCollapsibleSection>
                 </Box>
-            </MenuSection>
+            )}
         </Box>
     );
 }

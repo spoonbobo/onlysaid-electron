@@ -1,12 +1,12 @@
 import { ipcMain } from 'electron';
 import onlysaidServiceInstance from './service';
-import { IChatRoom, ICreateChatArgs, IGetChatArgs, IUpdateChatArgs } from '@/../../types/Chat/Chatroom';
+import { IWorkspace, ICreateWorkspaceArgs, IGetWorkspaceArgs, IUpdateWorkspaceArgs } from '@/../../types/Workspace/Workspace';
 
-export const setupChatroomHandlers = () => {
-    ipcMain.handle('chat:create', async (event, args: ICreateChatArgs) => {
+export const setupWorkspaceHandlers = () => {
+    ipcMain.handle('workspace:create', async (event, args: ICreateWorkspaceArgs) => {
         try {
-            const response = await onlysaidServiceInstance.post<IChatRoom>(
-                '/chat',
+            const response = await onlysaidServiceInstance.post<IWorkspace>(
+                '/workspace',
                 args.request,
                 {
                     headers: {
@@ -16,7 +16,7 @@ export const setupChatroomHandlers = () => {
             );
             return { data: response.data };
         } catch (error: any) {
-            console.error('Error in main process API call (create_room):', error.message);
+            console.error('Error in main process API call (create_workspace):', error.message);
             return {
                 error: error.message,
                 status: error.response?.status
@@ -24,10 +24,10 @@ export const setupChatroomHandlers = () => {
         }
     });
 
-    ipcMain.handle('chat:get', async (event, args: IGetChatArgs) => {
+    ipcMain.handle('workspace:get', async (event, args: IGetWorkspaceArgs) => {
         try {
-            const response = await onlysaidServiceInstance.get<IChatRoom[]>(
-                `/chat?userId=${args.userId}&type=${args.type}`,
+            const response = await onlysaidServiceInstance.get<IWorkspace[]>(
+                `/workspace?userId=${args.userId}&type=${args.type}`,
                 {
                     headers: {
                         Authorization: `Bearer ${args.token}`
@@ -37,7 +37,7 @@ export const setupChatroomHandlers = () => {
 
             return { data: response.data };
         } catch (error: any) {
-            console.error('Error in main process API call (get_rooms):', error.message);
+            console.error('Error in main process API call (get_workspaces):', error.message);
             return {
                 error: error.message,
                 status: error.response?.status
@@ -45,10 +45,10 @@ export const setupChatroomHandlers = () => {
         }
     });
 
-    ipcMain.handle('chat:update', async (event, args: IUpdateChatArgs) => {
+    ipcMain.handle('workspace:update', async (event, args: IUpdateWorkspaceArgs) => {
         try {
-            const response = await onlysaidServiceInstance.put<IChatRoom>(
-                `/chat`,
+            const response = await onlysaidServiceInstance.put<IWorkspace>(
+                `/workspace`,
                 args.request,
                 {
                     headers: {
@@ -59,7 +59,7 @@ export const setupChatroomHandlers = () => {
 
             return { data: response.data };
         } catch (error: any) {
-            console.error('Error in main process API call (update_room):', error.message);
+            console.error('Error in main process API call (update_workspace):', error.message);
             return {
                 error: error.message,
                 status: error.response?.status
@@ -67,10 +67,10 @@ export const setupChatroomHandlers = () => {
         }
     });
 
-    ipcMain.handle('chat:delete', async (event, args) => {
+    ipcMain.handle('workspace:delete', async (event, args) => {
         try {
             const response = await onlysaidServiceInstance.delete<null>(
-                `/chat?id=${args.id}`,
+                `/workspace?id=${args.id}`,
                 {
                     headers: {
                         Authorization: `Bearer ${args.token}`
@@ -79,7 +79,7 @@ export const setupChatroomHandlers = () => {
             );
             return { data: response.data };
         } catch (error: any) {
-            console.error('Error in main process API call (delete_room):', error.message);
+            console.error('Error in main process API call (delete_workspace):', error.message);
             return {
                 error: error.message,
                 status: error.response?.status

@@ -1,6 +1,6 @@
 import { Box, Typography } from "@mui/material";
 import { useRef, useEffect, useState, useCallback, useMemo, memo } from "react";
-import { IChatMessage } from "@/types/Chat/Message";
+import { IChatMessage } from "@/../../types/Chat/Message";
 import { getUserFromStore } from "@/utils/user";
 import { useChatStore } from "@/stores/Chat/chatStore";
 import ChatBubble from "@/components/Chat/ChatBubble";

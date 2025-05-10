@@ -4,16 +4,17 @@ import { useCurrentTopicContext } from "@/stores/Topic/TopicStore";
 import ChatHeader from "./ChatHeader";
 import ChatUI from "./ChatUI";
 import ChatInput from "./ChatInput";
-import { IChatMessage } from "@/types/Chat/Message";
+import { IChatMessage } from "@/../../types/Chat/Message";
 import { useChatStore } from "@/stores/Chat/chatStore";
 import { getUserFromStore } from "@/utils/user";
-import { IUser } from "@/types/User/User";
-import { IFile } from "@/types/File/File";
+import { IUser } from "@/../../types/User/User";
+import { IFile } from "@/../../types/File/File";
 import { useSelectedModelStore } from "@/stores/LLM/SelectedModelStore";
 import { useStreamStore, OpenAIMessage } from "@/stores/SSE/StreamStore";
 import { DeepSeekUser } from "@/stores/Chat/chatStore";
 import { v4 as uuidv4 } from 'uuid';
 import { Typography } from "@mui/material";
+import { useUserLevelStore } from "@/stores/User/UserLevel";
 
 type SectionName = 'Friends' | 'Agents';
 
@@ -298,6 +299,12 @@ function Chat() {
                                 text: "Error generating response. Please try again."
                             });
                         } finally {
+                            // Calculate XP based on token count (tokens/10 as integer)
+                            const earnedXP = Math.floor(tokenCountRef.current / 10);
+
+                            // Add XP to the user's level
+                            useUserLevelStore.getState().levelUp(earnedXP);
+
                             // Crucial: Signal that streaming has stopped for this messageId
                             setStreamingState(null, null);
                         }

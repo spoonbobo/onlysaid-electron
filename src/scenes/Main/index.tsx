@@ -5,18 +5,6 @@ import { Box, Typography } from "@mui/material";
 import Playground from "@/components/Debug";
 import Calendar from "@/scenes/Main/Calendar";
 
-// Create a wrapper component that shows workspace name
-const WorkspaceWrapper = ({ children, name }: { children: React.ReactNode, name: string }) => (
-    <Box sx={{ height: "100%", display: "flex", flexDirection: "column" }}>
-        <Box sx={{ p: 2, borderBottom: 1, borderColor: "divider" }}>
-            <Typography variant="h6">{name}</Typography>
-        </Box>
-        <Box sx={{ flex: 1, overflow: "auto" }}>
-            {children}
-        </Box>
-    </Box>
-);
-
 function Main() {
     const { selectedContext } = useTopicStore();
 
@@ -34,11 +22,8 @@ function Main() {
                     <Typography variant="h5" gutterBottom>Plans for {workspaceName}</Typography>
                     <Typography>This feature is coming soon</Typography>
                 </Box>;
-            case "workspace:addNewChat":
-                return <Box sx={{ p: 3 }}>
-                    <Typography variant="h5" gutterBottom>New Chat in {workspaceName}</Typography>
-                    <Typography>This feature is coming soon</Typography>
-                </Box>;
+            case "workspace:chat":
+                return <Chat />
             case "workspace:exit":
                 return <Box sx={{ p: 3 }}>
                     <Typography variant="h5" gutterBottom>Exit {workspaceName}</Typography>

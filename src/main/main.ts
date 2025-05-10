@@ -24,7 +24,7 @@ import { setupFileSystemHandlers } from './filesystem';
 import { setupWindowHandlers } from './window';
 import { setupResourceHandlers } from './resource';
 import { setupSSEHandlers } from './streaming';
-import { setupMCPHandlers } from './mcp/mcp';
+import { setupMCPHandlers } from './mcp';
 import { setupContentHandlers } from './filesystem';
 import { setupRedisHandlers } from './redis';
 import { initializeDeeplinkHandling } from './deeplink';
@@ -52,7 +52,6 @@ class AppUpdater {
 let mainWindow: BrowserWindow | null = null;
 
 // Store tab windows
-const tabWindows = new Map<string, BrowserWindow>();
 
 ipcMain.on('ipc-example', async (event, arg) => {
     const msgTemplate = (pingPong: string) => `IPC test: ${pingPong}`;
@@ -174,7 +173,7 @@ const createWindow = async () => {
     };
 
     mainWindow = new BrowserWindow({
-        show: false,
+        show: true,
         width: 1024,
         height: 728,
         icon: getAssetPath('icon.png'),

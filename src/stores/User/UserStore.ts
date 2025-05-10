@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import { IUser } from "@/types/User/User";
+import { IUser } from "@/../../types/User/User";
 import { useUserTokenStore } from "./UserToken";
 import { toast } from "@/utils/toast";
 

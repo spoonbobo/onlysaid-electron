@@ -1,5 +1,5 @@
 import { Box } from "@mui/material";
-import Workspace from "./Workspace";
+import WorkspaceMenu from "./Workspace";
 import UserSettings from "./Settings/UserSettings";
 import { useCurrentTopicContext } from "@/stores/Topic/TopicStore";
 import { useFileExplorerStore } from "@/stores/Layout/FileExplorerResize";
@@ -25,7 +25,7 @@ function Menu() {
     // Render the menu component
     const MenuComponent = React.useMemo(() => {
         switch (selectedContextType) {
-            case "workspace": return Workspace;
+            case "workspace": return WorkspaceMenu;
             case "settings": return UserSettings;
             case "home": return HomeMenu;
             default: return () => <Box p={2}>Select a menu item</Box>;

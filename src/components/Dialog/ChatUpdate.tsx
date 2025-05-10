@@ -8,7 +8,7 @@ import {
     Button,
     Stack
 } from '@mui/material';
-import { IChatRoom } from '@/types/Chat/Chatroom';
+import { IChatRoom } from '@/../../types/Chat/Chatroom';
 import { useChatStore } from '@/stores/Chat/chatStore';
 
 interface ChatUpdateProps {

@@ -36,7 +36,8 @@ type MCPChannels = 'mcp:initialize_client';
 
 type ApiChatChannels = 'chat:get' | 'chat:create' | 'chat:update' | 'chat:delete';
 type ApiUserChannels = 'user:auth' | 'user:get' | 'user:get_one';
-type ApiChannels = ApiChatChannels | ApiUserChannels;
+type ApiWorkspaceChannels = 'workspace:get' | 'workspace:create' | 'workspace:update' | 'workspace:delete';
+type ApiChannels = ApiChatChannels | ApiUserChannels | ApiWorkspaceChannels;
 
 type RedisChannels = 'redis:connect' | 'redis:disconnect' | 'redis:get' | 'redis:set' |
     'redis:del' | 'redis:publish' | 'redis:start-server' | 'redis:stop-server';
@@ -78,6 +79,12 @@ const electronHandler = {
         auth: (...args: unknown[]) => ipcRenderer.invoke('user:auth', ...args),
         get: (...args: unknown[]) => ipcRenderer.invoke('user:get', ...args),
         get_one: (...args: unknown[]) => ipcRenderer.invoke('user:get_one', ...args),
+    },
+    workspace: {
+        get: (...args: unknown[]) => ipcRenderer.invoke('workspace:get', ...args),
+        create: (...args: unknown[]) => ipcRenderer.invoke('workspace:create', ...args),
+        update: (...args: unknown[]) => ipcRenderer.invoke('workspace:update', ...args),
+        delete: (...args: unknown[]) => ipcRenderer.invoke('workspace:delete', ...args),
     },
     chat: {
         get: (...args: unknown[]) => ipcRenderer.invoke('chat:get', ...args),
