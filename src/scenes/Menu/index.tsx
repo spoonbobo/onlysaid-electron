@@ -1,6 +1,6 @@
 import { Box } from "@mui/material";
 import WorkspaceMenu from "./Workspace";
-import UserSettings from "./Settings/UserSettings";
+import UserSettings from "./UserSettings";
 import { useCurrentTopicContext } from "@/stores/Topic/TopicStore";
 import { useFileExplorerStore } from "@/stores/Layout/FileExplorerResize";
 import HomeMenu from "./Home";

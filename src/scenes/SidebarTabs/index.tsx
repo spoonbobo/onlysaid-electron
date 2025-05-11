@@ -110,7 +110,12 @@ function SidebarTabs() {
         section: sectionToUse
       });
     } else if (context.type === "home") {
-      setSelectedContext(context);
+      const lastHomeSection = useTopicStore.getState().lastSections['home'];
+
+      setSelectedContext({
+        ...context,
+        section: lastHomeSection || 'agents'
+      });
 
       // Fetch home chat rooms
       const user = getUserFromStore();

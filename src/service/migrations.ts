@@ -17,9 +17,6 @@ export const coreMigrations = [
     username TEXT NOT NULL UNIQUE,
     email TEXT NOT NULL UNIQUE,
     avatar TEXT,
-    teams TEXT, -- Stored as JSON string
-    active_rooms TEXT, -- Stored as JSON string
-    archived_rooms TEXT, -- Stored as JSON string
     settings TEXT -- Stored as JSON string
   )`,
 

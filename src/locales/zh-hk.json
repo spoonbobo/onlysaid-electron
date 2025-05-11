@@ -65,7 +65,7 @@
   "chat.deleteMessageDescription": "刪除訊息將會從聊天室中移除，並且無法恢復。",
   "chat.deleteMessageConfirm": "確認刪除",
   "chat.deleteMessageCancel": "取消",
-  "chat.deleteForYou": "爲您刪除",
+  "chat.deleteForYou": "爲自己刪除",
   "chat.deleteForEveryone": "爲所有人刪除",
   "chat.deleteMessageConfirmation": "確認刪除以下訊息？",
   "chat.noChatSelected": "沒有選取聊天室",
