@@ -6,25 +6,25 @@ import os from 'os';
 // namespace
 type AuthChannels = 'auth:sign-in' | 'auth:signed-in';
 type WindowChannels =
-    | 'window:create-tab'
-    | 'window:close-tab'
-    | 'window:focus-tab'
-    | 'window:rename-tab'
-    | 'window:sync-state'
-    | 'window:tab-created'
-    | 'window:create-window'
-    | 'window:close-window'
-    | 'window:focus-window'
-    | 'window:detach-tab'
-    | 'window:move-tab'
-    | 'window:init'
-    | 'window:tab-moved'
-    | 'window:tab-detached'
-    | 'window:tab-focused'
-    | 'window:tab-closed'
-    | 'window:bounds-changed'
-    | 'window:state-changed'
-    | 'window:get-active-tab';
+  | 'window:create-tab'
+  | 'window:close-tab'
+  | 'window:focus-tab'
+  | 'window:rename-tab'
+  | 'window:sync-state'
+  | 'window:tab-created'
+  | 'window:create-window'
+  | 'window:close-window'
+  | 'window:focus-window'
+  | 'window:detach-tab'
+  | 'window:move-tab'
+  | 'window:init'
+  | 'window:tab-moved'
+  | 'window:tab-detached'
+  | 'window:tab-focused'
+  | 'window:tab-closed'
+  | 'window:bounds-changed'
+  | 'window:state-changed'
+  | 'window:get-active-tab';
 type MenuChannels = 'menu:close-tab' | 'menu:new-tab';
 type MiscChannels = 'ipc-example';
 type DbChannels = 'db:initialize' | 'db:query' | 'db:transaction' | 'db:close';
@@ -37,120 +37,120 @@ type MCPChannels = 'mcp:initialize_client';
 type ApiChatChannels = 'chat:get' | 'chat:create' | 'chat:update' | 'chat:delete';
 type ApiUserChannels = 'user:auth' | 'user:get' | 'user:get_one';
 type ApiWorkspaceChannels =
-    | 'workspace:get'
-    | 'workspace:create'
-    | 'workspace:update'
-    | 'workspace:delete'
-    | 'workspace:add_users'
-    | 'workspace:remove_users'
-    | 'workspace:get_users';
+  | 'workspace:get'
+  | 'workspace:create'
+  | 'workspace:update'
+  | 'workspace:delete'
+  | 'workspace:add_users'
+  | 'workspace:remove_user'
+  | 'workspace:get_users';
 type ApiChannels = ApiChatChannels | ApiUserChannels | ApiWorkspaceChannels;
 
 type RedisChannels = 'redis:connect' | 'redis:disconnect' | 'redis:get' | 'redis:set' |
-    'redis:del' | 'redis:publish' | 'redis:start-server' | 'redis:stop-server';
+  'redis:del' | 'redis:publish' | 'redis:start-server' | 'redis:stop-server';
 
 export type Channels =
-    | AuthChannels
-    | DbChannels
-    | ApiChannels
-    | WindowChannels
-    | MenuChannels
-    | MiscChannels
-    | SystemChannels
-    | SSEChannels
-    | MCPChannels
-    | FileSystemChannels
-    | RedisChannels;
+  | AuthChannels
+  | DbChannels
+  | ApiChannels
+  | WindowChannels
+  | MenuChannels
+  | MiscChannels
+  | SystemChannels
+  | SSEChannels
+  | MCPChannels
+  | FileSystemChannels
+  | RedisChannels;
 
 const electronHandler = {
-    ipcRenderer: {
-        sendMessage: (channel: Channels, args: unknown[]) => ipcRenderer.send(channel, args),
-        on: (channel: Channels, func: (event: IpcRendererEvent, ...args: unknown[]) => void) => {
-            const subscription = (event: IpcRendererEvent, ...args: unknown[]) => func(event, ...args);
-            ipcRenderer.on(channel, subscription);
-            return () => ipcRenderer.removeListener(channel, subscription);
-        },
-        once: (channel: Channels, func: (event: IpcRendererEvent, ...args: unknown[]) => void) => ipcRenderer.once(channel, (event, ...args) => func(event, ...args)),
-        invoke: (channel: Channels, ...args: unknown[]) => ipcRenderer.invoke(channel, ...args),
+  ipcRenderer: {
+    sendMessage: (channel: Channels, args: unknown[]) => ipcRenderer.send(channel, args),
+    on: (channel: Channels, func: (event: IpcRendererEvent, ...args: unknown[]) => void) => {
+      const subscription = (event: IpcRendererEvent, ...args: unknown[]) => func(event, ...args);
+      ipcRenderer.on(channel, subscription);
+      return () => ipcRenderer.removeListener(channel, subscription);
     },
-    auth: {
-        signIn: (...args: unknown[]) => ipcRenderer.invoke('auth:sign-in', ...args),
-    },
-    db: {
-        initialize: (...args: unknown[]) => ipcRenderer.invoke('db:initialize', ...args),
-        query: (...args: unknown[]) => ipcRenderer.invoke('db:query', ...args),
-        transaction: (...args: unknown[]) => ipcRenderer.invoke('db:transaction', ...args),
-        close: (...args: unknown[]) => ipcRenderer.invoke('db:close', ...args),
-    },
-    user: {
-        auth: (...args: unknown[]) => ipcRenderer.invoke('user:auth', ...args),
-        get: (...args: unknown[]) => ipcRenderer.invoke('user:get', ...args),
-        get_one: (...args: unknown[]) => ipcRenderer.invoke('user:get_one', ...args),
-    },
-    workspace: {
-        get: (...args: unknown[]) => ipcRenderer.invoke('workspace:get', ...args),
-        create: (...args: unknown[]) => ipcRenderer.invoke('workspace:create', ...args),
-        update: (...args: unknown[]) => ipcRenderer.invoke('workspace:update', ...args),
-        delete: (...args: unknown[]) => ipcRenderer.invoke('workspace:delete', ...args),
-        add_users: (...args: unknown[]) => ipcRenderer.invoke('workspace:add_users', ...args),
-        remove_users: (...args: unknown[]) => ipcRenderer.invoke('workspace:remove_users', ...args),
-        get_users: (...args: unknown[]) => ipcRenderer.invoke('workspace:get_users', ...args),
-    },
-    chat: {
-        get: (...args: unknown[]) => ipcRenderer.invoke('chat:get', ...args),
-        create: (...args: unknown[]) => ipcRenderer.invoke('chat:create', ...args),
-        update: (...args: unknown[]) => ipcRenderer.invoke('chat:update', ...args),
-        delete: (...args: unknown[]) => ipcRenderer.invoke('chat:delete', ...args),
-    },
-    streaming: {
-        chat_stream_complete: (...args: unknown[]) => ipcRenderer.invoke('streaming:chat_stream_complete', ...args),
-        chunk: (...args: unknown[]) => ipcRenderer.invoke('streaming:chunk', ...args),
-        abort_stream: (...args: unknown[]) => ipcRenderer.invoke('streaming:abort_stream', ...args),
-    },
-    window: {
-        // Tab operations
-        createTab: (...args: unknown[]) => ipcRenderer.invoke('window:create-tab', ...args),
-        closeTab: (...args: unknown[]) => ipcRenderer.invoke('window:close-tab', ...args),
-        focusTab: (...args: unknown[]) => ipcRenderer.invoke('window:focus-tab', ...args),
-        renameTab: (...args: unknown[]) => ipcRenderer.invoke('window:rename-tab', ...args),
+    once: (channel: Channels, func: (event: IpcRendererEvent, ...args: unknown[]) => void) => ipcRenderer.once(channel, (event, ...args) => func(event, ...args)),
+    invoke: (channel: Channels, ...args: unknown[]) => ipcRenderer.invoke(channel, ...args),
+  },
+  auth: {
+    signIn: (...args: unknown[]) => ipcRenderer.invoke('auth:sign-in', ...args),
+  },
+  db: {
+    initialize: (...args: unknown[]) => ipcRenderer.invoke('db:initialize', ...args),
+    query: (...args: unknown[]) => ipcRenderer.invoke('db:query', ...args),
+    transaction: (...args: unknown[]) => ipcRenderer.invoke('db:transaction', ...args),
+    close: (...args: unknown[]) => ipcRenderer.invoke('db:close', ...args),
+  },
+  user: {
+    auth: (...args: unknown[]) => ipcRenderer.invoke('user:auth', ...args),
+    get: (...args: unknown[]) => ipcRenderer.invoke('user:get', ...args),
+    get_one: (...args: unknown[]) => ipcRenderer.invoke('user:get_one', ...args),
+  },
+  workspace: {
+    get: (...args: unknown[]) => ipcRenderer.invoke('workspace:get', ...args),
+    create: (...args: unknown[]) => ipcRenderer.invoke('workspace:create', ...args),
+    update: (...args: unknown[]) => ipcRenderer.invoke('workspace:update', ...args),
+    delete: (...args: unknown[]) => ipcRenderer.invoke('workspace:delete', ...args),
+    add_users: (...args: unknown[]) => ipcRenderer.invoke('workspace:add_users', ...args),
+    get_users: (...args: unknown[]) => ipcRenderer.invoke('workspace:get_users', ...args),
+    remove_user: (...args: unknown[]) => ipcRenderer.invoke('workspace:remove_user', ...args),
+  },
+  chat: {
+    get: (...args: unknown[]) => ipcRenderer.invoke('chat:get', ...args),
+    create: (...args: unknown[]) => ipcRenderer.invoke('chat:create', ...args),
+    update: (...args: unknown[]) => ipcRenderer.invoke('chat:update', ...args),
+    delete: (...args: unknown[]) => ipcRenderer.invoke('chat:delete', ...args),
+  },
+  streaming: {
+    chat_stream_complete: (...args: unknown[]) => ipcRenderer.invoke('streaming:chat_stream_complete', ...args),
+    chunk: (...args: unknown[]) => ipcRenderer.invoke('streaming:chunk', ...args),
+    abort_stream: (...args: unknown[]) => ipcRenderer.invoke('streaming:abort_stream', ...args),
+  },
+  window: {
+    // Tab operations
+    createTab: (...args: unknown[]) => ipcRenderer.invoke('window:create-tab', ...args),
+    closeTab: (...args: unknown[]) => ipcRenderer.invoke('window:close-tab', ...args),
+    focusTab: (...args: unknown[]) => ipcRenderer.invoke('window:focus-tab', ...args),
+    renameTab: (...args: unknown[]) => ipcRenderer.invoke('window:rename-tab', ...args),
 
-        // Window operations
-        createWindow: (...args: unknown[]) => ipcRenderer.invoke('window:create-window', ...args),
-        closeWindow: (...args: unknown[]) => ipcRenderer.invoke('window:close-window', ...args),
-        focusWindow: (...args: unknown[]) => ipcRenderer.invoke('window:focus-window', ...args),
+    // Window operations
+    createWindow: (...args: unknown[]) => ipcRenderer.invoke('window:create-window', ...args),
+    closeWindow: (...args: unknown[]) => ipcRenderer.invoke('window:close-window', ...args),
+    focusWindow: (...args: unknown[]) => ipcRenderer.invoke('window:focus-window', ...args),
 
-        // Multi-window tab operations
-        detachTab: (...args: unknown[]) => ipcRenderer.invoke('window:detach-tab', ...args),
-        moveTab: (...args: unknown[]) => ipcRenderer.invoke('window:move-tab', ...args),
+    // Multi-window tab operations
+    detachTab: (...args: unknown[]) => ipcRenderer.invoke('window:detach-tab', ...args),
+    moveTab: (...args: unknown[]) => ipcRenderer.invoke('window:move-tab', ...args),
 
-        // State sync
-        syncState: (...args: unknown[]) => ipcRenderer.send('window:sync-state', ...args),
-        getActiveTab: (...args: unknown[]) => ipcRenderer.invoke('window:get-active-tab', ...args),
-    },
-    menu: {
-        newTab: (...args: unknown[]) => ipcRenderer.invoke('menu:new-tab', ...args),
-        closeTab: (...args: unknown[]) => ipcRenderer.invoke('menu:close-tab', ...args),
-    },
-    api: {
-        getUrl: () => ipcRenderer.invoke('api:get-url'),
-    },
-    mcp: {
-        initialize_client: (...args: unknown[]) => ipcRenderer.invoke('mcp:initialize_client', ...args),
-    },
-    fileSystem: {
-        openFolderDialog: () => ipcRenderer.invoke('folder:open-dialog'),
-        getFolderContents: (folderPath: string) => ipcRenderer.invoke('folder:get-contents', folderPath),
-        uploadFile: (...args: unknown[]) => ipcRenderer.invoke('upload-file', ...args),
-        getFileContent: (...args: unknown[]) => ipcRenderer.invoke('get-file-content', ...args),
-    },
-    homedir: () => os.homedir(),
-    session: {
-        setCookie: (cookieDetails: { url: string; name: string; value: string; httpOnly: boolean; secure: boolean; }) => ipcRenderer.invoke('session:set-cookie', cookieDetails),
-    },
-    redis: {
-        startServer: (...args: unknown[]) => ipcRenderer.invoke('redis:start-server', ...args),
-        stopServer: (...args: unknown[]) => ipcRenderer.invoke('redis:stop-server', ...args),
-    },
+    // State sync
+    syncState: (...args: unknown[]) => ipcRenderer.send('window:sync-state', ...args),
+    getActiveTab: (...args: unknown[]) => ipcRenderer.invoke('window:get-active-tab', ...args),
+  },
+  menu: {
+    newTab: (...args: unknown[]) => ipcRenderer.invoke('menu:new-tab', ...args),
+    closeTab: (...args: unknown[]) => ipcRenderer.invoke('menu:close-tab', ...args),
+  },
+  api: {
+    getUrl: () => ipcRenderer.invoke('api:get-url'),
+  },
+  mcp: {
+    initialize_client: (...args: unknown[]) => ipcRenderer.invoke('mcp:initialize_client', ...args),
+  },
+  fileSystem: {
+    openFolderDialog: () => ipcRenderer.invoke('folder:open-dialog'),
+    getFolderContents: (folderPath: string) => ipcRenderer.invoke('folder:get-contents', folderPath),
+    uploadFile: (...args: unknown[]) => ipcRenderer.invoke('upload-file', ...args),
+    getFileContent: (...args: unknown[]) => ipcRenderer.invoke('get-file-content', ...args),
+  },
+  homedir: () => os.homedir(),
+  session: {
+    setCookie: (cookieDetails: { url: string; name: string; value: string; httpOnly: boolean; secure: boolean; }) => ipcRenderer.invoke('session:set-cookie', cookieDetails),
+  },
+  redis: {
+    startServer: (...args: unknown[]) => ipcRenderer.invoke('redis:start-server', ...args),
+    stopServer: (...args: unknown[]) => ipcRenderer.invoke('redis:stop-server', ...args),
+  },
 };
 
 contextBridge.exposeInMainWorld('electron', electronHandler);

@@ -8,8 +8,8 @@
 
 // Core application tables
 export const coreMigrations = [
-    // Users table - stores basic user information
-    `CREATE TABLE IF NOT EXISTS users (
+  // Users table - stores basic user information
+  `CREATE TABLE IF NOT EXISTS users (
     id TEXT PRIMARY KEY,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -23,8 +23,8 @@ export const coreMigrations = [
     settings TEXT -- Stored as JSON string
   )`,
 
-    // Settings table - stores application settings
-    `CREATE TABLE IF NOT EXISTS settings (
+  // Settings table - stores application settings
+  `CREATE TABLE IF NOT EXISTS settings (
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL
   )`
@@ -32,8 +32,8 @@ export const coreMigrations = [
 
 // Feature-specific tables
 export const featureMigrations = [
-    // Teams table
-    `CREATE TABLE IF NOT EXISTS teams (
+  // Teams table
+  `CREATE TABLE IF NOT EXISTS teams (
     id TEXT PRIMARY KEY,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -45,8 +45,8 @@ export const featureMigrations = [
     settings TEXT -- Stored as JSON string
   )`,
 
-    // Chat rooms table
-    `CREATE TABLE IF NOT EXISTS chat (
+  // Chat rooms table
+  `CREATE TABLE IF NOT EXISTS chat (
     id TEXT PRIMARY KEY,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -57,8 +57,8 @@ export const featureMigrations = [
     user_id TEXT
   )`,
 
-    // Messages table
-    `CREATE TABLE IF NOT EXISTS messages (
+  // Messages table
+  `CREATE TABLE IF NOT EXISTS messages (
     id TEXT PRIMARY KEY,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     chat_id TEXT,
@@ -73,8 +73,8 @@ export const featureMigrations = [
     text TEXT
   )`,
 
-    // reactions table
-    `CREATE TABLE IF NOT EXISTS reactions (
+  // reactions table
+  `CREATE TABLE IF NOT EXISTS reactions (
     id TEXT PRIMARY KEY,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     reaction TEXT NOT NULL,
@@ -83,8 +83,8 @@ export const featureMigrations = [
     FOREIGN KEY (message_id) REFERENCES messages(id)
   )`,
 
-    // Files table
-    `CREATE TABLE IF NOT EXISTS files (
+  // Files table
+  `CREATE TABLE IF NOT EXISTS files (
     id TEXT PRIMARY KEY,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     file_url TEXT NOT NULL,
@@ -93,8 +93,8 @@ export const featureMigrations = [
   )`,
 
 
-    // Notifications table
-    `CREATE TABLE IF NOT EXISTS notifications (
+  // Notifications table
+  `CREATE TABLE IF NOT EXISTS notifications (
     id TEXT PRIMARY KEY,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     message TEXT NOT NULL,
@@ -102,8 +102,8 @@ export const featureMigrations = [
     receivers TEXT -- Stored as JSON string
   )`,
 
-    // Plan table
-    `CREATE TABLE IF NOT EXISTS plans (
+  // Plan table
+  `CREATE TABLE IF NOT EXISTS plans (
     id TEXT PRIMARY KEY,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -120,8 +120,8 @@ export const featureMigrations = [
     context TEXT -- Stored as JSON string
   )`,
 
-    // Task table
-    `CREATE TABLE IF NOT EXISTS tasks (
+  // Task table
+  `CREATE TABLE IF NOT EXISTS tasks (
     id TEXT PRIMARY KEY,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     start_time TIMESTAMP,
@@ -139,8 +139,8 @@ export const featureMigrations = [
     FOREIGN KEY (plan_id) REFERENCES plans(id)
   )`,
 
-    // Plan log table
-    `CREATE TABLE IF NOT EXISTS logs (
+  // Plan log table
+  `CREATE TABLE IF NOT EXISTS logs (
     id TEXT PRIMARY KEY,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     type TEXT,
@@ -150,8 +150,8 @@ export const featureMigrations = [
     content TEXT
   )`,
 
-    // Skill table
-    `CREATE TABLE IF NOT EXISTS skills (
+  // Skill table
+  `CREATE TABLE IF NOT EXISTS skills (
     id TEXT PRIMARY KEY,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -162,8 +162,8 @@ export const featureMigrations = [
     args TEXT -- Stored as JSON string
   )`,
 
-    // Documents table
-    `CREATE TABLE IF NOT EXISTS documents (
+  // Documents table
+  `CREATE TABLE IF NOT EXISTS documents (
     id TEXT PRIMARY KEY,
     content TEXT,
     content_path TEXT,
@@ -200,14 +200,14 @@ export const featureMigrations = [
     FOREIGN KEY (parent_id) REFERENCES documents(id)
   )`,
 
-    // Document indexes
-    `CREATE INDEX IF NOT EXISTS idx_documents_parent_id ON documents(parent_id)`,
-    `CREATE INDEX IF NOT EXISTS idx_documents_document_type ON documents(document_type)`,
-    `CREATE INDEX IF NOT EXISTS idx_documents_language ON documents(language)`,
-    `CREATE INDEX IF NOT EXISTS idx_documents_ingested_at ON documents(ingested_at)`,
+  // Document indexes
+  `CREATE INDEX IF NOT EXISTS idx_documents_parent_id ON documents(parent_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_documents_document_type ON documents(document_type)`,
+  `CREATE INDEX IF NOT EXISTS idx_documents_language ON documents(language)`,
+  `CREATE INDEX IF NOT EXISTS idx_documents_ingested_at ON documents(ingested_at)`,
 
-    // Document view
-    `CREATE VIEW IF NOT EXISTS document_view AS
+  // Document view
+  `CREATE VIEW IF NOT EXISTS document_view AS
    SELECT
       id,
       title,
@@ -226,6 +226,6 @@ export const featureMigrations = [
 
 // Combined migrations array for all schema updates
 export const allMigrations = [
-    ...coreMigrations,
-    ...featureMigrations
+  ...coreMigrations,
+  ...featureMigrations
 ];

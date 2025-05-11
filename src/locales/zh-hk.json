@@ -7,6 +7,8 @@
   "common.resetToDefaults": "重置為預設值",
   "common.exiting": "退出中...",
   "common.exit": "退出",
+  "common.join": "加入",
+
 
   "home.friends": "朋友",
   "home.allFriends": "所有朋友",
@@ -27,6 +29,11 @@
   "toast.loggedOut": "您已登出",
   "toast.signingIn": "登入中...",
   "toast.authTimeout": "驗證超時。請重試。",
+
+
+  "file.emptyFolder": "這個資料夾是空的",
+
+
   "language.english": "英文",
   "language.spanish": "西班牙文",
   "language.french": "法文",
@@ -61,6 +68,7 @@
   "chat.deleteForYou": "爲您刪除",
   "chat.deleteForEveryone": "爲所有人刪除",
   "chat.deleteMessageConfirmation": "確認刪除以下訊息？",
+  "chat.noChatSelected": "沒有選取聊天室",
 
   "workspace.create": "創建工作空間",
   "workspace.create.description": "創建一個工作空間，讓您可以與其他人共享工作空間。",
@@ -69,7 +77,13 @@
   "workspace.exit.title": "退出工作空間",
   "workspace.exit.confirmation": "確定要退出工作空間「{name}」嗎？退出後您將無法再訪問此工作空間。",
   "workspace.exit.warning": "如有需要，您可以稍後使用邀請碼重新加入此工作空間。",
-
+  "workspace.join.title": "加入工作空間",
+  "workspace.create.inviteCode": "邀請碼",
+  "workspace.create.inviteCodeHelp": "讓其他人加入此工作空間的6位字符代碼",
+  "workspace.join.inviteCode": "工作空間邀請碼",
+  "workspace.join.inviteCodeHelp": "輸入工作空間管理員提供的6位字符邀請碼",
+  "workspace.join.description": "通過輸入工作空間管理員提供的邀請碼來加入現有工作空間。",
+  "workspace.title": "工作空間",
   "menu.chatroom": "聊天室",
   "menu.plan": "計劃",
   "menu.plans": "計劃",
@@ -110,7 +124,6 @@
   "menu.workspace.knowledgeBase": "知識庫",
   "menu.workspace.mcp": "MCP 伺服器",
   "menu.workspace.chatroom": "聊天室",
-  "file.emptyFolder": "這個資料夾是空的",
   "menu.workspace.newChatroom": "新增聊天室",
 
   "settings.general": "一般",
