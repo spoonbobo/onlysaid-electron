@@ -22,6 +22,17 @@ export const DeepSeekUser: IUser = {
   },
 }
 
+const DBTABLES = {
+  CHATROOM: 'chat',
+  PLANS: 'plans',
+  TASKS: 'tasks',
+  LOGS: 'logs',
+  SKILLS: 'skills',
+  USERS: 'users',
+  WORKSPACES: 'workspaces',
+  WORKSPACE_USERS: 'workspace_users',
+}
+
 const defaultSenderId = "a0382833-7932-4d23-8094-75681edb7160"
 
 interface ChatState {
@@ -34,12 +45,13 @@ interface ChatState {
   isLoading: boolean;
   error: string | null;
   isTyping: boolean;
+  chatOverlayMinimized: boolean;
 
   // Chat operations
-  createChat: (userId: string, type: string, contextId?: string) => Promise<IChatRoom | null>;
-  deleteChat: (chatId: string) => Promise<void>;
-  getChat: (userId: string, type: string, workspaceId?: string) => Promise<void>;
-  updateChat: (chatId: string, data: Partial<IChatRoom>) => Promise<void>;
+  createChat: (userId: string, type: string, contextId?: string, local?: boolean) => Promise<IChatRoom | null>;
+  deleteChat: (chatId: string, local?: boolean) => Promise<void>;
+  getChat: (userId: string, type: string, workspaceId?: string, local?: boolean) => Promise<void>;
+  updateChat: (chatId: string, data: Partial<IChatRoom>, local?: boolean) => Promise<void>;
   setActiveChat: (chatId: string, contextId?: string) => void;
   markAsRead: (chatId: string) => void;
   getActiveChatIdForContext: (contextId: string) => string | null;
@@ -58,10 +70,12 @@ interface ChatState {
   // Input/UI operations
   setInput: (chatId: string, input: string, contextId?: string) => void;
   getInput: (chatId: string, contextId?: string) => string;
-  setTyping: (typing: boolean) => void;
 
   // Reaction operations
   toggleReaction: (chatId: string, messageId: string, reaction: string) => Promise<void>;
+
+  // UI operations for chat overlay
+  setChatOverlayMinimized: (minimized: boolean) => void;
 }
 
 const NewChat = (userId: string, type: string, workspaceId?: string) => {
@@ -87,6 +101,7 @@ export const useChatStore = create<ChatState>()(
       isLoading: false,
       error: null,
       isTyping: false,
+      chatOverlayMinimized: false,
 
       getActiveChatIdForContext: (contextId) => {
         return get().activeChatByContext[contextId] || null;
@@ -122,23 +137,64 @@ export const useChatStore = create<ChatState>()(
         }
       },
 
-      createChat: async (userId: string, type: string, contextId?: string) => {
+      createChat: async (
+        userId: string,
+        type: string,
+        contextId?: string,
+        local?: boolean
+      ) => {
         set({ isLoading: true, error: null });
         try {
           const newChat = NewChat(userId, type, contextId);
-          // @ts-ignore
-          const response = await window.electron.chat.create({
-            token: getUserTokenFromStore(),
-            request: newChat
-          });
+          const chatId = uuidv4();
 
-          await get().getChat(userId, type);
-          if (response.data?.data?.[0]?.id) {
-            get().setActiveChat(response.data.data[0].id, contextId);
+          if (local) {
+            // Use direct DB query for local operation
+            await window.electron.db.query({
+              query: `
+                insert into ${DBTABLES.CHATROOM}
+                (id, name, created_at, last_updated, unread, workspace_id, type, user_id)
+                values
+                (@id, @name, @createdAt, @lastUpdated, @unread, @workspaceId, @type, @userId)
+              `,
+              params: {
+                id: chatId,
+                name: newChat.name,
+                createdAt: newChat.created_at,
+                lastUpdated: newChat.last_updated,
+                unread: newChat.unread,
+                workspaceId: newChat.workspace_id || null,
+                type: newChat.type,
+                userId: newChat.user_id
+              }
+            });
+
+            const localChat = {
+              ...newChat,
+              id: chatId
+            };
+
+            set(state => ({
+              chats: [...state.chats, localChat],
+              isLoading: false
+            }));
+
+            get().setActiveChat(chatId, contextId);
+            return localChat;
+          } else {
+            // Use API for remote operation
+            const response = await window.electron.chat.create({
+              token: getUserTokenFromStore(),
+              request: newChat
+            });
+
+            await get().getChat(userId, type, contextId);
+            if (response.data?.data?.[0]?.id) {
+              get().setActiveChat(response.data.data[0].id, contextId);
+            }
+
+            return response.data?.data?.[0];
           }
-
-          // Return the new chat data
-          return response.data?.data?.[0];
         } catch (error: any) {
           set({ error: error.message, isLoading: false });
           console.error(error);
@@ -146,41 +202,40 @@ export const useChatStore = create<ChatState>()(
         }
       },
 
-      deleteChat: async (chatId: string) => {
-        console.log("deleteChat", chatId);
+      deleteChat: async (chatId: string, local?: boolean) => {
         set({ isLoading: true, error: null });
         try {
-          // @ts-ignore
-          const resp = await window.electron.chat.delete({
-            token: getUserTokenFromStore(),
-            id: chatId
-          });
+          if (local) {
+            console.log('Deleting chat locally');
+            // Use direct DB query for local operation
+            await window.electron.db.query({
+              query: `
+                delete from ${DBTABLES.CHATROOM}
+                where id = @id
+              `,
+              params: { id: chatId }
+            });
 
-          // Clean up chat references after successful deletion
-          get().cleanupChatReferences(chatId);
-          set({ isLoading: false });
-        } catch (error: any) {
-          set({ error: error.message, isLoading: false });
-          console.error(error);
-        }
-      },
+            // Also delete associated messages
+            await window.electron.db.query({
+              query: `
+                delete from messages
+                where chat_id = @chatId
+              `,
+              params: { chatId }
+            });
 
-      getChat: async (userId: string, type: string, workspaceId?: string) => {
-        set({ isLoading: true, error: null });
-        try {
-          // @ts-ignore
-          const response = await window.electron.chat.get({
-            token: getUserTokenFromStore(),
-            userId: userId,
-            type: type,
-            workspaceId: workspaceId
-          });
-
-          if (response.data && response.data.data && Array.isArray(response.data.data)) {
-            set({ chats: [...response.data.data], isLoading: false });
+            get().cleanupChatReferences(chatId);
           } else {
-            set({ isLoading: false });
+            // Use API for remote operation
+            await window.electron.chat.delete({
+              token: getUserTokenFromStore(),
+              id: chatId
+            });
+
+            get().cleanupChatReferences(chatId);
           }
+
           set({ isLoading: false });
         } catch (error: any) {
           set({ error: error.message, isLoading: false });
@@ -188,9 +243,59 @@ export const useChatStore = create<ChatState>()(
         }
       },
 
-      updateChat: async (chatId, data) => {
+      getChat: async (userId: string, type: string, workspaceId?: string, local?: boolean) => {
         set({ isLoading: true, error: null });
         try {
+          if (local) {
+            // Use direct DB query for local operation
+            let query = `
+              select * from ${DBTABLES.CHATROOM}
+              where type = @type
+              and user_id = @userId
+            `;
+
+            const params: any = { type, userId };
+
+            if (workspaceId && workspaceId !== 'undefined') {
+              query += ` and workspace_id = @workspaceId`;
+              params.workspaceId = workspaceId;
+            }
+
+            const chats = await window.electron.db.query({
+              query,
+              params
+            });
+
+            if (Array.isArray(chats)) {
+              set({ chats, isLoading: false });
+            } else {
+              set({ isLoading: false });
+            }
+          } else {
+            // Use API for remote operation
+            const response = await window.electron.chat.get({
+              token: getUserTokenFromStore(),
+              userId,
+              type,
+              workspaceId
+            });
+
+            if (response.data && response.data.data && Array.isArray(response.data.data)) {
+              set({ chats: [...response.data.data], isLoading: false });
+            } else {
+              set({ isLoading: false });
+            }
+          }
+        } catch (error: any) {
+          set({ error: error.message, isLoading: false });
+          console.error(error);
+        }
+      },
+
+      updateChat: async (chatId, data, local?: boolean) => {
+        set({ isLoading: true, error: null });
+        try {
+          // Update in local state first for UI responsiveness
           set((state) => ({
             chats: state.chats.map(chat =>
               chat.id === chatId
@@ -199,19 +304,51 @@ export const useChatStore = create<ChatState>()(
             )
           }));
 
-          const existingChat = get().chats.find(chat => chat.id === chatId);
+          if (local) {
+            // Prepare fields for update
+            const updateFields = Object.entries(data)
+              .filter(([key]) => key !== 'id') // Skip ID
+              .map(([key, _]) => {
+                // Convert camelCase keys to snake_case for SQL
+                const snakeKey = key.replace(/([A-Z])/g, '_$1').toLowerCase();
+                return `${snakeKey} = @${key}`;
+              })
+              .join(', ');
 
-          const updateChatArgs: IUpdateChatArgs = {
-            token: getUserTokenFromStore() || "",
-            request: {
-              ...existingChat,
-              ...data,
-              id: chatId,
-              last_updated: new Date().toISOString()
-            } as IChatRoom
+            if (updateFields) {
+              // Add last_updated to params
+              const params = {
+                ...data,
+                id: chatId,
+                lastUpdated: new Date().toISOString()
+              };
+
+              await window.electron.db.query({
+                query: `
+                  update ${DBTABLES.CHATROOM}
+                  set ${updateFields}, last_updated = @lastUpdated
+                  where id = @id
+                `,
+                params
+              });
+            }
+          } else {
+            // Use existing API flow
+            const existingChat = get().chats.find(chat => chat.id === chatId);
+
+            const updateChatArgs = {
+              token: getUserTokenFromStore() || "",
+              request: {
+                ...existingChat,
+                ...data,
+                id: chatId,
+                last_updated: new Date().toISOString()
+              }
+            };
+
+            await window.electron.chat.update(updateChatArgs);
           }
 
-          const response = await window.electron.chat.update(updateChatArgs);
           set({ isLoading: false });
         } catch (error: any) {
           set({ error: error.message, isLoading: false });
@@ -450,7 +587,7 @@ export const useChatStore = create<ChatState>()(
       },
 
       markAsRead: (chatId) => {
-        console.log("Dummy markAsRead function called with:", chatId);
+        // TODO: Implement markAsRead
       },
 
       deleteMessage: async (chatId, messageId) => {
@@ -495,8 +632,7 @@ export const useChatStore = create<ChatState>()(
       },
 
       editMessage: async (chatId, messageId, content) => {
-        console.log("Dummy editMessage function called with:", chatId, messageId, content);
-        return;
+        // TODO: Implement editMessage
       },
 
       cleanupContextReferences: (contextId) => {
@@ -520,7 +656,6 @@ export const useChatStore = create<ChatState>()(
         });
       },
 
-      setTyping: (typing) => set({ isTyping: typing }),
 
       appendMessage: (chatId, message) => {
         set(state => {
@@ -559,7 +694,6 @@ export const useChatStore = create<ChatState>()(
 
       // Add this implementation inside the store
       toggleReaction: async (chatId, messageId, reaction) => {
-        console.log("toggleReaction", chatId, messageId, reaction);
         try {
           const currentUser = getUserFromStore();
           if (!currentUser || !currentUser.id) return;
@@ -703,6 +837,9 @@ export const useChatStore = create<ChatState>()(
           };
         });
       },
+
+      // Add the new setter function
+      setChatOverlayMinimized: (minimized) => set({ chatOverlayMinimized: minimized }),
     }),
     {
       name: "chat-storage",

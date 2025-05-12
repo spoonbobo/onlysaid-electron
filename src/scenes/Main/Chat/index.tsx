@@ -14,7 +14,7 @@ import { useCurrentTopicContext } from "@/stores/Topic/TopicStore";
 import { useSelectedModelStore } from "@/stores/LLM/SelectedModelStore";
 import { useStreamStore, OpenAIMessage } from "@/stores/SSE/StreamStore";
 import { DeepSeekUser } from "@/stores/Chat/ChatStore";
-import { useUserLevelStore } from "@/stores/User/UserLevel";
+import { useUserStore } from "@/stores/User/UserStore";
 
 type SectionName = 'Friends' | 'Agents';
 
@@ -250,7 +250,7 @@ function Chat() {
             } finally {
               const earnedXP = Math.floor(tokenCountRef.current / 10);
 
-              useUserLevelStore.getState().levelUp(earnedXP);
+              useUserStore.getState().levelUp(earnedXP);
 
               setStreamingState(null, null);
             }

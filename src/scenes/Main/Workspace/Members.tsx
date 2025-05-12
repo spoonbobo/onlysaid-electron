@@ -49,7 +49,6 @@ const Members = ({ workspaceId }: MembersProps) => {
   }, [workspaceId, getUsersByWorkspace]);
 
   useEffect(() => {
-    console.log(users);
   }, [users]);
 
   // Role options
@@ -76,7 +75,8 @@ const Members = ({ workspaceId }: MembersProps) => {
   const filteredUsers = users.filter(user =>
     (selectedRole === 'all' || user.role === selectedRole) &&
     (searchTerm === '' ||
-      (user.username && user.username.toLowerCase().includes(searchTerm.toLowerCase())))
+      (user.username && user.username.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (user.email && user.email.toLowerCase().includes(searchTerm.toLowerCase())))
   );
 
   // Calculate total pages
@@ -158,12 +158,13 @@ const Members = ({ workspaceId }: MembersProps) => {
       ) : (
         <>
           <TableContainer component={Paper} sx={{ mb: 2 }}>
-            <Table size="medium" sx={{ minWidth: 650 }}>
+            <Table size="medium" sx={{ minWidth: 750 }}>
               <TableHead>
                 <TableRow>
-                  <TableCell width="28%">{intl.formatMessage({ id: 'user.name', defaultMessage: '用戶' })}</TableCell>
-                  <TableCell width="22%">{intl.formatMessage({ id: 'workspace.create.joined', defaultMessage: '加入時間' })}</TableCell>
-                  <TableCell width="20%">{intl.formatMessage({ id: 'user.lastLogin', defaultMessage: '最後登入' })}</TableCell>
+                  <TableCell width="25%">{intl.formatMessage({ id: 'user.name', defaultMessage: '用戶' })}</TableCell>
+                  <TableCell width="10%">{intl.formatMessage({ id: 'agent.level', defaultMessage: '等級' })}</TableCell>
+                  <TableCell width="18%">{intl.formatMessage({ id: 'workspace.create.joined', defaultMessage: '加入時間' })}</TableCell>
+                  <TableCell width="17%">{intl.formatMessage({ id: 'user.lastLogin', defaultMessage: '最後登入' })}</TableCell>
                   <TableCell width="30%" align="right">{intl.formatMessage({ id: 'menu.workspace.manage', defaultMessage: '管理' })}</TableCell>
                 </TableRow>
               </TableHead>
@@ -207,6 +208,7 @@ const Members = ({ workspaceId }: MembersProps) => {
                           </Box>
                         </Box>
                       </TableCell>
+                      <TableCell>{user.level ?? 0}</TableCell>
                       <TableCell>{formatDate(user.created_at || '')}</TableCell>
                       <TableCell>{formatDate(user.last_login || '')}</TableCell>
                       <TableCell align="right">
@@ -243,7 +245,7 @@ const Members = ({ workspaceId }: MembersProps) => {
                   ))
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={4} align="center" sx={{ py: 3 }}>{intl.formatMessage({ id: 'workspace.members.noMembersFound', defaultMessage: '找不到成員' })}</TableCell>
+                    <TableCell colSpan={5} align="center" sx={{ py: 3 }}>{intl.formatMessage({ id: 'workspace.members.noMembersFound', defaultMessage: '找不到成員' })}</TableCell>
                   </TableRow>
                 )}
               </TableBody>

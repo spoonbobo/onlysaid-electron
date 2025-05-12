@@ -35,7 +35,7 @@ type SSEChannels = 'streaming:abort_stream' | 'streaming:chat_stream_complete' |
 type MCPChannels = 'mcp:initialize_client';
 
 type ApiChatChannels = 'chat:get' | 'chat:create' | 'chat:update' | 'chat:delete';
-type ApiUserChannels = 'user:auth' | 'user:get' | 'user:get_one';
+type ApiUserChannels = 'user:auth' | 'user:get' | 'user:get_one' | 'user:update';
 type ApiWorkspaceChannels =
   | 'workspace:get'
   | 'workspace:create'
@@ -86,6 +86,7 @@ const electronHandler = {
     auth: (...args: unknown[]) => ipcRenderer.invoke('user:auth', ...args),
     get: (...args: unknown[]) => ipcRenderer.invoke('user:get', ...args),
     get_one: (...args: unknown[]) => ipcRenderer.invoke('user:get_one', ...args),
+    update: (...args: unknown[]) => ipcRenderer.invoke('user:update', ...args),
   },
   workspace: {
     get: (...args: unknown[]) => ipcRenderer.invoke('workspace:get', ...args),

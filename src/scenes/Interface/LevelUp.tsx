@@ -1,21 +1,33 @@
 import { Box, LinearProgress, Tooltip, Typography } from "@mui/material";
-import { useUserLevelStore } from "@/stores/User/UserLevel";
 import { useUserStore } from "@/stores/User/UserStore";
 import { useState, useRef } from "react";
 import { FormattedMessage } from "react-intl";
 
+// Assuming calculateExperienceForLevel is accessible or can be redefined here
+const calculateExperienceForLevel = (level: number): number => {
+  // Simple formula: each level requires 50 * current level points
+  return 50 * level;
+};
+
 function LevelUp() {
-  const { level, experience, experienceToNextLevel } = useUserLevelStore();
-  const { user } = useUserStore();
+  const user = useUserStore((state) => state.user);
   const [showTooltip, setShowTooltip] = useState(false);
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
   const boxRef = useRef<HTMLDivElement>(null);
 
-  // Calculate progress percentage
-  const progressPercentage = (experience / experienceToNextLevel) * 100;
+  // Early return after all hooks are called
+  if (!user) {
+    return null;
+  }
 
-  // Force a minimum display percentage to ensure visibility
-  const displayPercentage = Math.max(progressPercentage, 2);
+  const level = user.level ?? 0;
+  const experience = user.xp ?? 0;
+
+  const experienceToNextLevel = calculateExperienceForLevel(level === 0 ? 1 : level);
+  const progressPercentage = experienceToNextLevel > 0 ? (experience / experienceToNextLevel) * 100 : 0;
+
+  // Only apply minimum display if there's actual progress
+  const displayPercentage = experience > 0 ? Math.max(progressPercentage, 2) : 0;
 
   return (
     <Box
@@ -73,9 +85,8 @@ function LevelUp() {
           followCursor
           slotProps={{
             popper: {
-              disablePortal: true,
               sx: {
-                position: 'absolute',
+                zIndex: 10000,
                 mt: -6
               }
             }

@@ -65,11 +65,13 @@
   "chat.deleteMessageDescription": "刪除訊息將會從聊天室中移除，並且無法恢復。",
   "chat.deleteMessageConfirm": "確認刪除",
   "chat.deleteMessageCancel": "取消",
-  "chat.deleteForYou": "爲自己刪除",
-  "chat.deleteForEveryone": "爲所有人刪除",
+  "chat.deleteForYou": "為自己刪除",
+  "chat.deleteForEveryone": "為所有人刪除",
   "chat.deleteMessageConfirmation": "確認刪除以下訊息？",
   "chat.noChatSelected": "沒有選取聊天室",
-
+  "chat.renameChat": "重命名聊天",
+  "chat.originalName": "原始名稱",
+  "chat.chatName": "聊天名稱",
   "workspace.create": "創建工作空間",
   "workspace.create.description": "創建一個工作空間，讓您可以與其他人共享工作空間。",
   "workspace.create.title": "創建新工作空間",
@@ -256,6 +258,9 @@
   "debug.clean-messages": "清理聊天室訊息",
   "debug.bot-message": "模擬機器人訊息",
   "debug.database-tools": "資料庫工具",
-  "debug.sample-markdown": "範例 Markdown"
+  "debug.sample-markdown": "範例 Markdown",
 
+  "time.morning": "上午",
+  "time.afternoon": "下午",
+  "time.midnight": "午夜"
 }

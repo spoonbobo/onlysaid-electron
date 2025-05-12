@@ -46,12 +46,12 @@ const ChatBubble = memo(({
   onMouseLeave = () => { }
 }: ChatBubbleProps) => {
   const [menuPosition, setMenuPosition] = useState<{ top: number, left: number } | null>(null);
-  const { selectedTopics } = useCurrentTopicContext();
+  const { selectedTopics, selectedContext } = useCurrentTopicContext();
   const toggleReaction = useChatStore(state => state.toggleReaction);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
-  // Get active chat ID using selectedTopics approach
-  const activeChatId = Object.values(selectedTopics).find(Boolean) || null;
+  // Get active chat ID using selectedContext and selectedTopics
+  const activeChatId = selectedContext?.section ? selectedTopics[selectedContext.section] || null : null;
 
   // Format time as HH:MM for continued messages
   const getTimeString = () => {
@@ -117,10 +117,6 @@ const ChatBubble = memo(({
     setDeleteDialogOpen(false);
   }, []);
 
-  const handleReport = useCallback(() => {
-    console.log('Report message:', msg.id);
-    handleMenuClose();
-  }, [msg.id, handleMenuClose]);
 
   return (
     <Box
@@ -199,7 +195,34 @@ const ChatBubble = memo(({
           }}>
             {msg.sender_object?.username}
             <Typography component="span" sx={{ color: "text.secondary", fontWeight: 400, fontSize: "0.8rem", ml: 1 }}>
-              {msg.created_at ? new Date(msg.created_at).toLocaleString() : 'Sending...'}
+              {msg.created_at ? (() => {
+                const date = new Date(msg.created_at);
+                const year = date.getFullYear();
+                const month = String(date.getMonth() + 1).padStart(2, '0'); // Months are 0-indexed
+                const day = String(date.getDate()).padStart(2, '0');
+                const hour = date.getHours();
+                const minute = String(date.getMinutes()).padStart(2, '0');
+
+                let timeOfDayKey = null;
+                if (hour === 0) {
+                  timeOfDayKey = "time.midnight";
+                } else if (hour >= 1 && hour < 12) {
+                  timeOfDayKey = "time.morning";
+                } else if (hour >= 12 && hour < 18) {
+                  timeOfDayKey = "time.afternoon";
+                }
+
+                const formattedDate = `${year}/${month}/${day}`;
+                const formattedTime = `${String(hour).padStart(2, '0')}:${minute}`;
+
+                return (
+                  <>
+                    {formattedDate}{' '}
+                    {timeOfDayKey && <FormattedMessage id={timeOfDayKey} />}{' '}
+                    {formattedTime}
+                  </>
+                );
+              })() : <FormattedMessage id="chat.sending" defaultMessage="Sending..." />}
             </Typography>
           </Typography>
         )}

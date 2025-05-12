@@ -53,21 +53,24 @@ function MenuHeader() {
   };
 
   const handleCreateChat = async () => {
-    if (user?.id) {
-      setSelectedContext({
-        type: 'home',
-        name: 'home',
-        section: 'agents'
-      });
+    setSelectedContext({
+      type: 'home',
+      name: 'home',
+      section: 'agents'
+    });
 
-      // Create the chat and get the new chat data
-      const newChat = await createChat(user.id, 'agent');
+    // Create the chat and get the new chat data
+    const newChat = await createChat(
+      user?.id || "guest",
+      'agent',
+      undefined,
+      true
+    );
 
-      // Use the returned chat data directly
-      if (newChat?.id) {
-        setSelectedTopic('agents', newChat.id);
-        setActiveChat(newChat.id, 'home:home');
-      }
+    // Use the returned chat data directly
+    if (newChat?.id) {
+      setSelectedTopic('agents', newChat.id);
+      setActiveChat(newChat.id, 'home:home');
     }
   };
 

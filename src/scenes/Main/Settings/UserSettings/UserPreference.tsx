@@ -16,8 +16,6 @@ function UserPreferences() {
   const error = useUserStore(state => state.error);
   const signIn = useUserStore(state => state.signIn);
   const logout = useUserStore(state => state.logout);
-  const handleAuthResponse = useUserStore(state => state.handleAuthResponse);
-  const clearAuthTimeout = useUserStore(state => state.clearAuthTimeout);
   const { mode, setMode } = useThemeStore();
   const [preferences, setPreferences] = useState({
     darkMode: mode === 'dark',
@@ -39,19 +37,6 @@ function UserPreferences() {
       darkMode: mode === 'dark'
     }));
   }, [mode]);
-
-  useEffect(() => {
-    // Set up the listener for auth responses
-    const removeListener = window.electron.ipcRenderer.on('auth:signed-in', async (response: any) => {
-      handleAuthResponse(response, intl);
-    });
-
-    // Clean up listener when component unmounts
-    return () => {
-      if (removeListener) removeListener();
-      clearAuthTimeout();
-    };
-  }, [handleAuthResponse, intl, clearAuthTimeout]);
 
   const handleSignIn = () => {
     signIn();

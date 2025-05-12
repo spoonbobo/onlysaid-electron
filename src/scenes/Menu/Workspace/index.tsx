@@ -1,7 +1,7 @@
 import { Box } from "@mui/material";
 
 import { useCurrentTopicContext } from "@/stores/Topic/TopicStore";
-import WorkspaceChatMenu from "./Chat";
+import WorkspaceChatMenu from "./Chatroom";
 
 export default function WorkspaceMenu() {
   const { selectedContext } = useCurrentTopicContext();

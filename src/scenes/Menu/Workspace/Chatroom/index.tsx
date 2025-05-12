@@ -9,6 +9,7 @@ import ChatUpdate from '@/components/Dialog/ChatUpdate';
 import { IChatRoom } from '@/../../types/Chat/Chatroom';
 import { useCurrentTopicContext } from "@/stores/Topic/TopicStore";
 import { getUserFromStore } from "@/utils/user";
+import { useUserStore } from "@/stores/User/UserStore";
 
 export default function WorkspaceChatMenu() {
   const { selectedContext } = useCurrentTopicContext();
@@ -18,6 +19,8 @@ export default function WorkspaceChatMenu() {
   const setActiveChat = useChatStore((state) => state.setActiveChat);
   const deleteChat = useChatStore((state) => state.deleteChat);
   const getChat = useChatStore((state) => state.getChat);
+  const user = useUserStore((state) => state.user);
+
 
   const [menuAnchorEl, setMenuAnchorEl] = useState<null | HTMLElement>(null);
   const [selectedChatId, setSelectedChatId] = useState<string>('');
@@ -28,6 +31,7 @@ export default function WorkspaceChatMenu() {
   const workspaceId = selectedContext?.id || '';
   const section = selectedContext?.section || '';
   const selectedSubcategory = section ? selectedTopics[section] || '' : '';
+  const isLocal = false;
 
   const getContextId = () => {
     if (!selectedContext) return '';

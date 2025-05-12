@@ -1,6 +1,6 @@
-import { Box, IconButton, Menu, MenuItem } from "@mui/material";
+import { Box, IconButton, Menu, MenuItem, CircularProgress } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { FormattedMessage } from "react-intl";
 import { useTopicStore } from "@/stores/Topic/TopicStore";
 import { useChatStore } from "@/stores/Chat/ChatStore";
@@ -16,15 +16,18 @@ export default function AgentsMenu() {
   const chats = useChatStore((state) => state.chats);
   const setActiveChat = useChatStore((state) => state.setActiveChat);
   const deleteChat = useChatStore((state) => state.deleteChat);
+  const isLoading = useChatStore((state) => state.isLoading);
 
   const [menuAnchorEl, setMenuAnchorEl] = useState<null | HTMLElement>(null);
   const [selectedChatId, setSelectedChatId] = useState<string>('');
   const [chatUpdateOpen, setChatUpdateOpen] = useState(false);
   const [selectedChat, setSelectedChat] = useState<IChatRoom | null>(null);
+  const [isFetching, setIsFetching] = useState(false);
   const menuOpen = Boolean(menuAnchorEl);
 
   const activeSection = 'agents';
   const selectedSubcategory = selectedTopics[activeSection] || '';
+  const fetchingRef = useRef(false);
 
   const user = getUserFromStore();
 
@@ -55,10 +58,11 @@ export default function AgentsMenu() {
 
   const handleDeleteChat = (id?: string, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
+    const isLocal = user?.id ? false : true;
 
     const chatIdToDelete = id || selectedChatId;
     if (chatIdToDelete) {
-      deleteChat(chatIdToDelete);
+      deleteChat(chatIdToDelete, isLocal);
     }
     handleCloseMenu();
   };
@@ -71,8 +75,13 @@ export default function AgentsMenu() {
   };
 
   useEffect(() => {
-    if (user?.id) {
-      useChatStore.getState().getChat(user.id, 'agent').then(() => {
+    const userId = user?.id || "guest";
+    const isLocal = user?.id ? false : true;
+    fetchingRef.current = true;
+    setIsFetching(true);
+
+    useChatStore.getState().getChat(userId, 'agent', undefined, isLocal)
+      .then(() => {
         const allCurrentChats = useChatStore.getState().chats;
         const agentChats = allCurrentChats.filter(chat => chat.type === 'agent');
         const agentChatIds = agentChats.map(chat => chat.id);
@@ -94,43 +103,54 @@ export default function AgentsMenu() {
             }
           }
         }
+      })
+      .finally(() => {
+        setIsFetching(false);
+        fetchingRef.current = false;
       });
-    }
-  }, [selectedSubcategory, user?.id, activeSection, setSelectedTopic, setActiveChat, getContextId]);
+  }, [user?.id]);
 
   return (
     <Box sx={{ mt: 2, px: 2 }}>
       <Box sx={{ mt: 2 }}>
-        {chats
-          .filter(chat => chat.type === 'agent')
-          .map((chat) => (
-            <MenuListItem
-              key={chat.id}
-              label={chat.name}
-              isSelected={selectedSubcategory === chat.id}
-              onClick={() => handleSelectChat(chat.id)}
-              onContextMenu={(e) => handleContextMenu(e, chat.id)}
-              endIcon={
-                <IconButton
-                  size="small"
-                  sx={{
-                    p: 0.25,
-                    opacity: 0,
-                    '&:hover': { opacity: 1 },
-                    '.MuiListItemButton-root:hover &': { opacity: 1 }
-                  }}
-                  onClick={(e) => handleDeleteChat(chat.id, e)}
-                >
-                  <CloseIcon sx={{ fontSize: 16 }} />
-                </IconButton>
-              }
-              sx={{ pl: 4 }}
-            />
-          ))}
-        {chats.filter(chat => chat.type === 'agent').length === 0 && (
-          <Box sx={{ pl: 4, py: 1, color: 'text.secondary', fontSize: '0.875rem' }}>
-            <FormattedMessage id="home.noAgents" defaultMessage="No agents found" />
+        {isFetching ? (
+          <Box sx={{ display: 'flex', justifyContent: 'center', py: 2 }}>
+            <CircularProgress size={24} />
           </Box>
+        ) : (
+          <>
+            {chats
+              .filter(chat => chat.type === 'agent')
+              .map((chat) => (
+                <MenuListItem
+                  key={chat.id}
+                  label={chat.name}
+                  isSelected={selectedSubcategory === chat.id}
+                  onClick={() => handleSelectChat(chat.id)}
+                  onContextMenu={(e) => handleContextMenu(e, chat.id)}
+                  endIcon={
+                    <IconButton
+                      size="small"
+                      sx={{
+                        p: 0.25,
+                        opacity: 0,
+                        '&:hover': { opacity: 1 },
+                        '.MuiListItemButton-root:hover &': { opacity: 1 }
+                      }}
+                      onClick={(e) => handleDeleteChat(chat.id, e)}
+                    >
+                      <CloseIcon sx={{ fontSize: 16 }} />
+                    </IconButton>
+                  }
+                  sx={{ pl: 4 }}
+                />
+              ))}
+            {chats.filter(chat => chat.type === 'agent').length === 0 && (
+              <Box sx={{ pl: 4, py: 1, color: 'text.secondary', fontSize: '0.875rem' }}>
+                <FormattedMessage id="home.noAgents" defaultMessage="No agents found" />
+              </Box>
+            )}
+          </>
         )}
       </Box>
 

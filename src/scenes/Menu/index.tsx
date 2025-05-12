@@ -5,7 +5,7 @@ import { useCurrentTopicContext } from "@/stores/Topic/TopicStore";
 import { useFileExplorerStore } from "@/stores/Layout/FileExplorerResize";
 import HomeMenu from "./Home";
 import FileExplorer from "@/components/FileExplorer/FileExplorer";
-import MenuHeader from "./MenuHeader/MenuHeader";
+import MenuHeader from "./Header";
 import React from "react";
 
 // Define minimum height for the content area above the file explorer

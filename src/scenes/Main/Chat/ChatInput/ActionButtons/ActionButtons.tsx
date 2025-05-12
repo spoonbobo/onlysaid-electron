@@ -25,7 +25,7 @@ export default function ActionButtons({
   isSending = false,
   hasAttachments = false
 }: ActionButtonsProps) {
-  const { parentId, trustMode, setTrustMode } = useCurrentTopicContext();
+  const { trustMode, setTrustMode } = useCurrentTopicContext();
   const { modelId, provider } = useSelectedModelStore();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -125,6 +125,7 @@ export default function ActionButtons({
 
       <IconButton
         type="submit"
+        onClick={onSend}
         size="small"
         disabled={(!input.trim() && !hasAttachments) || disabled || isSending}
         sx={{

@@ -2,9 +2,10 @@ import { Box, Tooltip, IconButton, Menu, MenuItem } from "@mui/material";
 import HomeIcon from "@mui/icons-material/Home";
 import AddIcon from "@mui/icons-material/Add";
 import GroupIcon from "@mui/icons-material/Group";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useTopicStore, TopicContext } from "@/stores/Topic/TopicStore";
 import { useWorkspaceStore } from "@/stores/Workspace/WorkspaceStore";
+import { useUserStore } from "@/stores/User/UserStore";
 import AddTeamDialog from "@/components/Dialog/AddWorkspaceDialog";
 import ExitWorkspaceDialog from "@/components/Dialog/ExitWorkspace";
 import { getUserFromStore } from "@/utils/user";
@@ -15,6 +16,7 @@ import { useIntl } from "react-intl";
 function SidebarTabs() {
   const { selectedContext, contexts, setSelectedContext, removeContext, addContext } = useTopicStore();
   const { workspaces, getWorkspace, exitWorkspace, isLoading, setWorkspaceCreatedCallback } = useWorkspaceStore();
+  const user = useUserStore(state => state.user);
   const [showAddTeamDialog, setShowAddTeamDialog] = useState(false);
   const [showExitDialog, setShowExitDialog] = useState(false);
   const [workspaceLastSections, setWorkspaceLastSections] = useState<Record<string, string>>({});
@@ -24,20 +26,46 @@ function SidebarTabs() {
   const [pendingWorkspaceSelection, setPendingWorkspaceSelection] = useState<string | null>(null);
   const [dialogCreation, setDialogCreation] = useState(false);
   const intl = useIntl();
+  const previousUserRef = useRef(user);
   const homeContext = contexts.find(context => context.name === "home" && context.type === "home") || contexts[0];
 
+  // Handle login/logout transitions
   useEffect(() => {
-    const fetchWorkspaces = async () => {
-      const currentUser = getUserFromStore();
-      if (currentUser?.id) {
-        await getWorkspace(currentUser.id);
-      }
-    };
+    const previousUser = previousUserRef.current;
+    previousUserRef.current = user;
 
-    fetchWorkspaces();
-  }, []);
+    // If user logged out
+    if (previousUser && !user) {
+      // Navigate to home
+      setSelectedContext(homeContext);
 
+      // Remove workspace contexts from TopicStore manually
+      const workspaceContexts = [...contexts].filter(ctx => ctx.type === "workspace");
+      workspaceContexts.forEach(ctx => removeContext(ctx));
+
+      // Clear workspaces in the WorkspaceStore
+      useWorkspaceStore.setState({ workspaces: [] });
+    }
+
+    // If user logged in
+    if (!previousUser && user && user.id) {
+      getWorkspace(user.id);
+    }
+  }, [user, homeContext, setSelectedContext, removeContext, contexts, getWorkspace]);
+
+  // Fetch workspaces when component mounts (if user is logged in)
   useEffect(() => {
+    const currentUser = getUserFromStore();
+    if (currentUser?.id) {
+      getWorkspace(currentUser.id);
+    }
+  }, [getWorkspace]);
+
+  // Sync workspaces to contexts (only add new ones, removal is handled in logout)
+  useEffect(() => {
+    if (!user) return;
+
+    // Add workspaces that aren't in the context list yet
     workspaces.forEach(workspace => {
       const existingContext = contexts.find(
         context => context.type === "workspace" && context.id === workspace.id
@@ -51,22 +79,15 @@ function SidebarTabs() {
         });
       }
     });
+  }, [workspaces, contexts, addContext, user]);
 
-    contexts
-      .filter(context =>
-        context.type === "workspace" &&
-        context.id &&
-        !workspaces.some(w => w.id === context.id)
-      )
-      .forEach(contextToRemove => {
-        removeContext(contextToRemove);
-      });
-  }, [workspaces, contexts, addContext, removeContext]);
-
-  const WorkspaceContexts = contexts.filter(context =>
-    context.type === "workspace" &&
-    !(context.name === "workspace" && context.type === "workspace")
-  );
+  // Filter workspace contexts
+  const WorkspaceContexts = user
+    ? contexts.filter(context =>
+      context.type === "workspace" &&
+      !(context.name === "workspace" && context.type === "workspace")
+    )
+    : [];
 
   useEffect(() => {
     if (selectedContext?.type === "workspace" && selectedContext?.section) {
@@ -103,7 +124,7 @@ function SidebarTabs() {
     if (context.type === "workspace") {
       const contextKey = context.id || context.name;
       const lastWorkspaceSection = workspaceLastSections[contextKey];
-      const sectionToUse = lastWorkspaceSection || context.section || "workspace:chat";
+      const sectionToUse = lastWorkspaceSection || context.section || "workspace:chatroom";
 
       setSelectedContext({
         ...context,
@@ -117,10 +138,9 @@ function SidebarTabs() {
         section: lastHomeSection || 'agents'
       });
 
-      // Fetch home chat rooms
-      const user = getUserFromStore();
-      if (user?.id) {
-        useChatStore.getState().getChat(user.id, 'agent');
+      const currentUser = getUserFromStore();
+      if (currentUser?.id) {
+        useChatStore.getState().getChat(currentUser.id, 'agent');
       }
     } else {
       setSelectedContext(context);
@@ -160,6 +180,12 @@ function SidebarTabs() {
       if (selectedContext?.id === workspaceToExit.id) {
         setSelectedContext(homeContext);
       }
+
+      // Refresh workspaces after exiting
+      const currentUser = getUserFromStore();
+      if (currentUser?.id) {
+        await getWorkspace(currentUser.id);
+      }
     } catch (error) {
       console.error("Error exiting workspace:", error);
     }
@@ -175,12 +201,6 @@ function SidebarTabs() {
 
   const handleTeamAdded = async (workspace?: IWorkspace) => {
     if (workspace && workspace.id) {
-      const isWorkspaceInList = workspaces.some(w => w.id === workspace.id);
-      if (!isWorkspaceInList) {
-        // This will trigger the useEffect that syncs workspaces to contexts
-        // No need to manually add the context
-      }
-
       const workspaceContext: TopicContext = {
         id: workspace.id,
         name: workspace.name?.toLowerCase() || 'unnamed workspace',
@@ -189,11 +209,11 @@ function SidebarTabs() {
       };
 
       setSelectedContext(workspaceContext);
-    } else {
-      const currentUser = getUserFromStore();
-      if (currentUser?.id) {
-        await getWorkspace(currentUser.id);
-      }
+    }
+
+    const currentUser = getUserFromStore();
+    if (currentUser?.id) {
+      await getWorkspace(currentUser.id);
     }
 
     setShowAddTeamDialog(false);
@@ -294,17 +314,19 @@ function SidebarTabs() {
           </Tooltip>
         ))}
 
-        <Tooltip title={intl.formatMessage({ id: "workspace.create.title", defaultMessage: "Add Workspace" })} placement="right">
-          <Box>
-            <IconButton
-              color="primary"
-              size="large"
-              onClick={handleAddTeam}
-            >
-              <AddIcon />
-            </IconButton>
-          </Box>
-        </Tooltip>
+        {user && (
+          <Tooltip title={intl.formatMessage({ id: "workspace.create.title", defaultMessage: "Add Workspace" })} placement="right">
+            <Box>
+              <IconButton
+                color="primary"
+                size="large"
+                onClick={handleAddTeam}
+              >
+                <AddIcon />
+              </IconButton>
+            </Box>
+          </Tooltip>
+        )}
       </Box>
 
       <Menu
