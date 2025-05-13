@@ -1,5 +1,5 @@
 import React from "react";
-import { Snackbar, Alert, Stack } from "@mui/material";
+import { Snackbar, Alert, Stack, LinearProgress, Box } from "@mui/material";
 import { useToastStore, ToastMessage } from "../stores/Notification/ToastStore";
 
 export function ToastProvider({ children }: { children: React.ReactNode }) {
@@ -13,24 +13,37 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
     <>
       {children}
 
-      <Stack spacing={2} sx={{ position: "fixed", bottom: 24, right: 24, zIndex: 2000 }}>
+      <Stack spacing={2} sx={{ position: "fixed", top: 24, right: 24, zIndex: 2000 }}>
         {toasts.map((toast: ToastMessage) => (
           <Snackbar
             key={toast.id}
             open={true}
             autoHideDuration={toast.autoHideDuration}
             onClose={() => handleClose(toast.id)}
-            anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
+            anchorOrigin={{ vertical: "top", horizontal: "right" }}
             sx={{ position: "static", transform: "none" }}
           >
-            <Alert
-              onClose={() => handleClose(toast.id)}
-              severity={toast.type}
-              variant="filled"
-              sx={{ width: "100%" }}
-            >
-              {toast.message}
-            </Alert>
+            <Box sx={{ width: '100%' }}>
+              <Alert
+                onClose={() => handleClose(toast.id)}
+                severity={toast.type}
+                variant="filled"
+                sx={{ width: "100%" }}
+              >
+                {toast.message}
+              </Alert>
+              {toast.showProgress && (
+                <LinearProgress
+                  variant="determinate"
+                  value={toast.progress}
+                  sx={{
+                    height: 4,
+                    borderBottomLeftRadius: 4,
+                    borderBottomRightRadius: 4
+                  }}
+                />
+              )}
+            </Box>
           </Snackbar>
         ))}
       </Stack>

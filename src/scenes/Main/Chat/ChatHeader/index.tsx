@@ -8,7 +8,8 @@ function ChatHeader() {
   const headerKey = selectedContext ? `${selectedContext.type}-${selectedContext.name}` : "no-context";
   const chats = useChatStore(state => state.chats);
 
-  const selectedGroup = Object.keys(selectedTopics).find(section => selectedTopics[section]);
+  const selectedGroup = selectedContext?.section ||
+    Object.keys(selectedTopics).find(section => selectedTopics[section]);
   const selectedTopic = selectedGroup ? selectedTopics[selectedGroup] : null;
 
   const chat = chats.find(chat => chat.id === selectedTopic);

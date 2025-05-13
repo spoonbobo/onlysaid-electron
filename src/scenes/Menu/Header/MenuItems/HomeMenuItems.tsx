@@ -1,4 +1,4 @@
-import { ListSubheader, Button, Tooltip, IconButton } from "@mui/material";
+import { MenuItem, ListSubheader, Divider, Tooltip, IconButton } from "@mui/material";
 import { FormattedMessage } from "react-intl";
 import PersonAddIcon from "@mui/icons-material/PersonAdd";
 import SmartToyIcon from "@mui/icons-material/SmartToy";
@@ -32,45 +32,46 @@ function HomeMenuItems({
       console.error("Error in handleCategoryClick:", error);
     }
   };
+
   return (
     <>
-      <ListSubheader
+      <ListSubheader sx={{
+        fontSize: 13,
+        fontWeight: 700,
+        color: "text.secondary",
+        bgcolor: "background.paper",
+        lineHeight: 2,
+        px: 2
+      }}>
+        <FormattedMessage id="home.friends" />
+      </ListSubheader>
+      <MenuItem
         onClick={() => handleCategoryClick('friends')}
-        sx={{
-          fontSize: 13,
-          fontWeight: 700,
-          color: "text.secondary",
-          bgcolor: "background.paper",
-          lineHeight: 2,
-          px: 2,
-          cursor: 'pointer',
-          '&:hover': { bgcolor: 'action.hover' },
-          display: 'flex',
-          alignItems: 'center'
-        }}
+        sx={{ minHeight: 36, fontSize: 14 }}
       >
         <PeopleIcon fontSize="small" sx={{ mr: 1.5, color: "text.secondary" }} />
         <FormattedMessage id="menu.home.friends" />
-      </ListSubheader>
+      </MenuItem>
 
-      <ListSubheader
+      <Divider sx={{ my: 1 }} />
+
+      <ListSubheader sx={{
+        fontSize: 13,
+        fontWeight: 700,
+        color: "text.secondary",
+        bgcolor: "background.paper",
+        lineHeight: 2,
+        px: 2
+      }}>
+        <FormattedMessage id="home.agents" />
+      </ListSubheader>
+      <MenuItem
         onClick={() => handleCategoryClick('agents')}
-        sx={{
-          fontSize: 13,
-          fontWeight: 700,
-          color: "text.secondary",
-          bgcolor: "background.paper",
-          lineHeight: 2,
-          px: 2,
-          cursor: 'pointer',
-          '&:hover': { bgcolor: 'action.hover' },
-          display: 'flex',
-          alignItems: 'center'
-        }}
+        sx={{ minHeight: 36, fontSize: 14 }}
       >
         <SmartToyIcon fontSize="small" sx={{ mr: 1.5, color: "text.secondary" }} />
         <FormattedMessage id="menu.home.agents" />
-      </ListSubheader>
+      </MenuItem>
     </>
   );
 }

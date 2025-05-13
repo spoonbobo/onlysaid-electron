@@ -103,7 +103,8 @@ const ChatBubble = memo(({
     };
   }, [menuPosition]);
 
-  const handleCopyText = useCallback(() => {
+  const handleCopyText = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
     navigator.clipboard.writeText(msg.text);
     handleMenuClose();
   }, [msg.text, handleMenuClose]);
@@ -258,39 +259,21 @@ const ChatBubble = memo(({
 
         {/* Only show MarkdownRenderer when there's content to display */}
         {(msg.text || (isStreaming && streamContent)) && (
-          <>
-            <MarkdownRenderer
-              content={msg.text}
-              isStreaming={isStreaming}
-              isConnecting={isConnecting}
-              streamContent={streamContent}
-            />
-          </>
-        )}
-
-        {/* Keep showing loading indicator until stream completes */}
-        {isStreaming && isConnecting && (
-          <Box sx={{ display: 'flex', mt: 1, alignItems: 'center' }}>
-            <CircularProgress
-              size={16}
-              thickness={4}
-              sx={{
-                color: 'text.secondary'
-              }}
-            />
-            <Typography sx={{ ml: 1, fontSize: '0.85rem', color: 'text.secondary' }}>
-              {streamContent && typeof streamContent === 'string' ? 'Generating...' : 'Loading...'}
-            </Typography>
-          </Box>
+          <MarkdownRenderer
+            content={msg.text}
+            isStreaming={isStreaming}
+            isConnecting={isConnecting}
+            streamContent={streamContent}
+          />
         )}
 
         {msg.reactions && msg.reactions.length > 0 && (
           <Box sx={{
             display: 'flex',
-            gap: 0.5,
+            gap: 0.3,
             mt: 0.5,
             mb: 0.3,
-            height: 24
+            minHeight: 22
           }}>
             {Object.entries(
               R.groupBy(reaction => reaction.reaction, msg.reactions)
@@ -301,22 +284,17 @@ const ChatBubble = memo(({
                 sx={{
                   display: 'flex',
                   alignItems: 'center',
-                  bgcolor: 'action.hover',
-                  borderRadius: 2,
-                  px: 0.8,
-                  py: 0.3,
-                  pb: 0.4,
+                  borderRadius: 3,
+                  px: 0.6,
+                  py: 0.2,
                   cursor: 'pointer',
-                  border: '1px solid',
-                  borderColor: 'divider',
                   '&:hover': {
                     bgcolor: 'action.selected',
-                    boxShadow: 1
                   }
                 }}
               >
-                <Typography sx={{ fontSize: '0.9rem', mr: 0.3 }}>{emoji}</Typography>
-                <Typography sx={{ fontSize: '0.75rem', fontWeight: 500 }}>{reactions?.length || 0}</Typography>
+                <Typography sx={{ fontSize: '1.1rem', mr: 0.3, lineHeight: 1 }}>{emoji}</Typography>
+                <Typography sx={{ fontSize: '0.75rem', fontWeight: 600, lineHeight: 1 }}>{reactions?.length || 0}</Typography>
               </Box>
             ))}
           </Box>
@@ -385,25 +363,45 @@ const ChatBubble = memo(({
     </Box>
   );
 }, (prevProps, nextProps) => {
-  // If any of these critical props change, they are NOT equal, so return false (re-render).
+  // Quick reference checks first
   if (prevProps.isStreaming !== nextProps.isStreaming ||
     prevProps.isConnecting !== nextProps.isConnecting ||
-    (nextProps.isStreaming && prevProps.streamContent !== nextProps.streamContent) ||
-    (!nextProps.isStreaming && prevProps.message.text !== nextProps.message.text) ||
-    prevProps.message.id !== nextProps.message.id ||
-    !R.equals(prevProps.message.reactions, nextProps.message.reactions) ||
-    prevProps.isHovered !== nextProps.isHovered ||
-    prevProps.isCurrentUser !== nextProps.isCurrentUser ||
-    prevProps.isContinuation !== nextProps.isContinuation ||
-    prevProps.isLastInSequence !== nextProps.isLastInSequence ||
-    (prevProps.replyToMessage?.id !== nextProps.replyToMessage?.id) ||
-    // Also consider changes in sender object if they can affect rendering
-    (prevProps.message.sender_object?.avatar !== nextProps.message.sender_object?.avatar) ||
-    (prevProps.message.sender_object?.username !== nextProps.message.sender_object?.username)
-  ) {
-    return false; // Props are different, re-render
+    prevProps.isHovered !== nextProps.isHovered) {
+    return false;
   }
-  return true; // Props are the same, skip re-render
+
+  // Check for streaming content changes only when streaming
+  if (nextProps.isStreaming && prevProps.streamContent !== nextProps.streamContent) {
+    return false;
+  }
+
+  // Only check message text when not streaming
+  if (!nextProps.isStreaming && prevProps.message.text !== nextProps.message.text) {
+    return false;
+  }
+
+  // Check IDs
+  if (prevProps.message.id !== nextProps.message.id) {
+    return false;
+  }
+
+  // Shallow comparison for reactions
+  if (!prevProps.message.reactions || !nextProps.message.reactions) {
+    if (prevProps.message.reactions !== nextProps.message.reactions) {
+      return false;
+    }
+  } else if (prevProps.message.reactions.length !== nextProps.message.reactions.length) {
+    return false;
+  } else {
+    // Instead of deep equality check, just check if arrays are same instances
+    // or if their stringified versions are equal (faster than Ramda deep check)
+    if (prevProps.message.reactions !== nextProps.message.reactions &&
+      JSON.stringify(prevProps.message.reactions) !== JSON.stringify(nextProps.message.reactions)) {
+      return false;
+    }
+  }
+
+  return true; // Skip re-render
 });
 
 export default ChatBubble;

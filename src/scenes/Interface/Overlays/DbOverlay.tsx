@@ -5,17 +5,21 @@ import { useCurrentTopicContext } from "@/stores/Topic/TopicStore";
 import { databaseQueries } from '../TestQueries/Queries';
 import { useChatStore } from "@/stores/Chat/ChatStore";
 import { FormattedMessage } from "react-intl";
+import { useWorkspaceStore } from "@/stores/Workspace/WorkspaceStore";
+import { useTopicStore } from "@/stores/Topic/TopicStore";
 
 export default function DbOverlay() {
   const { dbOverlayMinimized, setDbOverlayMinimized } = useDebugStore();
   const [isLoading, setIsLoading] = useState(false);
   const [result, setResult] = useState<string | null>(null);
 
-  const { selectedTopics } = useCurrentTopicContext();
+  const { selectedTopics, selectedContext } = useCurrentTopicContext();
   const { fetchMessages } = useChatStore();
+  const { addUserToWorkspace } = useWorkspaceStore();
 
   const executeQuery = async (queryId: string) => {
-    const activeChatId = Object.values(selectedTopics)[0];
+    const activeChatId = selectedContext?.section ? selectedTopics[selectedContext.section] : null;
+    console.log("Active chat ID:", activeChatId);
 
     if (!activeChatId) {
       setResult("No active topic selected");
@@ -44,6 +48,27 @@ export default function DbOverlay() {
       }
     } catch (error) {
       console.error("Failed to execute query:", error);
+      setResult(`Error: ${error instanceof Error ? error.message : String(error)}`);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleAddSpecificUser = async () => {
+    if (!selectedContext?.id) {
+      setResult("No workspace selected");
+      return;
+    }
+
+    setIsLoading(true);
+    setResult(null);
+
+    try {
+      const userId = "54c042fb-2fca-4a1b-89ee-06f14c5d6b02";
+      await addUserToWorkspace(selectedContext.id, userId, "member");
+      setResult(`User added to workspace ${selectedContext.name} successfully`);
+    } catch (error) {
+      console.error("Failed to add user to workspace:", error);
       setResult(`Error: ${error instanceof Error ? error.message : String(error)}`);
     } finally {
       setIsLoading(false);
@@ -102,6 +127,28 @@ export default function DbOverlay() {
               <FormattedMessage id={query.title} />
             </Button>
           ))}
+
+          <Button
+            fullWidth
+            onClick={handleAddSpecificUser}
+            disabled={isLoading || !selectedContext || selectedContext.type !== "workspace"}
+            sx={{
+              textTransform: 'none',
+              justifyContent: 'flex-start',
+              color: 'text.primary',
+              border: '1px solid rgba(255, 255, 255, 0.1)',
+              borderRadius: 1,
+              mb: 0.5,
+              py: 0.5,
+              fontSize: '0.75rem',
+              userSelect: 'none',
+              '&:hover': {
+                bgcolor: 'action.hover',
+              }
+            }}
+          >
+            Add Special User
+          </Button>
 
           {result && (
             <Typography

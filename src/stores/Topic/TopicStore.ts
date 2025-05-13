@@ -19,6 +19,12 @@ export interface TopicContext {
   section?: string;
 }
 
+interface StreamState {
+  messageId: string | null;
+  chatId: string | null;
+  streamId: string | null;
+}
+
 interface TopicStore {
   contexts: TopicContext[];
   selectedContext: TopicContext | null;
@@ -32,9 +38,6 @@ interface TopicStore {
   clearSelectedTopic: (sectionName: string) => void;
   validateSelectedTopics: (existingChatIds: string[]) => void;
 
-  trustMode: boolean;
-  setTrustMode: (trustMode: boolean) => void;
-
   replyingToId: string | null;
   setReplyingTo: (messageId: string | null) => void;
 
@@ -42,12 +45,15 @@ interface TopicStore {
   setAttachment: (type: string, file: any) => void;
   clearAttachments: () => void;
 
-  streamingState: {
-    messageId: string | null;
-    chatId: string | null;
-    streamId: string | null;
-  };
+  streamingState: StreamState;
+  completedStreams: Record<string, StreamState>;
   setStreamingState: (messageId: string | null, chatId: string | null) => void;
+  markStreamAsCompleted: (chatId: string, content: string) => void;
+  clearCompletedStream: (chatId: string) => void;
+
+  scrollPositions: Record<string, number>;
+  setScrollPosition: (chatId: string, position: number) => void;
+  getScrollPosition: (chatId: string) => number;
 }
 
 export const useTopicStore = create<TopicStore>()(
@@ -134,11 +140,6 @@ export const useTopicStore = create<TopicStore>()(
           return hasChanges ? { selectedTopics: validatedTopics } : state;
         }),
 
-      trustMode: false,
-
-      setTrustMode: (trustMode) =>
-        set({ trustMode }),
-
       replyingToId: null,
 
       setReplyingTo: (messageId) =>
@@ -158,15 +159,84 @@ export const useTopicStore = create<TopicStore>()(
         set({ attachments: {} }),
 
       streamingState: { messageId: null, chatId: null, streamId: null },
+      completedStreams: {},
 
       setStreamingState: (messageId, chatId) =>
-        set({
-          streamingState: {
-            messageId,
-            chatId,
-            streamId: messageId ? `stream-${messageId}` : null
+        set((state) => {
+          // If we're clearing streaming state, keep track of the completed stream
+          if (state.streamingState.messageId && !messageId && state.streamingState.chatId) {
+            return {
+              streamingState: {
+                messageId: null,
+                chatId: null,
+                streamId: null
+              },
+              completedStreams: {
+                ...state.completedStreams,
+                [state.streamingState.chatId]: {
+                  ...state.streamingState
+                }
+              }
+            };
           }
+
+          return {
+            streamingState: {
+              messageId,
+              chatId,
+              streamId: messageId ? `stream-${messageId}` : null
+            }
+          };
         }),
+
+      markStreamAsCompleted: (chatId, content) =>
+        set((state) => {
+          if (!chatId) return state;
+
+          // If there's a streaming state for this chatId, save it as completed
+          if (state.streamingState.chatId === chatId && state.streamingState.messageId) {
+            return {
+              completedStreams: {
+                ...state.completedStreams,
+                [chatId]: { ...state.streamingState }
+              }
+            };
+          }
+          return state;
+        }),
+
+      clearCompletedStream: (chatId) =>
+        set((state) => {
+          if (!chatId) return state;
+
+          const updatedCompletedStreams = { ...state.completedStreams };
+          delete updatedCompletedStreams[chatId];
+
+          return {
+            completedStreams: updatedCompletedStreams
+          };
+        }),
+
+      scrollPositions: {},
+
+      setScrollPosition: (chatId, position) =>
+        set((state) => {
+          // Only update if necessary (>50px change) to reduce state updates
+          const currentPos = state.scrollPositions[chatId] || 0;
+          if (Math.abs(currentPos - position) > 50) {
+            return {
+              scrollPositions: {
+                ...state.scrollPositions,
+                [chatId]: position
+              }
+            };
+          }
+          return state; // Return unchanged state if difference is small
+        }),
+
+      getScrollPosition: (chatId) => {
+        return get().scrollPositions[chatId] || 0;
+      }
     }),
     {
       name: "topic-store",
@@ -175,9 +245,10 @@ export const useTopicStore = create<TopicStore>()(
         selectedContext: state.selectedContext,
         lastSections: state.lastSections,
         selectedTopics: state.selectedTopics,
-        contexts: state.contexts
+        contexts: state.contexts,
+        scrollPositions: state.scrollPositions,
       }),
-      version: 6,
+      version: 7, // Increment version when changing store structure
     }
   )
 );

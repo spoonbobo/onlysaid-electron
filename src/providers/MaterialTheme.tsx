@@ -14,59 +14,63 @@ export function ThemeContextProvider({ children }: ThemeContextProviderProps) {
       palette: {
         mode,
         primary: {
-          // Indigo shades - more vibrant and modern
-          main: '#5c6bc0',      // Same for both modes for consistency
-          light: '#8e99f3',
-          dark: '#26418f',
+          // More accessible indigo with better contrast
+          main: '#4f5bd5',
+          light: '#7986cb',
+          dark: '#3949ab',
           contrastText: '#ffffff',
         },
         secondary: {
-          // Teal shades - balanced complementary color
-          main: '#26a69a',      // Same for both modes for consistency
-          light: '#64d8cb',
-          dark: '#00766c',
+          // Optimized teal for better harmony with primary
+          main: '#009688',
+          light: '#4db6ac',
+          dark: '#00796b',
           contrastText: '#ffffff',
         },
         error: {
-          main: mode === 'light' ? '#f44336' : '#ef5350',
-          light: mode === 'light' ? '#e57373' : '#ff8a80',
-          dark: mode === 'light' ? '#d32f2f' : '#c62828',
+          main: mode === 'light' ? '#d32f2f' : '#f44336',
+          light: mode === 'light' ? '#ef5350' : '#e57373',
+          dark: mode === 'light' ? '#c62828' : '#d32f2f',
         },
         warning: {
-          main: mode === 'light' ? '#ff9800' : '#ffa726',
-          light: mode === 'light' ? '#ffb74d' : '#ffcc80',
-          dark: mode === 'light' ? '#f57c00' : '#ef6c00',
+          main: mode === 'light' ? '#ed6c02' : '#ff9800',
+          light: mode === 'light' ? '#ff9800' : '#ffb74d',
+          dark: mode === 'light' ? '#e65100' : '#f57c00',
         },
         info: {
-          main: mode === 'light' ? '#2196f3' : '#29b6f6',
-          light: mode === 'light' ? '#64b5f6' : '#81d4fa',
-          dark: mode === 'light' ? '#1976d2' : '#0288d1',
+          main: mode === 'light' ? '#0288d1' : '#29b6f6',
+          light: mode === 'light' ? '#03a9f4' : '#4fc3f7',
+          dark: mode === 'light' ? '#01579b' : '#0277bd',
         },
         success: {
-          main: mode === 'light' ? '#4CAF50' : '#66BB6A',
-          light: mode === 'light' ? '#80E27E' : '#A5D6A7',
-          dark: mode === 'light' ? '#2E7D32' : '#1B5E20',
+          main: mode === 'light' ? '#2e7d32' : '#66bb6a',
+          light: mode === 'light' ? '#4caf50' : '#81c784',
+          dark: mode === 'light' ? '#1b5e20' : '#388e3c',
         },
         background: {
-          default: mode === 'light' ? '#f5f7fa' : '#121212',
+          // Softer backgrounds to reduce eye strain
+          default: mode === 'light' ? '#f8f9fc' : '#121212',
           paper: mode === 'light' ? '#ffffff' : '#1e1e1e',
         },
         text: {
-          primary: mode === 'light' ? 'rgba(0, 0, 0, 0.9)' : 'rgba(255, 255, 255, 1)',
-          secondary: mode === 'light' ? 'rgba(0, 0, 0, 0.65)' : 'rgba(255, 255, 255, 0.85)',
-          disabled: mode === 'light' ? 'rgba(0, 0, 0, 0.38)' : 'rgba(255, 255, 255, 0.5)',
+          // Improved text contrast for better readability
+          primary: mode === 'light' ? 'rgba(0, 0, 0, 0.87)' : 'rgba(255, 255, 255, 0.95)',
+          secondary: mode === 'light' ? 'rgba(0, 0, 0, 0.6)' : 'rgba(255, 255, 255, 0.7)',
+          disabled: mode === 'light' ? 'rgba(0, 0, 0, 0.38)' : 'rgba(255, 255, 255, 0.45)',
         },
-        divider: mode === 'light' ? 'rgba(0, 0, 0, 0.09)' : 'rgba(255, 255, 255, 0.12)',
+        divider: mode === 'light' ? 'rgba(0, 0, 0, 0.12)' : 'rgba(255, 255, 255, 0.12)',
         action: {
-          active: mode === 'light' ? 'rgba(0, 0, 0, 0.6)' : 'rgba(255, 255, 255, 0.7)',
-          hover: mode === 'light' ? 'rgba(0, 0, 0, 0.05)' : 'rgba(255, 255, 255, 0.08)',
-          selected: mode === 'light' ? 'rgba(92, 107, 192, 0.12)' : 'rgba(255, 255, 255, 0.16)',
+          active: mode === 'light' ? 'rgba(0, 0, 0, 0.54)' : 'rgba(255, 255, 255, 0.7)',
+          hover: mode === 'light' ? 'rgba(0, 0, 0, 0.04)' : 'rgba(255, 255, 255, 0.1)',
+          selected: mode === 'light' ? 'rgba(79, 91, 213, 0.12)' : 'rgba(79, 91, 213, 0.2)',
           disabled: mode === 'light' ? 'rgba(0, 0, 0, 0.26)' : 'rgba(255, 255, 255, 0.3)',
-          disabledBackground: mode === 'light' ? 'rgba(0, 0, 0, 0.1)' : 'rgba(255, 255, 255, 0.12)',
+          disabledBackground: mode === 'light' ? 'rgba(0, 0, 0, 0.12)' : 'rgba(255, 255, 255, 0.08)',
         },
       },
       typography: {
         fontFamily: [
+          'Inter',
+          'Source Sans Pro',
           'Roboto',
           'Noto Serif HK',
           'Space Mono',
@@ -107,7 +111,7 @@ export function ThemeContextProvider({ children }: ThemeContextProviderProps) {
                   transform: 'translateX(16px)',
                   color: '#fff',
                   '& + .MuiSwitch-track': {
-                    backgroundColor: '#5c6bc0',
+                    backgroundColor: mode === 'light' ? '#4f5bd5' : '#4f5bd5',
                     opacity: 1,
                     border: 0,
                   },

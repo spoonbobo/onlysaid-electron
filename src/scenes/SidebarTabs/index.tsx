@@ -6,7 +6,7 @@ import { useState, useEffect, useRef } from "react";
 import { useTopicStore, TopicContext } from "@/stores/Topic/TopicStore";
 import { useWorkspaceStore } from "@/stores/Workspace/WorkspaceStore";
 import { useUserStore } from "@/stores/User/UserStore";
-import AddTeamDialog from "@/components/Dialog/AddWorkspaceDialog";
+import AddTeamDialog from "@/components/Dialog/Workspace/AddWorkspace";
 import ExitWorkspaceDialog from "@/components/Dialog/ExitWorkspace";
 import { getUserFromStore } from "@/utils/user";
 import { IWorkspace } from "../../../../types/Workspace/Workspace";
@@ -29,31 +29,24 @@ function SidebarTabs() {
   const previousUserRef = useRef(user);
   const homeContext = contexts.find(context => context.name === "home" && context.type === "home") || contexts[0];
 
-  // Handle login/logout transitions
   useEffect(() => {
     const previousUser = previousUserRef.current;
     previousUserRef.current = user;
 
-    // If user logged out
     if (previousUser && !user) {
-      // Navigate to home
       setSelectedContext(homeContext);
 
-      // Remove workspace contexts from TopicStore manually
       const workspaceContexts = [...contexts].filter(ctx => ctx.type === "workspace");
       workspaceContexts.forEach(ctx => removeContext(ctx));
 
-      // Clear workspaces in the WorkspaceStore
       useWorkspaceStore.setState({ workspaces: [] });
     }
 
-    // If user logged in
     if (!previousUser && user && user.id) {
       getWorkspace(user.id);
     }
   }, [user, homeContext, setSelectedContext, removeContext, contexts, getWorkspace]);
 
-  // Fetch workspaces when component mounts (if user is logged in)
   useEffect(() => {
     const currentUser = getUserFromStore();
     if (currentUser?.id) {
@@ -61,11 +54,9 @@ function SidebarTabs() {
     }
   }, [getWorkspace]);
 
-  // Sync workspaces to contexts (only add new ones, removal is handled in logout)
   useEffect(() => {
     if (!user) return;
 
-    // Add workspaces that aren't in the context list yet
     workspaces.forEach(workspace => {
       const existingContext = contexts.find(
         context => context.type === "workspace" && context.id === workspace.id
@@ -81,7 +72,6 @@ function SidebarTabs() {
     });
   }, [workspaces, contexts, addContext, user]);
 
-  // Filter workspace contexts
   const WorkspaceContexts = user
     ? contexts.filter(context =>
       context.type === "workspace" &&
@@ -107,9 +97,7 @@ function SidebarTabs() {
       return;
     }
 
-    // Clear irrelevant topic selections when switching context types
     if (context.type !== selectedContext?.type) {
-      // Reset any selected topics tied to the previous context
       const currentTopics = useTopicStore.getState().selectedTopics;
       Object.keys(currentTopics).forEach(section => {
         if (
@@ -181,7 +169,6 @@ function SidebarTabs() {
         setSelectedContext(homeContext);
       }
 
-      // Refresh workspaces after exiting
       const currentUser = getUserFromStore();
       if (currentUser?.id) {
         await getWorkspace(currentUser.id);

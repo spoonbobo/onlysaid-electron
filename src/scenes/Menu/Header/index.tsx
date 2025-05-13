@@ -22,6 +22,7 @@ function MenuHeader() {
   const [menuPosition, setMenuPosition] = useState<{ top: number, left: number } | null>(null);
   const open = Boolean(anchorEl) || Boolean(menuPosition);
   const [showAddFriendDialog, setShowAddFriendDialog] = useState(false);
+  const isLocal = user?.id ? false : true;
 
   // Parse section from the context
   const selectedSection = selectedContext?.type === 'workspace' ?
@@ -52,6 +53,7 @@ function MenuHeader() {
     setMenuPosition(null);
   };
 
+  // FIXME: only for home context
   const handleCreateChat = async () => {
     setSelectedContext({
       type: 'home',
@@ -64,7 +66,7 @@ function MenuHeader() {
       user?.id || "guest",
       'agent',
       undefined,
-      true
+      isLocal
     );
 
     // Use the returned chat data directly

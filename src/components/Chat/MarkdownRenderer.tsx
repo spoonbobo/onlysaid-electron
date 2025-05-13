@@ -108,14 +108,15 @@ const markdownStyles = {
     justifyContent: 'center',
     cursor: 'pointer',
     borderRadius: '12px',
-    backgroundColor: 'rgba(255, 255, 255, 0.8)',
-    border: '1px solid',
-    borderColor: 'divider',
-    padding: '0 8px',
+    backgroundColor: 'transparent',
+    border: 'none',
+    padding: '4px',
     transition: 'all 0.2s ease',
     '&:hover': {
-      backgroundColor: 'rgba(0, 0, 0, 0.04)',
-      transform: 'scale(1.05)'
+      transform: 'scale(1.15)',
+      '& .copy-icon': {
+        color: 'primary.main'
+      }
     }
   },
   '& .copy-text': {
@@ -252,10 +253,12 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = React.memo(({
   const [markdownToRender, setMarkdownToRender] = useState(() => isStreaming ? (streamContent || "") : content);
   const [isPending, startTransition] = useTransition();
 
+  const instanceId = useMemo(() => `md-instance-${Math.random().toString(36).substring(2, 9)}`, []);
+
   const getNextCodeBlockId = useCallback(() => {
-    const id = `codeblock-${codeBlockIdRef.current++}`;
+    const id = `${instanceId}-codeblock-${codeBlockIdRef.current++}`;
     return id;
-  }, []);
+  }, [instanceId]);
 
   useEffect(() => {
     if (isStreaming) {

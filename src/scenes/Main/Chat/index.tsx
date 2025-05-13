@@ -1,5 +1,5 @@
-import { Box } from "@mui/material";
-import { useEffect, useRef, useCallback, useState } from "react";
+import { Box, CircularProgress } from "@mui/material";
+import { useEffect, useRef, useCallback, useState, useMemo } from "react";
 import ChatHeader from "./ChatHeader";
 import ChatUI from "./ChatUI";
 import ChatInput from "./ChatInput";
@@ -10,13 +10,12 @@ import { IFile } from "@/../../types/File/File";
 import { v4 as uuidv4 } from 'uuid';
 import { Typography } from "@mui/material";
 import { useChatStore } from "@/stores/Chat/ChatStore";
-import { useCurrentTopicContext } from "@/stores/Topic/TopicStore";
+import { useCurrentTopicContext, useTopicStore } from "@/stores/Topic/TopicStore";
 import { useSelectedModelStore } from "@/stores/LLM/SelectedModelStore";
 import { useStreamStore, OpenAIMessage } from "@/stores/SSE/StreamStore";
 import { DeepSeekUser } from "@/stores/Chat/ChatStore";
 import { useUserStore } from "@/stores/User/UserStore";
-
-type SectionName = 'Friends' | 'Agents';
+import { useWorkspaceStore } from "@/stores/Workspace/WorkspaceStore";
 
 function Chat() {
   const {
@@ -26,8 +25,7 @@ function Chat() {
     setReplyingTo,
     streamingState,
     setStreamingState,
-    clearSelectedTopic,
-    validateSelectedTopics
+    markStreamAsCompleted
   } = useCurrentTopicContext();
 
   const chatInstanceId = useState(() => uuidv4())[0];
@@ -53,7 +51,30 @@ function Chat() {
 
   const contextId = selectedContext ? `${selectedContext.name}:${selectedContext.type}` : '';
   const activeChatId = selectedContext?.section ? selectedTopics[selectedContext.section] || null : null;
-  const activeTopic = activeChatId;
+  const { user } = useUserStore();
+  const isLocal = user?.id ? false : true;
+  let workspaceId = '';
+  if (!isLocal) {
+    workspaceId = selectedContext?.id || '';
+  }
+
+  const { getUsersByWorkspace } = useWorkspaceStore();
+  const [workspaceUsers, setWorkspaceUsers] = useState<any[]>([]);
+
+  useEffect(() => {
+    if (workspaceId) {
+      const fetchUsers = async () => {
+        try {
+          const users = await getUsersByWorkspace(workspaceId);
+          setWorkspaceUsers(users);
+        } catch (error) {
+          console.error("Error fetching workspace users:", error);
+        }
+      };
+      fetchUsers();
+    }
+  }, [workspaceId, getUsersByWorkspace]);
+
 
   const messages = storeMessages[activeChatId || ''] || [];
   const replyingToMessage = replyingToId ? messages.find(m => m.id === replyingToId) || null : null;
@@ -71,18 +92,6 @@ function Chat() {
 
   const input = getInput(activeChatId || '', contextId);
 
-  useEffect(() => {
-    if (activeTopic) {
-      const { chats } = useChatStore.getState();
-
-      if (chats.length > 0 && !chats.some(chat => chat.id === activeTopic)) {
-        console.log("Cleaning up invalid topic on mount:", activeTopic);
-        clearSelectedTopic(Object.keys(selectedTopics).find(
-          section => selectedTopics[section] === activeTopic
-        ) as SectionName);
-      }
-    }
-  }, []);
 
   useEffect(() => {
     if (activeChatId && useChatStore.getState().chats.some(chat => chat.id === activeChatId)) {
@@ -181,7 +190,6 @@ function Chat() {
 
         const fileIds = messageData.files?.map(file => file.id);
         messageData.files = fileIds as unknown as IFile[];
-        console.log(messageData.files);
 
         const messageId = await sendMessage(activeChatId, messageData);
 
@@ -198,7 +206,6 @@ function Chat() {
             files: messageData.files
           };
 
-          console.log("newMessage", newMessage);
           appendMessage(activeChatId, newMessage);
 
           setInput(activeChatId, '', contextId);
@@ -242,6 +249,9 @@ function Chat() {
               );
 
               updateMessage(activeChatId, assistantMessage.id, { text: response });
+
+              markStreamAsCompleted(activeChatId, response);
+
             } catch (error) {
               console.error("Stream error:", error);
               updateMessage(activeChatId, assistantMessage.id, {
@@ -249,9 +259,7 @@ function Chat() {
               });
             } finally {
               const earnedXP = Math.floor(tokenCountRef.current / 10);
-
-              useUserStore.getState().levelUp(earnedXP);
-
+              useUserStore.getState().gainExperience(earnedXP);
               setStreamingState(null, null);
             }
           }
@@ -289,6 +297,19 @@ function Chat() {
     }
   }, [streamingState.messageId, abortStream, setStreamingState]);
 
+  const messagesWithRoles = useMemo(() => {
+    if (!messages.length || !workspaceUsers.length) return messages;
+
+    const userRoleMap = workspaceUsers.reduce((acc, user) => {
+      acc[user.user_id] = user.role;
+      return acc;
+    }, {});
+
+    return messages.map(message => ({
+      ...message,
+      sender_role: userRoleMap[message.sender] || 'user'
+    }));
+  }, [messages, workspaceUsers]);
 
   return (
     <Box
@@ -317,14 +338,28 @@ function Chat() {
             return (
               <>
                 <ChatUI
-                  messages={messages}
+                  messages={messagesWithRoles}
                   onReply={handleReply}
-                  streamingMessageId={streamingState.messageId}
-                  streamContentForBubble={currentStreamContent}
-                  isConnectingForBubble={isCurrentlyConnectingForUI}
+                  streamingMessageId={
+                    streamingState.chatId === activeChatId
+                      ? streamingState.messageId
+                      : (useTopicStore.getState().completedStreams[activeChatId || '']?.messageId || null)
+                  }
+                  streamContentForBubble={
+                    streamingState.chatId === activeChatId
+                      ? currentStreamContent
+                      : (useTopicStore.getState().completedStreams[activeChatId || '']?.messageId
+                        ? streamDataForId[`stream-${useTopicStore.getState().completedStreams[activeChatId || '']?.messageId}`]?.full || ""
+                        : "")
+                  }
+                  isConnectingForBubble={
+                    streamingState.chatId === activeChatId
+                      ? isCurrentlyConnectingForUI
+                      : false
+                  }
                 />
 
-                {streamingState.messageId && isCurrentlyConnectingForUI && (
+                {streamingState.messageId && isCurrentlyConnectingForUI && streamingState.chatId === activeChatId && (
                   <Box
                     sx={{
                       position: 'absolute',
@@ -334,12 +369,30 @@ function Chat() {
                       zIndex: 1000,
                       bgcolor: 'background.paper',
                       boxShadow: 3,
-                      padding: '4px 10px',
+                      padding: '6px 12px',
                       borderRadius: 2,
                       display: 'flex',
                       alignItems: 'center',
                     }}
                   >
+                    <CircularProgress
+                      size={16}
+                      thickness={4}
+                      sx={{
+                        color: 'text.secondary',
+                        mr: 1.5
+                      }}
+                    />
+                    <Typography
+                      color="text.secondary"
+                      sx={{
+                        mr: 2,
+                        fontSize: '0.85rem',
+                        fontWeight: 500
+                      }}
+                    >
+                      Generating...
+                    </Typography>
                     <Typography
                       onClick={handleStopGeneration}
                       color="error"

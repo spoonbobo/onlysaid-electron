@@ -8,10 +8,8 @@ import { IChatMessage, IReaction } from "@/../../types/Chat/Message";
 import { IChatRoom, IUpdateChatArgs } from "@/../../types/Chat/Chatroom";
 import { IUser } from "@/../../types/User/User";
 
-// Define the message limit
 const MESSAGE_FETCH_LIMIT = 30;
 
-// update to be dynamic later -- TODO:
 export const DeepSeekUser: IUser = {
   id: "a0382833-7932-4d23-8094-75681edb7160",
   username: "DeepSeek",
@@ -36,7 +34,6 @@ const DBTABLES = {
 const defaultSenderId = "a0382833-7932-4d23-8094-75681edb7160"
 
 interface ChatState {
-  // State properties
   activeChatByContext: Record<string, string | null>;
   messages: Record<string, IChatMessage[]>;
   messageOffsets: Record<string, number>;
@@ -47,7 +44,6 @@ interface ChatState {
   isTyping: boolean;
   chatOverlayMinimized: boolean;
 
-  // Chat operations
   createChat: (userId: string, type: string, contextId?: string, local?: boolean) => Promise<IChatRoom | null>;
   deleteChat: (chatId: string, local?: boolean) => Promise<void>;
   getChat: (userId: string, type: string, workspaceId?: string, local?: boolean) => Promise<void>;
@@ -58,8 +54,7 @@ interface ChatState {
   cleanupContextReferences: (contextId: string) => void;
   cleanupChatReferences: (chatId: string) => void;
 
-  // Message operations
-  sendMessage: (chatId: string, messageData: Partial<IChatMessage>) => Promise<string | void>;
+  sendMessage: (chatId: string, messageData: Partial<IChatMessage>, workspaceId?: string) => Promise<string | void>;
   updateMessage: (chatId: string, messageId: string, data: Partial<IChatMessage>) => Promise<void>;
   fetchMessages: (chatId: string, loadMore?: boolean, preserveHistory?: boolean) => Promise<boolean>;
   deleteMessage: (chatId: string, messageId: string) => Promise<void>;
@@ -67,14 +62,11 @@ interface ChatState {
   appendMessage: (chatId: string, message: IChatMessage) => void;
   getMessageById: (chatId: string, messageId: string) => Promise<IChatMessage | null>;
 
-  // Input/UI operations
   setInput: (chatId: string, input: string, contextId?: string) => void;
   getInput: (chatId: string, contextId?: string) => string;
 
-  // Reaction operations
   toggleReaction: (chatId: string, messageId: string, reaction: string) => Promise<void>;
 
-  // UI operations for chat overlay
   setChatOverlayMinimized: (minimized: boolean) => void;
 }
 
@@ -89,6 +81,8 @@ const NewChat = (userId: string, type: string, workspaceId?: string) => {
     user_id: userId,
   }
 }
+
+const messagesByIdCache = new Map<string, Map<string, IChatMessage>>();
 
 export const useChatStore = create<ChatState>()(
   persist(
@@ -108,10 +102,8 @@ export const useChatStore = create<ChatState>()(
       },
 
       setActiveChat: (chatId, contextId = '') => {
-        // First verify that the chatId exists in chats
         const { chats } = get();
 
-        // Allow empty chatId to clear the active chat
         if (!chatId) {
           set(state => ({
             activeChatByContext: {
@@ -149,7 +141,7 @@ export const useChatStore = create<ChatState>()(
           const chatId = uuidv4();
 
           if (local) {
-            // Use direct DB query for local operation
+            console.log('Creating chat locally');
             await window.electron.db.query({
               query: `
                 insert into ${DBTABLES.CHATROOM}
@@ -182,7 +174,6 @@ export const useChatStore = create<ChatState>()(
             get().setActiveChat(chatId, contextId);
             return localChat;
           } else {
-            // Use API for remote operation
             const response = await window.electron.chat.create({
               token: getUserTokenFromStore(),
               request: newChat
@@ -207,7 +198,6 @@ export const useChatStore = create<ChatState>()(
         try {
           if (local) {
             console.log('Deleting chat locally');
-            // Use direct DB query for local operation
             await window.electron.db.query({
               query: `
                 delete from ${DBTABLES.CHATROOM}
@@ -216,7 +206,6 @@ export const useChatStore = create<ChatState>()(
               params: { id: chatId }
             });
 
-            // Also delete associated messages
             await window.electron.db.query({
               query: `
                 delete from messages
@@ -227,7 +216,6 @@ export const useChatStore = create<ChatState>()(
 
             get().cleanupChatReferences(chatId);
           } else {
-            // Use API for remote operation
             await window.electron.chat.delete({
               token: getUserTokenFromStore(),
               id: chatId
@@ -247,7 +235,6 @@ export const useChatStore = create<ChatState>()(
         set({ isLoading: true, error: null });
         try {
           if (local) {
-            // Use direct DB query for local operation
             let query = `
               select * from ${DBTABLES.CHATROOM}
               where type = @type
@@ -272,7 +259,6 @@ export const useChatStore = create<ChatState>()(
               set({ isLoading: false });
             }
           } else {
-            // Use API for remote operation
             const response = await window.electron.chat.get({
               token: getUserTokenFromStore(),
               userId,
@@ -295,7 +281,6 @@ export const useChatStore = create<ChatState>()(
       updateChat: async (chatId, data, local?: boolean) => {
         set({ isLoading: true, error: null });
         try {
-          // Update in local state first for UI responsiveness
           set((state) => ({
             chats: state.chats.map(chat =>
               chat.id === chatId
@@ -305,18 +290,15 @@ export const useChatStore = create<ChatState>()(
           }));
 
           if (local) {
-            // Prepare fields for update
             const updateFields = Object.entries(data)
-              .filter(([key]) => key !== 'id') // Skip ID
+              .filter(([key]) => key !== 'id')
               .map(([key, _]) => {
-                // Convert camelCase keys to snake_case for SQL
                 const snakeKey = key.replace(/([A-Z])/g, '_$1').toLowerCase();
                 return `${snakeKey} = @${key}`;
               })
               .join(', ');
 
             if (updateFields) {
-              // Add last_updated to params
               const params = {
                 ...data,
                 id: chatId,
@@ -333,7 +315,6 @@ export const useChatStore = create<ChatState>()(
               });
             }
           } else {
-            // Use existing API flow
             const existingChat = get().chats.find(chat => chat.id === chatId);
 
             const updateChatArgs = {
@@ -357,12 +338,11 @@ export const useChatStore = create<ChatState>()(
         }
       },
 
-      sendMessage: async (chatId, messageData) => {
+      sendMessage: async (chatId, messageData, workspaceId?: string) => {
         set({ isLoading: true, error: null });
         try {
           const messageId = uuidv4();
 
-          // @ts-ignore
           await window.electron.db.query({
             query: `
             insert into messages
@@ -381,7 +361,6 @@ export const useChatStore = create<ChatState>()(
             }
           });
 
-
           set({ isLoading: false });
           return messageId;
         } catch (error: any) {
@@ -394,7 +373,6 @@ export const useChatStore = create<ChatState>()(
       updateMessage: async (chatId, messageId, data) => {
         set({ isLoading: true, error: null });
         try {
-          // Update message locally first
           set((state) => ({
             messages: {
               ...state.messages,
@@ -404,20 +382,17 @@ export const useChatStore = create<ChatState>()(
             }
           }));
 
-          // First check if message exists
           const checkQuery = `
             select count(*) as count from messages
             where id = @messageId and chat_id = @chatId
           `;
 
-          // @ts-ignore
           const result = await window.electron.db.query({
             query: checkQuery,
             params: { messageId, chatId }
           });
 
           if (result && result[0] && result[0].count > 0) {
-            // Message exists, update it
             const updateQuery = `
               update messages
               set text = @text, created_at = @createdAt
@@ -425,23 +400,19 @@ export const useChatStore = create<ChatState>()(
               and chat_id = @chatId
             `;
 
-            // @ts-ignore
             await window.electron.db.query({
               query: updateQuery,
               params: { messageId, chatId, text: data.text, createdAt: data.created_at }
             });
           } else {
-            // Message doesn't exist, insert it
             const insertQuery = `
               insert into messages (id, chat_id, sender, text, created_at)
               values (@messageId, @chatId, @sender, @text, @createdAt)
             `;
 
-            // Find the message in state to get the sender
             const message = get().messages[chatId]?.find(msg => msg.id === messageId);
             const sender = message?.sender || defaultSenderId;
 
-            // @ts-ignore
             await window.electron.db.query({
               query: insertQuery,
               params: {
@@ -469,10 +440,8 @@ export const useChatStore = create<ChatState>()(
           const existingMessages = (preserveHistory || loadMore) ?
             (get().messages[chatId] || []) : [];
 
-          // Create a Set of existing message IDs for quick lookup
           const existingMessageIds = new Set(existingMessages.map(msg => msg.id));
 
-          // @ts-ignore
           const response = await window.electron.db.query({
             query: `
               select * from messages
@@ -496,7 +465,6 @@ export const useChatStore = create<ChatState>()(
             const placeholders = msgIds.map((_, i) => `@id${i}`).join(',');
             const params = msgIds.reduce((acc, id, i) => ({ ...acc, [`id${i}`]: id }), {});
 
-            // @ts-ignore
             const reactions = await window.electron.db.query({
               query: `
               select * from reactions
@@ -505,8 +473,6 @@ export const useChatStore = create<ChatState>()(
               params: params
             });
 
-            // Access reactions data directly like we do with messages
-            // The structure appears different between responses
             const reactionData = Array.isArray(reactions) ? reactions : (reactions?.data?.data || []);
             const reactionsByMessageId = R.groupBy(R.prop('message_id'), reactionData as IReaction[]);
 
@@ -515,7 +481,6 @@ export const useChatStore = create<ChatState>()(
             let userMap: Record<string, IUser> = {};
 
             try {
-              // @ts-ignore
               const userInfos = await window.electron.user.get({
                 token: getUserTokenFromStore(),
                 args: {
@@ -523,7 +488,6 @@ export const useChatStore = create<ChatState>()(
                 }
               });
 
-              // Add null checks to handle undefined data
               if (userInfos && userInfos.data && userInfos.data.data) {
                 userMap = R.indexBy(
                   R.prop('id') as (user: IUser) => string,
@@ -534,12 +498,18 @@ export const useChatStore = create<ChatState>()(
               console.error("Error fetching user information:", error);
             }
 
-            // Add reactions to messages
             const messagesWithUsersAndReactions = R.map(msg => ({
               ...msg,
               sender_object: userMap[msg.sender] || null,
               reactions: reactionsByMessageId[msg.id] || []
             }), fetchedMessages).filter(msg => !existingMessageIds.has(msg.id));
+
+            if (!messagesByIdCache.has(chatId)) {
+              messagesByIdCache.set(chatId, new Map());
+            }
+
+            const chatMessageMap = messagesByIdCache.get(chatId)!;
+            fetchedMessages.forEach(msg => chatMessageMap.set(msg.id, msg));
 
             set(state => {
               const currentMessages = state.messages[chatId] || [];
@@ -587,13 +557,11 @@ export const useChatStore = create<ChatState>()(
       },
 
       markAsRead: (chatId) => {
-        // TODO: Implement markAsRead
       },
 
       deleteMessage: async (chatId, messageId) => {
         set({ isLoading: true, error: null });
         try {
-          // Update local state to remove the message (this can happen first for UX responsiveness)
           set((state) => ({
             messages: {
               ...state.messages,
@@ -632,16 +600,13 @@ export const useChatStore = create<ChatState>()(
       },
 
       editMessage: async (chatId, messageId, content) => {
-        // TODO: Implement editMessage
       },
 
       cleanupContextReferences: (contextId) => {
         set((state) => {
-          // Remove references to this context in activeChatByContext
           const newActiveChatByContext = { ...state.activeChatByContext };
           delete newActiveChatByContext[contextId];
 
-          // Clean up input state for this context
           const newInputByContextChat = { ...state.inputByContextChat };
           Object.keys(newInputByContextChat).forEach(key => {
             if (key.startsWith(`${contextId}:`)) {
@@ -656,14 +621,12 @@ export const useChatStore = create<ChatState>()(
         });
       },
 
-
       appendMessage: (chatId, message) => {
         set(state => {
           const currentMessages = state.messages[chatId] || [];
 
-          // Check if message already exists
           if (currentMessages.some(msg => msg.id === message.id)) {
-            return state; // No change needed
+            return state;
           }
 
           return {
@@ -675,7 +638,6 @@ export const useChatStore = create<ChatState>()(
         });
       },
 
-      // Add the implementation
       getMessageById: async (chatId, messageId) => {
         const query = `
           select * from messages
@@ -683,7 +645,6 @@ export const useChatStore = create<ChatState>()(
           and chat_id = @chatId
         `;
 
-        // @ts-ignore
         const result = await window.electron.db.query({
           query,
           params: { messageId, chatId }
@@ -692,14 +653,11 @@ export const useChatStore = create<ChatState>()(
         return result.data[0] || null;
       },
 
-      // Add this implementation inside the store
       toggleReaction: async (chatId, messageId, reaction) => {
         try {
           const currentUser = getUserFromStore();
           if (!currentUser || !currentUser.id) return;
 
-          // Check if reaction already exists in database
-          // @ts-ignore
           const existingReaction = await window.electron.db.query({
             query: `
               select id from reactions
@@ -718,14 +676,12 @@ export const useChatStore = create<ChatState>()(
           const reactionId = reactionExists ? existingReaction[0]?.id : uuidv4();
           const createdAt = new Date().toISOString();
 
-          // Get current message for UI update
           const messages = get().messages[chatId] || [];
           const message = messages.find(m => m.id === messageId);
           if (!message) return;
 
           const currentReactions = message.reactions || [];
 
-          // Update local state
           set((state) => {
             const messages = state.messages[chatId] || [];
             const messageIndex = messages.findIndex(m => m.id === messageId);
@@ -757,7 +713,6 @@ export const useChatStore = create<ChatState>()(
           });
 
           if (!reactionExists) {
-            // @ts-ignore
             await window.electron.db.query({
               query: `
                 insert into reactions
@@ -774,7 +729,6 @@ export const useChatStore = create<ChatState>()(
               }
             });
           } else {
-            // @ts-ignore
             await window.electron.db.query({
               query: `
                 delete from reactions
@@ -794,7 +748,6 @@ export const useChatStore = create<ChatState>()(
         }
       },
 
-      // Add this helper function to the store
       cleanupChatReferences: (chatId: string) => {
         set(state => {
           const updatedChats = state.chats.filter(chat => chat.id !== chatId);
@@ -803,19 +756,15 @@ export const useChatStore = create<ChatState>()(
 
           const { [chatId]: removedOffset, ...restOffsets } = state.messageOffsets;
 
-          // Create a new activeChatByContext object with valid chat references
           const newActiveChatByContext = { ...state.activeChatByContext };
 
-          // First pass: remove references to the deleted chat
           Object.entries(newActiveChatByContext).forEach(([contextId, activeChatId]) => {
             if (activeChatId === chatId) {
               delete newActiveChatByContext[contextId];
             }
           });
 
-          // Second pass: validate all remaining references
           Object.entries(newActiveChatByContext).forEach(([contextId, activeChatId]) => {
-            // If chatId doesn't exist in chats array, remove it
             if (!updatedChats.some(chat => chat.id === activeChatId)) {
               delete newActiveChatByContext[contextId];
             }
@@ -838,14 +787,12 @@ export const useChatStore = create<ChatState>()(
         });
       },
 
-      // Add the new setter function
       setChatOverlayMinimized: (minimized) => set({ chatOverlayMinimized: minimized }),
     }),
     {
       name: "chat-storage",
       storage: createJSONStorage(() => localStorage),
       partialize: (state) => {
-        // Limit each chat's messages to 100 most recent
         const limitedMessages: Record<string, IChatMessage[]> = {};
         Object.entries(state.messages).forEach(([chatId, messages]) => {
           limitedMessages[chatId] = messages.slice(-100);

@@ -9,7 +9,9 @@ import ChatUpdate from '@/components/Dialog/ChatUpdate';
 import { IChatRoom } from '@/../../types/Chat/Chatroom';
 import { useCurrentTopicContext } from "@/stores/Topic/TopicStore";
 import { getUserFromStore } from "@/utils/user";
-import { useUserStore } from "@/stores/User/UserStore";
+import { useWorkspaceStore } from "@/stores/Workspace/WorkspaceStore";
+import { toast } from "@/utils/toast";
+import { IWorkspaceUser } from '@/../../types/Workspace/Workspace';
 
 export default function WorkspaceChatMenu() {
   const { selectedContext } = useCurrentTopicContext();
@@ -19,19 +21,18 @@ export default function WorkspaceChatMenu() {
   const setActiveChat = useChatStore((state) => state.setActiveChat);
   const deleteChat = useChatStore((state) => state.deleteChat);
   const getChat = useChatStore((state) => state.getChat);
-  const user = useUserStore((state) => state.user);
-
+  const getUserInWorkspace = useWorkspaceStore((state) => state.getUserInWorkspace);
 
   const [menuAnchorEl, setMenuAnchorEl] = useState<null | HTMLElement>(null);
   const [selectedChatId, setSelectedChatId] = useState<string>('');
   const [chatUpdateOpen, setChatUpdateOpen] = useState(false);
   const [selectedChat, setSelectedChat] = useState<IChatRoom | null>(null);
+  const [workspaceUser, setWorkspaceUser] = useState<IWorkspaceUser | null>(null);
   const menuOpen = Boolean(menuAnchorEl);
 
   const workspaceId = selectedContext?.id || '';
   const section = selectedContext?.section || '';
   const selectedSubcategory = section ? selectedTopics[section] || '' : '';
-  const isLocal = false;
 
   const getContextId = () => {
     if (!selectedContext) return '';
@@ -53,6 +54,18 @@ export default function WorkspaceChatMenu() {
     }
   }, [chats, workspaceId, selectedSubcategory, setSelectedTopic, setActiveChat, section]);
 
+  useEffect(() => {
+    const fetchWorkspaceUser = async () => {
+      const currentUser = getUserFromStore();
+      if (currentUser?.id && workspaceId) {
+        const user = await getUserInWorkspace(workspaceId, currentUser.id);
+        setWorkspaceUser(user);
+      }
+    };
+
+    fetchWorkspaceUser();
+  }, [workspaceId, getUserInWorkspace]);
+
   const handleSelectChat = (chatId: string) => {
     setSelectedTopic(section, chatId);
     setActiveChat(chatId, getContextId());
@@ -73,8 +86,14 @@ export default function WorkspaceChatMenu() {
     setMenuAnchorEl(null);
   };
 
+  const canModifyChat = workspaceUser?.role === 'admin' || workspaceUser?.role === 'super_admin';
+
   const handleDeleteChat = (id?: string, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
+    if (!canModifyChat) {
+      toast.error("You don't have permission to delete chats");
+      return;
+    }
 
     const chatIdToDelete = id || selectedChatId;
     if (chatIdToDelete) {
@@ -92,6 +111,33 @@ export default function WorkspaceChatMenu() {
 
   const workspaceChats = chats.filter(chat => chat.workspace_id === workspaceId);
 
+  const menuItems = [];
+
+  if (canModifyChat) {
+    menuItems.push(
+      <MenuItem
+        key="rename"
+        onClick={() => {
+          const chat = chats.find(c => c.id === selectedChatId) || null;
+          handleRenameChat(chat);
+        }}
+        sx={{ minHeight: 36, fontSize: 14 }}
+      >
+        <FormattedMessage id="menu.chat.rename" defaultMessage="Rename" />
+      </MenuItem>
+    );
+
+    menuItems.push(
+      <MenuItem
+        key="delete"
+        onClick={() => handleDeleteChat(selectedChatId)}
+        sx={{ minHeight: 36, fontSize: 14, color: 'error.main' }}
+      >
+        <FormattedMessage id="menu.chat.delete" defaultMessage="Delete" />
+      </MenuItem>
+    );
+  }
+
   try {
     return (
       <Box sx={{ mt: 2, px: 2 }}>
@@ -105,18 +151,20 @@ export default function WorkspaceChatMenu() {
                 onClick={() => handleSelectChat(chat.id)}
                 onContextMenu={(e) => handleContextMenu(e, chat.id)}
                 endIcon={
-                  <IconButton
-                    size="small"
-                    sx={{
-                      p: 0.25,
-                      opacity: 0,
-                      '&:hover': { opacity: 1 },
-                      '.MuiListItemButton-root:hover &': { opacity: 1 }
-                    }}
-                    onClick={(e) => handleDeleteChat(chat.id, e)}
-                  >
-                    <CloseIcon sx={{ fontSize: 16 }} />
-                  </IconButton>
+                  canModifyChat && (
+                    <IconButton
+                      size="small"
+                      sx={{
+                        p: 0.25,
+                        opacity: 0,
+                        '&:hover': { opacity: 1 },
+                        '.MuiListItemButton-root:hover &': { opacity: 1 }
+                      }}
+                      onClick={(e) => handleDeleteChat(chat.id, e)}
+                    >
+                      <CloseIcon sx={{ fontSize: 16 }} />
+                    </IconButton>
+                  )
                 }
                 sx={{ pl: 4 }}
               />
@@ -141,15 +189,7 @@ export default function WorkspaceChatMenu() {
             horizontal: 'right',
           }}
         >
-          <MenuItem onClick={() => {
-            const chat = chats.find(c => c.id === selectedChatId) || null;
-            handleRenameChat(chat);
-          }} sx={{ minHeight: 36, fontSize: 14 }}>
-            <FormattedMessage id="menu.chat.rename" defaultMessage="Rename" />
-          </MenuItem>
-          <MenuItem onClick={() => handleDeleteChat(selectedChatId)} sx={{ minHeight: 36, fontSize: 14, color: 'error.main' }}>
-            <FormattedMessage id="menu.chat.delete" defaultMessage="Delete" />
-          </MenuItem>
+          {menuItems}
         </Menu>
 
         <ChatUpdate

@@ -14,6 +14,7 @@ interface UserStore {
   error: string | null;
   timeoutId: NodeJS.Timeout | null;
   setUser: (user: IUser | null) => void;
+  updateUser: (user: IUser) => void;
   signIn: () => void;
   logout: () => void;
   handleAuthentication: (input: { response?: any; token?: string; cookieName?: string | null }, intl?: any) => Promise<void>;
@@ -163,6 +164,10 @@ export const useUserStore = create<UserStore>()(
           clearTimeout(timeoutId);
           set({ timeoutId: null });
         }
+      },
+
+      updateUser: (user: IUser) => {
+        set({ user });
       },
 
       gainExperience: async (amount: number) => {

@@ -13,6 +13,8 @@ interface WorkspaceCreateData extends Partial<IWorkspace> {
   users?: string[];
 }
 
+type WORKSPACE_ROLE = 'super_admin' | 'admin' | 'member';
+
 interface WorkspaceState {
   workspaces: IWorkspace[];
   isLoading: boolean;
@@ -26,12 +28,14 @@ interface WorkspaceState {
   getWorkspace: (userId: string) => Promise<void>;
   joinWorkspaceByInviteCode: (inviteCode: string) => Promise<IWorkspace>;
 
-  addUserToWorkspace: (workspaceId: string, userId: string, role: string) => Promise<void>;
+  addUserToWorkspace: (workspaceId: string, userId: string | undefined, role: string, email?: string) => Promise<void>;
   removeUserFromWorkspace: (workspaceId: string, userId: string) => Promise<void>;
   getUsersByWorkspace: (workspaceId: string, role?: string) => Promise<IWorkspaceUser[]>;
 
   onWorkspaceCreated?: (workspace: IWorkspace) => void;
   setWorkspaceCreatedCallback: (callback: ((workspace: IWorkspace) => void) | undefined) => void;
+
+  getUserInWorkspace: (workspaceId: string, userId: string) => Promise<IWorkspaceUser | null>;
 }
 
 export const useWorkspaceStore = create<WorkspaceState>()((set, get) => ({
@@ -121,7 +125,6 @@ export const useWorkspaceStore = create<WorkspaceState>()((set, get) => ({
         token: getUserTokenFromStore(),
         userId: userId,
       });
-      console.log('response', response);
 
       if (response.data?.data && Array.isArray(response.data.data)) {
         const ws: IWorkspaceWithRole[] = response.data.data;
@@ -174,14 +177,33 @@ export const useWorkspaceStore = create<WorkspaceState>()((set, get) => ({
     return get().workspaces.find(workspace => workspace.id === workspaceId);
   },
 
-  addUserToWorkspace: async (workspaceId, userId, role) => {
+  addUserToWorkspace: async (workspaceId, userId, role, email?: string) => {
     set({ isLoading: true, error: null });
     try {
-      // Implementation remains the same
+      const response = await window.electron.workspace.add_users({
+        token: getUserTokenFromStore(),
+        workspaceId,
+        request: [{
+          user_id: userId,
+          role: role as WORKSPACE_ROLE,
+          email: email
+        }]
+      });
+
+      if (response.error) {
+        throw new Error(response.error);
+      }
+
+      await get().getUsersByWorkspace(workspaceId);
+
+      set({ isLoading: false });
+      toast.success("User added to workspace successfully");
+
+      return response.data;
     } catch (error: any) {
       set({ error: error.message, isLoading: false });
+      toast.error(error.message || "Failed to add user to workspace");
       console.error("Error adding user to workspace:", error);
-      throw error;
     }
   },
 
@@ -283,5 +305,17 @@ export const useWorkspaceStore = create<WorkspaceState>()((set, get) => ({
 
   setWorkspaceCreatedCallback: (callback) => {
     set({ onWorkspaceCreated: callback });
+  },
+
+  getUserInWorkspace: async (workspaceId: string, userId: string) => {
+    try {
+      const workspaceUsers = await get().getUsersByWorkspace(workspaceId);
+      const userInWorkspace = workspaceUsers.find(user => user.user_id === userId);
+
+      return userInWorkspace || null;
+    } catch (error) {
+      console.error("Error getting user in workspace:", error);
+      return null;
+    }
   },
 }));

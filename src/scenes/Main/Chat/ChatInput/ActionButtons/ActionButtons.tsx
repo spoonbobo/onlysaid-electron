@@ -1,12 +1,11 @@
-import { useState, useRef } from "react";
-import { Box, Button, IconButton, alpha } from "@mui/material";
+import { useRef } from "react";
+import { Box, IconButton, alpha } from "@mui/material";
 import SendIcon from "@mui/icons-material/Send";
 import MicIcon from "@mui/icons-material/Mic";
 import AttachFileIcon from "@mui/icons-material/AttachFile";
-import { FormattedMessage } from "react-intl";
 import { useSelectedModelStore } from "@/stores/LLM/SelectedModelStore";
 import ModelSelector from "./ModelSelector";
-import { useCurrentTopicContext } from "@/stores/Topic/TopicStore";
+import AIMode from "./AIMode";
 
 interface ActionButtonsProps {
   input: string;
@@ -25,7 +24,6 @@ export default function ActionButtons({
   isSending = false,
   hasAttachments = false
 }: ActionButtonsProps) {
-  const { trustMode, setTrustMode } = useCurrentTopicContext();
   const { modelId, provider } = useSelectedModelStore();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -61,84 +59,70 @@ export default function ActionButtons({
         flexWrap: "wrap",
         gap: 0.5,
         alignItems: "center",
-        p: 1,
+        px: 2,
+        py: 1,
         justifyContent: "flex-end",
         bgcolor: theme => alpha(theme.palette.background.paper, 0.5),
       }}
     >
-      <ModelSelector disabled={disabled} />
+      <Box sx={{ display: "flex", gap: 0.5 }}>
+        <AIMode disabled={disabled} />
+        <ModelSelector disabled={disabled} />
+      </Box>
 
-      <Button
-        variant="text"
-        size="small"
-        sx={{
-          minWidth: "auto",
-          px: 1.5,
-          borderRadius: "20px",
-          color: trustMode ? "#ec4899" : "text.disabled",
-          fontWeight: "bold",
-          fontSize: "0.75rem",
-          "&:hover": {
-            color: "#ec4899",
-            bgcolor: "transparent"
-          }
-        }}
-        onClick={() => setTrustMode(!trustMode)}
-      >
-        <FormattedMessage id="chat.trustMode" />
-      </Button>
+      <Box sx={{ display: "flex", gap: 0.5 }}>
+        <IconButton
+          size="small"
+          disabled
+          sx={{
+            color: "text.disabled",
+            opacity: 0.5,
+            "&:hover": {
+              bgcolor: "transparent"
+            }
+          }}
+        >
+          <MicIcon fontSize="small" />
+        </IconButton>
 
-      <IconButton
-        size="small"
-        disabled
-        sx={{
-          color: "text.disabled",
-          opacity: 0.5,
-          "&:hover": {
-            bgcolor: "transparent"
-          }
-        }}
-      >
-        <MicIcon fontSize="small" />
-      </IconButton>
+        <IconButton
+          size="small"
+          onClick={() => fileInputRef.current?.click()}
+          disabled={disabled}
+          sx={{
+            color: hasAttachments ? "primary.main" : "text.secondary",
+            "&:hover": {
+              bgcolor: "transparent"
+            }
+          }}
+        >
+          <AttachFileIcon fontSize="small" />
+          <input
+            type="file"
+            ref={fileInputRef}
+            style={{ display: 'none' }}
+            onChange={handleFileSelect}
+            accept="image/*,video/*,audio/*,application/*"
+          />
+        </IconButton>
 
-      <IconButton
-        size="small"
-        onClick={() => fileInputRef.current?.click()}
-        disabled={disabled}
-        sx={{
-          color: hasAttachments ? "primary.main" : "text.secondary",
-          "&:hover": {
-            bgcolor: "transparent"
-          }
-        }}
-      >
-        <AttachFileIcon fontSize="small" />
-        <input
-          type="file"
-          ref={fileInputRef}
-          style={{ display: 'none' }}
-          onChange={handleFileSelect}
-          accept="image/*,video/*,audio/*,application/*"
-        />
-      </IconButton>
-
-      <IconButton
-        type="submit"
-        onClick={onSend}
-        size="small"
-        disabled={(!input.trim() && !hasAttachments) || disabled || isSending}
-        sx={{
-          color: (input.trim() || hasAttachments) && !disabled && modelId && provider
-            ? "primary.main"
-            : "text.disabled",
-          "&:hover": {
-            bgcolor: theme => alpha(theme.palette.primary.main, 0.08)
-          }
-        }}
-      >
-        <SendIcon fontSize="small" />
-      </IconButton>
+        <IconButton
+          type="submit"
+          onClick={onSend}
+          size="small"
+          disabled={(!input.trim() && !hasAttachments) || disabled || isSending}
+          sx={{
+            color: (input.trim() || hasAttachments) && !disabled && modelId && provider
+              ? "primary.main"
+              : "text.disabled",
+            "&:hover": {
+              bgcolor: theme => alpha(theme.palette.primary.main, 0.08)
+            }
+          }}
+        >
+          <SendIcon fontSize="small" />
+        </IconButton>
+      </Box>
     </Box>
   );
 }

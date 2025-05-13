@@ -24,25 +24,6 @@ export const setupUserHandlers = () => {
     }
   });
 
-  ipcMain.handle('user:get_one', async (event, args) => {
-    try {
-      const user = await onlysaidServiceInstance.get<IUser>(
-        '/user?id=' + args.id,
-        {
-          headers: {
-            Authorization: `Bearer ${args.token}`
-          }
-        }
-      );
-      return { data: user.data };
-    } catch (error: any) {
-      console.error('Error in main process API call (get_user):', error.message);
-      return {
-        error: error.message,
-        status: error.response?.status
-      };
-    }
-  });
 
   ipcMain.handle('user:get', async (event, arg: IUserGet) => {
     try {

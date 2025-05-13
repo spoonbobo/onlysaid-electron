@@ -6,6 +6,7 @@ import { useChatStore } from "@/stores/Chat/ChatStore";
 import ChatBubble from "@/components/Chat/ChatBubble";
 import { useCurrentTopicContext } from "@/stores/Topic/TopicStore";
 import { useIntl } from "react-intl";
+import { throttle } from "lodash";
 
 interface ChatUIProps {
   messages: IChatMessage[];
@@ -17,8 +18,19 @@ interface ChatUIProps {
   isConnectingForBubble?: boolean;
 }
 
-// Memoize the individual message to prevent re-renders
 const MemoizedChatBubble = memo(ChatBubble);
+
+function useEvent<T extends (...args: any[]) => any>(handler: T): T {
+  const handlerRef = useRef<T>(handler);
+
+  useEffect(() => {
+    handlerRef.current = handler;
+  });
+
+  return useCallback((...args: Parameters<T>): ReturnType<T> => {
+    return handlerRef.current(...args);
+  }, []) as T;
+}
 
 function ChatUI({ messages, onReply, streamingMessageId, streamContentForBubble, isConnectingForBubble }: ChatUIProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -30,10 +42,14 @@ function ChatUI({ messages, onReply, streamingMessageId, streamContentForBubble,
   const prevMessagesLength = useRef(0);
   const hasUserScrolled = useRef(false);
   const [hoveredMessageId, setHoveredMessageId] = useState<string | null>(null);
+  const initialScrollRestored = useRef(false);
+  const lastSavedScrollPosition = useRef(0);
 
-  const { selectedTopics } = useCurrentTopicContext();
+  const { selectedTopics, setScrollPosition, getScrollPosition } = useCurrentTopicContext();
   const chatId = Object.values(selectedTopics)[0];
   const intl = useIntl();
+
+  const scrollMetricsRef = useRef({ scrollHeight: 0, clientHeight: 0 });
 
   const handleMessageMouseEnter = useCallback((messageId: string) => {
     setHoveredMessageId(messageId);
@@ -52,15 +68,49 @@ function ChatUI({ messages, onReply, streamingMessageId, streamContentForBubble,
     }
   }, []);
 
+  const saveScrollPosition = useEvent((chatId: string, scrollTop: number) => {
+    if (Math.abs(scrollTop - lastSavedScrollPosition.current) > 50) {
+      setScrollPosition(chatId, scrollTop);
+      lastSavedScrollPosition.current = scrollTop;
+    }
+  });
+
+  const throttledSaveScrollPosition = useMemo(
+    () => throttle(saveScrollPosition, 500),
+    []
+  );
+
+  useEffect(() => {
+    if (!chatId || !scrollContainerRef.current) return;
+
+    initialScrollRestored.current = false;
+    hasUserScrolled.current = false;
+
+    const savedPosition = getScrollPosition(chatId);
+    lastSavedScrollPosition.current = savedPosition;
+
+    if (savedPosition > 0) {
+      requestAnimationFrame(() => {
+        if (scrollContainerRef.current) {
+          scrollContainerRef.current.scrollTop = savedPosition;
+          initialScrollRestored.current = true;
+          hasUserScrolled.current = true;
+        }
+      });
+    } else {
+      requestAnimationFrame(scrollToBottom);
+    }
+  }, [chatId, getScrollPosition, scrollToBottom]);
+
   const handleScroll = useCallback(() => {
+    if (!scrollContainerRef.current || !chatId) return;
+
+    const { scrollTop, scrollHeight, clientHeight } = scrollContainerRef.current;
+
+    // Only track scroll if not loading more or streaming
     if (streamingMessageId && isConnectingForBubble) {
       shouldScrollToBottom.current = false;
     }
-
-    if (!scrollContainerRef.current) return;
-
-    const { scrollTop, scrollHeight, clientHeight } = scrollContainerRef.current;
-    const loadMoreThreshold = clientHeight * 0.1;
 
     if (!hasUserScrolled.current && scrollTop !== 0) {
       hasUserScrolled.current = true;
@@ -69,16 +119,35 @@ function ChatUI({ messages, onReply, streamingMessageId, streamContentForBubble,
     const isNearBottom = scrollHeight - scrollTop - clientHeight < (clientHeight * 0.15);
     shouldScrollToBottom.current = isNearBottom;
 
+    // Save scroll position with throttle
+    if (hasUserScrolled.current) {
+      throttledSaveScrollPosition(chatId, scrollTop);
+    }
+
+    // Check if we need to load more messages
+    const loadMoreThreshold = clientHeight * 0.1;
     if (
       scrollTop < loadMoreThreshold &&
       hasMoreMessages &&
       !isLoadingMore &&
-      hasUserScrolled.current &&
-      chatId
+      hasUserScrolled.current
     ) {
       loadOlderMessages();
     }
-  }, [hasMoreMessages, isLoadingMore, chatId, streamingMessageId, isConnectingForBubble]);
+  }, [hasMoreMessages, isLoadingMore, chatId, streamingMessageId, isConnectingForBubble, throttledSaveScrollPosition]);
+
+  // Save scroll position on unmount
+  useEffect(() => {
+    return () => {
+      if (chatId && scrollContainerRef.current) {
+        const scrollTop = scrollContainerRef.current.scrollTop;
+        if (Math.abs(scrollTop - lastSavedScrollPosition.current) > 50) {
+          setScrollPosition(chatId, scrollTop);
+        }
+        throttledSaveScrollPosition.cancel();
+      }
+    };
+  }, [chatId, setScrollPosition, throttledSaveScrollPosition]);
 
   const loadOlderMessages = async () => {
     if (!chatId || isLoadingMore || !hasMoreMessages) return;
@@ -96,6 +165,7 @@ function ChatUI({ messages, onReply, streamingMessageId, streamContentForBubble,
         setHasMoreMessages(false);
       }
 
+      // Use requestAnimationFrame for smoother UI
       requestAnimationFrame(() => {
         if (scrollContainer) {
           const newScrollHeight = scrollContainer.scrollHeight;
@@ -113,13 +183,17 @@ function ChatUI({ messages, onReply, streamingMessageId, streamContentForBubble,
   useEffect(() => {
     if (chatId) {
       setHasMoreMessages(true);
-      hasUserScrolled.current = false;
-      shouldScrollToBottom.current = true;
+      if (!initialScrollRestored.current) {
+        shouldScrollToBottom.current = true;
+      }
       prevMessagesLength.current = 0;
 
       const fetchInitial = async () => {
         await useChatStore.getState().fetchMessages(chatId, false);
-        setTimeout(scrollToBottom, 50);
+
+        if (!initialScrollRestored.current) {
+          requestAnimationFrame(scrollToBottom);
+        }
       };
       fetchInitial();
     }
@@ -127,27 +201,19 @@ function ChatUI({ messages, onReply, streamingMessageId, streamContentForBubble,
 
   useEffect(() => {
     if (streamContentForBubble && shouldScrollToBottom.current) {
-      requestAnimationFrame(() => {
-        scrollToBottom();
-      });
+      requestAnimationFrame(scrollToBottom);
     }
   }, [streamContentForBubble, scrollToBottom]);
 
   useEffect(() => {
-    const scrollAfterRender = () => {
-      requestAnimationFrame(() => {
-        scrollToBottom();
-      });
-    };
-
-    if (messages.length > 0 && prevMessagesLength.current === 0 && shouldScrollToBottom.current) {
-      scrollAfterRender();
+    if (messages.length > 0 && prevMessagesLength.current === 0 && shouldScrollToBottom.current && !initialScrollRestored.current) {
+      requestAnimationFrame(scrollToBottom);
     }
 
     if (messages.length > prevMessagesLength.current && !isLoadingMore) {
       const lastMessage = messages[messages.length - 1];
       if (lastMessage?.sender === userId || shouldScrollToBottom.current) {
-        scrollAfterRender();
+        requestAnimationFrame(scrollToBottom);
       }
     }
 
@@ -155,14 +221,56 @@ function ChatUI({ messages, onReply, streamingMessageId, streamContentForBubble,
   }, [messages, userId, scrollToBottom, isLoadingMore]);
 
   const processedMessages = useMemo(() => {
-    return messages.map((msg, index) => {
+    let messagesToProcess = [...messages];
+
+    if (streamingMessageId && !messagesToProcess.some(m => m.id === streamingMessageId)) {
+      const assistantUser = {
+        id: "assistant",
+        username: "Assistant",
+        email: ""
+      };
+
+      let lastUserMessageTime = new Date(0); // Default to epoch start
+      let lastUserMessageIndex = -1;
+
+      for (let i = messagesToProcess.length - 1; i >= 0; i--) {
+        if (messagesToProcess[i].sender === userId) {
+          lastUserMessageTime = new Date(messagesToProcess[i].created_at);
+          lastUserMessageIndex = i;
+          break;
+        }
+      }
+
+      const streamMessageTime = new Date(lastUserMessageTime.getTime() + 100);
+
+      const placeholderMessage = {
+        id: streamingMessageId,
+        chat_id: chatId || '',
+        sender: assistantUser.id,
+        sender_object: assistantUser,
+        text: "",
+        created_at: streamMessageTime.toISOString(),
+      };
+
+      if (lastUserMessageIndex >= 0) {
+        messagesToProcess.splice(lastUserMessageIndex + 1, 0, placeholderMessage);
+      } else {
+        messagesToProcess.push(placeholderMessage);
+      }
+    }
+
+    messagesToProcess.sort((a, b) => {
+      return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+    });
+
+    return messagesToProcess.map((msg, index) => {
       const isCurrentUser = msg.sender === userId;
-      const previousMessage = index > 0 ? messages[index - 1] : undefined;
-      const nextMessage = index < messages.length - 1 ? messages[index + 1] : undefined;
+      const previousMessage = index > 0 ? messagesToProcess[index - 1] : undefined;
+      const nextMessage = index < messagesToProcess.length - 1 ? messagesToProcess[index + 1] : undefined;
       const isLastInSequence = nextMessage?.sender !== msg.sender;
 
       const replyToMessage = msg.reply_to
-        ? messages.find(m => m.id === msg.reply_to) || null
+        ? messagesToProcess.find(m => m.id === msg.reply_to) || null
         : null;
 
       const isContinuation = !replyToMessage &&
@@ -177,7 +285,26 @@ function ChatUI({ messages, onReply, streamingMessageId, streamContentForBubble,
         messageKey: msg.id || `message-${index}-${Date.now()}`
       };
     });
-  }, [messages, userId]);
+  }, [messages, userId, streamingMessageId, chatId]);
+
+  useEffect(() => {
+    // Update metrics on resize
+    const updateMetrics = () => {
+      if (scrollContainerRef.current) {
+        scrollMetricsRef.current = {
+          scrollHeight: scrollContainerRef.current.scrollHeight,
+          clientHeight: scrollContainerRef.current.clientHeight
+        };
+      }
+    };
+
+    const resizeObserver = new ResizeObserver(updateMetrics);
+    if (scrollContainerRef.current) {
+      resizeObserver.observe(scrollContainerRef.current);
+    }
+
+    return () => resizeObserver.disconnect();
+  }, []);
 
   return (
     <Box
@@ -189,7 +316,7 @@ function ChatUI({ messages, onReply, streamingMessageId, streamContentForBubble,
         overflowY: "auto",
         height: "100%",
         maxHeight: "100%",
-        px: 1,
+        px: 3,
         pt: 2,
         pb: 0.8
       }}

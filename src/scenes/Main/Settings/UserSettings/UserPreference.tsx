@@ -138,14 +138,11 @@ function UserPreferences() {
             <option value="en">
               <FormattedMessage id="language.english" />
             </option>
-            <option value="es">
-              <FormattedMessage id="language.spanish" />
-            </option>
-            <option value="fr">
-              <FormattedMessage id="language.french" />
-            </option>
             <option value="zh-hk">
               <FormattedMessage id="language.chinese" />
+            </option>
+            <option value="ja">
+              <FormattedMessage id="language.japanese" />
             </option>
           </TextField>
         </SettingsFormField>

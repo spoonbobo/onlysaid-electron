@@ -5,26 +5,26 @@ import os from 'os';
 
 // namespace
 type AuthChannels = 'auth:sign-in' | 'auth:signed-in';
-type WindowChannels =
-  | 'window:create-tab'
-  | 'window:close-tab'
-  | 'window:focus-tab'
-  | 'window:rename-tab'
-  | 'window:sync-state'
-  | 'window:tab-created'
-  | 'window:create-window'
-  | 'window:close-window'
-  | 'window:focus-window'
-  | 'window:detach-tab'
-  | 'window:move-tab'
-  | 'window:init'
-  | 'window:tab-moved'
-  | 'window:tab-detached'
-  | 'window:tab-focused'
-  | 'window:tab-closed'
-  | 'window:bounds-changed'
-  | 'window:state-changed'
-  | 'window:get-active-tab';
+// type WindowChannels =
+//   | 'window:create-tab'
+//   | 'window:close-tab'
+//   | 'window:focus-tab'
+//   | 'window:rename-tab'
+//   | 'window:sync-state'
+//   | 'window:tab-created'
+//   | 'window:create-window'
+//   | 'window:close-window'
+//   | 'window:focus-window'
+//   | 'window:detach-tab'
+//   | 'window:move-tab'
+//   | 'window:init'
+//   | 'window:tab-moved'
+//   | 'window:tab-detached'
+//   | 'window:tab-focused'
+//   | 'window:tab-closed'
+//   | 'window:bounds-changed'
+//   | 'window:state-changed'
+//   | 'window:get-active-tab';
 type MenuChannels = 'menu:close-tab' | 'menu:new-tab';
 type MiscChannels = 'ipc-example';
 type DbChannels = 'db:initialize' | 'db:query' | 'db:transaction' | 'db:close';
@@ -32,7 +32,7 @@ type SystemChannels = 'system:get-cpu-usage' | 'system:get-memory-usage' | 'syst
 type FileSystemChannels = 'get-file-content';
 
 type SSEChannels = 'streaming:abort_stream' | 'streaming:chat_stream_complete' | 'streaming:chunk';
-type MCPChannels = 'mcp:initialize_client';
+type MCPChannels = 'mcp:initialize_client' | 'mcp:list_tools';
 
 type ApiChatChannels = 'chat:get' | 'chat:create' | 'chat:update' | 'chat:delete';
 type ApiUserChannels = 'user:auth' | 'user:get' | 'user:get_one' | 'user:update';
@@ -53,7 +53,7 @@ export type Channels =
   | AuthChannels
   | DbChannels
   | ApiChannels
-  | WindowChannels
+  // | WindowChannels
   | MenuChannels
   | MiscChannels
   | SystemChannels
@@ -108,26 +108,26 @@ const electronHandler = {
     chunk: (...args: unknown[]) => ipcRenderer.invoke('streaming:chunk', ...args),
     abort_stream: (...args: unknown[]) => ipcRenderer.invoke('streaming:abort_stream', ...args),
   },
-  window: {
-    // Tab operations
-    createTab: (...args: unknown[]) => ipcRenderer.invoke('window:create-tab', ...args),
-    closeTab: (...args: unknown[]) => ipcRenderer.invoke('window:close-tab', ...args),
-    focusTab: (...args: unknown[]) => ipcRenderer.invoke('window:focus-tab', ...args),
-    renameTab: (...args: unknown[]) => ipcRenderer.invoke('window:rename-tab', ...args),
+  // window: {
+  //   // Tab operations
+  //   createTab: (...args: unknown[]) => ipcRenderer.invoke('window:create-tab', ...args),
+  //   closeTab: (...args: unknown[]) => ipcRenderer.invoke('window:close-tab', ...args),
+  //   focusTab: (...args: unknown[]) => ipcRenderer.invoke('window:focus-tab', ...args),
+  //   renameTab: (...args: unknown[]) => ipcRenderer.invoke('window:rename-tab', ...args),
 
-    // Window operations
-    createWindow: (...args: unknown[]) => ipcRenderer.invoke('window:create-window', ...args),
-    closeWindow: (...args: unknown[]) => ipcRenderer.invoke('window:close-window', ...args),
-    focusWindow: (...args: unknown[]) => ipcRenderer.invoke('window:focus-window', ...args),
+  //   // Window operations
+  //   createWindow: (...args: unknown[]) => ipcRenderer.invoke('window:create-window', ...args),
+  //   closeWindow: (...args: unknown[]) => ipcRenderer.invoke('window:close-window', ...args),
+  //   focusWindow: (...args: unknown[]) => ipcRenderer.invoke('window:focus-window', ...args),
 
-    // Multi-window tab operations
-    detachTab: (...args: unknown[]) => ipcRenderer.invoke('window:detach-tab', ...args),
-    moveTab: (...args: unknown[]) => ipcRenderer.invoke('window:move-tab', ...args),
+  //   // Multi-window tab operations
+  //   detachTab: (...args: unknown[]) => ipcRenderer.invoke('window:detach-tab', ...args),
+  //   moveTab: (...args: unknown[]) => ipcRenderer.invoke('window:move-tab', ...args),
 
-    // State sync
-    syncState: (...args: unknown[]) => ipcRenderer.send('window:sync-state', ...args),
-    getActiveTab: (...args: unknown[]) => ipcRenderer.invoke('window:get-active-tab', ...args),
-  },
+  //   // State sync
+  //   syncState: (...args: unknown[]) => ipcRenderer.send('window:sync-state', ...args),
+  //   getActiveTab: (...args: unknown[]) => ipcRenderer.invoke('window:get-active-tab', ...args),
+  // },
   menu: {
     newTab: (...args: unknown[]) => ipcRenderer.invoke('menu:new-tab', ...args),
     closeTab: (...args: unknown[]) => ipcRenderer.invoke('menu:close-tab', ...args),
@@ -137,6 +137,7 @@ const electronHandler = {
   },
   mcp: {
     initialize_client: (...args: unknown[]) => ipcRenderer.invoke('mcp:initialize_client', ...args),
+    list_tools: (...args: unknown[]) => ipcRenderer.invoke('mcp:list_tools', ...args),
   },
   fileSystem: {
     openFolderDialog: () => ipcRenderer.invoke('folder:open-dialog'),
