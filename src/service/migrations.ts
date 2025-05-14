@@ -8,19 +8,6 @@
 
 // Core application tables
 export const coreMigrations = [
-  // Users table - stores basic user information
-  `CREATE TABLE IF NOT EXISTS users (
-    id TEXT PRIMARY KEY,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    last_login TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    username TEXT NOT NULL UNIQUE,
-    email TEXT NOT NULL UNIQUE,
-    avatar TEXT,
-    settings TEXT -- Stored as JSON string
-  )`,
-
-  // Settings table - stores application settings
   `CREATE TABLE IF NOT EXISTS settings (
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL
@@ -29,19 +16,6 @@ export const coreMigrations = [
 
 // Feature-specific tables
 export const featureMigrations = [
-  // Teams table
-  `CREATE TABLE IF NOT EXISTS teams (
-    id TEXT PRIMARY KEY,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    name TEXT NOT NULL,
-    members TEXT, -- Stored as JSON string
-    owners TEXT, -- Stored as JSON string
-    rooms TEXT, -- Stored as JSON string
-    invite_code TEXT,
-    settings TEXT -- Stored as JSON string
-  )`,
-
   // Chat rooms table
   `CREATE TABLE IF NOT EXISTS chat (
     id TEXT PRIMARY KEY,
@@ -58,8 +32,12 @@ export const featureMigrations = [
   `CREATE TABLE IF NOT EXISTS messages (
     id TEXT PRIMARY KEY,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    sent_at TIMESTAMP,
     chat_id TEXT,
     sender TEXT,
+    recipients TEXT[], -- Stored as JSON string
+    status TEXT, -- pending, sent
     reactions TEXT[], -- Stored as JSON string
     reply_to TEXT,
     mentions TEXT[], -- Stored as JSON string

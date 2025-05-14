@@ -761,8 +761,6 @@ export const useMCPStore = create<MCPState>()(
             state.setServiceTools(serviceType, result.tools);
           }
 
-          console.log(result);
-
           return result;
         } catch (error: any) {
           console.error(`Error initializing ${serviceType} client:`, error);

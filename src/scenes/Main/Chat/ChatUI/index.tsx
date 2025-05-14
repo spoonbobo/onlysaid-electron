@@ -7,6 +7,7 @@ import ChatBubble from "@/components/Chat/ChatBubble";
 import { useCurrentTopicContext } from "@/stores/Topic/TopicStore";
 import { useIntl } from "react-intl";
 import { throttle } from "lodash";
+import { useAgentStore } from "@/stores/Agent/AgentStore";
 
 interface ChatUIProps {
   messages: IChatMessage[];
@@ -44,6 +45,7 @@ function ChatUI({ messages, onReply, streamingMessageId, streamContentForBubble,
   const [hoveredMessageId, setHoveredMessageId] = useState<string | null>(null);
   const initialScrollRestored = useRef(false);
   const lastSavedScrollPosition = useRef(0);
+  const { agent } = useAgentStore.getState();
 
   const { selectedTopics, setScrollPosition, getScrollPosition } = useCurrentTopicContext();
   const chatId = Object.values(selectedTopics)[0];
@@ -224,10 +226,12 @@ function ChatUI({ messages, onReply, streamingMessageId, streamContentForBubble,
     let messagesToProcess = [...messages];
 
     if (streamingMessageId && !messagesToProcess.some(m => m.id === streamingMessageId)) {
-      const assistantUser = {
+
+      const assistantUser = agent || {
         id: "assistant",
         username: "Assistant",
-        email: ""
+        email: "",
+        avatar: ""
       };
 
       let lastUserMessageTime = new Date(0); // Default to epoch start
@@ -246,7 +250,7 @@ function ChatUI({ messages, onReply, streamingMessageId, streamContentForBubble,
       const placeholderMessage = {
         id: streamingMessageId,
         chat_id: chatId || '',
-        sender: assistantUser.id,
+        sender: assistantUser.id ?? "assistant",
         sender_object: assistantUser,
         text: "",
         created_at: streamMessageTime.toISOString(),

@@ -29,6 +29,8 @@ import { setupContentHandlers } from './filesystem';
 import { setupRedisHandlers } from './redis';
 import { setupWorkspaceHandlers } from './api/v2/workspace';
 import { initializeDeeplinkHandling } from './deeplink';
+import { setupSocketHandlers } from './socket';
+
 dotenv.config();
 
 setupChatroomHandlers();
@@ -68,6 +70,7 @@ ipcMain.on('ipc-example', async (event, arg) => {
   console.log(msgTemplate(arg));
   event.reply('ipc-example', msgTemplate('pong'));
 });
+
 ipcMain.handle('db:initialize', async () => {
   try {
     initializeDatabase();
@@ -184,6 +187,10 @@ const createWindow = async () => {
       webSecurity: true
     },
   });
+
+  // Call setupSocketHandlers immediately after BrowserWindow creation
+  // and before loading the URL
+  setupSocketHandlers(mainWindow);
 
   mainWindow.loadURL(resolveHtmlPath('index.html'));
 

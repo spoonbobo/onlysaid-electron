@@ -13,8 +13,8 @@ import { useChatStore } from "@/stores/Chat/ChatStore";
 import { useCurrentTopicContext, useTopicStore } from "@/stores/Topic/TopicStore";
 import { useSelectedModelStore } from "@/stores/LLM/SelectedModelStore";
 import { useStreamStore, OpenAIMessage } from "@/stores/SSE/StreamStore";
-import { DeepSeekUser } from "@/stores/Chat/ChatStore";
 import { useUserStore } from "@/stores/User/UserStore";
+import { useAgentStore } from "@/stores/Agent/AgentStore";
 import { useWorkspaceStore } from "@/stores/Workspace/WorkspaceStore";
 
 function Chat() {
@@ -52,6 +52,7 @@ function Chat() {
   const contextId = selectedContext ? `${selectedContext.name}:${selectedContext.type}` : '';
   const activeChatId = selectedContext?.section ? selectedTopics[selectedContext.section] || null : null;
   const { user } = useUserStore();
+  const { agent } = useAgentStore();
   const isLocal = user?.id ? false : true;
   let workspaceId = '';
   if (!isLocal) {
@@ -212,11 +213,17 @@ function Chat() {
           setReplyingTo(null);
 
           if (modelId && provider && messageData.text) {
+            const assistantSender = agent;
+            const assistantSenderId = agent?.id || "";
+            if (!agent) {
+              console.warn("[Chat] Agent not found in store, falling back for assistant message sender.");
+            }
+
             const assistantMessage: IChatMessage = {
               id: uuidv4(),
               chat_id: activeChatId,
-              sender: DeepSeekUser?.id || "",
-              sender_object: DeepSeekUser,
+              sender: assistantSenderId,
+              sender_object: assistantSender as IUser,
               text: "",
               created_at: new Date().toISOString(),
             };
@@ -230,7 +237,6 @@ function Chat() {
             tokenCountRef.current = 0;
             setTokenRate(0);
 
-            console.log("streaming", modelId, provider, assistantMessage.id);
             try {
               const lastMessages = messages.slice(-10).map(msg => ({
                 role: msg.sender === currentUser?.id ? "user" : "assistant",
@@ -247,8 +253,12 @@ function Chat() {
                   provider: provider
                 }
               );
+              console.log("sender", assistantSenderId);
 
-              updateMessage(activeChatId, assistantMessage.id, { text: response });
+              updateMessage(activeChatId, assistantMessage.id, {
+                text: response,
+                sender: assistantSenderId
+              });
 
               markStreamAsCompleted(activeChatId, response);
 
@@ -259,7 +269,7 @@ function Chat() {
               });
             } finally {
               const earnedXP = Math.floor(tokenCountRef.current / 10);
-              useUserStore.getState().gainExperience(earnedXP);
+              useAgentStore.getState().gainExperience(earnedXP);
               setStreamingState(null, null);
             }
           }

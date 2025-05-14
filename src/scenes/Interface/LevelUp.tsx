@@ -1,33 +1,36 @@
 import { Box, LinearProgress, Tooltip, Typography } from "@mui/material";
-import { useUserStore } from "@/stores/User/UserStore";
+import { useAgentStore } from "@/stores/Agent/AgentStore";
 import { useState, useRef } from "react";
 import { FormattedMessage } from "react-intl";
 
 // Assuming calculateExperienceForLevel is accessible or can be redefined here
 const calculateExperienceForLevel = (level: number): number => {
   // Simple formula: each level requires 50 * current level points
-  return 50 * level;
+  // For level 0, requirement is for level 1. For level N, requirement is for level N+1.
+  return 50 * (level === 0 ? 1 : level + 1);
 };
 
 function LevelUp() {
-  const user = useUserStore((state) => state.user);
+  const agent = useAgentStore((state) => state.agent);
   const [showTooltip, setShowTooltip] = useState(false);
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
   const boxRef = useRef<HTMLDivElement>(null);
 
   // Early return after all hooks are called
-  if (!user) {
+  if (!agent) {
     return null;
   }
 
-  const level = user.level ?? 0;
-  const experience = user.xp ?? 0;
+  const level = agent.level ?? 0;
+  const experience = agent.xp ?? 0;
 
-  const experienceToNextLevel = calculateExperienceForLevel(level === 0 ? 1 : level);
+  // Calculate experience needed to reach the *next* level.
+  // If agent is level 0, target is level 1. If agent is level L, target is level L+1.
+  const experienceToNextLevel = calculateExperienceForLevel(level);
   const progressPercentage = experienceToNextLevel > 0 ? (experience / experienceToNextLevel) * 100 : 0;
 
   // Only apply minimum display if there's actual progress
-  const displayPercentage = experience > 0 ? Math.max(progressPercentage, 2) : 0;
+  const displayPercentage = experience > 0 && experienceToNextLevel > 0 ? Math.max(progressPercentage, 2) : 0;
 
   return (
     <Box
@@ -73,7 +76,7 @@ function LevelUp() {
                 <FormattedMessage id="agent.level" /> {level}
               </Typography>
               <Typography variant="caption" display="block">
-                <FormattedMessage id="agent.progress" /> {Math.round(progressPercentage)}%
+                <FormattedMessage id="agent.progress" /> {Math.min(100, Math.round(progressPercentage))}%
               </Typography>
               <Typography variant="caption" display="block">
                 <FormattedMessage id="agent.xp" /> {experience}/{experienceToNextLevel}

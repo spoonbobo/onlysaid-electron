@@ -1,12 +1,15 @@
 import { useEffect, useState } from 'react';
-import { Box, Typography, CircularProgress, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, Chip, Pagination, TextField, FormControl, InputLabel, Select, MenuItem, SelectChangeEvent, InputAdornment, Avatar, IconButton } from '@mui/material';
+import { Box, Typography, CircularProgress, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, Chip, Pagination, TextField, FormControl, InputLabel, Select, MenuItem, SelectChangeEvent, InputAdornment, Avatar, IconButton, LinearProgress, Tooltip } from '@mui/material';
 import { useWorkspaceStore } from '@/stores/Workspace/WorkspaceStore';
+import { useAgentStore } from '@/stores/Agent/AgentStore';
 import { IWorkspaceUser } from '@/../../types/Workspace/Workspace';
+import { IUser } from '@/../../types/User/User';
 import SearchIcon from '@mui/icons-material/Search';
 import AdminPanelSettingsOutlinedIcon from '@mui/icons-material/AdminPanelSettingsOutlined';
 import PersonRemoveOutlinedIcon from '@mui/icons-material/PersonRemoveOutlined';
+import EmojiEventsIcon from '@mui/icons-material/EmojiEvents';
 import { useIntl } from 'react-intl';
-import { getUserFromStore } from '@/utils/user';
+import { getUserFromStore, getUserTokenFromStore } from '@/utils/user';
 import RemoveUserDialog from '@/components/Dialog/Workspace/RemoveUser';
 import ChangePermissionDialog from '@/components/Dialog/Workspace/ChangePermission';
 
@@ -14,29 +17,35 @@ interface MembersProps {
   workspaceId: string;
 }
 
+interface UserWithAgent extends IWorkspaceUser {
+  agent?: IUser | null;
+}
+
 const Members = ({ workspaceId }: MembersProps) => {
   const intl = useIntl();
   const { getUsersByWorkspace, getUserInWorkspace, removeUserFromWorkspace, isLoading, error, getWorkspace, getWorkspaceById } = useWorkspaceStore();
+  const { fetchAgent } = useAgentStore();
   const [currentUserRole, setCurrentUserRole] = useState<string>('member');
   const [currentUserId, setCurrentUserId] = useState<string>('');
-  const [users, setUsers] = useState<IWorkspaceUser[]>([]);
+  const [users, setUsers] = useState<UserWithAgent[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedRole, setSelectedRole] = useState('all');
   const [page, setPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(5);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
+  const token = getUserTokenFromStore();
 
   // Remove dialog state
   const [removeDialogOpen, setRemoveDialogOpen] = useState(false);
-  const [userToRemove, setUserToRemove] = useState<IWorkspaceUser | null>(null);
+  const [userToRemove, setUserToRemove] = useState<UserWithAgent | null>(null);
 
   // Change permission dialog state
   const [permissionDialogOpen, setPermissionDialogOpen] = useState(false);
-  const [userToChangePermission, setUserToChangePermission] = useState<IWorkspaceUser | null>(null);
+  const [userToChangePermission, setUserToChangePermission] = useState<UserWithAgent | null>(null);
 
   const [workspaceName, setWorkspaceName] = useState('');
 
-  const handleOpenPermissionDialog = (user: IWorkspaceUser) => {
+  const handleOpenPermissionDialog = (user: UserWithAgent) => {
     setUserToChangePermission(user);
     setPermissionDialogOpen(true);
   };
@@ -63,7 +72,7 @@ const Members = ({ workspaceId }: MembersProps) => {
     return Promise.resolve();
   };
 
-  const handleOpenRemoveDialog = (user: IWorkspaceUser) => {
+  const handleOpenRemoveDialog = (user: UserWithAgent) => {
     setUserToRemove(user);
     setRemoveDialogOpen(true);
   };
@@ -100,13 +109,30 @@ const Members = ({ workspaceId }: MembersProps) => {
   }, [workspaceId, getWorkspace, getWorkspaceById]);
 
   useEffect(() => {
-    const fetchUsers = async () => {
+    const fetchUsersAndAgents = async () => {
       const workspaceUsers = await getUsersByWorkspace(workspaceId);
-      setUsers(workspaceUsers);
+
+      // For each user, fetch their agent details if they have an agent_id
+      for (const user of workspaceUsers) {
+        if (user.agent_id && typeof user.agent_id === 'string' && token) {
+          await fetchAgent(user.agent_id, token);
+        }
+      }
+
+      // Create users array with agent data from store
+      const { agent } = useAgentStore.getState();
+      const usersWithAgents = workspaceUsers.map(user => ({
+        ...user,
+        agent: user.agent_id && user.agent_id === agent?.id ? agent : null
+      }));
+
+      setUsers(usersWithAgents);
     };
 
-    fetchUsers();
-  }, [workspaceId, getUsersByWorkspace, refreshTrigger]);
+    if (token) {
+      fetchUsersAndAgents();
+    }
+  }, [workspaceId, getUsersByWorkspace, refreshTrigger, token, fetchAgent]);
 
   useEffect(() => {
     const fetchCurrentUserRole = async () => {
@@ -170,8 +196,11 @@ const Members = ({ workspaceId }: MembersProps) => {
     if (roleHierarchy[a.role] !== roleHierarchy[b.role]) {
       return roleHierarchy[b.role] - roleHierarchy[a.role];
     }
-    // Then sort by agent level
-    return (b.level ?? 0) - (a.level ?? 0);
+
+    // Then sort by agent level (prefer agent level if available)
+    const aLevel = a.agent?.level ?? a.level ?? 0;
+    const bLevel = b.agent?.level ?? b.level ?? 0;
+    return bLevel - aLevel;
   });
 
   const totalPages = Math.ceil(sortedUsers.length / itemsPerPage);
@@ -198,6 +227,22 @@ const Members = ({ workspaceId }: MembersProps) => {
 
   const formatDate = (dateString: string) => {
     return dateString ? new Date(dateString).toLocaleDateString() : 'N/A';
+  };
+
+  // Calculate experience progress for agent XP bar
+  const calculateXpProgress = (user: UserWithAgent) => {
+    if (!user.agent || typeof user.agent.level !== 'number' || typeof user.agent.xp !== 'number') {
+      return 0;
+    }
+
+    const currentLevel = user.agent.level;
+    const currentXp = user.agent.xp;
+    const nextLevelXp = 50 * (currentLevel + 1); // Based on calculation from AgentStore
+
+    // Avoid division by zero
+    if (nextLevelXp === 0) return 0;
+
+    return (currentXp / nextLevelXp) * 100;
   };
 
   if (error) {
@@ -252,11 +297,11 @@ const Members = ({ workspaceId }: MembersProps) => {
             <Table size="medium" sx={{ minWidth: 750 }}>
               <TableHead>
                 <TableRow>
-                  <TableCell width="25%">{intl.formatMessage({ id: 'user.name', defaultMessage: 'User' })}</TableCell>
-                  <TableCell width="10%">{intl.formatMessage({ id: 'agent.level', defaultMessage: 'Level' })}</TableCell>
-                  <TableCell width="18%">{intl.formatMessage({ id: 'workspace.create.joined', defaultMessage: 'Joined' })}</TableCell>
-                  <TableCell width="17%">{intl.formatMessage({ id: 'user.lastLogin', defaultMessage: 'Last Login' })}</TableCell>
-                  <TableCell width="30%" align="right">{intl.formatMessage({ id: 'menu.workspace.manage', defaultMessage: 'Manage' })}</TableCell>
+                  <TableCell width="22%">{intl.formatMessage({ id: 'user.name', defaultMessage: 'User' })}</TableCell>
+                  <TableCell width="33%">{intl.formatMessage({ id: 'agent.info', defaultMessage: 'Agent Info' })}</TableCell>
+                  <TableCell width="15%">{intl.formatMessage({ id: 'workspace.create.joined', defaultMessage: 'Joined' })}</TableCell>
+                  <TableCell width="15%">{intl.formatMessage({ id: 'user.lastLogin', defaultMessage: 'Last Login' })}</TableCell>
+                  <TableCell width="15%" align="right">{intl.formatMessage({ id: 'menu.workspace.manage', defaultMessage: 'Manage' })}</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -276,7 +321,7 @@ const Members = ({ workspaceId }: MembersProps) => {
                             <Avatar
                               src={user.avatar}
                               sx={{ width: 40, height: 40 }}
-                              alt={user.username || ''}
+                              alt=""
                             />
                           ) : (
                             <Avatar
@@ -307,7 +352,38 @@ const Members = ({ workspaceId }: MembersProps) => {
                           </Box>
                         </Box>
                       </TableCell>
-                      <TableCell>{user.level ?? 0}</TableCell>
+                      <TableCell>
+                        {user.agent ? (
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                            <Avatar
+                              src={user.agent.avatar || ''}
+                              sx={{
+                                width: 40,
+                                height: 40
+                              }}
+                            />
+                            <Box sx={{ flexGrow: 1 }}>
+                              <Box sx={{ display: 'flex', alignItems: 'center', mb: 0.5 }}>
+                                <EmojiEventsIcon color="primary" fontSize="small" sx={{ mr: 1 }} />
+                                <Typography variant="body2" fontWeight="medium">
+                                  {`Level ${user.agent.level ?? 0} • XP: ${user.agent.xp ?? 0}`}
+                                </Typography>
+                              </Box>
+                              <Tooltip title={`${user.agent.xp ?? 0} XP / ${50 * ((user.agent.level ?? 0) + 1)} XP to level ${(user.agent.level ?? 0) + 1}`}>
+                                <LinearProgress
+                                  variant="determinate"
+                                  value={calculateXpProgress(user)}
+                                  sx={{ height: 6, borderRadius: 1 }}
+                                />
+                              </Tooltip>
+                            </Box>
+                          </Box>
+                        ) : (
+                          <Typography variant="body2" color="text.secondary">
+                            {intl.formatMessage({ id: 'agent.noInfo', defaultMessage: 'No agent info' })}
+                          </Typography>
+                        )}
+                      </TableCell>
                       <TableCell>{formatDate(user.created_at || '')}</TableCell>
                       <TableCell>{formatDate(user.last_login || '')}</TableCell>
                       <TableCell align="right">

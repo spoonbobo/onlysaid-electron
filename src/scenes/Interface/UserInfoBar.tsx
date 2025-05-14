@@ -1,25 +1,31 @@
-import { Box, Avatar, Typography, IconButton } from "@mui/material";
+import { Box, Avatar, Typography, IconButton, Badge } from "@mui/material";
 import SettingsIcon from "@mui/icons-material/Settings";
 import { useUserStore } from "@/stores/User/UserStore";
+import { useAgentStore } from "@/stores/Agent/AgentStore";
 import { IUser } from "@/../../types/User/User";
 import { FormattedMessage } from "react-intl";
 import { useTopicStore } from "@/stores/Topic/TopicStore";
 
 export default function UserInfoBar() {
   const user: IUser | null = useUserStore((state) => state.user);
+  const agent: IUser | null = useAgentStore((state) => state.agent);
   const setSelectedContext = useTopicStore((state) => state.setSelectedContext);
+
   const displayName = user?.username || "Guest";
   const status = user === null ? "offline" : "online";
-  const avatar = user?.avatar || "";
+  const userAvatarSrc = user?.avatar || "";
   const isOffline = status === "offline";
-  const level = user?.level ?? 0;
+
+  const agentAvatarSrc = agent?.avatar || "";
+  const agentLevel = agent?.level ?? 0;
+  const avatarSize = 32; // Define a common size
+  const overlapOffset = avatarSize / 2; // Agent avatar shifted by half its width to the right
 
   const handleNavigateToSettings = () => {
     const settingsContext = {
       name: "settings",
       type: "settings" as const
     };
-
     setSelectedContext(settingsContext);
   };
 
@@ -33,49 +39,93 @@ export default function UserInfoBar() {
         borderColor: "divider",
         bgcolor: "background.paper",
         justifyContent: "space-between",
+        minHeight: avatarSize + 8, // Adjusted minHeight slightly
       }}
     >
       <Box sx={{ display: "flex", alignItems: "center" }}>
-        <Avatar
-          src={avatar}
+        <Box
           sx={{
-            width: 32,
-            height: 32,
-            mr: 1,
-            opacity: isOffline ? 0.5 : 1
+            position: 'relative',
+            width: avatarSize + overlapOffset, // Container width to fit both partially
+            height: avatarSize,
+            mr: 1
           }}
-          slotProps={{
-            img: {
-              referrerPolicy: "no-referrer",
-              crossOrigin: "anonymous"
-            }
-          }}
-        />
-        <Box>
-          <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
-            <Typography variant="body2">
-              {displayName}
-            </Typography>
-            {user && (
-              <Typography
-                variant="body2"
+        >
+          {/* Agent Avatar and Badge - Rendered first to be in the background */}
+          {agent && (
+            <Badge
+              overlap="circular"
+              anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+              badgeContent={
+                <Typography
+                  variant="caption"
+                  sx={{
+                    fontSize: '0.6rem',
+                    bgcolor: 'primary.main',
+                    color: 'white',
+                    borderRadius: '6px',
+                    px: 0.5,
+                    py: 0.1,
+                    minWidth: '12px',
+                    height: '12px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    border: `1px solid white`,
+                    position: 'relative', // Ensure badge content respects zIndex if needed over avatar border
+                    zIndex: 3, // Badge on top of agent avatar
+                  }}
+                >
+                  {agentLevel}
+                </Typography>
+              }
+              sx={{
+                position: 'absolute',
+                top: 0,
+                left: overlapOffset, // Position agent avatar to the right
+                zIndex: 1, // Agent avatar and its badge container behind user avatar
+              }}
+            >
+              <Avatar
+                src={agentAvatarSrc}
                 sx={{
-                  fontSize: "0.75rem",
-                  fontWeight: "medium",
-                  bgcolor: "primary.main",
-                  color: "white",
-                  borderRadius: "12px",
-                  px: 1,
-                  py: 0.25,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center"
+                  width: avatarSize,
+                  height: avatarSize,
                 }}
-              >
-                <FormattedMessage id="agent.level" /> {level}
-              </Typography>
-            )}
-          </Box>
+                slotProps={{
+                  img: {
+                    referrerPolicy: "no-referrer",
+                    crossOrigin: "anonymous"
+                  }
+                }}
+              />
+            </Badge>
+          )}
+          {/* User Avatar - Rendered last to be on top */}
+          <Avatar
+            src={userAvatarSrc}
+            sx={{
+              width: avatarSize,
+              height: avatarSize,
+              opacity: isOffline ? 0.5 : 1,
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              zIndex: 2,
+              border: `2px solid ${isOffline ? 'transparent' : 'background.paper'}`,
+            }}
+            slotProps={{
+              img: {
+                referrerPolicy: "no-referrer",
+                crossOrigin: "anonymous"
+              }
+            }}
+          />
+        </Box>
+        <Box>
+          <Typography variant="body2">
+            {displayName}
+          </Typography>
           <Typography
             variant="caption"
             color={isOffline ? "text.disabled" : "success.main"}

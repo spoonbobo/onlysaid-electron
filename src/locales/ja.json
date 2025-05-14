@@ -11,6 +11,8 @@
   "common.invite": "招待",
   "common.error.requiredField": "この項目は必須です",
   "common.error.invalidEmail": "有効なメールアドレスを入力してください",
+  "common.remove": "削除",
+  "common.change": "変更",
 
   "home.friends": "友達",
   "home.allFriends": "すべての友達",
@@ -38,7 +40,7 @@
   "language.spanish": "スペイン語",
   "language.french": "フランス語",
   "language.chinese": "中国語（香港）",
-
+  "language.japanese": "日本語",
   "context.home": "ホーム",
   "context.team": "チーム",
   "context.settings": "設定",
@@ -90,6 +92,8 @@
   "workspace.join.inviteCodeHelp": "ワークスペース管理者から提供された6桁の招待コードを入力してください",
   "workspace.join.description": "ワークスペース管理者から提供された招待コードを入力して、既存のワークスペースに参加します。",
   "workspace.title": "ワークスペース",
+  "workspace.workspace:chatroom": "チャットルーム",
+  "workspace.removeUser.warning": "ユーザーを削除すると、ワークスペースから完全に削除され、復元できなくなります。",
 
   "workspace.roles.all": "すべての役割",
   "workspace.roles.superAdmin": "スーパー管理者",
@@ -99,6 +103,11 @@
   "workspace.searchByUsername": "ユーザー名で検索",
   "workspace.create.joined": "参加日時",
   "workspace.members.noMembersFound": "メンバーが見つかりません",
+
+  "workspace.changePermission.title": "権限変更",
+  "workspace.changePermission.explanation": "{workspaceName}での{username}の権限レベルを変更",
+  "workspace.changePermission.role": "役割",
+  "workspace.changePermission.info": "ユーザーの役割を変更すると、このワークスペースでの権限に影響します。",
 
   "menu.chatroom": "チャットルーム",
   "menu.plan": "プラン",
@@ -294,6 +303,9 @@
 
   "user.unknown": "不明",
   "user.lastLogin": "最終ログイン",
+  "user.currentUser": "現在のユーザー",
+  "user.assistant": "アシスタント",
+  "user.you": "あなた",
 
   "menu.workspace.inviteUserTo": "「{name}」にユーザーを招待"
 }

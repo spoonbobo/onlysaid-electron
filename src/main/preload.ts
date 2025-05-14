@@ -5,26 +5,6 @@ import os from 'os';
 
 // namespace
 type AuthChannels = 'auth:sign-in' | 'auth:signed-in';
-// type WindowChannels =
-//   | 'window:create-tab'
-//   | 'window:close-tab'
-//   | 'window:focus-tab'
-//   | 'window:rename-tab'
-//   | 'window:sync-state'
-//   | 'window:tab-created'
-//   | 'window:create-window'
-//   | 'window:close-window'
-//   | 'window:focus-window'
-//   | 'window:detach-tab'
-//   | 'window:move-tab'
-//   | 'window:init'
-//   | 'window:tab-moved'
-//   | 'window:tab-detached'
-//   | 'window:tab-focused'
-//   | 'window:tab-closed'
-//   | 'window:bounds-changed'
-//   | 'window:state-changed'
-//   | 'window:get-active-tab';
 type MenuChannels = 'menu:close-tab' | 'menu:new-tab';
 type MiscChannels = 'ipc-example';
 type DbChannels = 'db:initialize' | 'db:query' | 'db:transaction' | 'db:close';
@@ -49,18 +29,23 @@ type ApiChannels = ApiChatChannels | ApiUserChannels | ApiWorkspaceChannels;
 type RedisChannels = 'redis:connect' | 'redis:disconnect' | 'redis:get' | 'redis:set' |
   'redis:del' | 'redis:publish' | 'redis:start-server' | 'redis:stop-server';
 
+type SocketChannels = 'socket:initialize' | 'socket:close' |
+  'socket:connected' | 'socket:disconnected' | 'socket:send-message' |
+  'socket:delete-message' | 'socket:new-message' | 'socket:message-deleted' |
+  'socket:notification' | 'socket:room-update';
+
 export type Channels =
   | AuthChannels
   | DbChannels
   | ApiChannels
-  // | WindowChannels
   | MenuChannels
   | MiscChannels
   | SystemChannels
   | SSEChannels
   | MCPChannels
   | FileSystemChannels
-  | RedisChannels;
+  | RedisChannels
+  | SocketChannels;
 
 const electronHandler = {
   ipcRenderer: {
@@ -108,26 +93,6 @@ const electronHandler = {
     chunk: (...args: unknown[]) => ipcRenderer.invoke('streaming:chunk', ...args),
     abort_stream: (...args: unknown[]) => ipcRenderer.invoke('streaming:abort_stream', ...args),
   },
-  // window: {
-  //   // Tab operations
-  //   createTab: (...args: unknown[]) => ipcRenderer.invoke('window:create-tab', ...args),
-  //   closeTab: (...args: unknown[]) => ipcRenderer.invoke('window:close-tab', ...args),
-  //   focusTab: (...args: unknown[]) => ipcRenderer.invoke('window:focus-tab', ...args),
-  //   renameTab: (...args: unknown[]) => ipcRenderer.invoke('window:rename-tab', ...args),
-
-  //   // Window operations
-  //   createWindow: (...args: unknown[]) => ipcRenderer.invoke('window:create-window', ...args),
-  //   closeWindow: (...args: unknown[]) => ipcRenderer.invoke('window:close-window', ...args),
-  //   focusWindow: (...args: unknown[]) => ipcRenderer.invoke('window:focus-window', ...args),
-
-  //   // Multi-window tab operations
-  //   detachTab: (...args: unknown[]) => ipcRenderer.invoke('window:detach-tab', ...args),
-  //   moveTab: (...args: unknown[]) => ipcRenderer.invoke('window:move-tab', ...args),
-
-  //   // State sync
-  //   syncState: (...args: unknown[]) => ipcRenderer.send('window:sync-state', ...args),
-  //   getActiveTab: (...args: unknown[]) => ipcRenderer.invoke('window:get-active-tab', ...args),
-  // },
   menu: {
     newTab: (...args: unknown[]) => ipcRenderer.invoke('menu:new-tab', ...args),
     closeTab: (...args: unknown[]) => ipcRenderer.invoke('menu:close-tab', ...args),
@@ -152,6 +117,13 @@ const electronHandler = {
   redis: {
     startServer: (...args: unknown[]) => ipcRenderer.invoke('redis:start-server', ...args),
     stopServer: (...args: unknown[]) => ipcRenderer.invoke('redis:stop-server', ...args),
+  },
+  socket: {
+    initialize: (user: any) => ipcRenderer.invoke('socket:initialize', user),
+    close: () => ipcRenderer.invoke('socket:close'),
+    sendMessage: (message: any) => ipcRenderer.invoke('socket:send-message', message),
+    deleteMessage: (roomId: string, messageId: string) =>
+      ipcRenderer.invoke('socket:delete-message', { roomId, messageId }),
   },
 };
 

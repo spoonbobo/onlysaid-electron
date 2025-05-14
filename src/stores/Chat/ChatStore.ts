@@ -8,17 +8,7 @@ import { IChatMessage, IReaction } from "@/../../types/Chat/Message";
 import { IChatRoom, IUpdateChatArgs } from "@/../../types/Chat/Chatroom";
 import { IUser } from "@/../../types/User/User";
 
-const MESSAGE_FETCH_LIMIT = 30;
-
-export const DeepSeekUser: IUser = {
-  id: "a0382833-7932-4d23-8094-75681edb7160",
-  username: "DeepSeek",
-  email: "deepseek@llm.com",
-  avatar: "https://diplo-media.s3.eu-central-1.amazonaws.com/2025/01/deepseek-italy-ban-garante.png",
-  settings: {
-    theme: "light",
-  },
-}
+const MESSAGE_FETCH_LIMIT = 35;
 
 const DBTABLES = {
   CHATROOM: 'chat',
@@ -30,8 +20,6 @@ const DBTABLES = {
   WORKSPACES: 'workspaces',
   WORKSPACE_USERS: 'workspace_users',
 }
-
-const defaultSenderId = "a0382833-7932-4d23-8094-75681edb7160"
 
 interface ChatState {
   activeChatByContext: Record<string, string | null>;
@@ -339,6 +327,7 @@ export const useChatStore = create<ChatState>()(
       },
 
       sendMessage: async (chatId, messageData, workspaceId?: string) => {
+        console.log("sendMessage", messageData);
         set({ isLoading: true, error: null });
         try {
           const messageId = uuidv4();
@@ -371,6 +360,7 @@ export const useChatStore = create<ChatState>()(
       },
 
       updateMessage: async (chatId, messageId, data) => {
+        console.log("updateMessage", messageId, data);
         set({ isLoading: true, error: null });
         try {
           set((state) => ({
@@ -393,16 +383,25 @@ export const useChatStore = create<ChatState>()(
           });
 
           if (result && result[0] && result[0].count > 0) {
+            const message = get().messages[chatId]?.find(msg => msg.id === messageId);
+            const sender = data.sender || message?.sender || "";
+
             const updateQuery = `
               update messages
-              set text = @text, created_at = @createdAt
+              set text = @text, created_at = @createdAt, sender = @sender
               where id = @messageId
               and chat_id = @chatId
             `;
 
             await window.electron.db.query({
               query: updateQuery,
-              params: { messageId, chatId, text: data.text, createdAt: data.created_at }
+              params: {
+                messageId,
+                chatId,
+                text: data.text,
+                sender,
+                createdAt: data.created_at
+              }
             });
           } else {
             const insertQuery = `
@@ -411,7 +410,7 @@ export const useChatStore = create<ChatState>()(
             `;
 
             const message = get().messages[chatId]?.find(msg => msg.id === messageId);
-            const sender = message?.sender || defaultSenderId;
+            const sender = data.sender || message?.sender || "";
 
             await window.electron.db.query({
               query: insertQuery,
@@ -514,15 +513,23 @@ export const useChatStore = create<ChatState>()(
             set(state => {
               const currentMessages = state.messages[chatId] || [];
 
+              let updatedMessages;
+              if (loadMore) {
+                updatedMessages = [...messagesWithUsersAndReactions, ...currentMessages];
+              } else if (preserveHistory) {
+                updatedMessages = [...currentMessages, ...messagesWithUsersAndReactions.filter(msg =>
+                  !currentMessages.some(m => m.id === msg.id))];
+              } else {
+                updatedMessages = messagesWithUsersAndReactions;
+              }
+
+              // Limit to maximum 35 messages
+              const limitedMessages = updatedMessages.slice(-MESSAGE_FETCH_LIMIT);
+
               return {
                 messages: {
                   ...state.messages,
-                  [chatId]: loadMore
-                    ? [...messagesWithUsersAndReactions, ...currentMessages]
-                    : preserveHistory
-                      ? [...currentMessages, ...messagesWithUsersAndReactions.filter(msg =>
-                        !currentMessages.some(m => m.id === msg.id))]
-                      : messagesWithUsersAndReactions
+                  [chatId]: limitedMessages
                 },
                 messageOffsets: {
                   ...state.messageOffsets,
@@ -629,10 +636,13 @@ export const useChatStore = create<ChatState>()(
             return state;
           }
 
+          const updatedMessages = [...currentMessages, message];
+          const limitedMessages = updatedMessages.slice(-MESSAGE_FETCH_LIMIT);
+
           return {
             messages: {
               ...state.messages,
-              [chatId]: [...currentMessages, message]
+              [chatId]: limitedMessages
             }
           };
         });
@@ -795,7 +805,7 @@ export const useChatStore = create<ChatState>()(
       partialize: (state) => {
         const limitedMessages: Record<string, IChatMessage[]> = {};
         Object.entries(state.messages).forEach(([chatId, messages]) => {
-          limitedMessages[chatId] = messages.slice(-100);
+          limitedMessages[chatId] = messages.slice(-MESSAGE_FETCH_LIMIT);
         });
 
         return {

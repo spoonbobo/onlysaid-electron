@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import { useSelectedModelStore } from "./SelectedModelStore";
 
 type AIMode = "none" | "ask" | "agent";
 
@@ -8,6 +9,11 @@ interface LLMConfigurationState {
   temperature: number;
   trustMode: boolean;
   aiMode: AIMode;
+
+  // Saved model state for when switching back from "none" mode
+  savedProvider: "openai" | "deepseek" | "ollama" | null;
+  savedModelId: string | null;
+  savedModelName: string | null;
 
   // Public LLM settings
   openAIKey: string;
@@ -27,6 +33,7 @@ interface LLMConfigurationState {
   setTemperature: (value: number) => void;
   setTrustMode: (trustMode: boolean) => void;
   setAIMode: (mode: AIMode) => void;
+  setSavedModel: (provider: "openai" | "deepseek" | "ollama" | null, modelId: string | null, modelName: string | null) => void;
   setOpenAIKey: (key: string) => void;
   setDeepSeekKey: (key: string) => void;
   setOpenAIEnabled: (enabled: boolean) => void;
@@ -45,6 +52,9 @@ const DEFAULT_CONFIG = {
   temperature: 0.7,
   trustMode: false,
   aiMode: "ask" as AIMode,
+  savedProvider: null,
+  savedModelId: null,
+  savedModelName: null,
   openAIKey: "",
   deepSeekKey: "",
   openAIEnabled: true,
@@ -66,11 +76,49 @@ export const useLLMConfigurationStore = create<LLMConfigurationState>()(
       // Actions
       setTemperature: (value) => set({ temperature: value }),
       setTrustMode: (trustMode) => set({ trustMode }),
-      setAIMode: (aiMode) => set((state) => ({
-        aiMode,
-        // If switching away from agent mode, disable trust mode
-        trustMode: aiMode === "agent" ? state.trustMode : false
-      })),
+      setSavedModel: (provider, modelId, modelName) =>
+        set({ savedProvider: provider, savedModelId: modelId, savedModelName: modelName }),
+      setAIMode: (aiMode) => {
+        // Get the model store - we need to set it outside the zustand store
+        const { setSelectedModel, provider, modelId, modelName } = useSelectedModelStore.getState();
+
+        if (aiMode === "none") {
+          // Save current model before switching to none
+          if (provider !== null && modelId !== null) {
+            set({
+              aiMode,
+              savedProvider: provider,
+              savedModelId: modelId,
+              savedModelName: modelName,
+              // If switching away from agent mode, disable trust mode
+              trustMode: false
+            });
+          } else {
+            set({
+              aiMode,
+              // If switching away from agent mode, disable trust mode
+              trustMode: false
+            });
+          }
+          // Set model to none
+          setSelectedModel(null, null, "None");
+        } else {
+          // Get previously saved model state
+          const state = useLLMConfigurationStore.getState();
+
+          // Restore the saved model if it exists
+          if (state.savedProvider !== null && state.savedModelId !== null) {
+            setSelectedModel(state.savedProvider, state.savedModelId, state.savedModelName);
+          }
+
+          // Update the AI mode
+          set((state) => ({
+            aiMode,
+            // If switching to agent mode, maintain trust mode, otherwise disable
+            trustMode: aiMode === "agent" ? state.trustMode : false
+          }));
+        }
+      },
       setOpenAIKey: (key) => set({ openAIKey: key, openAIVerified: false }),
       setDeepSeekKey: (key) => set({ deepSeekKey: key, deepSeekVerified: false }),
       setOpenAIEnabled: (enabled) => set({ openAIEnabled: enabled }),

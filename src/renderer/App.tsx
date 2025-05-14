@@ -4,12 +4,16 @@ import { useTopicStore } from '../stores/Topic/TopicStore';
 import { useUserStore, setupDeeplinkAuthListener } from '../stores/User/UserStore';
 import { useMCPStore } from '../stores/MCP/MCPStore';
 import { useToastStore } from '../stores/Notification/ToastStore';
+import { useSocketStore } from '../stores/Socket/SocketStore';
+
 
 function App() {
   const { selectedContext, contexts, setSelectedContext } = useTopicStore();
   const { getAllConfiguredServers, initializeClient } = useMCPStore();
   const [initProgress, setInitProgress] = useState(0);
   const [initToastId, setInitToastId] = useState<string | null>(null);
+  const { user } = useUserStore();
+  const { initialize: initializeSocket, close: closeSocket } = useSocketStore();
 
   useEffect(() => {
     if (!selectedContext && contexts.length > 0) {
@@ -21,12 +25,40 @@ function App() {
     setupDeeplinkAuthListener();
   }, []);
 
-  // Initialize all enabled MCP services on app startup
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (user && user.id) {
+        console.log("Initializing socket with user:", user.username);
+        initializeSocket(user);
+      }
+    }, 1000);
+
+    return () => {
+      clearTimeout(timer);
+      if (!user) {
+        closeSocket();
+      }
+    };
+  }, [user, initializeSocket, closeSocket]);
+
+  const { isConnected } = useSocketStore();
+
+  useEffect(() => {
+    console.log("isConnected", isConnected);
+    if (isConnected) {
+      console.log("Socket connected successfully!");
+      useToastStore.getState().addToast(
+        "Socket connected",
+        "success",
+        3000
+      );
+    }
+  }, [isConnected]);
+
   useEffect(() => {
     const initializeServices = async () => {
       const servers = getAllConfiguredServers();
 
-      // Map of store keys to service types expected by initializeClient
       const serviceTypeMap: Record<string, string> = {
         weatherCategory: 'weather',
         location: 'location',
@@ -42,7 +74,6 @@ function App() {
         linkedIn: 'linkedin'
       };
 
-      // Get all services that need to be initialized
       const servicesToInit = Object.entries(servers)
         .filter(([_, service]) => service.enabled && service.configured)
         .map(([key]) => serviceTypeMap[key])
@@ -50,7 +81,6 @@ function App() {
 
       if (servicesToInit.length === 0) return;
 
-      // Create initial toast with progress 0
       const toastId = useToastStore.getState().addToast(
         "Initializing MCP services...",
         "info",
@@ -59,7 +89,6 @@ function App() {
       useToastStore.getState().updateToastProgress(toastId, 0);
       setInitToastId(toastId);
 
-      // Initialize each enabled and configured service
       let completed = 0;
       for (const [key, service] of Object.entries(servers)) {
         if (service.enabled && service.configured) {
@@ -70,7 +99,6 @@ function App() {
               await initializeClient(serviceType);
               completed++;
 
-              // Update progress
               const progress = Math.round((completed / servicesToInit.length) * 100);
               setInitProgress(progress);
               useToastStore.getState().updateToastProgress(
@@ -84,7 +112,6 @@ function App() {
         }
       }
 
-      // All services initialized
       if (completed > 0) {
         useToastStore.getState().updateToastProgress(
           toastId,

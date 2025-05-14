@@ -24,6 +24,10 @@ interface DebugStore {
   resourceOverlayMinimized: boolean;
   setResourceOverlayMinimized: (minimized: boolean) => void;
 
+  // Socket Overlay
+  socketOverlayMinimized: boolean;
+  setSocketOverlayMinimized: (minimized: boolean) => void;
+
   // Common overlays container
   overlaysPosition: OverlayPosition;
   overlaysWidth: number;
@@ -49,6 +53,10 @@ export const useDebugStore = create<DebugStore>()(
       resourceOverlayMinimized: false,
       setResourceOverlayMinimized: (minimized) => set({ resourceOverlayMinimized: minimized }),
 
+      // Socket Overlay
+      socketOverlayMinimized: false,
+      setSocketOverlayMinimized: (minimized) => set({ socketOverlayMinimized: minimized }),
+
       // Common container settings
       overlaysPosition: { x: 20, y: 60 },
       overlaysWidth: 250,
@@ -63,7 +71,8 @@ export const useDebugStore = create<DebugStore>()(
         overlaysHeight: 400,
         debugOverlayMinimized: false,
         dbOverlayMinimized: false,
-        resourceOverlayMinimized: false
+        resourceOverlayMinimized: false,
+        socketOverlayMinimized: false
       })
     }),
     {

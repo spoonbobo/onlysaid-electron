@@ -3,6 +3,7 @@ import { Chip, Menu, MenuItem, Typography, alpha } from "@mui/material";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import { LLMService } from "@/service/ai";
 import { useSelectedModelStore } from "@/stores/LLM/SelectedModelStore";
+import { useLLMConfigurationStore } from "@/stores/LLM/LLMConfiguration";
 import { useIntl } from "react-intl";
 
 const llmService = new LLMService();
@@ -14,9 +15,13 @@ interface ModelSelectorProps {
 export default function ModelSelector({ disabled = false }: ModelSelectorProps) {
   const [availableModels, setAvailableModels] = useState<any[]>([]);
   const { modelName, provider, modelId, setSelectedModel } = useSelectedModelStore();
+  const { aiMode } = useLLMConfigurationStore();
   const [menuAnchor, setMenuAnchor] = useState<null | HTMLElement>(null);
   const menuOpen = Boolean(menuAnchor);
   const intl = useIntl();
+
+  // Check if model selection should be disabled based on AI mode
+  const isDisabled = disabled || aiMode === "none";
 
   useEffect(() => {
     loadModels();
@@ -26,7 +31,7 @@ export default function ModelSelector({ disabled = false }: ModelSelectorProps) 
     try {
       const models = await llmService.GetEnabledLLM();
       setAvailableModels(models);
-      if (models.length > 0 && (modelId === undefined || provider === undefined)) {
+      if (models.length > 0 && (modelId === undefined || provider === undefined) && aiMode !== "none") {
         setSelectedModel(models[0].provider, models[0].id, models[0].name);
       }
     } catch (error) {
@@ -35,6 +40,7 @@ export default function ModelSelector({ disabled = false }: ModelSelectorProps) 
   };
 
   const handleMenuOpen = (event: React.MouseEvent<HTMLDivElement>) => {
+    if (isDisabled) return;
     loadModels();
     setMenuAnchor(event.currentTarget);
   };
@@ -50,11 +56,25 @@ export default function ModelSelector({ disabled = false }: ModelSelectorProps) 
 
   return (
     <>
-      {availableModels.length > 0 ? (
+      {aiMode === "none" ? (
+        <Chip
+          label="None"
+          disabled
+          size="small"
+          variant="outlined"
+          sx={{
+            height: 24,
+            fontSize: "0.75rem",
+            fontStyle: "italic",
+            opacity: 0.7,
+            borderColor: "transparent"
+          }}
+        />
+      ) : availableModels.length > 0 ? (
         <Chip
           label={modelName || "Select Model"}
           onClick={handleMenuOpen}
-          disabled={disabled}
+          disabled={isDisabled}
           deleteIcon={<ExpandMoreIcon fontSize="small" />}
           onDelete={handleMenuOpen}
           size="small"

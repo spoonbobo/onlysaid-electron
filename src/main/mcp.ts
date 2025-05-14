@@ -41,10 +41,10 @@ export function setupMCPHandlers() {
             inputSchema: tool.inputSchema
           };
         });
-        console.log(
-          `Connected to ${serverName} server with tools:`,
-          tools.map(({ name }) => name)
-        );
+        // console.log(
+        //   `Connected to ${serverName} server with tools:`,
+        //   tools.map(({ name }) => name)
+        // );
       } catch (error) {
         console.warn(`Could not get tools from ${serverName} server:`, error);
       }
