@@ -5,6 +5,7 @@ import ResourceOverlay from "./ResourceOverlay";
 import PlaygroundOverlay from "./PlaygroundOverlay";
 import ChatOverlay from "./ChatOverlay";
 import SocketOverlay from "./SocketOverlay";
+import UserOverlay from "./UserOverlay";
 import { useDebugStore } from "@/stores/Debug/DebugStore";
 import { useState, useRef, useEffect } from "react";
 import { useUserSettingsStore } from "@/stores/User/UserSettings";
@@ -199,6 +200,7 @@ export default function OverlaysContainer() {
         <SocketOverlay />
         <ChatOverlay />
         <DbOverlay />
+        <UserOverlay />
         <PlaygroundOverlay />
       </Box>
 

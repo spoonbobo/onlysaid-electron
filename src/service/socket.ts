@@ -6,6 +6,7 @@ export class SocketClient {
   private socketInstance: any = null;
   private socketServerUrl: string | null = null;
   private currentUser: IUser | null = null;
+  private currentSocketId: string | null = null;
 
   // Message tracking to prevent duplicates/loops
   private deletedMessageTracker: Set<string> = new Set();
@@ -13,9 +14,11 @@ export class SocketClient {
   // Callbacks storage
   private messageCallback: ((message: IChatMessage) => void) | null = null;
   private messageDeletedCallback: ((data: { roomId: string, messageId: string }) => void) | null = null;
-  private roomUpdateCallback: ((room: any) => void) | null = null;
+  // private roomUpdateCallback: ((room: any) => void) | null = null; // Commented out as server doesn't seem to emit 'room_update'
   private connectCallback: (() => void) | null = null;
   private disconnectCallback: (() => void) | null = null;
+  private pongCallback: ((data: { timestamp: number }) => void) | null = null;
+  private connectionDetailsCallback: ((details: { socketId: string }) => void) | null = null;
 
   constructor() { }
 
@@ -24,6 +27,7 @@ export class SocketClient {
     this.socketServerUrl = process.env.SOCKET_SERVER_URL || 'https://onlysaid-dev.com';
     console.log("Connecting to socket server:", this.socketServerUrl);
     this.currentUser = user;
+    this.currentSocketId = null;
 
     if (this.socketInstance) {
       this.socketInstance.disconnect();
@@ -61,12 +65,14 @@ export class SocketClient {
 
       this.socketInstance.on('disconnect', () => {
         console.log('Socket disconnected');
+        this.currentSocketId = null;
         if (this.disconnectCallback) this.disconnectCallback();
       });
 
       this.setupMessageListener();
       this.setupMessageDeletedListener();
-      this.setupRoomUpdateListener();
+      this.setupPongListener();
+      this.setupConnectionEstablishedListener();
     }
   }
 
@@ -76,11 +82,16 @@ export class SocketClient {
       this.socketInstance = null;
     }
     this.currentUser = null;
+    this.currentSocketId = null;
   }
 
-  sendMessage(message: IChatMessage): void {
+  sendMessage(message: IChatMessage, workspaceId: string): void {
+    // console.log('SocketClient: Emitting message', message);
+    // console.log('SocketClient: Socket instance', this.socketInstance);
+    // console.log('SocketClient: Socket instance connected', this.socketInstance?.connected);
     if (this.socketInstance && this.socketInstance.connected) {
-      this.socketInstance.emit('send_message', message);
+      // console.log('SocketClient: Emitting message to socket', message);
+      this.socketInstance.emit('message', { message, workspaceId });
     } else {
       console.warn('Socket not connected, cannot send message');
     }
@@ -90,6 +101,15 @@ export class SocketClient {
     if (this.socketInstance && this.socketInstance.connected) {
       this.socketInstance.emit('delete_message', { roomId, messageId });
       this.deletedMessageTracker.add(messageId);
+    }
+  }
+
+  sendPing(): void {
+    if (this.socketInstance && this.socketInstance.connected) {
+      console.log('SocketClient: Emitting ping');
+      this.socketInstance.emit('ping', { timestamp: Date.now() });
+    } else {
+      console.warn('Socket not connected, cannot send ping');
     }
   }
 
@@ -109,18 +129,32 @@ export class SocketClient {
     this.messageDeletedCallback = callback;
   }
 
+  onPong(callback: (data: { timestamp: number }) => void): void {
+    this.pongCallback = callback;
+  }
+
+  onConnectionEstablished(callback: (details: { socketId: string }) => void): void {
+    this.connectionDetailsCallback = callback;
+  }
+
+  joinWorkspace(workspaceId: string): void {
+    if (this.socketInstance && this.socketInstance.connected) {
+      this.socketInstance.emit('join_workspace', workspaceId);
+    } else {
+      console.warn('Socket not connected, cannot join workspace');
+    }
+  }
 
   // Private helper methods
   private setupMessageListener(): void {
     if (!this.socketInstance) return;
 
-    this.socketInstance.on('new_message', (message: IChatMessage) => {
+    this.socketInstance.on('message', (message: IChatMessage) => {
       if (this.messageCallback) {
         this.messageCallback(message);
       }
     });
   }
-
 
   private setupMessageDeletedListener(): void {
     if (!this.socketInstance) return;
@@ -133,12 +167,25 @@ export class SocketClient {
     });
   }
 
-  private setupRoomUpdateListener(): void {
+  private setupPongListener(): void {
     if (!this.socketInstance) return;
 
-    this.socketInstance.on('room_update', (room: any) => {
-      if (this.roomUpdateCallback) {
-        this.roomUpdateCallback(room);
+    this.socketInstance.on('pong', (data: { timestamp: number }) => {
+      console.log('SocketClient: Received pong', data);
+      if (this.pongCallback) {
+        this.pongCallback(data);
+      }
+    });
+  }
+
+  private setupConnectionEstablishedListener(): void {
+    if (!this.socketInstance) return;
+
+    this.socketInstance.on('connection_established', (data: { socketId: string }) => {
+      console.log('SocketClient: Connection established with details', data);
+      this.currentSocketId = data.socketId;
+      if (this.connectionDetailsCallback) {
+        this.connectionDetailsCallback(data);
       }
     });
   }

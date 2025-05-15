@@ -143,7 +143,8 @@ export const RenderWorkspaceActions = ({
             size="small"
             onClick={async () => {
               if (currentUser && selectedContext?.id) {
-                const newChat = await createChat(currentUser.id || "", "workspace", selectedContext.id);
+                const workspaceId = selectedContext.id;
+                const newChat = await createChat(currentUser.id || "", "workspace", workspaceId);
 
                 if (newChat?.id) {
                   setSelectedTopic(selectedContext.section || 'workspace:chatroom', newChat.id);

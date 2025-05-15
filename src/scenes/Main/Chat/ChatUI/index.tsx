@@ -257,9 +257,9 @@ function ChatUI({ messages, onReply, streamingMessageId, streamContentForBubble,
       };
 
       if (lastUserMessageIndex >= 0) {
-        messagesToProcess.splice(lastUserMessageIndex + 1, 0, placeholderMessage);
+        messagesToProcess.splice(lastUserMessageIndex + 1, 0, placeholderMessage as IChatMessage);
       } else {
-        messagesToProcess.push(placeholderMessage);
+        messagesToProcess.push(placeholderMessage as IChatMessage);
       }
     }
 

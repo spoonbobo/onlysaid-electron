@@ -4,7 +4,16 @@ import { useSocketStore } from "@/stores/Socket/SocketStore";
 
 export default function SocketOverlay() {
   const { socketOverlayMinimized, setSocketOverlayMinimized } = useDebugStore();
-  const { isConnected, isInitialized } = useSocketStore();
+  const { isConnected, isInitialized, lastPongReceived, socketId } = useSocketStore();
+
+  const formatPongTimestamp = (timestamp: number | null) => {
+    if (!timestamp) return "N/A";
+    try {
+      return new Date(timestamp).toLocaleString();
+    } catch (e) {
+      return "Invalid Date";
+    }
+  };
 
   return (
     <Box sx={{
@@ -43,6 +52,14 @@ export default function SocketOverlay() {
           <InfoRow
             label="Initialized"
             value={isInitialized ? "Yes" : "No"}
+          />
+          <InfoRow
+            label="Last Pong"
+            value={formatPongTimestamp(lastPongReceived)}
+          />
+          <InfoRow
+            label="Socket ID"
+            value={socketId || "N/A"}
           />
         </Box>
       )}

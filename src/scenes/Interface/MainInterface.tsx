@@ -79,7 +79,7 @@ function MainInterface() {
         overflow: "hidden",
       }}
     >
-      {/* <TopBar /> */}
+      <TopBar />
       <Box
         sx={{
           display: "flex",

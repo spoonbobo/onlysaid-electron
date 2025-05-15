@@ -76,11 +76,10 @@ export default function AgentsMenu() {
 
   useEffect(() => {
     const userId = user?.id || "guest";
-    const isLocal = user?.id ? false : true;
     fetchingRef.current = true;
     setIsFetching(true);
 
-    useChatStore.getState().getChat(userId, 'agent', undefined, isLocal)
+    useChatStore.getState().getChat(userId, 'agent', undefined)
       .then(() => {
         const allCurrentChats = useChatStore.getState().chats;
         const agentChats = allCurrentChats.filter(chat => chat.type === 'agent');

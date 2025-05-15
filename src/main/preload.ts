@@ -32,7 +32,8 @@ type RedisChannels = 'redis:connect' | 'redis:disconnect' | 'redis:get' | 'redis
 type SocketChannels = 'socket:initialize' | 'socket:close' |
   'socket:connected' | 'socket:disconnected' | 'socket:send-message' |
   'socket:delete-message' | 'socket:new-message' | 'socket:message-deleted' |
-  'socket:notification' | 'socket:room-update';
+  'socket:notification' | 'socket:room-update' | 'socket:send-ping' | 'socket:pong' |
+  'socket:connection-details' | 'socket:join-workspace';
 
 export type Channels =
   | AuthChannels
@@ -121,9 +122,11 @@ const electronHandler = {
   socket: {
     initialize: (user: any) => ipcRenderer.invoke('socket:initialize', user),
     close: () => ipcRenderer.invoke('socket:close'),
-    sendMessage: (message: any) => ipcRenderer.invoke('socket:send-message', message),
+    sendMessage: (message: any, workspaceId: string) => ipcRenderer.invoke('socket:send-message', message, workspaceId),
     deleteMessage: (roomId: string, messageId: string) =>
       ipcRenderer.invoke('socket:delete-message', { roomId, messageId }),
+    sendPing: () => ipcRenderer.invoke('socket:send-ping'),
+    joinWorkspace: (workspaceId: string) => ipcRenderer.invoke('socket:join-workspace', workspaceId),
   },
 };
 

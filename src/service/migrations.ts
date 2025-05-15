@@ -36,8 +36,7 @@ export const featureMigrations = [
     sent_at TIMESTAMP,
     chat_id TEXT,
     sender TEXT,
-    recipients TEXT[], -- Stored as JSON string
-    status TEXT, -- pending, sent
+    status TEXT, -- pending, sent, error
     reactions TEXT[], -- Stored as JSON string
     reply_to TEXT,
     mentions TEXT[], -- Stored as JSON string

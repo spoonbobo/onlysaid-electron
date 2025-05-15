@@ -66,7 +66,7 @@ export default function DebugOverlay() {
   );
 }
 
-function InfoRow({ label, value }: { label: string, value: string }) {
+export function InfoRow({ label, value }: { label: string, value: string }) {
   return (
     <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
       <Typography variant="caption" sx={{ fontWeight: 'bold', color: 'text.secondary' }}>

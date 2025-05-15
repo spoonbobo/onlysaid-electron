@@ -192,7 +192,7 @@ function Chat() {
         const fileIds = messageData.files?.map(file => file.id);
         messageData.files = fileIds as unknown as IFile[];
 
-        const messageId = await sendMessage(activeChatId, messageData);
+        const messageId = await sendMessage(activeChatId, messageData, workspaceId);
 
         if (messageId) {
           const currentUser = getUserFromStore();
@@ -204,7 +204,9 @@ function Chat() {
             created_at: messageData.created_at,
             sender_object: currentUser as IUser,
             reply_to: replyingToId || undefined,
-            files: messageData.files
+            files: messageData.files,
+            sent_at: messageData.sent_at || new Date().toISOString(),
+            status: messageData.status || "pending"
           };
 
           appendMessage(activeChatId, newMessage);
@@ -226,6 +228,8 @@ function Chat() {
               sender_object: assistantSender as IUser,
               text: "",
               created_at: new Date().toISOString(),
+              sent_at: new Date().toISOString(),
+              status: "pending"
             };
 
             appendMessage(activeChatId, assistantMessage);

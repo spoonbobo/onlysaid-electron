@@ -7,6 +7,7 @@ import { validate } from 'uuid';
 import { IChatMessage, IReaction } from "@/../../types/Chat/Message";
 import { IChatRoom, IUpdateChatArgs } from "@/../../types/Chat/Chatroom";
 import { IUser } from "@/../../types/User/User";
+import { useSocketStore } from "../Socket/SocketStore";
 
 const MESSAGE_FETCH_LIMIT = 35;
 
@@ -32,9 +33,9 @@ interface ChatState {
   isTyping: boolean;
   chatOverlayMinimized: boolean;
 
-  createChat: (userId: string, type: string, contextId?: string, local?: boolean) => Promise<IChatRoom | null>;
+  createChat: (userId: string, type: string, workspaceId?: string) => Promise<IChatRoom | null>;
   deleteChat: (chatId: string, local?: boolean) => Promise<void>;
-  getChat: (userId: string, type: string, workspaceId?: string, local?: boolean) => Promise<void>;
+  getChat: (userId: string, type: string, workspaceId?: string) => Promise<void>;
   updateChat: (chatId: string, data: Partial<IChatRoom>, local?: boolean) => Promise<void>;
   setActiveChat: (chatId: string, contextId?: string) => void;
   markAsRead: (chatId: string) => void;
@@ -120,16 +121,14 @@ export const useChatStore = create<ChatState>()(
       createChat: async (
         userId: string,
         type: string,
-        contextId?: string,
-        local?: boolean
+        workspaceId?: string,
       ) => {
         set({ isLoading: true, error: null });
         try {
-          const newChat = NewChat(userId, type, contextId);
+          const newChat = NewChat(userId, type, workspaceId);
           const chatId = uuidv4();
 
-          if (local) {
-            console.log('Creating chat locally');
+          if (!workspaceId || workspaceId === 'undefined') {
             await window.electron.db.query({
               query: `
                 insert into ${DBTABLES.CHATROOM}
@@ -159,7 +158,7 @@ export const useChatStore = create<ChatState>()(
               isLoading: false
             }));
 
-            get().setActiveChat(chatId, contextId);
+            get().setActiveChat(chatId, workspaceId);
             return localChat;
           } else {
             const response = await window.electron.chat.create({
@@ -167,9 +166,9 @@ export const useChatStore = create<ChatState>()(
               request: newChat
             });
 
-            await get().getChat(userId, type, contextId);
+            await get().getChat(userId, type, workspaceId);
             if (response.data?.data?.[0]?.id) {
-              get().setActiveChat(response.data.data[0].id, contextId);
+              get().setActiveChat(response.data.data[0].id, workspaceId);
             }
 
             return response.data?.data?.[0];
@@ -219,10 +218,10 @@ export const useChatStore = create<ChatState>()(
         }
       },
 
-      getChat: async (userId: string, type: string, workspaceId?: string, local?: boolean) => {
+      getChat: async (userId: string, type: string, workspaceId?: string) => {
         set({ isLoading: true, error: null });
         try {
-          if (local) {
+          if (!workspaceId || workspaceId === 'undefined') {
             let query = `
               select * from ${DBTABLES.CHATROOM}
               where type = @type
@@ -327,28 +326,38 @@ export const useChatStore = create<ChatState>()(
       },
 
       sendMessage: async (chatId, messageData, workspaceId?: string) => {
-        console.log("sendMessage", messageData);
         set({ isLoading: true, error: null });
         try {
           const messageId = uuidv4();
+          const status = workspaceId ? "pending" : "sent"
+          const sent_at = workspaceId ? null : messageData.sent_at || new Date().toISOString()
+          const message: IChatMessage = {
+            id: messageId,
+            chat_id: chatId,
+            sender: getUserFromStore()?.id || "",
+            text: messageData.text || "",
+            created_at: messageData.created_at || new Date().toISOString(),
+            reply_to: messageData.reply_to || undefined,
+            files: messageData.files || undefined,
+            sent_at: sent_at || new Date().toISOString(),
+            status: status
+          }
+          console.log("workspaceId", workspaceId);
+          console.log("sendMessage", message);
 
           await window.electron.db.query({
             query: `
             insert into messages
-            (id, chat_id, sender, text, created_at, reply_to, files)
+            (id, chat_id, sender, text, created_at, reply_to, files, sent_at, status)
             values
-            (@id, @chatId, @sender, @text, @createdAt, @replyTo, @files)
+            (@id, @chat_id, @sender, @text, @created_at, @reply_to, @files, @sent_at, @status)
             `,
-            params: {
-              id: messageId,
-              chatId,
-              sender: getUserFromStore()?.id || "",
-              text: messageData.text || "",
-              createdAt: messageData.created_at,
-              replyTo: messageData.reply_to || null,
-              files: JSON.stringify(messageData.files) || null
-            }
+            params: message
           });
+
+          if (workspaceId) {
+            useSocketStore.getState().sendMessage(message, workspaceId);
+          }
 
           set({ isLoading: false });
           return messageId;

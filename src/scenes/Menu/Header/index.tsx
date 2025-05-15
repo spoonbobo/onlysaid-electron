@@ -66,7 +66,6 @@ function MenuHeader() {
       user?.id || "guest",
       'agent',
       undefined,
-      isLocal
     );
 
     // Use the returned chat data directly

@@ -18,12 +18,23 @@ export const setupSocketHandlers = (mainWindow: BrowserWindow): void => {
     socketClient.close();
   });
 
-  ipcMain.handle('socket:send-message', (_event, message) => {
-    socketClient.sendMessage(message);
+  ipcMain.handle('socket:send-message', (_event, message, workspaceId) => {
+    socketClient.sendMessage(message, workspaceId);
   });
 
   ipcMain.handle('socket:delete-message', (_event, { roomId, messageId }) => {
     socketClient.deleteMessage(roomId, messageId);
+  });
+
+  ipcMain.handle('socket:send-ping', () => {
+    console.log('Main: Received socket:send-ping request');
+    socketClient.sendPing();
+    return { success: true };
+  });
+
+  ipcMain.handle('socket:join-workspace', (_event, workspaceId) => {
+    socketClient.joinWorkspace(workspaceId);
+    return { success: true };
   });
 
   // Set up the event callbacks that will send events to renderer
@@ -48,6 +59,20 @@ export const setupSocketHandlers = (mainWindow: BrowserWindow): void => {
   socketClient.onMessageDeleted((data) => {
     if (mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.webContents.send('socket:message-deleted', data);
+    }
+  });
+
+  socketClient.onPong((data) => {
+    console.log('Main: Received pong from SocketClient, forwarding to renderer', data);
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('socket:pong', data);
+    }
+  });
+
+  socketClient.onConnectionEstablished((details) => {
+    console.log('Main: Received connection details from SocketClient, forwarding to renderer', details);
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('socket:connection-details', details);
     }
   });
 

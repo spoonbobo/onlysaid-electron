@@ -42,7 +42,8 @@ export default function WorkspaceChatMenu() {
   useEffect(() => {
     const currentUser = getUserFromStore();
     if (currentUser?.id && selectedContext?.id) {
-      getChat(currentUser.id, "workspace", selectedContext.id || '');
+      const workspaceId = selectedContext.id || '';
+      getChat(currentUser.id, "workspace", workspaceId);
     }
   }, [selectedContext?.id, getChat]);
 
