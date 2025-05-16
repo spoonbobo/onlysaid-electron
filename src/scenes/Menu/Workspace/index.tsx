@@ -3,6 +3,7 @@ import { useEffect } from "react";
 
 import { useCurrentTopicContext } from "@/stores/Topic/TopicStore";
 import WorkspaceChatMenu from "./Chatroom";
+import MenuCalendar from "./Calendar";
 import { useUserStore } from "@/stores/User/UserStore";
 import { useSocketStore } from "@/stores/Socket/SocketStore";
 
@@ -24,10 +25,11 @@ export default function WorkspaceMenu() {
   const contextId = selectedContext ? `${selectedContext.name}:${selectedContext.type}` : '';
   const menuKey = `${contextId}`;
 
+
   return (
-    <Box key={menuKey}>
-      {section.includes('chat') && <WorkspaceChatMenu />}
-      {/* Add other section components when implemented */}
+    <Box key={menuKey} sx={{ p: 1 }}>
+      {section.includes('chatroom') && <WorkspaceChatMenu />}
+      {selectedContext?.type === 'workspace' && section === 'workspace:calendar' && <MenuCalendar />}
     </Box>
   );
 }

@@ -14,6 +14,9 @@ function MainInterface() {
   const { menuWidth, setMenuWidth } = useLayoutResize();
   const { selectedContext } = useTopicStore();
   const isDraggingMenu = useRef(false);
+  const mainInterfaceRenderCountRef = useRef(0);
+
+  mainInterfaceRenderCountRef.current += 1;
 
   // Reset functionality without window/tab dependency
   useEffect(() => {
@@ -46,6 +49,7 @@ function MainInterface() {
   const handleMenuMouseDown = () => {
     isDraggingMenu.current = true;
     document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
   };
 
   useEffect(() => {
@@ -55,15 +59,23 @@ function MainInterface() {
         setMenuWidth(newWidth);
       }
     };
+
     const handleMouseUp = () => {
-      isDraggingMenu.current = false;
-      document.body.style.cursor = "";
+      if (isDraggingMenu.current) {
+        isDraggingMenu.current = false;
+        document.body.style.cursor = "";
+        document.body.style.removeProperty('user-select');
+      }
     };
+
     window.addEventListener("mousemove", handleMouseMove);
     window.addEventListener("mouseup", handleMouseUp);
+
     return () => {
       window.removeEventListener("mousemove", handleMouseMove);
       window.removeEventListener("mouseup", handleMouseUp);
+      document.body.style.cursor = "";
+      document.body.style.removeProperty('user-select');
     };
   }, [setMenuWidth]);
 
@@ -157,7 +169,7 @@ function MainInterface() {
         </Box>
       </Box>
 
-      <OverlaysContainer />
+      <OverlaysContainer mainInterfaceRenderCount={mainInterfaceRenderCountRef.current} />
     </Box>
   );
 }

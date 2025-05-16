@@ -50,7 +50,7 @@ export const useWorkspaceStore = create<WorkspaceState>()((set, get) => ({
       const newWorkspace: IWorkspace = {
         id: uuidv4(),
         name: data.name || 'New Workspace',
-        image: data.image || '/workspace-icon.png',
+        image: data.image || '/dummy.png',
         invite_code: data.invite_code || '',
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),

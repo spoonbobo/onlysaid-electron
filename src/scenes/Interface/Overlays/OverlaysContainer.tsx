@@ -10,7 +10,11 @@ import { useDebugStore } from "@/stores/Debug/DebugStore";
 import { useState, useRef, useEffect } from "react";
 import { useUserSettingsStore } from "@/stores/User/UserSettings";
 
-export default function OverlaysContainer() {
+interface OverlaysContainerProps {
+  mainInterfaceRenderCount: number;
+}
+
+export default function OverlaysContainer({ mainInterfaceRenderCount }: OverlaysContainerProps) {
   const { debugMode } = useUserSettingsStore();
   const {
     overlaysPosition,
@@ -196,7 +200,7 @@ export default function OverlaysContainer() {
         onMouseDown={handleDragStart}
       >
         <ResourceOverlay />
-        <DebugOverlay />
+        <DebugOverlay mainInterfaceRenderCount={mainInterfaceRenderCount} />
         <SocketOverlay />
         <ChatOverlay />
         <DbOverlay />

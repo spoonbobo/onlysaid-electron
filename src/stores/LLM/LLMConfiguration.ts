@@ -2,7 +2,7 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { useSelectedModelStore } from "./SelectedModelStore";
 
-type AIMode = "none" | "ask" | "agent";
+type AIMode = "none" | "ask" | "query" | "agent";
 
 interface LLMConfigurationState {
   // General settings

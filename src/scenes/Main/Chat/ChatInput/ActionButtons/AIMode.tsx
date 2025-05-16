@@ -22,7 +22,7 @@ export default function AIMode({ disabled = false }: AIModeProps) {
     setMenuAnchor(null);
   };
 
-  const handleModeSelect = (newMode: "none" | "ask" | "agent") => {
+  const handleModeSelect = (newMode: "none" | "ask" | "query" | "agent") => {
     setAIMode(newMode);
     handleMenuClose();
   };
@@ -31,6 +31,7 @@ export default function AIMode({ disabled = false }: AIModeProps) {
   const getModeDisplayText = () => {
     if (aiMode === "none") return intl.formatMessage({ id: "chat.mode.none" }) || "Not using AI";
     if (aiMode === "ask") return intl.formatMessage({ id: "chat.mode.ask" }) || "Ask";
+    if (aiMode === "query") return intl.formatMessage({ id: "chat.mode.query" }) || "Query";
     return intl.formatMessage({ id: "chat.mode.agent" }) || "Agent";
   };
 
@@ -87,6 +88,13 @@ export default function AIMode({ disabled = false }: AIModeProps) {
           dense
         >
           <Typography variant="body2">{intl.formatMessage({ id: "chat.mode.ask" })}</Typography>
+        </MenuItem>
+        <MenuItem
+          onClick={() => handleModeSelect("query")}
+          selected={aiMode === "query"}
+          dense
+        >
+          <Typography variant="body2">{intl.formatMessage({ id: "chat.mode.query" }) || "Query"}</Typography>
         </MenuItem>
         <MenuItem
           onClick={() => handleModeSelect("agent")}

@@ -185,7 +185,6 @@ export const useSocketStore = create<SocketState>((set, get) => ({
 
   sendPing: () => {
     if (get().isConnected) {
-      console.log("SocketStore: Sending PING");
       window.electron.socket.sendPing();
     }
   },
@@ -210,7 +209,6 @@ export const useSocketStore = create<SocketState>((set, get) => ({
   },
 
   handlePong: (timestamp: number) => {
-    console.log("SocketStore: Received PONG", timestamp);
     set({ lastPongReceived: timestamp, isConnected: true });
 
     if (pongTimeoutId) clearTimeout(pongTimeoutId);

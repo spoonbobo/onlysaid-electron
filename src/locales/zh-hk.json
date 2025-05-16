@@ -305,5 +305,6 @@
 
   "menu.workspace.inviteUserTo": "邀請用戶加入「{name}」",
 
-  "workspace.workspace:chatroom": "聊天室"
+  "workspace.workspace:chatroom": "聊天室",
+  "chat.mode.query": "查詢(AI)"
 }

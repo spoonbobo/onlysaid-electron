@@ -3,7 +3,11 @@ import { useDebugStore } from "../../../stores/Debug/DebugStore";
 import { useTopicStore } from "../../../stores/Topic/TopicStore";
 import { useRef, useState } from "react";
 
-export default function DebugOverlay() {
+interface DebugOverlayProps {
+  mainInterfaceRenderCount: number;
+}
+
+export default function DebugOverlay({ mainInterfaceRenderCount }: DebugOverlayProps) {
   const { selectedContext, lastSections, selectedTopics } = useTopicStore();
   const { debugOverlayMinimized, setDebugOverlayMinimized } = useDebugStore();
 
@@ -58,7 +62,8 @@ export default function DebugOverlay() {
           <InfoRow label="Section" value={selectedContext?.section || 'None'} />
           <InfoRow label="Last Section" value={selectedContext?.type ? lastSections[selectedContext.type] || 'None' : 'None'} />
           <InfoRow label="Selected Topic" value={selectedContext?.section ? selectedTopics[selectedContext.section] || 'None' : 'None'} />
-          <InfoRow label="Renders" value={`${renderCountRef.current}`} />
+          <InfoRow label="DebugOverlay Renders" value={`${renderCountRef.current}`} />
+          <InfoRow label="MainIF Renders" value={`${mainInterfaceRenderCount}`} />
           <InfoRow label="Uptime" value={`${uptime}s`} />
         </Box>
       )}

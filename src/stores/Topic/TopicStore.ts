@@ -5,6 +5,7 @@
 
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
+import { useMemo } from 'react';
 
 export interface TopicContext {
   id?: string;
@@ -54,7 +55,15 @@ interface TopicStore {
   scrollPositions: Record<string, number>;
   setScrollPosition: (chatId: string, position: number) => void;
   getScrollPosition: (chatId: string) => number;
+
+  selectedCalendarDate: string | null;
+  setSelectedCalendarDate: (date: Date | null) => void;
+
+  calendarViewMode: CalendarViewMode;
+  setCalendarViewMode: (mode: CalendarViewMode) => void;
 }
+
+export type CalendarViewMode = "month" | "week" | "day";
 
 export const useTopicStore = create<TopicStore>()(
   persist(
@@ -236,7 +245,13 @@ export const useTopicStore = create<TopicStore>()(
 
       getScrollPosition: (chatId) => {
         return get().scrollPositions[chatId] || 0;
-      }
+      },
+
+      selectedCalendarDate: null,
+      setSelectedCalendarDate: (date) => set({ selectedCalendarDate: date ? date.toISOString() : null }),
+
+      calendarViewMode: "month",
+      setCalendarViewMode: (mode) => set({ calendarViewMode: mode }),
     }),
     {
       name: "topic-store",
@@ -254,3 +269,18 @@ export const useTopicStore = create<TopicStore>()(
 );
 
 export const useCurrentTopicContext = () => useTopicStore();
+
+export const useSelectedCalendarDate = () => {
+  const isoDate = useTopicStore((state) => state.selectedCalendarDate);
+
+  // Memoize the Date object creation
+  return useMemo(() => {
+    if (!isoDate) return null;
+    try {
+      return new Date(isoDate);
+    } catch (e) {
+      console.error("Error parsing selectedCalendarDate from store:", e);
+      return null;
+    }
+  }, [isoDate]); // Only re-create the Date object if the isoDate string changes
+};

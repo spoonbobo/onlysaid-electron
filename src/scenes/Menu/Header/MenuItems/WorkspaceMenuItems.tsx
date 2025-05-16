@@ -63,7 +63,7 @@ function WorkspaceMenuItems({ handleClose }: WorkspaceMenuItemsProps) {
         <AssignmentIcon fontSize="small" sx={{ mr: 1.5, color: "text.secondary" }} />
         <FormattedMessage id="menu.workspace.plans" />
       </MenuItem>
-      <MenuItem disabled onClick={() => handleMenuItemClick('calendar')} sx={{ minHeight: 36, fontSize: 14 }}>
+      <MenuItem onClick={() => handleMenuItemClick('calendar')} sx={{ minHeight: 36, fontSize: 14 }}>
         <CalendarMonthIcon fontSize="small" sx={{ mr: 1.5, color: "text.secondary" }} />
         <FormattedMessage id="menu.workspace.calendar" />
       </MenuItem>

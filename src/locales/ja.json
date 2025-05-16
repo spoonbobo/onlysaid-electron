@@ -307,5 +307,56 @@
   "user.assistant": "アシスタント",
   "user.you": "あなた",
 
-  "menu.workspace.inviteUserTo": "「{name}」にユーザーを招待"
+  "menu.workspace.inviteUserTo": "「{name}」にユーザーを招待",
+
+  "chat.mode.query": "クエリ（AI）",
+  "workspace.removeUser.confirmation": "ユーザーを削除しますか？",
+  "workspace.removeUser.title": "ユーザー削除",
+  "agent.info": "AIエージェント",
+  "user.itsYou": "あなたです",
+
+  "calendar.default.title": "カレンダー",
+  "workspace.calendar.title": "カレンダー",
+  "calendar.day.sun": "日",
+  "calendar.day.mon": "月",
+  "calendar.day.tue": "火",
+  "calendar.day.wed": "水",
+  "calendar.day.thu": "木",
+  "calendar.day.fri": "金",
+  "calendar.day.sat": "土",
+  "calendar.aria.prevMonth": "前の月",
+  "calendar.aria.nextMonth": "次の月",
+
+  "calendar.menu.day.mon": "月",
+  "calendar.menu.day.tue": "火",
+  "calendar.menu.day.wed": "水",
+  "calendar.menu.day.thu": "木",
+  "calendar.menu.day.fri": "金",
+  "calendar.menu.day.sat": "土",
+  "calendar.menu.day.sun": "日",
+  "calendar.yearLabel": "年",
+  "calendar.monthLabel": "月",
+
+  "calendar.dayView.title": "デイリータイムライン",
+  "calendar.backToMonthView": "月表示に戻る",
+  "calendar.dayView.placeholder": "この日のタイムラインイベントがここに表示されます。",
+
+  "calendar.time.am": "午前",
+  "calendar.time.pm": "午後",
+  "calendar.time.hourLabel": "時",
+  "calendar.time.midnight": "深夜",
+  "calendar.time.noon": "正午",
+
+  "calendar.aria.prevDay": "前の日",
+  "calendar.aria.nextDay": "次の日",
+
+  "calendar.aria.prevWeek": "前の週",
+  "calendar.aria.nextWeek": "次の週",
+  "calendar.event.untitled": "(無題)",
+  "calendar.event.timeRange": "午前10時 - 午後7時",
+  "calendar.viewMode.day": "日",
+  "calendar.viewMode.week": "週",
+  "calendar.viewMode.month": "月",
+  "calendar.viewMode.label": "カレンダー",
+  "workspace.noChats": "チャットがありません。新しいチャットを作成してください。"
 }

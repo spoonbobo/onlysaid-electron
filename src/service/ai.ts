@@ -40,7 +40,6 @@ export class LLMService {
     const config = useLLMConfigurationStore.getState();
     const enabledModels: LLMModel[] = [];
 
-    // For OpenAI, consider it available if enabled and has a key
     if (config.openAIEnabled && config.openAIKey) {
       enabledModels.push({
         id: "gpt-4o",
@@ -56,7 +55,6 @@ export class LLMService {
       });
     }
 
-    // For DeepSeek, consider it available if enabled and has a key
     if (config.deepSeekEnabled && config.deepSeekKey) {
       enabledModels.push({
         id: "deepseek-chat",
@@ -73,9 +71,7 @@ export class LLMService {
       });
     }
 
-    // For Ollama, fetch and add available models if enabled and has baseURL
     if (config.ollamaVerified && config.ollamaBaseURL) {
-      // If a specific model is configured, add it
       if (config.ollamaModel) {
         enabledModels.push({
           id: config.ollamaModel,
@@ -85,7 +81,6 @@ export class LLMService {
         });
       } else {
         console.log("Fetching Ollama models");
-        // Otherwise, try to fetch all available models
         try {
           const ollamaModels = await this.ollamaService.GetLLMModels();
           ollamaModels.forEach(model => {
@@ -97,7 +92,6 @@ export class LLMService {
             });
           });
 
-          // If models were found, update the default model in the store
           if (ollamaModels.length > 0 && !config.ollamaModel) {
             const store = useLLMConfigurationStore.getState();
             store.setOllamaModel(ollamaModels[0].name);
@@ -114,20 +108,16 @@ export class LLMService {
 
   async TestOllamaConnection(): Promise<{ success: boolean; models: any[] }> {
     try {
-      // Test authentication
       const isAuthenticated = await this.ollamaService.Authenticate();
       if (!isAuthenticated) {
         return { success: false, models: [] };
       }
 
-      // Fetch available models
       const models = await this.ollamaService.GetLLMModels();
 
-      // Update the store if successful
       const store = useLLMConfigurationStore.getState();
       store.setOllamaVerified(true);
 
-      // If models were found and no model is currently selected, set the first one
       if (models.length > 0 && !store.ollamaModel) {
         store.setOllamaModel(models[0].name);
       }
@@ -189,7 +179,6 @@ export class LLMService {
 
       switch (provider) {
         case "openai":
-          // Dummy implementation for OpenAI verification
           isVerified = false;
           store.setOpenAIVerified(isVerified);
           break;
@@ -198,12 +187,10 @@ export class LLMService {
           store.setDeepSeekVerified(isVerified);
           break;
         case "ollama":
-          // Test connection and get models
           const { success, models } = await this.TestOllamaConnection();
           isVerified = success;
           store.setOllamaVerified(isVerified);
 
-          // If successful and there are models, set the first one if none is selected
           if (success && models.length > 0 && !store.ollamaModel) {
             store.setOllamaModel(models[0].name);
           }
@@ -216,7 +203,6 @@ export class LLMService {
     } catch (error) {
       console.error(`Error verifying ${provider} API key:`, error);
 
-      // Update verification status to false on error
       const store = useLLMConfigurationStore.getState();
       if (provider === "openai") store.setOpenAIVerified(false);
       if (provider === "deepseek") store.setDeepSeekVerified(false);

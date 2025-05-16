@@ -14,13 +14,12 @@ function Main() {
   const workspaceName = selectedContext?.name || "workspace";
   const workspaceId = selectedContext?.id;
 
-  // Create dynamic workspace components with the workspace name
   const getWorkspaceComponent = (section: string) => {
     switch (section) {
       case "workspace:chatroom":
         return <Chat />;
       case "workspace:calendar":
-        return <Calendar workspaceName={workspaceId} />;
+        return <Calendar />;
       case "workspace:plans":
         return <Box sx={{ p: 3 }}>
           <Typography variant="h5" gutterBottom>Plans for {workspaceId}</Typography>

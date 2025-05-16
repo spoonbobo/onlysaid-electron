@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect } from "react";
 import { Box, Typography, alpha, IconButton } from "@mui/material";
 import MessageTextField from "../../../../components/Chat/MessageTextField";
-import ActionButtons from "./ActionButtons/ActionButtons";
+import ActionButtons from "./ActionButtons";
 import AttachmentPreview from "@/components/Attachments";
 import { IChatMessage } from "@/../../types/Chat/Message";
 import CloseIcon from '@mui/icons-material/Close';

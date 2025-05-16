@@ -1,4 +1,4 @@
-import { Box, Tooltip, IconButton, Menu, MenuItem } from "@mui/material";
+import { Box, Tooltip, IconButton, Menu, MenuItem, Avatar } from "@mui/material";
 import HomeIcon from "@mui/icons-material/Home";
 import AddIcon from "@mui/icons-material/Add";
 import GroupIcon from "@mui/icons-material/Group";
@@ -271,35 +271,51 @@ function SidebarTabs() {
           </Box>
         </Tooltip>
 
-        {WorkspaceContexts.map(workspaceContext => (
-          <Tooltip
-            key={workspaceContext.id || `workspace-${workspaceContext.name}`}
-            title={`${intl.formatMessage({ id: "workspace.title", defaultMessage: "Workspace" })}: ${workspaceContext.name}${workspaceContext.id ? ` (${workspaceContext.id.slice(0, 8)})` : ''}`}
-            placement="right"
-          >
-            <Box
-              sx={{
-                position: 'relative',
-                borderBottom: isContextSelected(workspaceContext)
-                  ? "3px solid"
-                  : "3px solid transparent",
-                borderColor: isContextSelected(workspaceContext)
-                  ? "primary.main"
-                  : "transparent",
-                borderRadius: 0,
-              }}
-              onContextMenu={(e) => handleContextMenu(e, workspaceContext)}
+        {WorkspaceContexts.map(workspaceContext => {
+          const workspace = workspaces.find(w => w.id === workspaceContext.id);
+          const imageUrl = workspace?.image;
+          const workspaceNameInitial = workspaceContext.name[0]?.toUpperCase();
+
+          return (
+            <Tooltip
+              key={workspaceContext.id || `workspace-${workspaceContext.name}`}
+              title={`${intl.formatMessage({ id: "workspace.title", defaultMessage: "Workspace" })}: ${workspaceContext.name}${workspaceContext.id ? ` (${workspaceContext.id.slice(0, 8)})` : ''}`}
+              placement="right"
             >
-              <IconButton
-                color="primary"
-                size="large"
-                onClick={() => handleNavigate(workspaceContext)}
+              <Box
+                sx={{
+                  position: 'relative',
+                  borderBottom: isContextSelected(workspaceContext)
+                    ? "3px solid"
+                    : "3px solid transparent",
+                  borderColor: isContextSelected(workspaceContext)
+                    ? "primary.main"
+                    : "transparent",
+                  borderRadius: 0,
+                }}
+                onContextMenu={(e) => handleContextMenu(e, workspaceContext)}
               >
-                <GroupIcon />
-              </IconButton>
-            </Box>
-          </Tooltip>
-        ))}
+                <IconButton
+                  color="primary"
+                  size="large"
+                  onClick={() => handleNavigate(workspaceContext)}
+                >
+                  {imageUrl ? (
+                    <Avatar src={imageUrl} sx={{ width: 24, height: 24 }}>
+                      {workspaceNameInitial || <GroupIcon fontSize="small" />}
+                    </Avatar>
+                  ) : workspaceNameInitial ? (
+                    <Avatar sx={{ width: 24, height: 24, fontSize: '0.875rem' }}>
+                      {workspaceNameInitial}
+                    </Avatar>
+                  ) : (
+                    <GroupIcon />
+                  )}
+                </IconButton>
+              </Box>
+            </Tooltip>
+          );
+        })}
 
         {user && (
           <Tooltip title={intl.formatMessage({ id: "workspace.create.title", defaultMessage: "Add Workspace" })} placement="right">

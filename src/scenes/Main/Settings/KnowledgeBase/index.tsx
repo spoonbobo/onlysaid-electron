@@ -16,7 +16,7 @@ import { EmbeddingModel, EmbeddingService } from "@/service/ai";
 
 function KnowledgeBaseComponent() {
   const {
-    databases,
+    knowledge_bases,
     page,
     itemsPerPage,
     searchTerm,
@@ -50,7 +50,7 @@ function KnowledgeBaseComponent() {
       });
   }, []);
 
-  const filteredDatabases = databases.filter(db =>
+  const filteredDatabases = knowledge_bases.filter(db =>
     searchTerm === "" ||
     db.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     db.description.toLowerCase().includes(searchTerm.toLowerCase())
@@ -151,12 +151,12 @@ function KnowledgeBaseComponent() {
 
   const getSelectedDb = () => {
     if (!selectedDbId) return null;
-    return databases.find(db => db.id === selectedDbId) || null;
+    return knowledge_bases.find(db => db.id === selectedDbId) || null;
   };
 
   const getSelectedDbName = () => {
     if (!selectedDbId) return "";
-    const db = databases.find(db => db.id === selectedDbId);
+    const db = knowledge_bases.find(db => db.id === selectedDbId);
     return db?.name || "";
   };
 
