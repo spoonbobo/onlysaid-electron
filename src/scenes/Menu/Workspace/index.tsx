@@ -6,6 +6,7 @@ import WorkspaceChatMenu from "./Chatroom";
 import MenuCalendar from "./Calendar";
 import { useUserStore } from "@/stores/User/UserStore";
 import { useSocketStore } from "@/stores/Socket/SocketStore";
+import KnowledgeBaseMenu from "./KnowledgeBase";
 
 export default function WorkspaceMenu() {
   const { selectedContext } = useCurrentTopicContext();
@@ -30,6 +31,7 @@ export default function WorkspaceMenu() {
     <Box key={menuKey} sx={{ p: 1 }}>
       {section.includes('chatroom') && <WorkspaceChatMenu />}
       {selectedContext?.type === 'workspace' && section === 'workspace:calendar' && <MenuCalendar />}
+      {selectedContext?.type === 'workspace' && section.includes('knowledgeBase') && <KnowledgeBaseMenu />}
     </Box>
   );
 }

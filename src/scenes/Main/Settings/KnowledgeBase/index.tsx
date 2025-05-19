@@ -1,568 +1,415 @@
-import { Box, Button, TextField, Pagination, InputAdornment, Typography, Card, CardContent, List, ListItem, IconButton, Switch, Chip, Stack, Tooltip } from "@mui/material";
+import { Box, Typography, Card, CardContent, Chip, Stack, CircularProgress, Divider, IconButton, Switch, Tooltip } from "@mui/material";
 import { useState, useEffect, useMemo, useCallback } from "react";
-import { useKBConfigurationStore } from "@/stores/KB/KBConfigurationStore";
 import SettingsSection from "@/components/Settings/SettingsSection";
-import SearchIcon from "@mui/icons-material/Search";
-import DeleteIcon from "@mui/icons-material/Delete";
-import EditIcon from "@mui/icons-material/Edit";
-import RefreshIcon from "@mui/icons-material/Refresh";
-import { FormattedMessage } from "react-intl";
-import CreateKBDialog, { DeleteKBConfirmationDialog } from "@/components/Dialog/CreateKBDialog";
-import { useIntl } from "react-intl";
-import { useKBSettingsStore } from "@/stores/KB/KBSettingStore";
-import { useTopicStore, TopicContext } from "@/stores/Topic/TopicStore";
+import { FormattedMessage, useIntl } from "react-intl";
+import { useTopicStore, useCurrentTopicContext } from "@/stores/Topic/TopicStore";
 import { toast } from "@/utils/toast";
 import { EmbeddingModel, EmbeddingService } from "@/service/ai";
 import { IKnowledgeBase, IKnowledgeBaseRegisterArgs } from "@/../../types/KnowledgeBase/KnowledgeBase";
 import { useKBStore } from "@/stores/KB/KBStore";
+import CreateKBDialog, { DeleteKBConfirmationDialog } from "@/components/Dialog/CreateKBDialog";
+import { v4 as uuidv4 } from 'uuid';
 import CloudIcon from "@mui/icons-material/Cloud";
 import StorageIcon from "@mui/icons-material/Storage";
-import { v4 as uuidv4 } from 'uuid';
+import EditIcon from "@mui/icons-material/Edit";
+import DeleteIcon from "@mui/icons-material/Delete";
+import RefreshIcon from "@mui/icons-material/Refresh";
+import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
+import ReplayIcon from '@mui/icons-material/Replay';
+import { useKBConfigurationStore } from "@/stores/KB/KBConfigurationStore";
 
-const getContextIdString = (selectedContext: TopicContext | null): string | undefined => {
-  if (!selectedContext) return undefined;
-  return selectedContext.type === "workspace" && selectedContext.id
-    ? `${selectedContext.id}:workspace`
-    : selectedContext.id ? `${selectedContext.id}:${selectedContext.type}`
-      : `${selectedContext.name}:${selectedContext.type}`;
-};
+// This key should ideally be shared, e.g., exported from TopicStore or a constants file
+const KNOWLEDGE_BASE_SELECTION_KEY = "knowledgeBaseMenu:selectedId";
 
-const EMPTY_KBS: IKnowledgeBase[] = [];
+function KnowledgeBaseManagerComponent() {
+  const intl = useIntl();
+  const { selectedContext } = useCurrentTopicContext();
+  const { selectedTopics, clearSelectedTopic } = useTopicStore();
 
-function KnowledgeBaseComponent() {
   const {
-    setPage: storeSetPage,
-    isCreateKBDialogOpen,
-    closeCreateKBDialog,
-    ...configStore
-  } = useKBConfigurationStore();
-  const {
-    page,
-    itemsPerPage,
-    searchTerm,
-    reinitializeDatabase,
-    setItemsPerPage,
-    setSearchTerm
-  } = configStore;
+    isLoading: kbStoreIsLoadingGlobal,
+    error: kbStoreErrorGlobal,
+    getKnowledgeBaseById,
+    updateKnowledgeBase,
+    deleteKnowledgeBase,
+    createKnowledgeBase,
+  } = useKBStore();
 
-  const { queryEngineLLM } = useKBSettingsStore();
-  const { selectedContext } = useTopicStore();
-  const contextId = useMemo(() => getContextIdString(selectedContext), [selectedContext]);
+  const { isCreateKBDialogOpen, closeCreateKBDialog } = useKBConfigurationStore();
+
+  const [selectedKnowledgeBase, setSelectedKnowledgeBase] = useState<IKnowledgeBase | null>(null);
+  const [embeddingModels, setEmbeddingModels] = useState<EmbeddingModel[]>([]);
+  const [isLoadingDetails, setIsLoadingDetails] = useState(false);
+
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+
   const currentWorkspaceId = useMemo(() => {
     return selectedContext?.type === "workspace" ? selectedContext.id : undefined;
   }, [selectedContext]);
 
-  const {
-    isLoading: kbStoreIsLoading,
-    error: kbStoreError,
-    getKnowledgeBaseDetailsList,
-    createKnowledgeBase,
-    updateKnowledgeBase,
-    deleteKnowledgeBase,
-    getKnowledgeBaseById,
-  } = useKBStore();
-
-  const intl = useIntl();
-  const [localKbs, setLocalKbs] = useState<IKnowledgeBase[]>(EMPTY_KBS);
-  const [editDialogOpen, setEditDialogOpen] = useState(false);
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [selectedDbId, setSelectedDbId] = useState<string | null>(null);
-  const [editingDb, setEditingDb] = useState<IKnowledgeBase | null | undefined>(null);
-  const [embeddingModels, setEmbeddingModels] = useState<EmbeddingModel[]>([]);
+  const selectedKbId = selectedTopics[KNOWLEDGE_BASE_SELECTION_KEY];
 
   useEffect(() => {
     const embeddingService = new EmbeddingService();
     embeddingService.GetEmbeddingModels()
-      .then(models => {
-        setEmbeddingModels(models);
-      })
-      .catch(error => {
-        console.error("Failed to load embedding models for display:", error);
-      });
+      .then(models => setEmbeddingModels(models))
+      .catch(error => console.error("Failed to load embedding models:", error));
   }, []);
 
-  const refreshKnowledgeBases = useCallback(async (workspaceIdToFetch?: string) => {
-    const idToFetch = workspaceIdToFetch || currentWorkspaceId;
-    if (selectedContext?.type === "workspace" && idToFetch) {
-      const fetchedKbs = await getKnowledgeBaseDetailsList(idToFetch);
-      if (fetchedKbs) {
-        setLocalKbs(fetchedKbs);
-      } else {
-        setLocalKbs(EMPTY_KBS);
+  const fetchAndSetSelectedKbDetails = useCallback(async (idToFetch?: string) => {
+    const kbIdToUse = idToFetch || selectedKbId;
+    if (kbIdToUse && currentWorkspaceId) {
+      setIsLoadingDetails(true);
+      if (!idToFetch) setSelectedKnowledgeBase(null); // Clear previous if it's a new selectedKbId
+      try {
+        const kb = await getKnowledgeBaseById(currentWorkspaceId, kbIdToUse);
+        if (kb) {
+          setSelectedKnowledgeBase(kb);
+          if (idToFetch) { // If specifically refreshing
+            toast.success(intl.formatMessage({ id: "settings.kb.fetch.success", defaultMessage: "Knowledge base details refreshed." }));
+          }
+        } else {
+          setSelectedKnowledgeBase(null); // Explicitly nullify if not found
+          if (idToFetch) { // If specifically refreshing
+            toast.info(intl.formatMessage({ id: "settings.kb.fetch.notFound", defaultMessage: "Knowledge base details not found after refresh attempt." }));
+          } else if (selectedKbId) { // Only show not found if an ID was actually selected
+            toast.info(intl.formatMessage({ id: "settings.kb.selected.notFound", defaultMessage: "Selected knowledge base not found." }));
+          }
+        }
+      } catch (error) {
+        toast.error(intl.formatMessage({ id: "settings.kb.selected.fetchError", defaultMessage: "Failed to fetch selected knowledge base details." }));
+        console.error("Error fetching KB details:", error);
+      } finally {
+        setIsLoadingDetails(false);
       }
     } else {
-      setLocalKbs(EMPTY_KBS);
+      setSelectedKnowledgeBase(null); // Clear details if no selection or workspace
+      setIsLoadingDetails(false);
     }
-  }, [currentWorkspaceId, selectedContext, getKnowledgeBaseDetailsList]);
+  }, [selectedKbId, currentWorkspaceId, getKnowledgeBaseById, intl]);
 
   useEffect(() => {
-    if (contextId) {
-      storeSetPage(1);
+    fetchAndSetSelectedKbDetails();
+  }, [selectedKbId, currentWorkspaceId]); // Re-fetch when selectedKbId or workspace changes
+
+  const handleOpenEditDialog = useCallback(() => {
+    if (selectedKnowledgeBase) {
+      setEditDialogOpen(true);
     }
-    refreshKnowledgeBases();
-  }, [contextId, selectedContext, refreshKnowledgeBases, storeSetPage]);
-
-  const filteredDatabases = useMemo(() => {
-    if (!localKbs) return EMPTY_KBS;
-    return localKbs.filter(db =>
-      searchTerm === "" ||
-      db.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (db.description && db.description.toLowerCase().includes(searchTerm.toLowerCase()))
-    );
-  }, [localKbs, searchTerm]);
-
-  const totalPages = Math.ceil(filteredDatabases.length / itemsPerPage);
-
-  const getCurrentPageItems = () => {
-    const startIndex = (page - 1) * itemsPerPage;
-    const endIndex = startIndex + itemsPerPage;
-    return filteredDatabases.slice(startIndex, endIndex);
-  };
-
-  const handlePageChange = useCallback((event: React.ChangeEvent<unknown>, value: number) => {
-    storeSetPage(value);
-  }, [storeSetPage]);
-
-  const handleSearchChange = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
-    setSearchTerm(event.target.value);
-  }, [setSearchTerm]);
-
-  const handleOpenEditDialog = useCallback((id: string) => {
-    setSelectedDbId(id);
-    const dbToEdit = localKbs.find(kb => kb.id === id);
-    setEditingDb(dbToEdit);
-    setEditDialogOpen(true);
-  }, [localKbs]);
+  }, [selectedKnowledgeBase]);
 
   const handleCloseEditDialog = useCallback(() => {
     setEditDialogOpen(false);
-    setSelectedDbId(null);
-    setEditingDb(null);
   }, []);
 
-  const handleOpenDeleteDialog = useCallback((id: string) => {
-    setSelectedDbId(id);
-    setDeleteDialogOpen(true);
-  }, []);
-
-  const handleCloseDeleteDialog = useCallback(() => {
-    setDeleteDialogOpen(false);
-    setSelectedDbId(null);
-  }, []);
-
-  const handleConfirmDelete = useCallback(async () => {
-    if (selectedDbId && currentWorkspaceId) {
-      const success = await deleteKnowledgeBase(currentWorkspaceId, selectedDbId);
-      if (success) {
-        toast.success(intl.formatMessage({ id: "settings.kb.delete.success", defaultMessage: "Knowledge base deleted." }));
-        refreshKnowledgeBases(currentWorkspaceId);
-      } else {
-        toast.error(intl.formatMessage({ id: "settings.kb.delete.error", defaultMessage: "Failed to delete knowledge base." }));
-      }
-      handleCloseDeleteDialog();
-    } else {
-      toast.error(intl.formatMessage({ id: "settings.kb.delete.error.missingInfo", defaultMessage: "Cannot delete: DB ID or Workspace ID is missing." }));
-    }
-  }, [selectedDbId, deleteKnowledgeBase, handleCloseDeleteDialog, intl, refreshKnowledgeBases, currentWorkspaceId]);
-
-  const handleToggleEnabled = useCallback(async (id: string, enabled: boolean) => {
-    if (!currentWorkspaceId) {
-      toast.error(intl.formatMessage({
-        id: "settings.kb.update.error.noWorkspace",
-        defaultMessage: "No active workspace selected. Cannot update knowledge base status."
-      }));
-      return;
-    }
-    const result = await updateKnowledgeBase(currentWorkspaceId, id, { enabled });
-    if (result) {
-      toast.success(intl.formatMessage({
-        id: enabled ? "settings.kb.enable.success" : "settings.kb.disable.success",
-        defaultMessage: `Knowledge base ${enabled ? 'enabled' : 'disabled'}.`
-      }));
-      refreshKnowledgeBases(currentWorkspaceId);
-    } else {
-      toast.error(intl.formatMessage({
-        id: "settings.kb.update.error",
-        defaultMessage: "Failed to update knowledge base status."
-      }));
-    }
-  }, [updateKnowledgeBase, intl, refreshKnowledgeBases, currentWorkspaceId]);
-
-  const handleReinitialize = useCallback((id: string) => {
-    reinitializeDatabase(id);
-    toast.info(intl.formatMessage({ id: "settings.kb.reinitialize.started", defaultMessage: "Reinitialization started." }));
-  }, [reinitializeDatabase, intl]);
-
-  const handleCreateDatabase = useCallback(async (data: { name: string; description: string; path: string; sourceType: string; embeddingEngine: string; }) => {
-    if (!currentWorkspaceId) {
-      toast.error(intl.formatMessage({ id: "settings.kb.error.noWorkspace", defaultMessage: "No active workspace selected. Cannot create knowledge base." }));
-      return;
-    }
-    if (data.sourceType === "local-store" && (!data.embeddingEngine || data.embeddingEngine === "none")) {
-      toast.error(intl.formatMessage({
-        id: "settings.kb.error.embeddingEngineRequired",
-        defaultMessage: "An embedding engine must be selected for local storage type."
-      }));
-      return;
-    }
-
-    let type: "public" | "private";
-    let url: string;
-
-    if (data.sourceType === "onlysaid-kb") {
-      type = "public";
-      url = `/storage/${currentWorkspaceId}/${data.name}`;
-    } else if (data.sourceType === "local-store") {
-      type = "private";
-      url = data.path;
-    } else {
-      toast.error(intl.formatMessage({ id: "settings.kb.error.unknownSourceType", defaultMessage: "Unknown source type." }));
-      return;
-    }
-
-    const actualEmbeddingEngine = data.sourceType === "onlysaid-kb" ? "" : data.embeddingEngine;
-
-    const newKbArgs: IKnowledgeBaseRegisterArgs = {
-      id: uuidv4(),
-      name: data.name,
-      description: data.description,
-      source: data.sourceType,
-      url: url,
-      workspace_id: currentWorkspaceId,
-      type: type,
-      embedding_engine: actualEmbeddingEngine,
-    };
-
-    const createdKb = await createKnowledgeBase(newKbArgs);
-    if (createdKb) {
-      toast.success(intl.formatMessage({ id: "settings.kb.create.success", defaultMessage: "Knowledge base created." }));
-      refreshKnowledgeBases(currentWorkspaceId);
-      closeCreateKBDialog();
-    } else {
-      toast.error(intl.formatMessage({ id: "settings.kb.create.error", defaultMessage: "Failed to create knowledge base." }));
-    }
-  }, [currentWorkspaceId, createKnowledgeBase, intl, refreshKnowledgeBases, closeCreateKBDialog]);
-
-  const handleEditDatabase = useCallback(async (data: { name: string; description: string; path: string; sourceType: string; }) => {
-    if (selectedDbId && currentWorkspaceId) {
-      const existingKb = localKbs.find(kb => kb.id === selectedDbId);
-      if (!existingKb) {
-        toast.error("Original knowledge base not found for editing.");
-        return;
-      }
-
-      const updates: Partial<Omit<IKnowledgeBase, 'id'>> = {
+  const handleEditDatabase = useCallback(async (data: { name: string; description: string; path: string; sourceType: string; /* embeddingEngine: string; */ }) => {
+    if (selectedKnowledgeBase && currentWorkspaceId) {
+      const updates: Partial<Omit<IKnowledgeBase, 'id' | 'workspace_id' | 'create_at' | 'embedding_engine' | 'type' | 'source'>> = {
         name: data.name,
         description: data.description,
       };
-
-      if (existingKb.type === 'private' && data.path !== existingKb.source) {
-        updates.source = data.path;
+      // Only allow path update for private KBs if it has changed
+      if (selectedKnowledgeBase.type === 'private' && data.path !== selectedKnowledgeBase.url) {
         updates.url = data.path;
       }
 
-      const updatedKb = await updateKnowledgeBase(currentWorkspaceId, selectedDbId, updates);
+      const updatedKb = await updateKnowledgeBase(currentWorkspaceId, selectedKnowledgeBase.id, updates);
       if (updatedKb) {
         toast.success(intl.formatMessage({ id: "settings.kb.edit.success", defaultMessage: "Knowledge base updated." }));
-        refreshKnowledgeBases(currentWorkspaceId);
+        fetchAndSetSelectedKbDetails(selectedKnowledgeBase.id); // Re-fetch details
         handleCloseEditDialog();
       } else {
         toast.error(intl.formatMessage({ id: "settings.kb.edit.error", defaultMessage: "Failed to update knowledge base." }));
       }
     }
-  }, [selectedDbId, localKbs, updateKnowledgeBase, intl, handleCloseEditDialog, refreshKnowledgeBases, currentWorkspaceId]);
+  }, [selectedKnowledgeBase, currentWorkspaceId, updateKnowledgeBase, intl, handleCloseEditDialog, fetchAndSetSelectedKbDetails]);
 
-  const getSelectedDbForDialog = useCallback(() => {
-    return editingDb || null;
-  }, [editingDb]);
+  const handleOpenDeleteDialog = useCallback(() => {
+    if (selectedKnowledgeBase) {
+      setDeleteDialogOpen(true);
+    }
+  }, [selectedKnowledgeBase]);
 
-  const getSelectedDbName = useCallback(() => {
-    if (!selectedDbId) return "";
-    const db = localKbs.find(db => db.id === selectedDbId);
-    return db?.name || "";
-  }, [selectedDbId, localKbs]);
+  const handleCloseDeleteDialog = useCallback(() => {
+    setDeleteDialogOpen(false);
+  }, []);
+
+  const handleConfirmDelete = useCallback(async () => {
+    if (selectedKnowledgeBase && currentWorkspaceId) {
+      const success = await deleteKnowledgeBase(currentWorkspaceId, selectedKnowledgeBase.id);
+      if (success) {
+        toast.success(intl.formatMessage({ id: "settings.kb.delete.success", defaultMessage: "Knowledge base deleted." }));
+        setSelectedKnowledgeBase(null); // Clear the local selected KB in this component
+        clearSelectedTopic(KNOWLEDGE_BASE_SELECTION_KEY); // Clear the selection in TopicStore
+      } else {
+        toast.error(intl.formatMessage({ id: "settings.kb.delete.error", defaultMessage: "Failed to delete knowledge base." }));
+      }
+      handleCloseDeleteDialog();
+    }
+  }, [selectedKnowledgeBase, currentWorkspaceId, deleteKnowledgeBase, intl, handleCloseDeleteDialog, clearSelectedTopic]);
+
+  const handleToggleEnabled = useCallback(async (enabled: boolean) => {
+    if (selectedKnowledgeBase && currentWorkspaceId) {
+      if (!selectedKnowledgeBase.configured) {
+        toast.warning(intl.formatMessage({ id: "settings.kb.enable.notConfiguredWarn", defaultMessage: "Cannot enable/disable a non-configured knowledge base." }));
+        return;
+      }
+      const success = await updateKnowledgeBase(currentWorkspaceId, selectedKnowledgeBase.id, { enabled });
+      if (success) {
+        toast.success(intl.formatMessage({
+          id: enabled ? "settings.kb.enable.success" : "settings.kb.disable.success",
+          defaultMessage: `Knowledge base ${enabled ? 'enabled' : 'disabled'}.`
+        }));
+        fetchAndSetSelectedKbDetails(selectedKnowledgeBase.id); // Re-fetch details
+      } else {
+        toast.error(intl.formatMessage({ id: "settings.kb.update.error", defaultMessage: "Failed to update knowledge base status." }));
+      }
+    }
+  }, [selectedKnowledgeBase, currentWorkspaceId, updateKnowledgeBase, intl, fetchAndSetSelectedKbDetails]);
 
   const getEmbeddingEngineName = useCallback((engineId: string) => {
+    if (!engineId) return intl.formatMessage({ id: "settings.kb.embedding.notApplicable", defaultMessage: "N/A" });
     const model = embeddingModels.find(m => m.id === engineId);
     return model ? model.name : engineId;
-  }, [embeddingModels]);
+  }, [embeddingModels, intl]);
 
-  const getKbSourceIcon = useCallback((db: IKnowledgeBase) => {
-    if (db.url.includes("onlysaid.com")) {
-      return (
-        <Chip
-          size="small"
-          color="info"
-          icon={<CloudIcon fontSize="small" />}
-          label={intl.formatMessage({
-            id: "settings.kb.private.onlysaidKb",
-            defaultMessage: "Onlysaid KB"
-          })}
-        />
-      );
+  const getKbSourceIconAndLabel = useCallback((db: IKnowledgeBase) => {
+    const isOnlysaidKb = db.source === "onlysaid-kb" || (db.url && db.url.includes("onlysaid.com"));
+    if (isOnlysaidKb) {
+      return {
+        icon: <CloudIcon fontSize="small" />,
+        label: intl.formatMessage({
+          id: "settings.kb.source.onlysaidKb",
+          defaultMessage: "Onlysaid Cloud KB"
+        }),
+        color: "info" as "info",
+      };
     }
-    return (
-      <Chip
-        size="small"
-        color="default"
-        icon={<StorageIcon fontSize="small" />}
-        label={intl.formatMessage({
-          id: "settings.kb.private.localKb",
-          defaultMessage: "Local KB"
-        })}
-      />
-    );
+    return {
+      icon: <StorageIcon fontSize="small" />,
+      label: intl.formatMessage({
+        id: "settings.kb.source.localKb",
+        defaultMessage: "Local Storage KB"
+      }),
+      color: "default" as "default",
+    };
   }, [intl]);
 
-  const fetchKnowledgeBaseDetails = useCallback(async (kbId: string) => {
+  const renderDetailItem = (labelId: string, defaultValue: string, value?: string | number | null) => (
+    <Typography variant="body2" gutterBottom sx={{ display: 'flex' }}>
+      <FormattedMessage id={labelId} defaultMessage={defaultValue} />:&nbsp;
+      <Typography component="span" fontWeight="bold">{value ?? "-"}</Typography>
+    </Typography>
+  );
+
+  const title = selectedKnowledgeBase
+    ? selectedKnowledgeBase.name
+    : intl.formatMessage({ id: "settings.kb.selected.title", defaultMessage: "Knowledge Base Details" });
+
+  // Placeholder for reinitialize logic
+  const handleReinitialize = useCallback(async () => {
+    if (selectedKnowledgeBase && currentWorkspaceId) {
+      // TODO: Implement reinitialization logic for selectedKnowledgeBase.id
+      // This might involve calling a new method in useKBStore or a service.
+      toast.info(intl.formatMessage(
+        { id: "settings.kb.reinitialize.placeholder", defaultMessage: "Reinitialize action for '{kbName}' needs to be implemented." },
+        { kbName: selectedKnowledgeBase.name }
+      ));
+    }
+  }, [selectedKnowledgeBase, currentWorkspaceId, intl]);
+
+  const handleCreateKnowledgeBase = useCallback(async (data: { name: string; description: string; path: string; sourceType: string; embeddingEngine: string; }) => {
     if (!currentWorkspaceId) {
-      toast.error(intl.formatMessage({
-        id: "settings.kb.error.noWorkspace",
-        defaultMessage: "No active workspace selected."
-      }));
+      toast.error(intl.formatMessage({ id: "settings.kb.create.noWorkspaceContext", defaultMessage: "An active workspace is required to create a knowledge base." }));
       return;
     }
 
-    try {
-      const kb = await getKnowledgeBaseById(currentWorkspaceId, kbId);
-      if (kb) {
-        setLocalKbs(prevKbs => {
-          const index = prevKbs.findIndex(k => k.id === kbId);
-          if (index !== -1) {
-            const newKbs = [...prevKbs];
-            newKbs[index] = kb;
-            return newKbs;
-          }
-          return prevKbs;
-        });
-        toast.success(intl.formatMessage({
-          id: "settings.kb.fetch.success",
-          defaultMessage: "Knowledge base details refreshed."
-        }));
-      } else {
-        toast.info(intl.formatMessage({
-          id: "settings.kb.fetch.notFound",
-          defaultMessage: "Knowledge base details not found after refresh attempt."
-        }));
-      }
-    } catch (error) {
-      toast.error(intl.formatMessage({
-        id: "settings.kb.fetch.error",
-        defaultMessage: "Failed to fetch knowledge base details."
-      }));
+    const args: IKnowledgeBaseRegisterArgs = {
+      id: uuidv4(),
+      workspace_id: currentWorkspaceId,
+      name: data.name,
+      description: data.description,
+      url: data.path,
+      type: 'private',
+      source: data.sourceType,
+      embedding_engine: data.embeddingEngine,
+    };
+
+    const newKb = await createKnowledgeBase(args);
+    if (newKb) {
+      toast.success(intl.formatMessage({ id: "settings.kb.create.success", defaultMessage: "Knowledge base created successfully." }));
+      // Optionally, select the new KB or simply close dialog
+      // fetchAndSetSelectedKbDetails(newKb.id); // Or rely on menu refresh + user selection
+      closeCreateKBDialog();
+    } else {
+      // Error is usually handled by store or if it returns undefined
+      toast.error(intl.formatMessage({ id: "settings.kb.create.error", defaultMessage: "Failed to create knowledge base." }));
     }
-  }, [currentWorkspaceId, getKnowledgeBaseById, intl]);
+  }, [currentWorkspaceId, createKnowledgeBase, intl, closeCreateKBDialog, fetchAndSetSelectedKbDetails]);
 
   return (
     <Box sx={{ mb: 4 }}>
-      <SettingsSection title={intl.formatMessage({ id: "settings.kb.title", defaultMessage: "Knowledge Base" })}>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-          <TextField
-            size="small"
-            placeholder={intl.formatMessage({ id: "settings.kb.private.search", defaultMessage: "Search databases" })}
-            value={searchTerm}
-            onChange={handleSearchChange}
-            InputProps={{
-              startAdornment: (
-                <InputAdornment position="start">
-                  <SearchIcon fontSize="small" />
-                </InputAdornment>
-              ),
-            }}
-            sx={{
-              width: 250,
-              '& .MuiInputBase-root': {
-                height: 40,
-                borderRadius: 1
-              },
-              '& .MuiOutlinedInput-root': {
-                backgroundColor: 'background.paper',
-                '&:hover fieldset': {
-                  borderColor: 'primary.main',
-                },
-              }
-            }}
-          />
-        </Box>
-
-        {kbStoreIsLoading && <Typography>Loading knowledge bases...</Typography>}
-        {kbStoreError && <Typography color="error">Error loading knowledge bases: {kbStoreError}</Typography>}
-        {!kbStoreIsLoading && !kbStoreError && filteredDatabases.length === 0 && (
-          <Box sx={{ textAlign: 'center', py: 4 }}>
-            <Typography variant="body1" color="text.secondary">
-              <FormattedMessage
-                id="settings.kb.noKb"
-                defaultMessage={intl.formatMessage({ id: "settings.kb.noKb", defaultMessage: "No knowledge base found. Create a new knowledge base to get started." })}
-              />
+      <SettingsSection
+        title={title}
+      >
+        {isLoadingDetails || kbStoreIsLoadingGlobal ? ( // kbStoreIsLoadingGlobal for initial app load checks if needed
+          <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', py: 4 }}>
+            <CircularProgress />
+            <Typography sx={{ ml: 2 }}>
+              <FormattedMessage id="settings.kb.selected.loading" defaultMessage="Loading details..." />
             </Typography>
           </Box>
-        )}
+        ) : kbStoreErrorGlobal ? (
+          <Typography color="error" sx={{ textAlign: 'center', py: 4 }}>
+            <FormattedMessage id="settings.kb.selected.loadErrorGlobal" defaultMessage="Error loading knowledge base system." /> {kbStoreErrorGlobal}
+          </Typography>
+        ) : selectedKnowledgeBase && currentWorkspaceId ? (
+          <Card sx={{ width: '100%' }} elevation={0}>
+            <CardContent>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1 }}>
+                <Box sx={{ flexGrow: 1 }}>
+                  <Typography variant="body1" color="text.secondary" sx={{ mb: 2 }}>
+                    {selectedKnowledgeBase.description || intl.formatMessage({ id: "settings.kb.selected.noDescription", defaultMessage: "No description provided." })}
+                  </Typography>
+                </Box>
+                <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'center', flexShrink: 0 }}>
+                  <Tooltip title={intl.formatMessage({ id: "settings.kb.private.reinitialize", defaultMessage: "Reinitialize" })}>
+                    <IconButton size="small" color="secondary" onClick={handleReinitialize}>
+                      <ReplayIcon />
+                    </IconButton>
+                  </Tooltip>
+                  <Tooltip title={intl.formatMessage({ id: "settings.kb.private.edit", defaultMessage: "Edit" })}>
+                    <IconButton size="small" color="primary" onClick={handleOpenEditDialog}>
+                      <EditIcon />
+                    </IconButton>
+                  </Tooltip>
+                  <Tooltip title={intl.formatMessage({ id: "settings.kb.private.delete", defaultMessage: "Delete" })}>
+                    <IconButton size="small" color="error" onClick={handleOpenDeleteDialog}>
+                      <DeleteIcon />
+                    </IconButton>
+                  </Tooltip>
+                </Box>
+              </Box>
 
-        {!kbStoreIsLoading && !kbStoreError && filteredDatabases.length > 0 && (
-          <>
-            <List>
-              {getCurrentPageItems().map((db) => (
-                <ListItem
-                  key={db.id}
-                  sx={{ p: 0, mb: 2 }}
-                >
-                  <Card sx={{ width: '100%' }}>
-                    <CardContent>
-                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                          <Typography variant="h6">{db.name}</Typography>
-                          <Stack direction="row" spacing={1}>
-                            {db.configured ? (
-                              <Chip
-                                size="small"
-                                color="success"
-                                label={intl.formatMessage({ id: "settings.kb.private.configured", defaultMessage: "Configured" })}
-                              />
-                            ) : (
-                              <Chip
-                                size="small"
-                                color="warning"
-                                label={intl.formatMessage({ id: "settings.kb.private.notConfigured", defaultMessage: "Not Configured" })}
-                              />
-                            )}
-                            {db.enabled && (
-                              <Chip
-                                size="small"
-                                color="primary"
-                                label={intl.formatMessage({ id: "settings.kb.private.enabled", defaultMessage: "Enabled" })}
-                              />
-                            )}
-                            {getKbSourceIcon(db)}
-                            {db.embedding_engine && getEmbeddingEngineName(db.embedding_engine) && (
-                              <Chip
-                                size="small"
-                                variant="outlined"
-                                label={getEmbeddingEngineName(db.embedding_engine)}
-                                title={intl.formatMessage({ id: "settings.kb.embeddingEngineUsed", defaultMessage: "Embedding Engine" })}
-                              />
-                            )}
-                          </Stack>
-                        </Box>
-                        <Box sx={{ display: 'flex', gap: 1 }}>
-                          <Tooltip title={intl.formatMessage({ id: "settings.kb.private.reinitialize", defaultMessage: "Reinitialize" })}>
-                            <IconButton
-                              size="small"
-                              color="primary"
-                              onClick={() => handleReinitialize(db.id)}
-                            >
-                              <RefreshIcon />
-                            </IconButton>
-                          </Tooltip>
-                          <Tooltip title={intl.formatMessage({ id: "settings.kb.private.edit", defaultMessage: "Edit" })}>
-                            <IconButton
-                              size="small"
-                              color="primary"
-                              onClick={() => handleOpenEditDialog(db.id)}
-                            >
-                              <EditIcon />
-                            </IconButton>
-                          </Tooltip>
-                          <Tooltip title={intl.formatMessage({ id: "settings.kb.private.delete", defaultMessage: "Delete" })}>
-                            <IconButton
-                              size="small"
-                              color="error"
-                              onClick={() => handleOpenDeleteDialog(db.id)}
-                            >
-                              <DeleteIcon />
-                            </IconButton>
-                          </Tooltip>
-                          <Tooltip title={intl.formatMessage({ id: "settings.kb.private.refresh", defaultMessage: "Refresh Details" })}>
-                            <IconButton
-                              size="small"
-                              color="primary"
-                              onClick={() => fetchKnowledgeBaseDetails(db.id)}
-                            >
-                              <RefreshIcon />
-                            </IconButton>
-                          </Tooltip>
-                        </Box>
-                      </Box>
-                      <Typography variant="body2" color="text.secondary">{db.description}</Typography>
-                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mt: 2 }}>
-                        <Box sx={{ flexGrow: 1 }}>
-                          <Typography variant="body2">
-                            <FormattedMessage
-                              id="settings.kb.private.documents"
-                              defaultMessage="Documents: {count}"
-                              values={{ count: db.configured ? db.documents : "-" }}
-                            />
-                          </Typography>
-                          <Typography variant="body2">
-                            <FormattedMessage
-                              id="settings.kb.private.size"
-                              defaultMessage="Size: {size} KB"
-                              values={{ size: db.configured && db.size ? (db.size / 1024).toFixed(2) : "-" }}
-                            />
-                          </Typography>
-                          <Typography variant="body2">
-                            <FormattedMessage
-                              id="settings.kb.private.created"
-                              defaultMessage="Created: {date}"
-                              values={{ date: new Date(db.create_at).toLocaleDateString() }}
-                            />
-                          </Typography>
-                        </Box>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                          <Typography variant="body2">
-                            <FormattedMessage id="settings.kb.private.enableKB" defaultMessage="Enable" />
-                          </Typography>
-                          <Switch
-                            checked={db.enabled}
-                            onChange={(e) => handleToggleEnabled(db.id, e.target.checked)}
-                            disabled={!db.configured}
-                            size="small"
-                          />
-                        </Box>
-                      </Box>
-                    </CardContent>
-                  </Card>
-                </ListItem>
-              ))}
-            </List>
+              <Stack direction="row" spacing={1} sx={{ mb: 2, flexWrap: 'wrap' }}>
+                <Chip
+                  size="small"
+                  color={selectedKnowledgeBase.configured ? "success" : "warning"}
+                  label={intl.formatMessage({
+                    id: selectedKnowledgeBase.configured ? "settings.kb.status.configured" : "settings.kb.status.notConfigured",
+                    defaultMessage: selectedKnowledgeBase.configured ? "Configured" : "Not Configured"
+                  })}
+                />
+                {selectedKnowledgeBase.configured && (
+                  <Chip
+                    size="small"
+                    color={selectedKnowledgeBase.enabled ? "primary" : "default"}
+                    label={intl.formatMessage({
+                      id: selectedKnowledgeBase.enabled ? "settings.kb.status.enabled" : "settings.kb.status.disabled",
+                      defaultMessage: selectedKnowledgeBase.enabled ? "Enabled" : "Disabled"
+                    })}
+                  />
+                )}
+                <Chip
+                  size="small"
+                  icon={getKbSourceIconAndLabel(selectedKnowledgeBase).icon}
+                  label={getKbSourceIconAndLabel(selectedKnowledgeBase).label}
+                  color={getKbSourceIconAndLabel(selectedKnowledgeBase).color}
+                />
+                {selectedKnowledgeBase.embedding_engine && (
+                  <Chip
+                    size="small"
+                    variant="outlined"
+                    label={getEmbeddingEngineName(selectedKnowledgeBase.embedding_engine)}
+                    title={intl.formatMessage({ id: "settings.kb.embeddingEngineUsed", defaultMessage: "Embedding Engine" })}
+                  />
+                )}
+              </Stack>
 
-            <Box sx={{ display: 'flex', justifyContent: 'center', mt: 3 }}>
-              <Pagination
-                count={totalPages}
-                page={page}
-                onChange={handlePageChange}
-                color="primary"
+              <Divider sx={{ my: 2 }} />
+
+              {renderDetailItem("settings.kb.selected.id", "ID", selectedKnowledgeBase.id)}
+              {renderDetailItem("settings.kb.selected.documents", "Documents", selectedKnowledgeBase.configured ? selectedKnowledgeBase.documents : undefined)}
+              {renderDetailItem(
+                "settings.kb.selected.size", "Size (KB)",
+                selectedKnowledgeBase.configured && selectedKnowledgeBase.size != null ? (selectedKnowledgeBase.size / 1024).toFixed(2) : undefined
+              )}
+              {renderDetailItem(
+                "settings.kb.selected.createdAt", "Created",
+                new Date(selectedKnowledgeBase.create_at).toLocaleDateString()
+              )}
+              {selectedKnowledgeBase.type === 'private' && renderDetailItem(
+                "settings.kb.selected.path", "Path/URL",
+                selectedKnowledgeBase.url
+              )}
+
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 1, mt: 2 }}>
+                <Typography variant="body2">
+                  <FormattedMessage id="settings.kb.private.enableKB" defaultMessage="Enable Knowledge Base" />
+                </Typography>
+                <Switch
+                  checked={selectedKnowledgeBase.enabled}
+                  onChange={(e) => handleToggleEnabled(e.target.checked)}
+                  disabled={!selectedKnowledgeBase.configured || isLoadingDetails}
+                  size="small"
+                />
+              </Box>
+
+            </CardContent>
+          </Card>
+        ) : (
+          <Box sx={{ textAlign: 'center', py: 4, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1 }}>
+            <InfoOutlinedIcon color="action" sx={{ fontSize: 40 }} />
+            <Typography variant="body1" color="text.secondary">
+              <FormattedMessage
+                id="settings.kb.selected.noKbSelectedOrWorkspace"
+                defaultMessage="Select a knowledge base from the menu to view and manage its details."
               />
-            </Box>
-          </>
+            </Typography>
+            {!currentWorkspaceId && (
+              <Typography variant="caption" color="text.secondary">
+                <FormattedMessage id="settings.kb.selected.noWorkspaceActive" defaultMessage="An active workspace is required." />
+              </Typography>
+            )}
+            {currentWorkspaceId && !selectedKbId && (
+              <Typography variant="caption" color="text.secondary">
+                <FormattedMessage id="settings.kb.selected.promptToSelect" defaultMessage="Please choose a KB from the side menu." />
+              </Typography>
+            )}
+          </Box>
         )}
       </SettingsSection>
 
-      {/* Create Database Dialog */}
+      {/* Dialog for Editing existing KB */}
+      {selectedKnowledgeBase && editDialogOpen && (
+        <CreateKBDialog
+          open={editDialogOpen}
+          onClose={handleCloseEditDialog}
+          onSubmit={handleEditDatabase}
+          database={selectedKnowledgeBase}
+          mode="edit"
+        />
+      )}
+
+      {/* Dialog for Creating new KB - driven by global state */}
       <CreateKBDialog
         open={isCreateKBDialogOpen}
         onClose={closeCreateKBDialog}
-        onSubmit={handleCreateDatabase}
+        onSubmit={handleCreateKnowledgeBase}
         mode="create"
       />
 
-      {/* Edit Database Dialog */}
-      <CreateKBDialog
-        open={editDialogOpen}
-        onClose={handleCloseEditDialog}
-        onSubmit={handleEditDatabase}
-        database={getSelectedDbForDialog()}
-        mode="edit"
-      />
-
-      {/* Delete Confirmation Dialog */}
-      <DeleteKBConfirmationDialog
-        open={deleteDialogOpen}
-        onClose={handleCloseDeleteDialog}
-        onConfirm={handleConfirmDelete}
-        dbName={getSelectedDbName()}
-      />
+      {selectedKnowledgeBase && deleteDialogOpen && (
+        <DeleteKBConfirmationDialog
+          open={deleteDialogOpen}
+          onClose={handleCloseDeleteDialog}
+          onConfirm={handleConfirmDelete}
+          dbName={selectedKnowledgeBase.name}
+        />
+      )}
     </Box>
   );
 }
 
-export default KnowledgeBaseComponent;
+export default KnowledgeBaseManagerComponent;
