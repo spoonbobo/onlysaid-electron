@@ -1,0 +1,300 @@
+import { ipcMain } from 'electron';
+import fs from 'fs/promises';
+import path from 'path';
+import { v4 as uuidv4 } from 'uuid';
+import onlysaidServiceInstance from './service';
+import { createReadStream, createWriteStream } from 'fs';
+import { pipeline } from 'stream/promises';
+import os from 'os';
+
+// Queue for managing file operations
+class FileOperationQueue {
+  private queue: Array<{
+    id: string;
+    operation: () => Promise<any>;
+    status: 'pending' | 'processing' | 'completed' | 'failed';
+    progress: number;
+    error?: Error;
+  }> = [];
+  private processing = false;
+  private webSocketClient: any;
+  private progressListeners: Map<string, (progress: number) => void> = new Map();
+
+  setWebSocketClient(client: any) {
+    this.webSocketClient = client;
+  }
+
+  addOperation(operation: () => Promise<any>): string {
+    const id = uuidv4();
+    this.queue.push({
+      id,
+      operation,
+      status: 'pending',
+      progress: 0
+    });
+
+    this.processQueue();
+    return id;
+  }
+
+  onProgress(id: string, listener: (progress: number) => void) {
+    this.progressListeners.set(id, listener);
+  }
+
+  updateProgress(id: string, progress: number) {
+    const operation = this.queue.find(op => op.id === id);
+    if (operation) {
+      operation.progress = progress;
+
+      // Call progress listener if exists
+      const listener = this.progressListeners.get(id);
+      if (listener) listener(progress);
+
+      if (this.webSocketClient) {
+        this.webSocketClient.emit('file:progress', { id, progress });
+      }
+    }
+  }
+
+  private async processQueue() {
+    if (this.processing || this.queue.length === 0) return;
+
+    this.processing = true;
+    const current = this.queue.find(op => op.status === 'pending');
+
+    if (!current) {
+      this.processing = false;
+      return;
+    }
+
+    current.status = 'processing';
+
+    try {
+      await current.operation();
+      current.status = 'completed';
+      current.progress = 100;
+
+      if (this.webSocketClient) {
+        this.webSocketClient.emit('file:completed', { id: current.id });
+      }
+    } catch (error) {
+      current.status = 'failed';
+      current.error = error as Error;
+
+      if (this.webSocketClient) {
+        this.webSocketClient.emit('file:error', {
+          id: current.id,
+          error: error instanceof Error ? error.message : String(error)
+        });
+      }
+    }
+
+    this.processing = false;
+    this.processQueue();
+  }
+
+  getStatus(id: string) {
+    const operation = this.queue.find(op => op.id === id);
+    return operation ? {
+      id: operation.id,
+      status: operation.status,
+      progress: operation.progress,
+      error: operation.error?.message
+    } : null;
+  }
+}
+
+const fileQueue = new FileOperationQueue();
+
+export function setupFileHandlers(): void {
+  // Upload file to workspace
+  ipcMain.handle('file:upload', async (event, args: {
+    workspaceId: string,
+    filePath: string,
+    token: string,
+    metadata?: Record<string, any>
+  }) => {
+    const { workspaceId, filePath, token, metadata = {} } = args;
+
+    const opId = fileQueue.addOperation(async () => {
+      const stats = await fs.stat(filePath);
+      const filename = path.basename(filePath);
+      const fileSize = stats.size;
+
+      // Create form data
+      const FormData = require('form-data');
+      const form = new FormData();
+      const fileStream = createReadStream(filePath);
+
+      // Add file to form data
+      form.append('file', fileStream, { filename });
+      form.append('metadata', JSON.stringify(metadata));
+
+      // Upload with progress tracking
+      let uploaded = 0;
+
+      const response = await onlysaidServiceInstance.post(
+        `workspace/${workspaceId}/file`,
+        form,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'multipart/form-data'
+          },
+          onUploadProgress: (progressEvent) => {
+            const progress = Math.round((progressEvent.loaded * 100) / fileSize);
+            fileQueue.updateProgress(opId, progress);
+          }
+        }
+      );
+
+      return response.data;
+    });
+
+    // Return operationId to renderer
+    const { operationId } = { operationId: opId };
+
+    // Set up progress event listener for this operation
+    const progressListener = (progress: number) => {
+      event.sender.send('file:progress-update', { operationId, progress });
+    };
+
+    // Add to operation listeners
+    fileQueue.onProgress(opId, progressListener);
+
+    return { operationId: opId };
+  });
+
+  // Download file from workspace
+  ipcMain.handle('file:download', async (event, args: {
+    workspaceId: string,
+    fileId: string,
+    destinationPath: string,
+    token: string
+  }) => {
+    const { workspaceId, fileId, destinationPath, token } = args;
+
+    const opId = fileQueue.addOperation(async () => {
+      const response = await onlysaidServiceInstance.get(
+        `workspace/${workspaceId}/file/${fileId}`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`
+          },
+          responseType: 'stream',
+          onDownloadProgress: (progressEvent) => {
+            if (progressEvent.total) {
+              const progress = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+              fileQueue.updateProgress(opId, progress);
+            }
+          }
+        }
+      );
+
+      const writer = createWriteStream(destinationPath);
+      await pipeline(response.data, writer);
+
+      return { path: destinationPath };
+    });
+
+    return { operationId: opId };
+  });
+
+  // Get operation status
+  ipcMain.handle('file:status', (event, { operationId }) => {
+    return fileQueue.getStatus(operationId);
+  });
+
+  // Cancel operation (if possible)
+  ipcMain.handle('file:cancel', (event, { operationId }) => {
+    // Implementation would depend on how cancelable your operations are
+    return { canceled: false, message: 'Operation cancellation not implemented' };
+  });
+
+  // Add this to setupFileHandlers function
+  ipcMain.handle('upload-file', async (event, args) => {
+    const { workspaceId, fileData, fileName, token, metadata = {} } = args;
+
+    try {
+      // Convert base64 data to buffer
+      const base64Data = fileData.split(';base64,').pop();
+      const buffer = Buffer.from(base64Data, 'base64');
+
+      // Create temp file
+      const tempDir = os.tmpdir();
+      const tempFilePath = path.join(tempDir, fileName);
+      await fs.writeFile(tempFilePath, buffer);
+
+      // Now use the existing file:upload handler
+      const { operationId } = await uploadFileToWorkspace(
+        event,
+        {
+          workspaceId,
+          filePath: tempFilePath,
+          token,
+          metadata
+        }
+      );
+
+      // Clean up is handled in a finally block after upload completes
+      return { operationId };
+    } catch (error) {
+      console.error('Error processing file upload:', error);
+      throw error;
+    }
+  });
+}
+
+// Extract the upload logic to a separate function
+async function uploadFileToWorkspace(event: any, args: any) {
+  const { workspaceId, filePath, token, metadata = {} } = args;
+
+  const opId = fileQueue.addOperation(async () => {
+    try {
+      const stats = await fs.stat(filePath);
+      const filename = path.basename(filePath);
+      const fileSize = stats.size;
+
+      // Create form data
+      const FormData = require('form-data');
+      const form = new FormData();
+      const fileStream = createReadStream(filePath);
+
+      // Add file to form data
+      form.append('file', fileStream, { filename });
+      form.append('metadata', JSON.stringify(metadata));
+
+      const response = await onlysaidServiceInstance.post(
+        `workspace/${workspaceId}/file`,
+        form,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'multipart/form-data'
+          },
+          onUploadProgress: (progressEvent) => {
+            const progress = Math.round((progressEvent.loaded * 100) / fileSize);
+            fileQueue.updateProgress(opId, progress);
+          }
+        }
+      );
+
+      return response.data;
+    } finally {
+      // Clean up temp file
+      try {
+        await fs.unlink(filePath);
+      } catch (error) {
+        console.error('Error cleaning up temp file:', error);
+      }
+    }
+  });
+
+  // Set up progress listener
+  const progressListener = (progress: number) => {
+    event.sender.send('file:progress-update', { operationId: opId, progress });
+  };
+  fileQueue.onProgress(opId, progressListener);
+
+  return { operationId: opId };
+}

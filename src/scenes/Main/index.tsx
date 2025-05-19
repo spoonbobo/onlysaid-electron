@@ -22,15 +22,15 @@ function Main() {
       case "workspace:calendar":
         return <Calendar />;
       case "workspace:plans":
-        return <Box sx={{ p: 3 }}>
+        return <Box>
           <Typography variant="h5" gutterBottom>Plans for {workspaceId}</Typography>
           <Typography>This feature is coming soon</Typography>
-        </Box>;
+        </Box >;
       case "workspace:exit":
-        return <Box sx={{ p: 3 }}>
+        return <Box>
           <Typography variant="h5" gutterBottom>Exit {workspaceId}</Typography>
           <Typography>This feature is coming soon</Typography>
-        </Box>;
+        </Box >;
       case "workspace:members":
         return <Members workspaceId={workspaceId || ""} />;
       case "workspace:knowledgeBase":

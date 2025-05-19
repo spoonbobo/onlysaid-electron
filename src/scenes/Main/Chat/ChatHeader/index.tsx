@@ -20,7 +20,6 @@ function ChatHeader() {
     <Box
       key={headerKey}
       sx={{
-        px: 2,
         py: 1.5,
         height: "auto",
         display: "flex",

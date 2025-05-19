@@ -4,10 +4,12 @@ import * as R from 'ramda';
 import { getUserFromStore, getUserTokenFromStore } from "@/utils/user";
 import { IWorkspace, IWorkspaceUser, IWorkspaceWithRole } from "@/../../types/Workspace/Workspace";
 import { toast } from "@/utils/toast";
+import { useToastStore } from "../Notification/ToastStore";
 
 interface WorkspaceCreateData extends Partial<IWorkspace> {
   name: string;
   image: string;
+  imageFile?: File | null;
   invite_code: string;
   settings: Record<string, any>;
   users?: string[];
@@ -50,7 +52,7 @@ export const useWorkspaceStore = create<WorkspaceState>()((set, get) => ({
       const newWorkspace: IWorkspace = {
         id: uuidv4(),
         name: data.name || 'New Workspace',
-        image: data.image || '/dummy.png',
+        image: '/workspace-icon.png',
         invite_code: data.invite_code || '',
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
@@ -58,7 +60,7 @@ export const useWorkspaceStore = create<WorkspaceState>()((set, get) => ({
       };
 
       const response = await window.electron.workspace.create({
-        token: getUserTokenFromStore(),
+        token: getUserTokenFromStore() || '',
         request: newWorkspace
       });
 
@@ -71,11 +73,62 @@ export const useWorkspaceStore = create<WorkspaceState>()((set, get) => ({
         createdWorkspace = newWorkspace;
       }
 
+      if (data.imageFile) {
+        try {
+          const workspaceId = createdWorkspace.id;
+          const extension = data.imageFile.name.split('.').pop() || 'png';
+          const filename = `logo-${uuidv4().slice(0, 8)}.${extension}`;
+          const targetPath = `/storage/${workspaceId}/${filename}`;
+
+          const reader = new FileReader();
+          const fileDataPromise = new Promise<string>((resolve) => {
+            reader.onload = () => resolve(reader.result as string);
+            reader.readAsDataURL(data.imageFile as File);
+          });
+          const fileData = await fileDataPromise;
+
+          createdWorkspace.image = targetPath;
+
+          await window.electron.workspace.update({
+            token: getUserTokenFromStore() || '',
+            workspaceId,
+            request: { image: targetPath }
+          });
+
+          const toastId = useToastStore.getState().addToast(
+            "Uploading workspace logo...",
+            "info",
+            30000
+          );
+
+          const { operationId } = await window.electron.fileSystem.uploadFile({
+            workspaceId,
+            fileData,
+            fileName: filename,
+            token: getUserTokenFromStore() || '',
+            metadata: { type: 'workspace-logo', path: targetPath }
+          });
+
+          window.electron.fileSystem.onProgress((data) => {
+            if (data.operationId === operationId) {
+              useToastStore.getState().updateToastProgress(toastId, data.progress);
+              if (data.progress === 100) {
+                toast.success("Workspace logo uploaded successfully");
+              }
+            }
+          });
+        } catch (uploadError) {
+          console.error("Error uploading workspace image:", uploadError);
+          toast.error("Failed to upload workspace image, using default");
+          createdWorkspace.image = '/workspace-icon.png';
+        }
+      }
+
       const currentUser = getUserFromStore();
       if (currentUser?.id) {
         const newWorkspaceId = createdWorkspace.id || newWorkspace.id;
         await window.electron.workspace.add_users({
-          token: getUserTokenFromStore(),
+          token: getUserTokenFromStore() || '',
           workspaceId: newWorkspaceId,
           request: [{
             user_id: currentUser.id,
@@ -122,7 +175,7 @@ export const useWorkspaceStore = create<WorkspaceState>()((set, get) => ({
     set({ isLoading: true, error: null });
     try {
       const response = await window.electron.workspace.get({
-        token: getUserTokenFromStore(),
+        token: getUserTokenFromStore() || '',
         userId: userId,
       });
 
@@ -181,7 +234,7 @@ export const useWorkspaceStore = create<WorkspaceState>()((set, get) => ({
     set({ isLoading: true, error: null });
     try {
       const response = await window.electron.workspace.add_users({
-        token: getUserTokenFromStore(),
+        token: getUserTokenFromStore() || '',
         workspaceId,
         request: [{
           user_id: userId,
@@ -211,7 +264,7 @@ export const useWorkspaceStore = create<WorkspaceState>()((set, get) => ({
     set({ isLoading: true, error: null });
     try {
       await window.electron.workspace.remove_user({
-        token: getUserTokenFromStore(),
+        token: getUserTokenFromStore() || '',
         workspaceId,
         userId
       });
@@ -234,7 +287,7 @@ export const useWorkspaceStore = create<WorkspaceState>()((set, get) => ({
     try {
       set({ isLoading: true, error: null });
       const { data, error } = await window.electron.workspace.get_users({
-        token: getUserTokenFromStore(),
+        token: getUserTokenFromStore() || '',
         workspaceId,
       });
 

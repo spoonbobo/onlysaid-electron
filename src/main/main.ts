@@ -30,6 +30,7 @@ import { setupRedisHandlers } from './redis';
 import { setupWorkspaceHandlers } from './api/v2/workspace';
 import { initializeDeeplinkHandling } from './deeplink';
 import { initializeKnowledgeBaseHandlers } from './api/v2/onlysaid_kb';
+import { setupFileHandlers } from './api/v2/file';
 import { setupSocketHandlers } from './socket';
 
 dotenv.config();
@@ -44,6 +45,7 @@ setupContentHandlers();
 setupRedisHandlers();
 setupWorkspaceHandlers();
 initializeDeeplinkHandling();
+setupFileHandlers();
 initAuth(process.env.ONLYSAID_API_URL || '', process.env.ONLYSAID_DOMAIN || '');
 initializeKnowledgeBaseHandlers();
 

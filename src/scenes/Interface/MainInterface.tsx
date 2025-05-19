@@ -158,7 +158,7 @@ function MainInterface() {
         </Box>
 
         <Box sx={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", position: "relative" }}>
-          <Box sx={{ flex: 1, overflow: "hidden" }}>
+          <Box sx={{ flex: 1, overflow: "hidden", padding: 3 }}>
             <Main />
           </Box>
           {/* Absolute position to ensure visibility */}

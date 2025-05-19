@@ -250,7 +250,7 @@ const Members = ({ workspaceId }: MembersProps) => {
   }
 
   return (
-    <Box sx={{ p: 3 }}>
+    <Box>
       <Typography variant="h5" gutterBottom>
         {intl.formatMessage({ id: 'menu.workspace.members', defaultMessage: 'Members' })}
       </Typography>

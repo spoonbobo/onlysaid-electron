@@ -20,6 +20,7 @@ import { FormattedMessage } from "react-intl";
 import { getUserFromStore } from "@/utils/user";
 import { useIntl } from "react-intl";
 import { IWorkspace } from "../../../../../types/Workspace/Workspace";
+import { v4 as uuidv4 } from 'uuid';
 
 interface AddWorkspaceDialogProps {
   open: boolean;
@@ -38,6 +39,7 @@ function AddWorkspaceDialog({ open, onClose, onWorkspaceAdded }: AddWorkspaceDia
   const [workspaceImage, setWorkspaceImage] = useState<string>("/workspace-icon.png");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [fileSize, setFileSize] = useState<number | null>(null);
+  const [imageFile, setImageFile] = useState<File | null>(null);
 
   const { addContext, setSelectedContext } = useTopicStore();
   const { createWorkspace, joinWorkspaceByInviteCode } = useWorkspaceStore();
@@ -80,6 +82,8 @@ function AddWorkspaceDialog({ open, onClose, onWorkspaceAdded }: AddWorkspaceDia
       }
 
       setImageError("");
+      setImageFile(file);
+
       const reader = new FileReader();
       reader.onload = (e) => {
         setWorkspaceImage(e.target?.result as string);
@@ -100,7 +104,8 @@ function AddWorkspaceDialog({ open, onClose, onWorkspaceAdded }: AddWorkspaceDia
 
       const newWorkspace = await createWorkspace({
         name: workspaceName.trim(),
-        image: workspaceImage,
+        image: '/workspace-icon.png', // Default image, will be replaced if imageFile exists
+        imageFile, // The actual file to upload
         invite_code: inviteCode,
         settings: {},
         created_at: new Date().toISOString(),
@@ -155,6 +160,7 @@ function AddWorkspaceDialog({ open, onClose, onWorkspaceAdded }: AddWorkspaceDia
     setInviteCode("");
     setJoinInviteCode("");
     setWorkspaceImage("/workspace-icon.png");
+    setImageFile(null);
     setError("");
     setTabValue(0);
   };

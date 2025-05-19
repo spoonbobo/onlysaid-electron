@@ -9,7 +9,16 @@ type MenuChannels = 'menu:close-tab' | 'menu:new-tab';
 type MiscChannels = 'ipc-example';
 type DbChannels = 'db:initialize' | 'db:query' | 'db:transaction' | 'db:close';
 type SystemChannels = 'system:get-cpu-usage' | 'system:get-memory-usage' | 'system:get-storage-usage';
-type FileSystemChannels = 'get-file-content';
+type FileSystemChannels =
+  | 'get-file-content'
+  | 'upload-file'
+  | 'folder:open-dialog'
+  | 'folder:get-contents'
+  | 'file:upload'
+  | 'file:download'
+  | 'file:status'
+  | 'file:cancel'
+  | 'file:progress-update';
 
 type KnowledgeBaseChannels =
   | 'kb:list'
@@ -129,8 +138,18 @@ const electronHandler = {
   fileSystem: {
     openFolderDialog: () => ipcRenderer.invoke('folder:open-dialog'),
     getFolderContents: (folderPath: string) => ipcRenderer.invoke('folder:get-contents', folderPath),
-    uploadFile: (...args: unknown[]) => ipcRenderer.invoke('upload-file', ...args),
+    uploadFile: (args: { workspaceId: string, fileData: string, fileName: string, token: string, metadata?: Record<string, any> }) =>
+      ipcRenderer.invoke('upload-file', args),
     getFileContent: (...args: unknown[]) => ipcRenderer.invoke('get-file-content', ...args),
+    upload: (workspaceId: string, filePath: string, token: string, metadata?: Record<string, any>) =>
+      ipcRenderer.invoke('file:upload', { workspaceId, filePath, token, metadata }),
+    download: (workspaceId: string, fileId: string, destinationPath: string, token: string) =>
+      ipcRenderer.invoke('file:download', { workspaceId, fileId, destinationPath, token }),
+    getStatus: (operationId: string) => ipcRenderer.invoke('file:status', { operationId }),
+    cancelOperation: (operationId: string) => ipcRenderer.invoke('file:cancel', { operationId }),
+    onProgress: (callback: (data: { operationId: string, progress: number }) => void) => {
+      return ipcRenderer.on('file:progress-update', (_, data) => callback(data));
+    },
   },
   homedir: () => os.homedir(),
   session: {

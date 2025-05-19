@@ -56,41 +56,52 @@ export const setupWorkspaceHandlers = () => {
 
   ipcMain.handle('workspace:update', async (event, args: IUpdateWorkspaceArgs) => {
     try {
+      const { workspaceId, request, token } = args;
+      if (!workspaceId) {
+        throw new Error("workspaceId is required for update operation.");
+      }
+
       const response = await onlysaidServiceInstance.put<IWorkspace>(
-        `/workspace`,
-        args.request,
+        `/workspace/${workspaceId}`,
+        request,
         {
           headers: {
-            Authorization: `Bearer ${args.token}`
+            Authorization: `Bearer ${token}`
           }
         }
       );
 
       return { data: response.data };
     } catch (error: any) {
-      console.error('Error in main process API call (update_workspace):', error.message);
+      const errorMessage = error.response?.data?.message || error.message || "Unknown error during workspace update";
+      console.error('Error in main process API call (update_workspace):', errorMessage, error.response?.data);
       return {
-        error: error.message,
+        error: errorMessage,
         status: error.response?.status
       };
     }
   });
 
-  ipcMain.handle('workspace:delete', async (event, args) => {
+  ipcMain.handle('workspace:delete', async (event, args: { token: string; workspaceId: string }) => {
     try {
+      const { workspaceId, token } = args;
+      if (!workspaceId) {
+        throw new Error("workspaceId is required for delete operation.");
+      }
       const response = await onlysaidServiceInstance.delete<null>(
-        `/workspace?id=${args.id}`,
+        `/workspace/${workspaceId}`,
         {
           headers: {
-            Authorization: `Bearer ${args.token}`
+            Authorization: `Bearer ${token}`
           }
         }
       );
       return { data: response.data };
     } catch (error: any) {
-      console.error('Error in main process API call (delete_workspace):', error.message);
+      const errorMessage = error.response?.data?.message || error.message || "Unknown error during workspace delete";
+      console.error('Error in main process API call (delete_workspace):', errorMessage, error.response?.data);
       return {
-        error: error.message,
+        error: errorMessage,
         status: error.response?.status
       };
     }

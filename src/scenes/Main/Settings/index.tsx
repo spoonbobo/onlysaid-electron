@@ -14,56 +14,56 @@ import PrivateKB from "./KnowledgeBase";
 import KBSettings from "./KnowledgeBase/KBSettings";
 
 function Settings() {
-    const { selectedTopics } = useCurrentTopicContext();
+  const { selectedTopics } = useCurrentTopicContext();
 
-    const selectedSubcategory = selectedTopics['settings'] || UserSettingsSubcategories.User;
+  const selectedSubcategory = selectedTopics['settings'] || UserSettingsSubcategories.User;
 
-    const renderContent = () => {
-        switch (selectedSubcategory) {
-            case UserSettingsSubcategories.User:
-                return <UserPreferences />;
+  const renderContent = () => {
+    switch (selectedSubcategory) {
+      case UserSettingsSubcategories.User:
+        return <UserPreferences />;
 
-            case UserSettingsSubcategories.DeleteAccount:
-                return <DeleteAccount />;
+      case UserSettingsSubcategories.DeleteAccount:
+        return <DeleteAccount />;
 
-            case UserSettingsSubcategories.LLMModels:
-                return <LLMConfiguration />;
+      case UserSettingsSubcategories.LLMModels:
+        return <LLMConfiguration />;
 
-            case UserSettingsSubcategories.LLMSettings:
-                return <LLMSettings />;
+      case UserSettingsSubcategories.LLMSettings:
+        return <LLMSettings />;
 
-            case UserSettingsSubcategories.DebugMode:
-                return <DebugMode />;
+      case UserSettingsSubcategories.DebugMode:
+        return <DebugMode />;
 
-            case UserSettingsSubcategories.KBSettings:
-                return <KBSettings />;
+      case UserSettingsSubcategories.KBSettings:
+        return <KBSettings />;
 
-            case UserSettingsSubcategories.KB:
-                return <PrivateKB />;
+      case UserSettingsSubcategories.KB:
+        return <PrivateKB />;
 
-            case UserSettingsSubcategories.MCP:
-                return <MCPSettings />;
+      case UserSettingsSubcategories.MCP:
+        return <MCPSettings />;
 
-            case UserSettingsSubcategories.MCPConfiguration:
-                return <MCPConfiguration />;
+      case UserSettingsSubcategories.MCPConfiguration:
+        return <MCPConfiguration />;
 
-            default:
-                return (
-                    <SettingsSection title="Select a settings category">
-                        <Typography>Please select a settings category from the menu</Typography>
-                    </SettingsSection>
-                );
-        }
-    };
+      default:
+        return (
+          <SettingsSection title="Select a settings category">
+            <Typography>Please select a settings category from the menu</Typography>
+          </SettingsSection>
+        );
+    }
+  };
 
-    return (
-        <Box sx={{ p: 3 }}>
-            <Typography variant="h4" sx={{ mb: 3 }}>
-                <FormattedMessage id={`settings.${selectedSubcategory}`} />
-            </Typography>
-            {renderContent()}
-        </Box>
-    );
+  return (
+    <Box>
+      <Typography variant="h4" sx={{ mb: 3 }}>
+        <FormattedMessage id={`settings.${selectedSubcategory}`} />
+      </Typography>
+      {renderContent()}
+    </Box>
+  );
 }
 
 export default Settings;

@@ -320,7 +320,6 @@ function ChatUI({ messages, onReply, streamingMessageId, streamContentForBubble,
         overflowY: "auto",
         height: "100%",
         maxHeight: "100%",
-        px: 3,
         pt: 2,
         pb: 0.8
       }}
