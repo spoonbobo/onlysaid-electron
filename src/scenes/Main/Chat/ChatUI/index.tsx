@@ -234,7 +234,7 @@ function ChatUI({ messages, onReply, streamingMessageId, streamContentForBubble,
         avatar: ""
       };
 
-      let lastUserMessageTime = new Date(0); // Default to epoch start
+      let lastUserMessageTime = new Date(0);
       let lastUserMessageIndex = -1;
 
       for (let i = messagesToProcess.length - 1; i >= 0; i--) {

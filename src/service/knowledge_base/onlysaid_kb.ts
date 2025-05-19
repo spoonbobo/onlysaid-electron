@@ -21,4 +21,9 @@ export class OnylsaidKBService {
     });
     return response.data;
   }
+
+  async retrieveKnowledgeBase(knowledgeBaseId: string): Promise<any> {
+    const response = await this.instance.get(`${this.baseURL}/knowledge-base/${knowledgeBaseId}`);
+    return response.data;
+  }
 }

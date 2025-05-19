@@ -1,4 +1,4 @@
-import { MenuItem, ListSubheader, Divider, Tooltip, IconButton } from "@mui/material";
+import { MenuItem, ListSubheader, Divider, Tooltip, IconButton, Box } from "@mui/material";
 import { FormattedMessage } from "react-intl";
 import SettingsIcon from "@mui/icons-material/Settings";
 import ExitToAppIcon from "@mui/icons-material/ExitToApp";
@@ -87,7 +87,7 @@ function WorkspaceMenuItems({ handleClose }: WorkspaceMenuItemsProps) {
         <PeopleIcon fontSize="small" sx={{ mr: 1.5, color: "text.secondary" }} />
         <FormattedMessage id="menu.workspace.members" />
       </MenuItem>
-      <MenuItem disabled onClick={() => handleMenuItemClick('knowledgeBase')} sx={{ minHeight: 36, fontSize: 14 }}>
+      <MenuItem onClick={() => handleMenuItemClick('knowledgeBase')} sx={{ minHeight: 36, fontSize: 14 }}>
         <SchoolIcon fontSize="small" sx={{ mr: 1.5, color: "text.secondary" }} />
         <FormattedMessage id="menu.workspace.knowledgeBase" />
       </MenuItem>
@@ -133,11 +133,15 @@ export const RenderWorkspaceActions = ({
     }
   };
 
-  if (!selectedSection) return null;
+  if (!selectedSection) {
+    return null;
+  }
+
+  let actualContent: React.ReactNode = null;
 
   switch (selectedSection) {
     case 'chatroom':
-      return (
+      actualContent = (
         <Tooltip title={<FormattedMessage id="menu.workspace.newChatroom" />}>
           <IconButton
             size="small"
@@ -158,8 +162,9 @@ export const RenderWorkspaceActions = ({
           </IconButton>
         </Tooltip>
       );
+      break;
     case 'members':
-      return (
+      actualContent = (
         <>
           <Tooltip title={<FormattedMessage id="menu.workspace.inviteUser" />}>
             <IconButton
@@ -180,9 +185,29 @@ export const RenderWorkspaceActions = ({
           />
         </>
       );
+      break;
     default:
       return null;
   }
+
+  if (actualContent) {
+    return (
+      <Box sx={{
+        display: 'flex',
+        py: 0.5,
+        px: 2,
+        minHeight: '32px',
+        backgroundColor: 'inherit',
+        alignItems: 'center',
+        width: '100%',
+        boxSizing: 'border-box'
+      }}>
+        {actualContent}
+      </Box>
+    );
+  }
+
+  return null;
 };
 
 export default WorkspaceMenuItems;

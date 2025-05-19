@@ -5,6 +5,7 @@ import { Box, Typography } from "@mui/material";
 import Playground from "@/components/Debug/Playground";
 import Calendar from "@/scenes/Main/Calendar";
 import Members from "@/scenes/Main/Workspace/Members";
+import KnowledgeBase from "@/scenes/Main/Settings/KnowledgeBase";
 
 function Main() {
   const { selectedContext } = useTopicStore();
@@ -32,6 +33,8 @@ function Main() {
         </Box>;
       case "workspace:members":
         return <Members workspaceId={workspaceId || ""} />;
+      case "workspace:knowledgeBase":
+        return <KnowledgeBase />;
       default:
         return <Chat />;
     }

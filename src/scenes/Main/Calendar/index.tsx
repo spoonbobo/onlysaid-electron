@@ -1,6 +1,5 @@
 import { Box, Typography, Paper, Divider, IconButton, Button, Select, MenuItem, FormControl, InputLabel, SelectChangeEvent } from "@mui/material";
 import { FormattedMessage, useIntl } from "react-intl";
-import CalendarMonthIcon from "@mui/icons-material/CalendarMonth";
 import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
 import ChevronRightIcon from "@mui/icons-material/ChevronRight";
 import { useState, useEffect } from "react";
@@ -16,90 +15,135 @@ function MonthViewInternal({ displayDate }: MonthViewInternalProps) {
   const intl = useIntl();
   const { setSelectedCalendarDate, setCalendarViewMode } = useTopicStore();
 
-  const handleDayClick = (day: number) => {
-    const newSelectedDate = new Date(displayDate.getFullYear(), displayDate.getMonth(), day);
-    setSelectedCalendarDate(newSelectedDate);
+  const handleDayClick = (clickedDate: Date) => {
+    setSelectedCalendarDate(new Date(clickedDate)); // Ensure a new Date object is set
     setCalendarViewMode('day');
   };
 
+  // Week starts on Monday, as per the image
   const daysOfWeek = [
-    intl.formatMessage({ id: "calendar.day.sun", defaultMessage: "Sun" }),
     intl.formatMessage({ id: "calendar.day.mon", defaultMessage: "Mon" }),
     intl.formatMessage({ id: "calendar.day.tue", defaultMessage: "Tue" }),
     intl.formatMessage({ id: "calendar.day.wed", defaultMessage: "Wed" }),
     intl.formatMessage({ id: "calendar.day.thu", defaultMessage: "Thu" }),
     intl.formatMessage({ id: "calendar.day.fri", defaultMessage: "Fri" }),
-    intl.formatMessage({ id: "calendar.day.sat", defaultMessage: "Sat" })
+    intl.formatMessage({ id: "calendar.day.sat", defaultMessage: "Sat" }),
+    intl.formatMessage({ id: "calendar.day.sun", defaultMessage: "Sun" })
   ];
+
   const currentMonth = displayDate.getMonth();
   const currentYear = displayDate.getFullYear();
-
-  const firstDayOfMonth = new Date(currentYear, currentMonth, 1);
-  const startingDay = firstDayOfMonth.getDay();
-
-  const lastDayOfMonth = new Date(currentYear, currentMonth + 1, 0);
-  const daysInMonth = lastDayOfMonth.getDate();
-
-  const calendarDays = [];
-  for (let i = 0; i < startingDay; i++) { calendarDays.push(null); }
-  for (let i = 1; i <= daysInMonth; i++) { calendarDays.push(i); }
-
-  const weeks: (number | null)[][] = [];
-  let week: (number | null)[] = [];
-  calendarDays.forEach((day, index) => {
-    week.push(day);
-    if ((index + 1) % 7 === 0 || index === calendarDays.length - 1) {
-      weeks.push([...week]);
-      week = [];
-    }
-  });
-  if (week.length > 0) {
-    while (week.length < 7) week.push(null);
-    weeks.push([...week]);
-  }
   const today = new Date();
+  today.setHours(0, 0, 0, 0); // Normalize today's date for accurate comparison
+
+  const firstDayOfCurrentMonth = new Date(currentYear, currentMonth, 1);
+  let dayOfWeekOfFirst = firstDayOfCurrentMonth.getDay(); // 0=Sun, 1=Mon, ...
+  // Adjust so Monday is 0, ..., Sunday is 6
+  dayOfWeekOfFirst = (dayOfWeekOfFirst === 0) ? 6 : dayOfWeekOfFirst - 1;
+
+  const firstCalendarDate = new Date(firstDayOfCurrentMonth);
+  firstCalendarDate.setDate(firstDayOfCurrentMonth.getDate() - dayOfWeekOfFirst);
+
+  const calendarCellsData: { day: number; isCurrentMonth: boolean; date: Date; isToday: boolean; lunar?: string; }[] = [];
+  const tempDate = new Date(firstCalendarDate);
+
+  for (let i = 0; i < 42; i++) { // Always render 6 weeks (42 days)
+    const cellDate = new Date(tempDate);
+    cellDate.setHours(0, 0, 0, 0); // Normalize for comparison
+
+    const isCurrentMonthFlag = cellDate.getMonth() === currentMonth && cellDate.getFullYear() === currentYear;
+    const isTodayFlag = cellDate.getTime() === today.getTime();
+
+    // Placeholder for lunar date - this would come from a library or service
+    // const lunarDateStr = getLunarDate(cellDate);
+
+    calendarCellsData.push({
+      day: cellDate.getDate(),
+      isCurrentMonth: isCurrentMonthFlag,
+      date: cellDate,
+      isToday: isTodayFlag,
+      // lunar: lunarDateStr // Example
+    });
+    tempDate.setDate(tempDate.getDate() + 1);
+  }
+
+  const weeksToRender: typeof calendarCellsData[] = [];
+  for (let i = 0; i < calendarCellsData.length; i += 7) {
+    weeksToRender.push(calendarCellsData.slice(i, i + 7));
+  }
 
   return (
-    <Paper elevation={0} sx={{ m: 3, mt: 1, mb: 1, overflow: "hidden", flexGrow: 1, display: 'flex', flexDirection: 'column', border: '1px solid', borderColor: 'divider' }}>
+    <Paper elevation={0} sx={{ m: 1, mt: 0, mb: 0, overflow: "hidden", flexGrow: 1, display: 'flex', flexDirection: 'column', border: '1px solid', borderColor: 'divider', borderTop: 0 }}>
       <Box sx={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)" }}>
         {daysOfWeek.map((dayName, index) => (
-          <Box key={`${dayName}-${index}`} sx={{ p: 1, textAlign: "center", fontWeight: "bold", bgcolor: "primary.light", color: "primary.contrastText" }}>
+          <Box key={`${dayName}-${index}`} sx={{ py: 0.5, px: 1, textAlign: "center", fontWeight: "normal", fontSize: '0.8rem', color: "text.secondary", borderBottom: 1, borderColor: 'divider' }}>
             {dayName}
           </Box>
         ))}
       </Box>
-      <Divider />
-      <Box sx={{ flexGrow: 1, display: 'grid', gridTemplateRows: `repeat(${weeks.length}, 1fr)` }}>
-        {weeks.map((weekData, weekIndex) => (
-          <Box key={`week-${weekIndex}`} sx={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", flexGrow: 1, borderBottom: weekIndex < weeks.length - 1 ? 1 : 0, borderColor: 'divider' }}>
-            {weekData.map((day, dayIndex) => {
-              const isCurrentMonthDay = day !== null;
-              const isToday = isCurrentMonthDay && day === today.getDate() &&
-                currentMonth === today.getMonth() &&
-                currentYear === today.getFullYear();
+      <Box sx={{ flexGrow: 1, display: 'grid', gridTemplateRows: `repeat(${weeksToRender.length}, 1fr)` }}>
+        {weeksToRender.map((weekData, weekIndex) => (
+          <Box key={`week-${weekIndex}`} sx={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", flexGrow: 1, borderBottom: weekIndex < weeksToRender.length - 1 ? 1 : 0, borderColor: 'divider' }}>
+            {weekData.map((cellData, dayIndex) => {
               return (
                 <Box
-                  key={`day-${weekIndex}-${dayIndex}`}
-                  onClick={isCurrentMonthDay ? () => handleDayClick(day as number) : undefined}
+                  key={cellData.date.toISOString()}
+                  onClick={cellData.isCurrentMonth ? () => handleDayClick(cellData.date) : undefined}
                   sx={{
-                    p: 1,
+                    p: 0.5,
                     borderRight: dayIndex < 6 ? 1 : 0,
                     borderColor: 'divider',
-                    bgcolor: isToday ? "primary.50" : (isCurrentMonthDay ? "background.paper" : "action.disabledBackground"),
-                    fontWeight: isToday ? "bold" : "normal",
+                    bgcolor: "background.paper",
                     display: 'flex',
+                    flexDirection: 'column',
                     alignItems: 'flex-start',
                     justifyContent: 'flex-start',
-                    color: isToday ? 'primary.main' : (isCurrentMonthDay ? 'text.primary' : 'text.disabled'),
-                    minHeight: '80px',
-                    flexGrow: 1,
-                    cursor: isCurrentMonthDay ? 'pointer' : 'default',
+                    minHeight: '100px', // Adjust as needed, image implies ~1/6th of available height
+                    cursor: cellData.isCurrentMonth ? 'pointer' : 'default',
                     '&:hover': {
-                      bgcolor: isCurrentMonthDay && !isToday ? 'action.hover' : undefined,
+                      bgcolor: cellData.isCurrentMonth && !cellData.isToday ? 'action.hover' : undefined,
                     }
                   }}
                 >
-                  {day}
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', width: '100%', p: 0.5 }}>
+                    <Typography
+                      variant="body2"
+                      component="span"
+                      sx={
+                        cellData.isToday ? {
+                          bgcolor: 'primary.main',
+                          color: 'common.white',
+                          width: 24, // Smaller circle
+                          height: 24,
+                          borderRadius: '50%',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          fontWeight: 'medium',
+                          fontSize: '0.8rem'
+                        } : {
+                          fontSize: '0.8rem',
+                          fontWeight: cellData.isCurrentMonth ? 'medium' : 'normal',
+                          p: '3px', // to align with circle size
+                          color: cellData.isCurrentMonth ? 'text.primary' : 'text.secondary',
+                        }
+                      }
+                    >
+                      {cellData.day}
+                    </Typography>
+                    {/* Placeholder for Lunar Date */}
+                    {cellData.lunar && (
+                      <Typography variant="caption" sx={{ fontSize: '0.7rem', color: cellData.isCurrentMonth ? 'text.secondary' : 'text.disabled', pt: '2px' }}>
+                        {cellData.lunar}
+                      </Typography>
+                    )}
+                  </Box>
+                  {cellData.isCurrentMonth && (
+                    <Box sx={{ flexGrow: 1, mt: 0.5, width: '100%', overflowY: 'auto', p: 0.5, fontSize: '0.75rem' }}>
+                      {/* Event rendering area. Example: */}
+                      {/* {cellData.day === 1 && <Chip label="Labour Day" size="small" sx={{backgroundColor: '#e6f4ea', color: '#137333', maxWidth: '100%'}} />} */}
+                    </Box>
+                  )}
                 </Box>
               );
             })}
@@ -254,10 +298,6 @@ export default function Calendar() {
         }}
       >
         <Box sx={{ display: "flex", alignItems: "center" }}>
-          <CalendarMonthIcon sx={{ mr: 1, color: 'primary.main' }} />
-          <Typography variant="h5" component="h1" fontWeight={600} sx={{ color: 'text.primary', mr: 2 }}>
-            <FormattedMessage id="workspace.calendar.title" defaultMessage="Calendar" />
-          </Typography>
           <IconButton onClick={handlePrev} aria-label="Previous" sx={{ color: 'text.secondary' }}>
             <ChevronLeftIcon />
           </IconButton>

@@ -4,28 +4,27 @@ import { IChatMessage } from '@/../../types/Chat/Message';
 import { useChatStore } from '@/stores/Chat/ChatStore';
 
 interface SocketState {
-  // Socket state
   isConnected: boolean;
-  isInitialized: boolean;
+  listenersReady: boolean;
   lastPongReceived: number | null;
   socketId: string | null;
-
-  // Socket actions
+  currentUser: IUser | null;
+  isConnecting: boolean;
+  isReconnecting: boolean;
+  reconnectAttempts: number;
   initialize: (user: IUser) => void;
   close: () => void;
   sendMessage: (message: IChatMessage, workspaceId: string) => void;
   deleteMessage: (roomId: string, messageId: string) => void;
   sendPing: () => void;
   joinWorkspace: (workspaceId: string) => void;
-
-  // Event handlers (internal)
+  attemptReconnect: () => void;
   handleNewMessage: (message: IChatMessage) => void;
   handleMessageDeleted: (data: { roomId: string, messageId: string }) => void;
   handlePong: (timestamp: number) => void;
   handleConnectionDetails: (details: { socketId: string }) => void;
 }
 
-// Keep listeners references at module level so they can be properly cleaned up
 let connectedListener: (() => void) | null = null;
 let disconnectedListener: (() => void) | null = null;
 let messageListener: (() => void) | null = null;
@@ -34,36 +33,65 @@ let pongListener: (() => void) | null = null;
 let connectionDetailsListener: (() => void) | null = null;
 let pingIntervalId: NodeJS.Timeout | null = null;
 let pongTimeoutId: NodeJS.Timeout | null = null;
+let reconnectTimeoutId: NodeJS.Timeout | null = null;
 
 const PING_INTERVAL = 30000;
-const PONG_TIMEOUT_DURATION = PING_INTERVAL + 15000; // 45 seconds
+const PONG_TIMEOUT_DURATION = PING_INTERVAL + 15000;
+
+const MAX_RECONNECT_ATTEMPTS = 5;
+const INITIAL_RECONNECT_DELAY = 3000;
+const RECONNECT_DELAY_MULTIPLIER = 2;
+const MAX_RECONNECT_DELAY = 60000;
 
 export const useSocketStore = create<SocketState>((set, get) => ({
-  // Socket state
   isConnected: false,
-  isInitialized: false,
+  listenersReady: false,
   lastPongReceived: null,
   socketId: null,
+  currentUser: null,
+  isConnecting: false,
+  isReconnecting: false,
+  reconnectAttempts: 0,
 
-  // Socket actions
   initialize: (user: IUser) => {
-    // Only initialize once
-    if (get().isInitialized) return;
+    if (get().isConnecting) {
+      console.warn("SocketStore: Initialize called while a connection attempt is already in progress.");
+      return;
+    }
 
-    try {
-      // Initialize socket with user data
-      window.electron.socket.initialize(user)
-        .then(() => {
-          // Set up event listeners (only once)
+    if (!get().isReconnecting && reconnectTimeoutId) {
+      clearTimeout(reconnectTimeoutId);
+      reconnectTimeoutId = null;
+      console.log("SocketStore: Manual initialize cancelled pending reconnect.");
+    }
+
+    set({ isConnecting: true, currentUser: user });
+
+    window.electron.socket.initialize(user)
+      .then(() => {
+        if (!get().listenersReady) {
           if (!connectedListener) {
             connectedListener = window.electron.ipcRenderer.on('socket:connected', (_event, ...args) => {
-              set({ isConnected: true, lastPongReceived: Date.now() });
+              console.log("SocketStore: socket:connected event received.");
+              set({
+                isConnected: true,
+                lastPongReceived: Date.now(),
+                isConnecting: false,
+                isReconnecting: false,
+                reconnectAttempts: 0
+              });
+
+              if (reconnectTimeoutId) {
+                clearTimeout(reconnectTimeoutId);
+                reconnectTimeoutId = null;
+              }
 
               if (pongTimeoutId) clearTimeout(pongTimeoutId);
               pongTimeoutId = setTimeout(() => {
                 if (get().isConnected) {
-                  console.warn("SocketStore: Pong timeout. Setting isConnected to false.");
+                  console.warn("SocketStore: Pong timeout. Setting isConnected to false and attempting reconnect.");
                   set({ isConnected: false });
+                  if (get().currentUser) get().attemptReconnect();
                 }
               }, PONG_TIMEOUT_DURATION);
 
@@ -78,14 +106,16 @@ export const useSocketStore = create<SocketState>((set, get) => ({
 
           if (!disconnectedListener) {
             disconnectedListener = window.electron.ipcRenderer.on('socket:disconnected', (_event, ...args) => {
-              set({ isConnected: false });
-              if (pingIntervalId) {
-                clearInterval(pingIntervalId);
-                pingIntervalId = null;
-              }
-              if (pongTimeoutId) {
-                clearTimeout(pongTimeoutId);
-                pongTimeoutId = null;
+              console.warn("SocketStore: socket:disconnected event received.");
+              const hadCurrentUser = !!get().currentUser;
+              set({ isConnected: false, isConnecting: false, socketId: null });
+
+              if (pingIntervalId) { clearInterval(pingIntervalId); pingIntervalId = null; }
+              if (pongTimeoutId) { clearTimeout(pongTimeoutId); pongTimeoutId = null; }
+              if (reconnectTimeoutId) { clearTimeout(reconnectTimeoutId); reconnectTimeoutId = null; }
+
+              if (hadCurrentUser) {
+                get().attemptReconnect();
               }
             });
           }
@@ -114,73 +144,104 @@ export const useSocketStore = create<SocketState>((set, get) => ({
               get().handleConnectionDetails(args[0] as { socketId: string });
             });
           }
+          set({ listenersReady: true });
+        }
+      })
+      .catch(err => {
+        console.error("SocketStore: Failed to execute socket.initialize with main process:", err);
+        set({ isConnecting: false });
+        if (get().currentUser) {
+          get().attemptReconnect();
+        }
+      });
+  },
 
-          set({ isInitialized: true });
-          get().sendPing();
-        })
-        .catch(err => {
-          console.error("Failed to initialize socket:", err);
-          // Try again after delay
-          setTimeout(() => get().initialize(user), 3000);
-        });
-    } catch (error) {
-      console.error("Error initializing socket:", error);
-      setTimeout(() => get().initialize(user), 3000);
+  attemptReconnect: () => {
+    const { currentUser, isConnecting, reconnectAttempts } = get();
+
+    if (!currentUser) {
+      console.warn("SocketStore: AttemptReconnect called without a user. Cannot reconnect.");
+      set({ isReconnecting: false, reconnectAttempts: 0 });
+      return;
     }
+    if (isConnecting) {
+      console.log("SocketStore: AttemptReconnect called while already connecting. Aborting this attempt.");
+      return;
+    }
+    if (reconnectTimeoutId) {
+      console.log("SocketStore: AttemptReconnect called but a reconnect is already scheduled.");
+      return;
+    }
+
+    if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
+      console.error(`SocketStore: Max reconnect attempts (${MAX_RECONNECT_ATTEMPTS}) reached. Will not try again until manual re-init or app restart.`);
+      set({ isReconnecting: false, reconnectAttempts: 0 });
+      return;
+    }
+
+    set({ isReconnecting: true });
+    const nextAttempt = reconnectAttempts + 1;
+    const delay = Math.min(
+      INITIAL_RECONNECT_DELAY * Math.pow(RECONNECT_DELAY_MULTIPLIER, nextAttempt - 1),
+      MAX_RECONNECT_DELAY
+    );
+
+    console.log(`SocketStore: Scheduling reconnect attempt ${nextAttempt}/${MAX_RECONNECT_ATTEMPTS} in ${delay / 1000}s`);
+
+    reconnectTimeoutId = setTimeout(() => {
+      reconnectTimeoutId = null;
+      if (get().currentUser) {
+        set({ reconnectAttempts: nextAttempt });
+        console.log(`SocketStore: Attempting reconnect ${nextAttempt}...`);
+        get().initialize(get().currentUser!);
+      } else {
+        console.warn("SocketStore: Reconnect conditions no longer met (no user). Aborting reconnect sequence.");
+        set({ isReconnecting: false, reconnectAttempts: 0 });
+      }
+    }, delay);
   },
 
   close: () => {
     window.electron.socket.close();
 
-    // Clean up listeners
-    if (connectedListener) {
-      connectedListener();
-      connectedListener = null;
-    }
+    if (connectedListener) { connectedListener(); connectedListener = null; }
+    if (disconnectedListener) { disconnectedListener(); disconnectedListener = null; }
+    if (messageListener) { messageListener(); messageListener = null; }
+    if (messageDeletedListener) { messageDeletedListener(); messageDeletedListener = null; }
+    if (pongListener) { pongListener(); pongListener = null; }
+    if (connectionDetailsListener) { connectionDetailsListener(); connectionDetailsListener = null; }
 
-    if (disconnectedListener) {
-      disconnectedListener();
-      disconnectedListener = null;
-    }
+    if (pingIntervalId) { clearInterval(pingIntervalId); pingIntervalId = null; }
+    if (pongTimeoutId) { clearTimeout(pongTimeoutId); pongTimeoutId = null; }
+    if (reconnectTimeoutId) { clearTimeout(reconnectTimeoutId); reconnectTimeoutId = null; }
 
-    if (messageListener) {
-      messageListener();
-      messageListener = null;
-    }
-
-    if (messageDeletedListener) {
-      messageDeletedListener();
-      messageDeletedListener = null;
-    }
-
-    if (pongListener) {
-      pongListener();
-      pongListener = null;
-    }
-
-    if (connectionDetailsListener) {
-      connectionDetailsListener();
-      connectionDetailsListener = null;
-    }
-
-    if (pingIntervalId) {
-      clearInterval(pingIntervalId);
-      pingIntervalId = null;
-    }
-    if (pongTimeoutId) {
-      clearTimeout(pongTimeoutId);
-      pongTimeoutId = null;
-    }
-
-    set({ isConnected: false, isInitialized: false, lastPongReceived: null, socketId: null });
+    set({
+      isConnected: false,
+      listenersReady: false,
+      lastPongReceived: null,
+      socketId: null,
+      currentUser: null,
+      isConnecting: false,
+      isReconnecting: false,
+      reconnectAttempts: 0,
+    });
+    console.log("SocketStore: Closed and cleaned up.");
   },
 
   sendMessage: (message: IChatMessage, workspaceId: string) => {
-    window.electron.socket.sendMessage(message, workspaceId);
+    if (get().isConnected) {
+      window.electron.socket.sendMessage(message, workspaceId);
+    } else {
+      console.warn("SocketStore: Socket not connected, cannot send message.");
+    }
   },
 
   deleteMessage: (roomId: string, messageId: string) => {
-    window.electron.socket.deleteMessage(roomId, messageId);
+    if (get().isConnected) {
+      window.electron.socket.deleteMessage(roomId, messageId);
+    } else {
+      console.warn("SocketStore: Socket not connected, cannot delete message.");
+    }
   },
 
   sendPing: () => {
@@ -197,15 +258,14 @@ export const useSocketStore = create<SocketState>((set, get) => ({
     }
   },
 
-  // Empty handlers
   handleNewMessage: (message: IChatMessage) => {
-    // Empty implementation as requested
     console.log("SocketStore: Received message", message);
     useChatStore.getState().appendMessage(message.chat_id, message);
   },
 
   handleMessageDeleted: (data: { roomId: string, messageId: string }) => {
-    // Empty implementation as requested
+    console.log("SocketStore: Message deleted", data);
+    // useChatStore.getState().removeMessage(data.roomId, data.messageId);
   },
 
   handlePong: (timestamp: number) => {
@@ -214,13 +274,21 @@ export const useSocketStore = create<SocketState>((set, get) => ({
     if (pongTimeoutId) clearTimeout(pongTimeoutId);
     pongTimeoutId = setTimeout(() => {
       if (get().isConnected) {
-        console.warn("SocketStore: Pong timeout after successful pong. Setting isConnected to false.");
+        console.warn("SocketStore: Pong timeout after successful pong. Setting isConnected to false and attempting reconnect.");
         set({ isConnected: false });
+        if (get().currentUser) get().attemptReconnect();
       }
     }, PONG_TIMEOUT_DURATION);
   },
 
   handleConnectionDetails: (details: { socketId: string }) => {
     set({ socketId: details.socketId });
+    if (get().isConnected) {
+      set({ isConnecting: false, isReconnecting: false, reconnectAttempts: 0 });
+      if (reconnectTimeoutId) {
+        clearTimeout(reconnectTimeoutId);
+        reconnectTimeoutId = null;
+      }
+    }
   }
 }));

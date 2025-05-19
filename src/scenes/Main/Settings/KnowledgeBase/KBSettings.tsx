@@ -3,7 +3,6 @@ import SettingsSection from "@/components/Settings/SettingsSection";
 import SettingsFormField from "@/components/Settings/SettingsFormField";
 import SettingsActionBar from "@/components/Settings/SettingsActionBar";
 import { useKBSettingsStore } from "@/stores/KB/KBSettingStore";
-import { useLLMConfigurationStore } from "@/stores/LLM/LLMConfiguration";
 import { LLMService, LLMModel, EmbeddingModel, EmbeddingService } from "@/service/ai";
 import { useEffect, useState } from "react";
 import { FormattedMessage, useIntl } from "react-intl";
@@ -12,7 +11,6 @@ import { toast } from "@/utils/toast";
 function KBSettings() {
   const intl = useIntl();
   const { queryEngineLLM, embeddingEngine, setQueryEngineLLM, setEmbeddingEngine, resetToDefaults, isKBUsable } = useKBSettingsStore();
-  const { openAIEnabled, deepSeekEnabled, ollamaEnabled } = useLLMConfigurationStore();
   const [llms, setLlms] = useState<LLMModel[]>([]);
   const [embeddingModels, setEmbeddingModels] = useState<EmbeddingModel[]>([]);
 

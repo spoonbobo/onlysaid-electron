@@ -16,6 +16,8 @@ import { useStreamStore, OpenAIMessage } from "@/stores/SSE/StreamStore";
 import { useUserStore } from "@/stores/User/UserStore";
 import { useAgentStore } from "@/stores/Agent/AgentStore";
 import { useWorkspaceStore } from "@/stores/Workspace/WorkspaceStore";
+import { useLLMConfigurationStore } from "@/stores/LLM/LLMConfiguration";
+import { processAskModeAIResponse } from './Mode/Ask';
 
 function Chat() {
   const {
@@ -51,9 +53,10 @@ function Chat() {
 
   const contextId = selectedContext ? `${selectedContext.name}:${selectedContext.type}` : '';
   const activeChatId = selectedContext?.section ? selectedTopics[selectedContext.section] || null : null;
-  const { user } = useUserStore();
-  const { agent } = useAgentStore();
-  const isLocal = user?.id ? false : true;
+  const { user: currentUser } = useUserStore();
+  const { agent, gainExperience: agentGainExperience } = useAgentStore();
+  const { aiMode } = useLLMConfigurationStore();
+  const isLocal = currentUser?.id ? false : true;
   let workspaceId = '';
   if (!isLocal) {
     workspaceId = selectedContext?.id || '';
@@ -214,66 +217,38 @@ function Chat() {
           setInput(activeChatId, '', contextId);
           setReplyingTo(null);
 
-          if (modelId && provider && messageData.text) {
-            const assistantSender = agent;
-            const assistantSenderId = agent?.id || "";
-            if (!agent) {
-              console.warn("[Chat] Agent not found in store, falling back for assistant message sender.");
-            }
-
-            const assistantMessage: IChatMessage = {
-              id: uuidv4(),
-              chat_id: activeChatId,
-              sender: assistantSenderId,
-              sender_object: assistantSender as IUser,
-              text: "",
-              created_at: new Date().toISOString(),
-              sent_at: new Date().toISOString(),
-              status: "pending"
-            };
-
-            appendMessage(activeChatId, assistantMessage);
-
-            setStreamingState(assistantMessage.id, activeChatId);
-
+          if (aiMode === "ask" && modelId && provider && messageData.text && activeChatId) {
             setCurrentStreamContent("");
             streamStartTimeRef.current = null;
             tokenCountRef.current = 0;
             setTokenRate(0);
 
+            let askModeProcessingSuccess = false;
+
             try {
-              const lastMessages = messages.slice(-10).map(msg => ({
-                role: msg.sender === currentUser?.id ? "user" : "assistant",
-                content: msg.text || ""
-              }));
-
-              lastMessages.push({ role: "user", content: messageData.text || "" });
-
-              const response = await streamChatCompletion(
-                lastMessages as OpenAIMessage[],
-                {
-                  model: modelId,
-                  streamId: `stream-${assistantMessage.id}`,
-                  provider: provider
-                }
-              );
-              console.log("sender", assistantSenderId);
-
-              updateMessage(activeChatId, assistantMessage.id, {
-                text: response,
-                sender: assistantSenderId
+              const result = await processAskModeAIResponse({
+                activeChatId,
+                userMessageText: messageData.text,
+                modelId,
+                provider,
+                agent,
+                currentUser,
+                existingMessages: messages,
+                appendMessage,
+                updateMessage,
+                setStreamingState,
+                markStreamAsCompleted,
+                streamChatCompletion,
               });
-
-              markStreamAsCompleted(activeChatId, response);
-
-            } catch (error) {
-              console.error("Stream error:", error);
-              updateMessage(activeChatId, assistantMessage.id, {
-                text: "Error generating response. Please try again."
-              });
+              askModeProcessingSuccess = result.success;
+              if (!result.success) {
+                console.error("Ask mode AI response failed:", result.error);
+              }
+            } catch (e) {
+              console.error("Critical error processing Ask mode AI response:", e);
             } finally {
               const earnedXP = Math.floor(tokenCountRef.current / 10);
-              useAgentStore.getState().gainExperience(earnedXP);
+              agentGainExperience(earnedXP);
               setStreamingState(null, null);
             }
           }

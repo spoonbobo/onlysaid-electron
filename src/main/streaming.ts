@@ -62,19 +62,16 @@ export function setupSSEHandlers() {
           break;
       }
 
-      // Set up variables to track response
       let accumulatedResponse = '';
       let buffer = '';
 
-      // Start streaming chunks in real-time
       for await (const chunk of stream) {
         const content = chunk.choices[0]?.delta?.content || '';
         if (content) {
           buffer += content;
           accumulatedResponse += content;
 
-          // Send in smaller chunks (e.g., 5)
-          if (buffer.length >= 5) { // Changed from 20
+          if (buffer.length >= 5) {
             event.sender.send('streaming:chunk', {
               streamId: options.streamId,
               chunk: {
@@ -88,7 +85,6 @@ export function setupSSEHandlers() {
         }
       }
 
-      // Send any remaining buffered content when the stream ends
       if (buffer.length > 0) {
         event.sender.send('streaming:chunk', {
           streamId: options.streamId,
@@ -98,19 +94,16 @@ export function setupSSEHandlers() {
             timestamp: Date.now()
           }
         });
-        buffer = ''; // Clear buffer after sending
+        buffer = '';
       }
 
-      // Return success when done
       return { success: true, fullResponse: accumulatedResponse };
     } catch (error: any) {
-      // Check if this is an abort error
       if (error.name === 'AbortError') {
         return { success: true, aborted: true };
       }
       return { success: false, error: error.message };
     } finally {
-      // Clean up the controller
       if (activeStreams[options.streamId]) {
         delete activeStreams[options.streamId];
       }
@@ -126,5 +119,22 @@ export function setupSSEHandlers() {
       return { success: true };
     }
     return { success: false, error: 'No active stream found' };
+  });
+
+  ipcMain.handle('streaming:query_stream_complete', async (event, { query, options }) => {
+    // This is a dummy handler for query_stream_complete
+    console.log("streaming:query_stream_complete", query, options);
+    // Simulate some async work
+    await new Promise(resolve => setTimeout(resolve, 100));
+    // Simulate sending a chunk
+    event.sender.send('streaming:chunk', {
+      streamId: options.streamId,
+      chunk: {
+        content: "Dummy query response chunk.",
+        full: "Dummy query response chunk.",
+        timestamp: Date.now()
+      }
+    });
+    return { success: true, fullResponse: "Dummy query full response." };
   });
 }

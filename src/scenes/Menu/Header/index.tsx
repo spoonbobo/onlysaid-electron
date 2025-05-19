@@ -142,6 +142,17 @@ function MenuHeader() {
     }
   };
 
+  const actionBarBoxStyles = {
+    display: 'flex',
+    py: 0.5,
+    px: 2,
+    minHeight: '32px',
+    backgroundColor: 'inherit',
+    alignItems: 'center',
+    width: '100%',
+    boxSizing: 'border-box'
+  };
+
   return (
     <Box
       sx={{
@@ -196,40 +207,31 @@ function MenuHeader() {
         </Box>
 
         {(() => {
-          let actionContent = null;
-
           if (selectedContext?.type === 'home' && selectedCategory) {
-            actionContent = renderCategoryActions({
+            const homeActionContent = renderCategoryActions({
               selectedCategory,
               setShowAddFriendDialog,
               handleCreateChat
             });
-          } else if (selectedContext?.type === 'workspace' && selectedSection) {
-            actionContent = <RenderWorkspaceActions
+            return homeActionContent ? <Box sx={actionBarBoxStyles}>{homeActionContent}</Box> : null;
+          }
+
+          if (selectedContext?.type === 'workspace' && selectedSection) {
+            return <RenderWorkspaceActions
               selectedSection={selectedSection}
               handleAction={handleWorkspaceAction}
             />;
-          } else if (selectedContext?.type === 'settings' && selectedSection) {
-            actionContent = renderSettingsActions({
+          }
+
+          if (selectedContext?.type === 'settings' && selectedSection) {
+            const settingsActionContent = renderSettingsActions({
               selectedSection,
               handleAction: (action) => console.log('Settings action:', action)
             });
+            return settingsActionContent ? <Box sx={actionBarBoxStyles}>{settingsActionContent}</Box> : null;
           }
 
-          return actionContent ? (
-            <Box sx={{
-              display: 'flex',
-              py: 0.5,
-              px: 2,
-              minHeight: '32px',
-              backgroundColor: 'inherit',
-              alignItems: 'center',
-              width: '100%',
-              boxSizing: 'border-box'
-            }}>
-              {actionContent}
-            </Box>
-          ) : null;
+          return null;
         })()}
       </Box>
 

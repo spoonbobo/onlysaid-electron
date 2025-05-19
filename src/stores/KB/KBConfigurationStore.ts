@@ -2,15 +2,25 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { v4 as uuidv4 } from "uuid";
 import { useKBSettingsStore } from "@/stores/KB/KBSettingStore";
+import { useTopicStore } from "@/stores/Topic/TopicStore";
 import { IKnowledgeBase } from "@/../../types/KnowledgeBase/KnowledgeBase";
+import { TopicContext } from "@/stores/Topic/TopicStore";
+
+const getContextIdString = (selectedContext: TopicContext | null): string | undefined => {
+  if (!selectedContext) return undefined;
+  return selectedContext.type === "workspace" && selectedContext.id
+    ? `${selectedContext.id}:workspace`
+    : selectedContext.id ? `${selectedContext.id}:${selectedContext.type}` // if id is present
+      : `${selectedContext.name}:${selectedContext.type}`; // fallback if id is not present (e.g. for predefined contexts)
+};
 
 interface KBConfigurationState {
-  knowledge_bases: IKnowledgeBase[];
+  knowledge_bases: Record<string, IKnowledgeBase[]>;
   page: number;
   itemsPerPage: number;
   searchTerm: string;
 
-  addDatabase: (db: Omit<IKnowledgeBase, "id" | "create_at" | "update_at" | "enabled" | "configured" | "size" | "documents">) => void;
+  addDatabase: (db: Omit<IKnowledgeBase, "id" | "create_at" | "update_at" | "enabled" | "configured" | "size" | "documents" | "context_id"> & { context_id?: string }) => void;
   removeDatabase: (id: string) => void;
   updateDatabase: (id: string, data: Partial<IKnowledgeBase>) => void;
   toggleDatabaseStatus: (id: string, enabled: boolean) => void;
@@ -19,11 +29,12 @@ interface KBConfigurationState {
   setPage: (page: number) => void;
   setItemsPerPage: (itemsPerPage: number) => void;
   setSearchTerm: (term: string) => void;
+  getContextKnowledgeBases: () => IKnowledgeBase[];
   reset: () => void;
 }
 
 const DEFAULT_STATE = {
-  knowledge_bases: [],
+  knowledge_bases: {},
   page: 1,
   itemsPerPage: 4,
   searchTerm: ""
@@ -31,19 +42,26 @@ const DEFAULT_STATE = {
 
 export const useKBConfigurationStore = create<KBConfigurationState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       ...DEFAULT_STATE,
 
       addDatabase: (db) => {
         const { queryEngineLLM } = useKBSettingsStore.getState();
+        const { selectedContext } = useTopicStore.getState();
+        const contextId = getContextIdString(selectedContext);
 
         if (!db.embedding_engine || db.embedding_engine === "none") {
           console.error("Cannot create KB: A valid embedding engine must be provided.");
           return;
         }
+        if (!contextId) {
+          console.error("Cannot create KB: contextId is missing from TopicStore.");
+          return;
+        }
 
-        set((state) => ({
-          knowledge_bases: [...state.knowledge_bases, {
+        set((state) => {
+          const currentContextKBs = state.knowledge_bases[contextId] || [];
+          const newKB: IKnowledgeBase = {
             ...db,
             id: uuidv4(),
             create_at: new Date().toISOString(),
@@ -51,47 +69,110 @@ export const useKBConfigurationStore = create<KBConfigurationState>()(
             enabled: false,
             configured: false,
             query_engine: db.query_engine || queryEngineLLM || "",
-          }]
-        }));
+            context_id: contextId
+          };
+          return {
+            knowledge_bases: {
+              ...state.knowledge_bases,
+              [contextId]: [...currentContextKBs, newKB]
+            }
+          };
+        });
       },
 
-      removeDatabase: (id) => set((state) => ({
-        knowledge_bases: state.knowledge_bases.filter(db => db.id !== id)
-      })),
+      removeDatabase: (id) => {
+        const { selectedContext } = useTopicStore.getState();
+        const contextId = getContextIdString(selectedContext);
+        if (!contextId) return;
 
-      updateDatabase: (id, data) => set((state) => ({
-        knowledge_bases: state.knowledge_bases.map(db =>
-          db.id === id ? { ...db, ...data, update_at: new Date().toISOString() } : db
-        )
-      })),
+        set((state) => {
+          const currentContextKBs = state.knowledge_bases[contextId] || [];
+          return {
+            knowledge_bases: {
+              ...state.knowledge_bases,
+              [contextId]: currentContextKBs.filter(db => db.id !== id)
+            }
+          };
+        });
+      },
 
-      toggleDatabaseStatus: (id, enabled) => set((state) => ({
-        knowledge_bases: state.knowledge_bases.map(db =>
-          db.id === id ? { ...db, enabled, update_at: new Date().toISOString() } : db
-        )
-      })),
+      updateDatabase: (id, data) => {
+        const { selectedContext } = useTopicStore.getState();
+        const contextId = getContextIdString(selectedContext);
+        if (!contextId) return;
 
-      setConfigurationStatus: (id, configured) => set((state) => ({
-        knowledge_bases: state.knowledge_bases.map(db =>
-          db.id === id ? { ...db, configured, update_at: new Date().toISOString() } : db
-        )
-      })),
+        set((state) => {
+          const currentContextKBs = state.knowledge_bases[contextId] || [];
+          return {
+            knowledge_bases: {
+              ...state.knowledge_bases,
+              [contextId]: currentContextKBs.map(db =>
+                db.id === id ? { ...db, ...data, update_at: new Date().toISOString() } : db
+              )
+            }
+          };
+        });
+      },
 
-      reinitializeDatabase: (id) => set((state) => {
-        const isConfigured = Math.random() > 0.2;
+      toggleDatabaseStatus: (id, enabled) => {
+        const { selectedContext } = useTopicStore.getState();
+        const contextId = getContextIdString(selectedContext);
+        if (!contextId) return;
 
-        return {
-          knowledge_bases: state.knowledge_bases.map(db =>
-            db.id === id ? {
-              ...db,
-              configured: isConfigured,
-              size: isConfigured ? Math.floor(Math.random() * 1000) : undefined,
-              documents: isConfigured ? Math.floor(Math.random() * 100) : undefined,
-              update_at: new Date().toISOString()
-            } : db
-          )
-        };
-      }),
+        set((state) => {
+          const currentContextKBs = state.knowledge_bases[contextId] || [];
+          return {
+            knowledge_bases: {
+              ...state.knowledge_bases,
+              [contextId]: currentContextKBs.map(db =>
+                db.id === id ? { ...db, enabled, update_at: new Date().toISOString() } : db
+              )
+            }
+          };
+        });
+      },
+
+      setConfigurationStatus: (id, configured) => {
+        const { selectedContext } = useTopicStore.getState();
+        const contextId = getContextIdString(selectedContext);
+        if (!contextId) return;
+        set((state) => {
+          const currentContextKBs = state.knowledge_bases[contextId] || [];
+          return {
+            knowledge_bases: {
+              ...state.knowledge_bases,
+              [contextId]: currentContextKBs.map(db =>
+                db.id === id ? { ...db, configured, update_at: new Date().toISOString() } : db
+              )
+            }
+          };
+        });
+      },
+
+      reinitializeDatabase: (id) => {
+        const { selectedContext } = useTopicStore.getState();
+        const contextId = getContextIdString(selectedContext);
+        if (!contextId) return;
+
+        set((state) => {
+          const isConfigured = Math.random() > 0.2;
+          const currentContextKBs = state.knowledge_bases[contextId] || [];
+          return {
+            knowledge_bases: {
+              ...state.knowledge_bases,
+              [contextId]: currentContextKBs.map(db =>
+                db.id === id ? {
+                  ...db,
+                  configured: isConfigured,
+                  size: isConfigured ? Math.floor(Math.random() * 1000) : undefined,
+                  documents: isConfigured ? Math.floor(Math.random() * 100) : undefined,
+                  update_at: new Date().toISOString()
+                } : db
+              )
+            }
+          };
+        });
+      },
 
       setPage: (page) => set({ page }),
 
@@ -104,6 +185,13 @@ export const useKBConfigurationStore = create<KBConfigurationState>()(
         searchTerm,
         page: 1
       }),
+
+      getContextKnowledgeBases: () => {
+        const { selectedContext } = useTopicStore.getState();
+        const contextId = getContextIdString(selectedContext);
+        if (!contextId) return [];
+        return get().knowledge_bases[contextId] || [];
+      },
 
       reset: () => set(DEFAULT_STATE)
     }),

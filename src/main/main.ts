@@ -22,7 +22,7 @@ import { setupChatroomHandlers } from './api/v2/chat';
 import { setupUserHandlers } from './api/v2/user';
 import { setupFileSystemHandlers } from './filesystem';
 import { setupWindowHandlers } from './window';
-import { setupResourceHandlers } from './resource';
+import { setupResourceHandlers } from './system';
 import { setupSSEHandlers } from './streaming';
 import { setupMCPHandlers } from './mcp';
 import { setupContentHandlers } from './filesystem';
@@ -122,7 +122,6 @@ ipcMain.handle('session:set-cookie', async (event, cookieDetails) => {
       secure: cookieDetails.secure,
       path: cookieDetails.path || '/',
       domain: cookieDetails.domain,
-      // expirationDate: ... // Optional
     });
     console.log(`[Main] Cookie "${cookieDetails.name}" set for ${cookieDetails.url}`);
     return { success: true };

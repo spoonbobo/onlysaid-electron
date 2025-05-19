@@ -4,7 +4,7 @@ import { useSocketStore } from "@/stores/Socket/SocketStore";
 
 export default function SocketOverlay() {
   const { socketOverlayMinimized, setSocketOverlayMinimized } = useDebugStore();
-  const { isConnected, isInitialized, lastPongReceived, socketId } = useSocketStore();
+  const { isConnected, listenersReady, lastPongReceived, socketId } = useSocketStore();
 
   const formatPongTimestamp = (timestamp: number | null) => {
     if (!timestamp) return "N/A";
@@ -50,8 +50,8 @@ export default function SocketOverlay() {
             value={isConnected ? "Yes" : "No"}
           />
           <InfoRow
-            label="Initialized"
-            value={isInitialized ? "Yes" : "No"}
+            label="Listeners Ready"
+            value={listenersReady ? "Yes" : "No"}
           />
           <InfoRow
             label="Last Pong"

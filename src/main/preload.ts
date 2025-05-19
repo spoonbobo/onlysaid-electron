@@ -11,7 +11,7 @@ type DbChannels = 'db:initialize' | 'db:query' | 'db:transaction' | 'db:close';
 type SystemChannels = 'system:get-cpu-usage' | 'system:get-memory-usage' | 'system:get-storage-usage';
 type FileSystemChannels = 'get-file-content';
 
-type SSEChannels = 'streaming:abort_stream' | 'streaming:chat_stream_complete' | 'streaming:chunk';
+type SSEChannels = 'streaming:abort_stream' | 'streaming:chat_stream_complete' | 'streaming:chunk' | 'streaming:query_stream_complete';
 type MCPChannels = 'mcp:initialize_client' | 'mcp:list_tools';
 
 type ApiChatChannels = 'chat:get' | 'chat:create' | 'chat:update' | 'chat:delete';
@@ -29,11 +29,21 @@ type ApiChannels = ApiChatChannels | ApiUserChannels | ApiWorkspaceChannels;
 type RedisChannels = 'redis:connect' | 'redis:disconnect' | 'redis:get' | 'redis:set' |
   'redis:del' | 'redis:publish' | 'redis:start-server' | 'redis:stop-server';
 
-type SocketChannels = 'socket:initialize' | 'socket:close' |
-  'socket:connected' | 'socket:disconnected' | 'socket:send-message' |
-  'socket:delete-message' | 'socket:new-message' | 'socket:message-deleted' |
-  'socket:notification' | 'socket:room-update' | 'socket:send-ping' | 'socket:pong' |
-  'socket:connection-details' | 'socket:join-workspace';
+type SocketChannels =
+  | 'socket:initialize'
+  | 'socket:close'
+  | 'socket:connected'
+  | 'socket:disconnected'
+  | 'socket:send-message'
+  | 'socket:delete-message'
+  | 'socket:new-message'
+  | 'socket:message-deleted'
+  | 'socket:notification'
+  | 'socket:room-update'
+  | 'socket:send-ping'
+  | 'socket:pong'
+  | 'socket:connection-details'
+  | 'socket:join-workspace';
 
 export type Channels =
   | AuthChannels
@@ -93,6 +103,7 @@ const electronHandler = {
     chat_stream_complete: (...args: unknown[]) => ipcRenderer.invoke('streaming:chat_stream_complete', ...args),
     chunk: (...args: unknown[]) => ipcRenderer.invoke('streaming:chunk', ...args),
     abort_stream: (...args: unknown[]) => ipcRenderer.invoke('streaming:abort_stream', ...args),
+    query_stream_complete: (...args: unknown[]) => ipcRenderer.invoke('streaming:query_stream_complete', ...args),
   },
   menu: {
     newTab: (...args: unknown[]) => ipcRenderer.invoke('menu:new-tab', ...args),

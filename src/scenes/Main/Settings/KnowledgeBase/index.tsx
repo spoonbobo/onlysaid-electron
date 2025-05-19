@@ -1,5 +1,5 @@
 import { Box, Button, TextField, Pagination, InputAdornment, Typography, Card, CardContent, List, ListItem, IconButton, Switch, Chip, Stack, Tooltip } from "@mui/material";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { useKBConfigurationStore } from "@/stores/KB/KBConfigurationStore";
 import SettingsSection from "@/components/Settings/SettingsSection";
 import SearchIcon from "@mui/icons-material/Search";
@@ -11,12 +11,26 @@ import { FormattedMessage } from "react-intl";
 import CreateKBDialog, { DeleteKBConfirmationDialog } from "@/components/Dialog/CreateKBDialog";
 import { useIntl } from "react-intl";
 import { useKBSettingsStore } from "@/stores/KB/KBSettingStore";
+import { useTopicStore, TopicContext } from "@/stores/Topic/TopicStore";
 import { toast } from "@/utils/toast";
 import { EmbeddingModel, EmbeddingService } from "@/service/ai";
+import { IKnowledgeBase } from "@/../../types/KnowledgeBase/KnowledgeBase";
+
+// Helper to derive contextId string from TopicContext (can be shared or redefined if not already global)
+const getContextIdString = (selectedContext: TopicContext | null): string | undefined => {
+  if (!selectedContext) return undefined;
+  return selectedContext.type === "workspace" && selectedContext.id
+    ? `${selectedContext.id}:workspace`
+    : selectedContext.id ? `${selectedContext.id}:${selectedContext.type}`
+      : `${selectedContext.name}:${selectedContext.type}`;
+};
+
+// Define a stable empty array reference outside the component
+const EMPTY_KBS: IKnowledgeBase[] = [];
 
 function KnowledgeBaseComponent() {
+  const { setPage: storeSetPage, ...configStore } = useKBConfigurationStore();
   const {
-    knowledge_bases,
     page,
     itemsPerPage,
     searchTerm,
@@ -25,12 +39,13 @@ function KnowledgeBaseComponent() {
     updateDatabase,
     toggleDatabaseStatus,
     reinitializeDatabase,
-    setPage,
     setItemsPerPage,
     setSearchTerm
-  } = useKBConfigurationStore();
+  } = configStore;
 
   const { queryEngineLLM, isKBUsable } = useKBSettingsStore();
+  const { selectedContext } = useTopicStore();
+  const contextId = useMemo(() => getContextIdString(selectedContext), [selectedContext]);
 
   const intl = useIntl();
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
@@ -50,11 +65,27 @@ function KnowledgeBaseComponent() {
       });
   }, []);
 
-  const filteredDatabases = knowledge_bases.filter(db =>
-    searchTerm === "" ||
-    db.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    db.description.toLowerCase().includes(searchTerm.toLowerCase())
+  useEffect(() => {
+    if (contextId) {
+      storeSetPage(1);
+    }
+  }, [contextId, storeSetPage]);
+
+  const contextKnowledgeBases = useKBConfigurationStore(
+    useCallback(
+      state => (contextId ? state.knowledge_bases[contextId] : undefined) || EMPTY_KBS,
+      [contextId]
+    )
   );
+
+  const filteredDatabases = useMemo(() => {
+    if (!contextKnowledgeBases) return EMPTY_KBS;
+    return contextKnowledgeBases.filter(db =>
+      searchTerm === "" ||
+      db.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (db.description && db.description.toLowerCase().includes(searchTerm.toLowerCase()))
+    );
+  }, [contextKnowledgeBases, searchTerm]);
 
   const totalPages = Math.ceil(filteredDatabases.length / itemsPerPage);
 
@@ -64,58 +95,62 @@ function KnowledgeBaseComponent() {
     return filteredDatabases.slice(startIndex, endIndex);
   };
 
-  const handlePageChange = (event: React.ChangeEvent<unknown>, value: number) => {
-    setPage(value);
-  };
+  const handlePageChange = useCallback((event: React.ChangeEvent<unknown>, value: number) => {
+    storeSetPage(value);
+  }, [storeSetPage]);
 
-  const handleSearchChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleSearchChange = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
     setSearchTerm(event.target.value);
-  };
+  }, [setSearchTerm]);
 
-  const handleOpenCreateDialog = () => {
+  const handleOpenCreateDialog = useCallback(() => {
     setCreateDialogOpen(true);
-  };
+  }, []);
 
-  const handleCloseCreateDialog = () => {
+  const handleCloseCreateDialog = useCallback(() => {
     setCreateDialogOpen(false);
-  };
+  }, []);
 
-  const handleOpenEditDialog = (id: string) => {
+  const handleOpenEditDialog = useCallback((id: string) => {
     setSelectedDbId(id);
     setEditDialogOpen(true);
-  };
+  }, []);
 
-  const handleCloseEditDialog = () => {
+  const handleCloseEditDialog = useCallback(() => {
     setEditDialogOpen(false);
     setSelectedDbId(null);
-  };
+  }, []);
 
-  const handleOpenDeleteDialog = (id: string) => {
+  const handleOpenDeleteDialog = useCallback((id: string) => {
     setSelectedDbId(id);
     setDeleteDialogOpen(true);
-  };
+  }, []);
 
-  const handleCloseDeleteDialog = () => {
+  const handleCloseDeleteDialog = useCallback(() => {
     setDeleteDialogOpen(false);
     setSelectedDbId(null);
-  };
+  }, []);
 
-  const handleConfirmDelete = () => {
+  const handleConfirmDelete = useCallback(() => {
     if (selectedDbId) {
       removeDatabase(selectedDbId);
       handleCloseDeleteDialog();
     }
-  };
+  }, [selectedDbId, removeDatabase, handleCloseDeleteDialog]);
 
-  const handleToggleEnabled = (id: string, enabled: boolean) => {
+  const handleToggleEnabled = useCallback((id: string, enabled: boolean) => {
     toggleDatabaseStatus(id, enabled);
-  };
+  }, [toggleDatabaseStatus]);
 
-  const handleReinitialize = (id: string) => {
+  const handleReinitialize = useCallback((id: string) => {
     reinitializeDatabase(id);
-  };
+  }, [reinitializeDatabase]);
 
-  const handleCreateDatabase = (data: { name: string; description: string; path: string; sourceType: string; embeddingEngine: string; }) => {
+  const handleCreateDatabase = useCallback((data: { name: string; description: string; path: string; sourceType: string; embeddingEngine: string; }) => {
+    if (!contextId) {
+      toast.error("Context ID is missing. Cannot create knowledge base.");
+      return;
+    }
     if (!data.embeddingEngine || data.embeddingEngine === "none") {
       toast.error(intl.formatMessage({
         id: "settings.kb.error.embeddingEngineRequired",
@@ -134,9 +169,9 @@ function KnowledgeBaseComponent() {
       type: "private"
     });
     setCreateDialogOpen(false);
-  };
+  }, [contextId, addDatabase, queryEngineLLM, intl]);
 
-  const handleEditDatabase = (data: { name: string; description: string; path: string; sourceType: string }) => {
+  const handleEditDatabase = useCallback((data: { name: string; description: string; path: string; sourceType: string }) => {
     if (selectedDbId) {
       updateDatabase(selectedDbId, {
         name: data.name,
@@ -147,23 +182,23 @@ function KnowledgeBaseComponent() {
       setEditDialogOpen(false);
       setSelectedDbId(null);
     }
-  };
+  }, [selectedDbId, updateDatabase]);
 
-  const getSelectedDb = () => {
+  const getSelectedDb = useCallback(() => {
     if (!selectedDbId) return null;
-    return knowledge_bases.find(db => db.id === selectedDbId) || null;
-  };
+    return contextKnowledgeBases.find(db => db.id === selectedDbId) || null;
+  }, [selectedDbId, contextKnowledgeBases]);
 
-  const getSelectedDbName = () => {
+  const getSelectedDbName = useCallback(() => {
     if (!selectedDbId) return "";
-    const db = knowledge_bases.find(db => db.id === selectedDbId);
+    const db = contextKnowledgeBases.find(db => db.id === selectedDbId);
     return db?.name || "";
-  };
+  }, [selectedDbId, contextKnowledgeBases]);
 
-  const getEmbeddingEngineName = (engineId: string) => {
+  const getEmbeddingEngineName = useCallback((engineId: string) => {
     const model = embeddingModels.find(m => m.id === engineId);
     return model ? model.name : engineId;
-  };
+  }, [embeddingModels]);
 
   return (
     <Box sx={{ mb: 4 }}>
@@ -300,7 +335,7 @@ function KnowledgeBaseComponent() {
                             <FormattedMessage
                               id="settings.kb.private.size"
                               defaultMessage="Size: {size} KB"
-                              values={{ size: db.configured ? (db.size ?? 0 / 1024).toFixed(2) : "-" }}
+                              values={{ size: db.configured && db.size ? (db.size / 1024).toFixed(2) : "-" }}
                             />
                           </Typography>
                           <Typography variant="body2">
