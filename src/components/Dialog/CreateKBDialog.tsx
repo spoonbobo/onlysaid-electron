@@ -1,359 +1,498 @@
 import { useState, useEffect } from "react";
 import {
-    Dialog,
-    DialogTitle,
-    DialogContent,
-    DialogActions,
-    Button,
-    TextField,
-    Typography,
-    Box,
-    IconButton,
-    Grid,
-    Paper,
-    InputAdornment,
-    DialogContentText,
-    Link,
-    Alert,
-    Select,
-    MenuItem,
-    FormControl,
-    InputLabel
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Button,
+  TextField,
+  Typography,
+  Box,
+  IconButton,
+  InputAdornment,
+  DialogContentText,
+  Link,
+  Alert,
+  Select,
+  MenuItem,
+  FormControl,
+  InputLabel,
+  RadioGroup,
+  FormControlLabel,
+  Radio,
+  SelectChangeEvent
 } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
 import FolderIcon from "@mui/icons-material/Folder";
 import StorageIcon from "@mui/icons-material/Storage";
-import { FormattedMessage } from "react-intl";
-import { KnowledgeBase } from "@/stores/KB/KBConfigurationStore";
+import CloudIcon from "@mui/icons-material/Cloud";
+import { FormattedMessage, useIntl } from "react-intl";
 import { useKBSettingsStore } from "@/stores/KB/KBSettingStore";
 import { EmbeddingModel, EmbeddingService } from "@/service/ai";
-
-// Since we're in an Electron environment, we need to access the IPC renderer
-// This import would typically be configured in your electron app
-
+import { IKnowledgeBase } from "../../../../types/KnowledgeBase/KnowledgeBase";
+import { useCurrentTopicContext } from "@/stores/Topic/TopicStore";
+import { useWorkspaceStore } from "@/stores/Workspace/WorkspaceStore";
 
 interface CreateKBDialogProps {
-    open: boolean;
-    onClose: () => void;
-    onSubmit: (data: { name: string; description: string; path: string; sourceType: string; embeddingEngine: string; }) => void;
-    database?: KnowledgeBase | null;
-    mode?: 'create' | 'edit';
+  open: boolean;
+  onClose: () => void;
+  onSubmit: (data: { name: string; description: string; path: string; sourceType: string; embeddingEngine: string; }) => void;
+  database?: IKnowledgeBase | null;
+  mode?: 'create' | 'edit';
 }
 
 export default function CreateKBDialog({
-    open,
-    onClose,
-    onSubmit,
-    database = null,
-    mode = 'create'
+  open,
+  onClose,
+  onSubmit,
+  database = null,
+  mode = 'create'
 }: CreateKBDialogProps) {
-    const [name, setName] = useState("");
-    const [description, setDescription] = useState("");
-    const [path, setPath] = useState("");
-    const [sourceType, setSourceType] = useState("local-store");
-    const [nameError, setNameError] = useState(false);
-    const [pathError, setPathError] = useState(false);
-    const { embeddingEngine: defaultEmbeddingEngine, isKBUsable } = useKBSettingsStore();
-    const [embeddingModels, setEmbeddingModels] = useState<EmbeddingModel[]>([]);
-    const [selectedEmbeddingEngine, setSelectedEmbeddingEngine] = useState<string>("");
+  const intl = useIntl();
+  const [name, setName] = useState("");
+  const [description, setDescription] = useState("");
+  const [path, setPath] = useState("");
+  const [sourceType, setSourceType] = useState("local-store");
+  const [nameError, setNameError] = useState(false);
+  const [pathError, setPathError] = useState(false);
+  const { embeddingEngine: defaultEmbeddingEngine } = useKBSettingsStore();
+  const [embeddingModels, setEmbeddingModels] = useState<EmbeddingModel[]>([]);
+  const [selectedEmbeddingEngine, setSelectedEmbeddingEngine] = useState<string>("");
+  const { selectedContext } = useCurrentTopicContext();
+  const workspaces = useWorkspaceStore(state => state.workspaces || []);
 
-    useEffect(() => {
-        if (open) {
-            if (mode === 'edit' && database) {
-                setName(database.name);
-                setDescription(database.description);
-                setPath(database.source);
-                // Embedding engine is not editable for existing KBs in this dialog
-                setSelectedEmbeddingEngine(database.embedding_engine);
-            } else if (mode === 'create') {
-                // Reset form for create mode
-                resetForm();
-                setSelectedEmbeddingEngine(defaultEmbeddingEngine !== "none" ? defaultEmbeddingEngine : "");
+  let currentWorkspaceName: string = intl.formatMessage({ id: "dialog.createKB.placeholder.currentWorkspace", defaultMessage: "the current workspace" });
+
+  if (selectedContext) {
+    if (selectedContext.id && Array.isArray(workspaces)) {
+      const workspaceFromStore = workspaces.find(ws => ws.id === selectedContext.id);
+      if (workspaceFromStore?.name) {
+        currentWorkspaceName = workspaceFromStore.name;
+      } else if (selectedContext.name) {
+        currentWorkspaceName = selectedContext.name;
+      }
+    } else if (selectedContext.name) {
+      currentWorkspaceName = selectedContext.name;
+    }
+  }
+
+  const kbNameForPath = name.trim() || intl.formatMessage({ id: "dialog.createKB.placeholder.kbName", defaultMessage: "<KB_Name>" });
+
+  useEffect(() => {
+    if (open) {
+      if (mode === 'edit' && database) {
+        setName(database.name);
+        setDescription(database.description);
+        setPath(database.source);
+        const dbSourceType = database.url.includes("onlysaid.com") ? "onlysaid-kb" : "local-store";
+        setSourceType(dbSourceType);
+        setSelectedEmbeddingEngine(database.embedding_engine);
+        new EmbeddingService().GetEmbeddingModels().then(setEmbeddingModels).catch(e => console.error("Failed to load models:", e));
+      } else if (mode === 'create') {
+        resetForm();
+        new EmbeddingService().GetEmbeddingModels()
+          .then(models => {
+            setEmbeddingModels(models);
+            if (defaultEmbeddingEngine && defaultEmbeddingEngine !== "none" && models.find(m => m.id === defaultEmbeddingEngine)) {
+              setSelectedEmbeddingEngine(defaultEmbeddingEngine);
+            } else {
+              setSelectedEmbeddingEngine("");
             }
+          })
+          .catch(error => console.error("Failed to load embedding models:", error));
+      }
+    }
+  }, [database, mode, open, defaultEmbeddingEngine]);
 
-            const embeddingService = new EmbeddingService();
-            embeddingService.GetEmbeddingModels()
-                .then(models => {
-                    setEmbeddingModels(models);
-                    if (mode === 'create' && (defaultEmbeddingEngine === "none" || defaultEmbeddingEngine === "") && models.length > 0) {
-                        // If no default engine or 'none', and models are available, select the first one
-                        // Or, keep it empty to force user selection if default is "none"
-                        if (defaultEmbeddingEngine === "none" || defaultEmbeddingEngine === "") {
-                            setSelectedEmbeddingEngine(""); // Force user selection
-                        } else if (models.find(m => m.id === defaultEmbeddingEngine)) {
-                            setSelectedEmbeddingEngine(defaultEmbeddingEngine);
-                        } else if (models.length > 0 && (selectedEmbeddingEngine === "" || selectedEmbeddingEngine === "none")) {
-                            // if current selection is empty or none, and there's no valid default, pick first.
-                            // This handles case where defaultEmbeddingEngine might not be in list.
-                            // setSelectedEmbeddingEngine(models[0].id); // Decided to keep it empty or default from settings
-                        }
-                    } else if (mode === 'create' && (defaultEmbeddingEngine !== "none" && defaultEmbeddingEngine !== "")) {
-                        setSelectedEmbeddingEngine(defaultEmbeddingEngine);
-                    }
-                })
-                .catch(error => {
-                    console.error("Failed to load embedding models:", error);
-                });
-        }
-    }, [database, mode, open, defaultEmbeddingEngine]);
+  const handleSubmit = () => {
+    if (mode === "create" && sourceType === "local-store" && (!selectedEmbeddingEngine || selectedEmbeddingEngine === "none")) {
+      console.error("Embedding engine must be selected for local store.");
+      return;
+    }
 
-    const handleSubmit = () => {
-        if (mode === "create" && (!selectedEmbeddingEngine || selectedEmbeddingEngine === "none")) {
-            console.error("Embedding engine must be selected.");
-            // Optionally, set an error state here to show in UI
-            return;
-        }
+    let finalPath = path;
+    let finalEmbeddingEngine = selectedEmbeddingEngine;
 
-        onSubmit({
-            name,
-            description,
-            path,
-            sourceType,
-            embeddingEngine: selectedEmbeddingEngine
-        });
-        if (mode === 'create') {
-            resetForm();
-        }
-    };
+    if (mode === "create" && sourceType === "onlysaid-kb") {
+      if (!selectedContext?.id) {
+        console.error("Workspace context is not available for Onlysaid KB.");
+        return;
+      }
+      finalPath = selectedContext.id;
+      finalEmbeddingEngine = "";
+    }
 
-    const resetForm = () => {
-        setName("");
-        setDescription("");
-        setPath("");
-        setSourceType("local-store"); // Assuming this is the only type for now
-        setSelectedEmbeddingEngine(defaultEmbeddingEngine !== "none" ? defaultEmbeddingEngine : "");
-        setNameError(false);
+    onSubmit({
+      name,
+      description,
+      path: finalPath,
+      sourceType,
+      embeddingEngine: finalEmbeddingEngine
+    });
+    if (mode === 'create') {
+      resetForm();
+    }
+  };
+
+  const resetForm = () => {
+    setName("");
+    setDescription("");
+    setPath("");
+    setSourceType("local-store");
+    setSelectedEmbeddingEngine(defaultEmbeddingEngine !== "none" ? defaultEmbeddingEngine : "");
+    setNameError(false);
+    setPathError(false);
+  };
+
+  const handleClose = () => {
+    if (mode === 'create') {
+      resetForm();
+    }
+    onClose();
+  };
+
+  const handleBrowseFolder = async () => {
+    try {
+      const result = await window.electron.fileSystem.openFolderDialog();
+
+      if (!result.canceled && result.filePaths && result.filePaths.length > 0) {
+        const selectedPath = result.filePaths[0];
+        setPath(selectedPath);
         setPathError(false);
-    };
+      }
+    } catch (error) {
+      console.error("Error selecting directory:", error);
+    }
+  };
 
-    const handleClose = () => {
-        if (mode === 'create') {
-            resetForm();
+  const handleSourceTypeChange = (event: SelectChangeEvent<string>) => {
+    const newType = event.target.value as string;
+    setSourceType(newType);
+    setPath("");
+    setPathError(false);
+
+    if (newType === "local-store") {
+      if (embeddingModels.length > 0) {
+        if (defaultEmbeddingEngine && defaultEmbeddingEngine !== "none" && embeddingModels.find(m => m.id === defaultEmbeddingEngine)) {
+          setSelectedEmbeddingEngine(defaultEmbeddingEngine);
+        } else {
+          setSelectedEmbeddingEngine("");
         }
-        onClose();
-    };
+      } else {
+        setSelectedEmbeddingEngine(defaultEmbeddingEngine !== "none" ? defaultEmbeddingEngine : "");
+      }
+    } else if (newType === "onlysaid-kb") {
+      setSelectedEmbeddingEngine("");
+    }
+  };
 
-    const handleBrowseFolder = async () => {
-        try {
-            // Use the existing fileSystem.openFolderDialog method from preload
-            const result = await window.electron.fileSystem.openFolderDialog();
+  const showEngineWarning = mode === "create" && sourceType === "local-store" && (!selectedEmbeddingEngine || selectedEmbeddingEngine === "none") && embeddingModels.length > 0;
 
-            if (!result.canceled && result.filePaths && result.filePaths.length > 0) {
-                const selectedPath = result.filePaths[0];
-                setPath(selectedPath);
-                setPathError(false);
-            }
-        } catch (error) {
-            console.error("Error selecting directory:", error);
-        }
-    };
+  let isSubmitDisabled = false;
+  if (mode === 'create') {
+    isSubmitDisabled = !name.trim() ||
+      (sourceType === "local-store" && (!path.trim() || !selectedEmbeddingEngine || selectedEmbeddingEngine === "none")) ||
+      (sourceType === "onlysaid-kb" && !selectedContext?.id);
+  } else {
+    isSubmitDisabled = !name.trim() ||
+      (sourceType === "local-store" && !path.trim());
+  }
 
-    const showEngineWarning = mode === "create" && (!selectedEmbeddingEngine || selectedEmbeddingEngine === "none") && embeddingModels.length > 0;
-    const isCreateDisabled = mode === "create" && (!selectedEmbeddingEngine || selectedEmbeddingEngine === "none" || !name || !path);
+  return (
+    <Dialog
+      open={open}
+      onClose={handleClose}
+      fullWidth
+      maxWidth="sm"
+    >
+      <DialogTitle>
+        <Box display="flex" justifyContent="space-between" alignItems="center">
+          <Typography variant="h6">
+            {mode === 'create' ? (
+              <FormattedMessage id="settings.kb.createKB.title" defaultMessage="Create Knowledge Base" />
+            ) : (
+              <FormattedMessage id="settings.kb.editKB.title" defaultMessage="Edit Knowledge Base" />
+            )}
+          </Typography>
+          <IconButton onClick={handleClose} size="small">
+            <CloseIcon />
+          </IconButton>
+        </Box>
+      </DialogTitle>
 
-    return (
-        <Dialog
-            open={open}
-            onClose={handleClose}
+      <DialogContent>
+        <Box mt={1}>
+          <Typography variant="subtitle2" sx={{ mb: 1 }}>
+            <FormattedMessage id="dialog.createKB.name" defaultMessage="Name" />
+            <Box component="span" sx={{ color: "error.main" }}>*</Box>
+          </Typography>
+          <TextField
             fullWidth
-            maxWidth="sm"
-        >
-            <DialogTitle>
-                <Box display="flex" justifyContent="space-between" alignItems="center">
-                    <Typography variant="h6">
-                        {mode === 'create' ? (
-                            <FormattedMessage id="settings.kb.createKB.title" defaultMessage="新增知識庫" />
-                        ) : (
-                            <FormattedMessage id="settings.kb.editKB.title" defaultMessage="編輯知識庫" />
-                        )}
-                    </Typography>
-                    <IconButton onClick={handleClose} size="small">
-                        <CloseIcon />
-                    </IconButton>
-                </Box>
-            </DialogTitle>
+            placeholder={intl.formatMessage({ id: "dialog.createKB.namePlaceholder", defaultMessage: "Example: Company Documents" })}
+            value={name}
+            onChange={(e) => {
+              setName(e.target.value);
+              setNameError(false);
+            }}
+            error={nameError}
+            helperText={nameError ? intl.formatMessage({ id: "dialog.createKB.nameError", defaultMessage: "Please enter a name for the knowledge base" }) : ""}
+            size="small"
+            sx={{ mb: 2 }}
+          />
 
-            <DialogContent>
-                <Box mt={1}>
-                    <Typography variant="subtitle2" sx={{ mb: 1 }}>
-                        <FormattedMessage id="dialog.createKB.name" defaultMessage="名稱" />
-                        <Box component="span" sx={{ color: "error.main" }}>*</Box>
-                    </Typography>
-                    <TextField
-                        fullWidth
-                        placeholder="例如：公司文件"
-                        value={name}
-                        onChange={(e) => {
-                            setName(e.target.value);
-                            setNameError(false);
-                        }}
-                        error={nameError}
-                        helperText={nameError ? "請輸入知識庫名稱" : ""}
-                        size="small"
-                        sx={{ mb: 2 }}
+          <Typography variant="subtitle2" sx={{ mb: 1 }}>
+            <FormattedMessage id="dialog.createKB.description" defaultMessage="Description" />
+          </Typography>
+          <TextField
+            fullWidth
+            placeholder={intl.formatMessage({ id: "dialog.createKB.descriptionPlaceholder", defaultMessage: "Brief description of this knowledge base" })}
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            multiline
+            rows={2}
+            size="small"
+            sx={{ mb: 2 }}
+          />
+
+          {mode === 'create' && (
+            <>
+              <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                <FormattedMessage id="dialog.createKB.source" defaultMessage="Source Type" />
+              </Typography>
+              <FormControl fullWidth size="small" sx={{ mb: 2 }}>
+                <InputLabel id="source-type-select-label">
+                  <FormattedMessage id="dialog.createKB.sourceSelectLabel" defaultMessage="Select Source Type" />
+                </InputLabel>
+                <Select
+                  labelId="source-type-select-label"
+                  value={sourceType}
+                  onChange={handleSourceTypeChange}
+                  label={intl.formatMessage({ id: "dialog.createKB.sourceSelectLabel", defaultMessage: "Select Source Type" })}
+                >
+                  <MenuItem value="local-store">
+                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                      <StorageIcon sx={{ color: "primary.main", mr: 1 }} />
+                      <Typography variant="body2">
+                        <FormattedMessage id="settings.kb.private.localStore" defaultMessage="Local Storage" />
+                      </Typography>
+                    </Box>
+                  </MenuItem>
+                  <MenuItem value="onlysaid-kb">
+                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                      <CloudIcon sx={{ color: "primary.main", mr: 1 }} />
+                      <Typography variant="body2">
+                        <FormattedMessage id="settings.kb.private.onlysaidKb" defaultMessage="Onlysaid Knowledge Base" />
+                      </Typography>
+                    </Box>
+                  </MenuItem>
+                </Select>
+              </FormControl>
+            </>
+          )}
+
+          {mode === 'create' && sourceType === "onlysaid-kb" && (
+            <Box sx={{ mb: 2, p: 2, backgroundColor: 'action.hover', borderRadius: 1 }}>
+              <Typography variant="subtitle2" sx={{ mb: 0.5 }}>
+                <FormattedMessage id="dialog.createKB.cloudStorageTitle" defaultMessage="Cloud Storage Information" />
+              </Typography>
+              {!selectedContext ? (
+                <Typography color="error.main" variant="body2">
+                  <FormattedMessage id="dialog.createKB.workspaceLoadingError" defaultMessage="Workspace information is not available. Please ensure a workspace is active." />
+                </Typography>
+              ) : (
+                <>
+                  <Typography variant="body2" sx={{ mb: 0.5 }}>
+                    <FormattedMessage
+                      id="dialog.createKB.cloudStoragePathInfo"
+                      defaultMessage="Storage Location: /storage/{workspaceId}/{kbName}"
+                      values={{
+                        workspaceId: selectedContext.id,
+                        kbName: (
+                          <Box component="span" sx={{ fontWeight: 'medium' }}>
+                            {kbNameForPath}
+                          </Box>
+                        ),
+                      }}
                     />
-
-                    <Typography variant="subtitle2" sx={{ mb: 1 }}>
-                        <FormattedMessage id="dialog.createKB.description" defaultMessage="描述" />
-                    </Typography>
-                    <TextField
-                        fullWidth
-                        placeholder="此知識庫的簡要描述"
-                        value={description}
-                        onChange={(e) => setDescription(e.target.value)}
-                        multiline
-                        rows={2}
-                        size="small"
-                        sx={{ mb: 2 }}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    <FormattedMessage
+                      id="dialog.createKB.teamAccessInfo"
+                      defaultMessage="This knowledge base will be accessible only within the {workspaceName} workspace."
+                      values={{ workspaceName: currentWorkspaceName }}
                     />
+                  </Typography>
+                </>
+              )}
+            </Box>
+          )}
 
-                    {mode === 'create' && (
-                        <>
-                            <Typography variant="subtitle2" sx={{ mb: 1 }}>
-                                <FormattedMessage id="dialog.createKB.source" defaultMessage="來源類型" />
-                            </Typography>
-
-                            <Box sx={{ mb: 2, display: 'flex', alignItems: 'center' }}>
-                                <StorageIcon sx={{ color: "primary.main", mr: 1 }} />
-                                <Typography variant="body2">Local Store</Typography>
-                            </Box>
-                        </>
-                    )}
-
-                    <Typography variant="subtitle2" sx={{ mb: 1 }}>
-                        <FormattedMessage id="dialog.createKB.path" defaultMessage="路徑" />
-                        <Box component="span" sx={{ color: "error.main" }}>*</Box>
-                    </Typography>
-                    <TextField
-                        fullWidth
-                        placeholder="輸入文件或目錄路徑"
-                        value={path}
-                        onChange={(e) => {
-                            setPath(e.target.value);
-                            setPathError(false);
-                        }}
-                        error={pathError}
-                        helperText={pathError ? "請選擇有效的路徑" : ""}
-                        size="small"
-                        InputProps={{
-                            endAdornment: (
-                                <InputAdornment position="end">
-                                    <Link
-                                        component="button"
-                                        variant="body2"
-                                        onClick={handleBrowseFolder}
-                                        sx={{
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            textDecoration: 'none',
-                                            cursor: 'pointer',
-                                            color: 'primary.main'
-                                        }}
-                                    >
-                                        <FolderIcon fontSize="small" sx={{ mr: 0.5 }} />
-                                        瀏覽
-                                    </Link>
-                                </InputAdornment>
-                            )
-                        }}
-                    />
-
-                    {mode === 'create' && (
-                        <>
-                            <Typography variant="subtitle2" sx={{ mb: 1, mt: 2 }}>
-                                <FormattedMessage id="settings.kb.embeddingEngine" defaultMessage="Embedding Engine" />
-                                <Box component="span" sx={{ color: "error.main" }}>*</Box>
-                            </Typography>
-                            <FormControl fullWidth size="small" sx={{ mb: 2 }}>
-                                <InputLabel id="embedding-engine-select-label">
-                                    <FormattedMessage id="settings.kb.selectEmbeddingEngine" defaultMessage="Select Embedding Engine" />
-                                </InputLabel>
-                                <Select
-                                    labelId="embedding-engine-select-label"
-                                    value={selectedEmbeddingEngine}
-                                    onChange={(e) => setSelectedEmbeddingEngine(e.target.value)}
-                                    label={<FormattedMessage id="settings.kb.selectEmbeddingEngine" defaultMessage="Select Embedding Engine" />}
-                                >
-                                    <MenuItem value="" disabled>
-                                        <em><FormattedMessage id="settings.kb.pleaseSelect" defaultMessage="Please select" /></em>
-                                    </MenuItem>
-                                    {embeddingModels.map((model) => (
-                                        <MenuItem key={model.id} value={model.id}>
-                                            {model.name}
-                                        </MenuItem>
-                                    ))}
-                                    {embeddingModels.length === 0 && (
-                                        <MenuItem value="" disabled>
-                                            <FormattedMessage id="settings.kb.noEmbeddingModelsAvailable" defaultMessage="No embedding models available" />
-                                        </MenuItem>
-                                    )}
-                                </Select>
-                            </FormControl>
-                        </>
-                    )}
-                </Box>
-
-                {showEngineWarning && (
-                    <Alert severity="warning" sx={{ mb: 2 }}>
-                        <FormattedMessage
-                            id="settings.kb.error.embeddingEngineRequired"
-                            defaultMessage="An embedding engine must be selected to create a knowledge base."
-                        />
-                    </Alert>
+          {(sourceType === "local-store" || (mode === 'edit' && sourceType === "onlysaid-kb")) && (
+            <>
+              <Typography variant="subtitle2" sx={{ mb: 1, mt: (mode === 'create' && sourceType === "onlysaid-kb") ? 0 : sourceType === "local-store" ? 0 : 1 }}>
+                {sourceType === "local-store" ? (
+                  <FormattedMessage id="dialog.createKB.path" defaultMessage="Path" />
+                ) : (
+                  <FormattedMessage id="dialog.createKB.kbId" defaultMessage="Knowledge Base ID" />
                 )}
-            </DialogContent>
+                {sourceType === "local-store" && <Box component="span" sx={{ color: "error.main" }}>*</Box>}
+              </Typography>
+              <TextField
+                fullWidth
+                placeholder={sourceType === "local-store"
+                  ? intl.formatMessage({ id: "dialog.createKB.pathPlaceholder", defaultMessage: "Enter file or directory path" })
+                  : ""
+                }
+                value={path}
+                onChange={(e) => {
+                  if (sourceType === "local-store") {
+                    setPath(e.target.value);
+                    setPathError(false);
+                  }
+                }}
+                error={pathError && sourceType === "local-store"}
+                helperText={pathError && sourceType === "local-store"
+                  ? intl.formatMessage({ id: "dialog.createKB.pathError", defaultMessage: "Please select a valid path" })
+                  : ""
+                }
+                size="small"
+                disabled={mode === 'edit' && sourceType === "onlysaid-kb"}
+                InputProps={{
+                  endAdornment: sourceType === "local-store" ? (
+                    <InputAdornment position="end">
+                      <Link
+                        component="button"
+                        variant="body2"
+                        onClick={handleBrowseFolder}
+                        sx={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          textDecoration: 'none',
+                          cursor: 'pointer',
+                          color: 'primary.main'
+                        }}
+                      >
+                        <FolderIcon fontSize="small" sx={{ mr: 0.5 }} />
+                        <FormattedMessage id="dialog.createKB.browse" defaultMessage="Browse" />
+                      </Link>
+                    </InputAdornment>
+                  ) : undefined
+                }}
+                sx={{ mb: 2 }}
+              />
+            </>
+          )}
 
-            <DialogActions>
-                <Button onClick={handleClose}>
-                    <FormattedMessage id="common.cancel" defaultMessage="取消" />
-                </Button>
-                <Button variant="contained" onClick={handleSubmit} disabled={isCreateDisabled}>
-                    {mode === 'create' ? (
-                        <FormattedMessage id="common.create" defaultMessage="新建" />
-                    ) : (
-                        <FormattedMessage id="common.save" defaultMessage="保存" />
-                    )}
-                </Button>
-            </DialogActions>
-        </Dialog>
-    );
+          {mode === 'create' && sourceType === "local-store" && (
+            <>
+              <Typography variant="subtitle2" sx={{ mb: 1, mt: 2 }}>
+                <FormattedMessage id="settings.kb.embeddingEngine" defaultMessage="Embedding Engine" />
+                <Box component="span" sx={{ color: "error.main" }}>*</Box>
+              </Typography>
+              <FormControl fullWidth size="small" sx={{ mb: 2 }}>
+                <InputLabel id="embedding-engine-select-label">
+                  <FormattedMessage id="settings.kb.selectEmbeddingEngine" defaultMessage="Select Embedding Engine" />
+                </InputLabel>
+                <Select
+                  labelId="embedding-engine-select-label"
+                  value={selectedEmbeddingEngine}
+                  onChange={(e) => setSelectedEmbeddingEngine(e.target.value)}
+                  label={<FormattedMessage id="settings.kb.selectEmbeddingEngine" defaultMessage="Select Embedding Engine" />}
+                >
+                  <MenuItem value="" disabled>
+                    <em><FormattedMessage id="settings.kb.pleaseSelect" defaultMessage="Please select" /></em>
+                  </MenuItem>
+                  {embeddingModels.map((model) => (
+                    <MenuItem key={model.id} value={model.id}>
+                      {model.name}
+                    </MenuItem>
+                  ))}
+                  {embeddingModels.length === 0 && (
+                    <MenuItem value="" disabled>
+                      <FormattedMessage id="settings.kb.noEmbeddingModelsAvailable" defaultMessage="No embedding models available" />
+                    </MenuItem>
+                  )}
+                </Select>
+              </FormControl>
+            </>
+          )}
+          {mode === 'edit' && sourceType === "local-store" && database?.embedding_engine && (
+            <>
+              <Typography variant="subtitle2" sx={{ mb: 1, mt: 2 }}>
+                <FormattedMessage id="settings.kb.embeddingEngine" defaultMessage="Embedding Engine" />
+              </Typography>
+              <TextField
+                fullWidth
+                value={embeddingModels.find(m => m.id === database.embedding_engine)?.name || database.embedding_engine}
+                disabled
+                size="small"
+                sx={{ mb: 2 }}
+              />
+            </>
+          )}
+
+        </Box>
+
+        {showEngineWarning && (
+          <Alert severity="warning" sx={{ mb: 2 }}>
+            <FormattedMessage
+              id="settings.kb.error.embeddingEngineRequired"
+              defaultMessage="An embedding engine must be selected to create a knowledge base."
+            />
+          </Alert>
+        )}
+      </DialogContent>
+
+      <DialogActions>
+        <Button onClick={handleClose}>
+          <FormattedMessage id="common.cancel" defaultMessage="Cancel" />
+        </Button>
+        <Button variant="contained" onClick={handleSubmit} disabled={isSubmitDisabled}>
+          {mode === 'create' ? (
+            <FormattedMessage id="common.create" defaultMessage="Create" />
+          ) : (
+            <FormattedMessage id="common.save" defaultMessage="Save" />
+          )}
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
 }
 
-// Confirmation Dialog for deletion
 export function DeleteKBConfirmationDialog({
-    open,
-    onClose,
-    onConfirm,
-    dbName
+  open,
+  onClose,
+  onConfirm,
+  dbName
 }: {
-    open: boolean;
-    onClose: () => void;
-    onConfirm: () => void;
-    dbName: string;
+  open: boolean;
+  onClose: () => void;
+  onConfirm: () => void;
+  dbName: string;
 }) {
-    return (
-        <Dialog open={open} onClose={onClose}>
-            <DialogTitle>
-                <FormattedMessage id="settings.kb.deleteKB.title" defaultMessage="刪除知識庫" />
-            </DialogTitle>
-            <DialogContent>
-                <DialogContentText>
-                    <FormattedMessage
-                        id="dialog.deleteKB.confirmation"
-                        defaultMessage="確定要刪除知識庫「{name}」嗎？此操作不可撤銷。"
-                        values={{ name: dbName }}
-                    />
-                </DialogContentText>
-            </DialogContent>
-            <DialogActions>
-                <Button onClick={onClose}>
-                    <FormattedMessage id="common.cancel" defaultMessage="取消" />
-                </Button>
-                <Button color="error" onClick={onConfirm}>
-                    <FormattedMessage id="common.delete" defaultMessage="刪除" />
-                </Button>
-            </DialogActions>
-        </Dialog>
-    );
+  return (
+    <Dialog open={open} onClose={onClose}>
+      <DialogTitle>
+        <FormattedMessage id="settings.kb.deleteKB.title" defaultMessage="Delete Knowledge Base" />
+      </DialogTitle>
+      <DialogContent>
+        <DialogContentText>
+          <FormattedMessage
+            id="dialog.deleteKB.confirmation"
+            defaultMessage="Are you sure you want to delete knowledge base '{name}'? This action cannot be undone."
+            values={{ name: dbName }}
+          />
+        </DialogContentText>
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onClose}>
+          <FormattedMessage id="common.cancel" defaultMessage="Cancel" />
+        </Button>
+        <Button color="error" onClick={onConfirm}>
+          <FormattedMessage id="common.delete" defaultMessage="Delete" />
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
 }
 

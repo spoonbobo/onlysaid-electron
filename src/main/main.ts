@@ -29,6 +29,7 @@ import { setupContentHandlers } from './filesystem';
 import { setupRedisHandlers } from './redis';
 import { setupWorkspaceHandlers } from './api/v2/workspace';
 import { initializeDeeplinkHandling } from './deeplink';
+import { initializeKnowledgeBaseHandlers } from './api/v2/onlysaid_kb';
 import { setupSocketHandlers } from './socket';
 
 dotenv.config();
@@ -44,7 +45,7 @@ setupRedisHandlers();
 setupWorkspaceHandlers();
 initializeDeeplinkHandling();
 initAuth(process.env.ONLYSAID_API_URL || '', process.env.ONLYSAID_DOMAIN || '');
-
+initializeKnowledgeBaseHandlers();
 
 if (process.env.NODE_ENV === 'production') {
   const sourceMapSupport = require('source-map-support');

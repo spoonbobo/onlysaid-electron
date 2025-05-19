@@ -10,17 +10,17 @@ import { useSocketStore } from "@/stores/Socket/SocketStore";
 export default function WorkspaceMenu() {
   const { selectedContext } = useCurrentTopicContext();
   const user = useUserStore((state) => state.user);
-  const { joinWorkspace, isConnected, isInitialized } = useSocketStore();
+  const { joinWorkspace, isConnected } = useSocketStore();
 
   const workspaceId = selectedContext?.id;
   const section = selectedContext?.section || '';
 
   useEffect(() => {
-    if (workspaceId && user?.id && isInitialized && isConnected) {
+    if (workspaceId && user?.id && isConnected) {
       console.log(`WorkspaceMenu: Joining workspace ${workspaceId}`);
       joinWorkspace(workspaceId);
     }
-  }, [workspaceId, user?.id, isInitialized, isConnected, joinWorkspace]);
+  }, [workspaceId, user?.id, isConnected, joinWorkspace]);
 
   const contextId = selectedContext ? `${selectedContext.name}:${selectedContext.type}` : '';
   const menuKey = `${contextId}`;

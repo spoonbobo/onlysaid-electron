@@ -14,16 +14,20 @@ export class OnylsaidKBService {
     });
   }
 
-  async queryKnowledgeBase(query: string, knowledgeBaseId: string): Promise<any[]> {
+  // TODO: add auth
+  async ListKnowledgeBases(workspaceId: string): Promise<any[]> {
+    const response = await this.instance.get(
+      `${this.baseURL}/list_documents/${workspaceId}`
+    );
+    return response.data;
+  }
+
+  async queryKnowledgeBase(query: string, workspaceId: string): Promise<any[]> {
     const response = await this.instance.post(`${this.baseURL}/query`, {
       query,
-      knowledgeBaseId
+      workspaceId
     });
     return response.data;
   }
 
-  async retrieveKnowledgeBase(knowledgeBaseId: string): Promise<any> {
-    const response = await this.instance.get(`${this.baseURL}/knowledge-base/${knowledgeBaseId}`);
-    return response.data;
-  }
 }

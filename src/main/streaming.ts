@@ -122,11 +122,8 @@ export function setupSSEHandlers() {
   });
 
   ipcMain.handle('streaming:query_stream_complete', async (event, { query, options }) => {
-    // This is a dummy handler for query_stream_complete
     console.log("streaming:query_stream_complete", query, options);
-    // Simulate some async work
     await new Promise(resolve => setTimeout(resolve, 100));
-    // Simulate sending a chunk
     event.sender.send('streaming:chunk', {
       streamId: options.streamId,
       chunk: {

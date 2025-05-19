@@ -11,6 +11,14 @@ type DbChannels = 'db:initialize' | 'db:query' | 'db:transaction' | 'db:close';
 type SystemChannels = 'system:get-cpu-usage' | 'system:get-memory-usage' | 'system:get-storage-usage';
 type FileSystemChannels = 'get-file-content';
 
+type KnowledgeBaseChannels =
+  | 'kb:list'
+  | 'kb:query'
+  | 'kb:create'
+  | 'kb:get'
+  | 'kb:update'
+  | 'kb:delete';
+
 type SSEChannels = 'streaming:abort_stream' | 'streaming:chat_stream_complete' | 'streaming:chunk' | 'streaming:query_stream_complete';
 type MCPChannels = 'mcp:initialize_client' | 'mcp:list_tools';
 
@@ -56,7 +64,8 @@ export type Channels =
   | MCPChannels
   | FileSystemChannels
   | RedisChannels
-  | SocketChannels;
+  | SocketChannels
+  | KnowledgeBaseChannels;
 
 const electronHandler = {
   ipcRenderer: {
@@ -138,6 +147,14 @@ const electronHandler = {
       ipcRenderer.invoke('socket:delete-message', { roomId, messageId }),
     sendPing: () => ipcRenderer.invoke('socket:send-ping'),
     joinWorkspace: (workspaceId: string) => ipcRenderer.invoke('socket:join-workspace', workspaceId),
+  },
+  knowledgeBase: {
+    list: (...args: unknown[]) => ipcRenderer.invoke('kb:list', ...args),
+    query: (...args: unknown[]) => ipcRenderer.invoke('kb:query', ...args),
+    create: (...args: unknown[]) => ipcRenderer.invoke('kb:create', ...args),
+    get: (...args: unknown[]) => ipcRenderer.invoke('kb:get', ...args),
+    update: (...args: unknown[]) => ipcRenderer.invoke('kb:update', ...args),
+    delete: (...args: unknown[]) => ipcRenderer.invoke('kb:delete', ...args),
   },
 };
 

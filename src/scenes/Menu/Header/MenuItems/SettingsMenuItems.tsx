@@ -40,7 +40,7 @@ function SettingsMenuItems({ handleClose }: SettingsMenuItemsProps) {
         <FormattedMessage id="settings.models" />
       </MenuItem>
 
-      <MenuItem onClick={() => handleNavigateToSection('kb')} sx={{ minHeight: 36, fontSize: 14 }}>
+      <MenuItem disabled onClick={() => handleNavigateToSection('kb')} sx={{ minHeight: 36, fontSize: 14 }}>
         <MenuBookIcon fontSize="small" sx={{ mr: 1.5, color: "text.secondary" }} />
         <FormattedMessage id="settings.knowledgeBase" />
       </MenuItem>

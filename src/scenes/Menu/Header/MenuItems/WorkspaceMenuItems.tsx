@@ -16,6 +16,7 @@ import { useChatStore } from "@/stores/Chat/ChatStore";
 import { getUserFromStore } from "@/utils/user";
 import { useState } from "react";
 import { useWorkspaceStore } from "@/stores/Workspace/WorkspaceStore";
+import { useKBConfigurationStore } from "@/stores/KB/KBConfigurationStore";
 import InviteUserDialog from "@/components/Dialog/Workspace/AddUser";
 import { IWorkspace } from "@/../../types/Workspace/Workspace";
 
@@ -117,6 +118,7 @@ export const RenderWorkspaceActions = ({
   const { selectedContext, setSelectedTopic } = useTopicStore();
   const currentUser = getUserFromStore();
   const { addUserToWorkspace } = useWorkspaceStore();
+  const { openCreateKBDialog } = useKBConfigurationStore();
   const [isInviteDialogOpen, setIsInviteDialogOpen] = useState(false);
 
   const handleInviteUser = async (email: string, role: string) => {
@@ -156,6 +158,21 @@ export const RenderWorkspaceActions = ({
                 }
               }
               handleAction?.('newChatroom');
+            }}
+          >
+            <AddCommentIcon fontSize="small" />
+          </IconButton>
+        </Tooltip>
+      );
+      break;
+    case 'knowledgeBase':
+      actualContent = (
+        <Tooltip title={<FormattedMessage id="settings.kb.createKB.title" defaultMessage="新增知識庫" />}>
+          <IconButton
+            size="small"
+            onClick={() => {
+              openCreateKBDialog();
+              handleAction?.('openCreateKBDialog');
             }}
           >
             <AddCommentIcon fontSize="small" />

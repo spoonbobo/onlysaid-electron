@@ -19,6 +19,7 @@ interface KBConfigurationState {
   page: number;
   itemsPerPage: number;
   searchTerm: string;
+  isCreateKBDialogOpen: boolean;
 
   addDatabase: (db: Omit<IKnowledgeBase, "id" | "create_at" | "update_at" | "enabled" | "configured" | "size" | "documents" | "context_id"> & { context_id?: string }) => void;
   removeDatabase: (id: string) => void;
@@ -31,13 +32,16 @@ interface KBConfigurationState {
   setSearchTerm: (term: string) => void;
   getContextKnowledgeBases: () => IKnowledgeBase[];
   reset: () => void;
+  openCreateKBDialog: () => void;
+  closeCreateKBDialog: () => void;
 }
 
 const DEFAULT_STATE = {
   knowledge_bases: {},
   page: 1,
   itemsPerPage: 4,
-  searchTerm: ""
+  searchTerm: "",
+  isCreateKBDialogOpen: false,
 };
 
 export const useKBConfigurationStore = create<KBConfigurationState>()(
@@ -68,8 +72,7 @@ export const useKBConfigurationStore = create<KBConfigurationState>()(
             update_at: new Date().toISOString(),
             enabled: false,
             configured: false,
-            query_engine: db.query_engine || queryEngineLLM || "",
-            context_id: contextId
+            workspace_id: contextId
           };
           return {
             knowledge_bases: {
@@ -193,7 +196,10 @@ export const useKBConfigurationStore = create<KBConfigurationState>()(
         return get().knowledge_bases[contextId] || [];
       },
 
-      reset: () => set(DEFAULT_STATE)
+      reset: () => set(DEFAULT_STATE),
+
+      openCreateKBDialog: () => set({ isCreateKBDialogOpen: true }),
+      closeCreateKBDialog: () => set({ isCreateKBDialogOpen: false }),
     }),
     {
       name: "kb-configuration-storage"
