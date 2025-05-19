@@ -22,11 +22,10 @@ export class OnylsaidKBService {
     return response.data;
   }
 
-  async queryKnowledgeBase(query: string, workspaceId: string): Promise<any[]> {
-    const response = await this.instance.post(`${this.baseURL}/query`, {
-      query,
-      workspaceId
-    });
+  async viewKnowledgeBaseStructure(workspaceId: string): Promise<any[]> {
+    const response = await this.instance.get(
+      `${this.baseURL}/view/${workspaceId}`
+    );
     return response.data;
   }
 

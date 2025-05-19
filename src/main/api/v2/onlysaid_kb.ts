@@ -47,6 +47,11 @@ interface IKBQueryArgs {
   // token?: string; // If kbService.queryKnowledgeBase were to require a token
 }
 
+// Add this interface with the other argument interfaces
+interface IKBViewArgs {
+  workspaceId: string;
+}
+
 // Helper function for error handling (optional, can be inlined)
 function handleAxiosError(error: any, context: string, method?: string, url?: string, requestData?: any): Error {
   if (axios.isAxiosError(error)) {
@@ -87,16 +92,6 @@ export function initializeKnowledgeBaseHandlers(): void {
       return response.data;
     } catch (error) {
       throw handleAxiosError(error, 'listing knowledge bases', 'GET', `workspace/${workspaceId}/kb`);
-    }
-  });
-
-  ipcMain.handle('kb:query', async (event, query: string, workspaceId: string) => {
-    try {
-      const results = await kbService.queryKnowledgeBase(query, workspaceId);
-      return results;
-    } catch (error) {
-      console.error('Error querying knowledge base:', error);
-      throw error instanceof Error ? error : new Error('Failed to query knowledge base');
     }
   });
 
@@ -161,6 +156,17 @@ export function initializeKnowledgeBaseHandlers(): void {
       return { success: true, id: kbId, message: `Knowledge base ${kbId} deleted successfully.` };
     } catch (error) {
       throw handleAxiosError(error, `deleting knowledge base ${kbId}`, 'DELETE', relativeUrl);
+    }
+  });
+
+  ipcMain.handle('kb:view', async (event, args: IKBViewArgs) => {
+    const { workspaceId } = args;
+    try {
+      // Use kbService specifically for view operation
+      const response = await kbService.viewKnowledgeBaseStructure(workspaceId);
+      return response;
+    } catch (error) {
+      throw handleAxiosError(error, 'viewing knowledge base structure', 'GET', `view/${workspaceId}`);
     }
   });
 }

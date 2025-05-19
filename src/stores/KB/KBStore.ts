@@ -12,6 +12,11 @@ interface KBState {
   updateKnowledgeBase: (workspaceId: string, kbId: string, updates: Partial<Omit<IKnowledgeBase, 'id' | 'workspace_id'>>) => Promise<IKnowledgeBase | undefined>;
   deleteKnowledgeBase: (workspaceId: string, kbId: string) => Promise<boolean>;
   getKnowledgeBaseDetailsList: (workspaceId?: string) => Promise<IKnowledgeBase[] | undefined>;
+  viewKnowledgeBaseStructure: (workspaceId: string) => Promise<{
+    dataSources: any[];
+    folderStructures: Record<string, any>;
+    documents: Record<string, any>;
+  } | undefined>;
 }
 
 interface CreateKBIPCArgs {
@@ -45,7 +50,7 @@ export const useKBStore = create<KBState>((set, get) => ({
     try {
       const ipcArgs = { workspaceId, token };
       const rawResponse = await window.electron.knowledgeBase.list(ipcArgs);
-      console.log("rawResponse for getKnowledgeBaseDetailsList", rawResponse);
+      // console.log("rawResponse for getKnowledgeBaseDetailsList", rawResponse);
       const kbs: IKnowledgeBase[] = Array.isArray(rawResponse) ? rawResponse : [];
       set({ isLoading: false });
       return kbs;
@@ -184,6 +189,28 @@ export const useKBStore = create<KBState>((set, get) => ({
       console.error(`Error deleting knowledge base ${kbId}:`, err);
       set({ error: err.message || 'Failed to delete knowledge base', isLoading: false });
       return false;
+    }
+  },
+
+  viewKnowledgeBaseStructure: async (workspaceId: string) => {
+    set({ isLoading: true, error: null });
+
+    if (!workspaceId) {
+      const errMsg = "Workspace ID is required to view knowledge base structure.";
+      console.error(errMsg);
+      set({ error: errMsg, isLoading: false });
+      return undefined;
+    }
+
+    try {
+      const ipcArgs = { workspaceId };
+      const response = await window.electron.knowledgeBase.view(ipcArgs);
+      set({ isLoading: false });
+      return response;
+    } catch (err: any) {
+      console.error("Error viewing knowledge base structure:", err);
+      set({ error: err.message || 'Failed to view knowledge base structure', isLoading: false });
+      return undefined;
     }
   },
 }));

@@ -107,13 +107,18 @@ export default function KnowledgeBaseMenu() {
             >
               <ListItemText
                 primary={kb.name}
-                primaryTypographyProps={{
-                  variant: 'body2',
-                  sx: {
-                    whiteSpace: 'nowrap',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis'
-                  }
+                slots={{
+                  primary: 'div',
+                }}
+                slotProps={{
+                  primary: {
+                    style: {
+                      whiteSpace: 'nowrap',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      fontSize: '0.875rem',
+                    },
+                  },
                 }}
               />
             </ListItemButton>

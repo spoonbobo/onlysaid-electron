@@ -17,7 +17,8 @@ type KnowledgeBaseChannels =
   | 'kb:create'
   | 'kb:get'
   | 'kb:update'
-  | 'kb:delete';
+  | 'kb:delete'
+  | 'kb:view';
 
 type SSEChannels = 'streaming:abort_stream' | 'streaming:chat_stream_complete' | 'streaming:chunk' | 'streaming:query_stream_complete';
 type MCPChannels = 'mcp:initialize_client' | 'mcp:list_tools';
@@ -150,11 +151,11 @@ const electronHandler = {
   },
   knowledgeBase: {
     list: (...args: unknown[]) => ipcRenderer.invoke('kb:list', ...args),
-    query: (...args: unknown[]) => ipcRenderer.invoke('kb:query', ...args),
     create: (...args: unknown[]) => ipcRenderer.invoke('kb:create', ...args),
     get: (...args: unknown[]) => ipcRenderer.invoke('kb:get', ...args),
     update: (...args: unknown[]) => ipcRenderer.invoke('kb:update', ...args),
     delete: (...args: unknown[]) => ipcRenderer.invoke('kb:delete', ...args),
+    view: (...args: unknown[]) => ipcRenderer.invoke('kb:view', ...args),
   },
 };
 
