@@ -7,8 +7,8 @@ import { FormattedMessage, useIntl } from "react-intl";
 export interface IKBStatus {
   // Example fields - adjust based on actual data
   lastChecked?: string;
-  Status?: string;
-  Message?: string | null;
+  status?: string;
+  message?: string | null;
   syncState?: 'syncing' | 'synced' | 'error' | 'pending';
   documentCount?: number;
   errorDetails?: string;
@@ -35,28 +35,9 @@ const KBExplorer: React.FC<KBExplorerProps> = ({ kbStatus, isLoading, sx }) => {
     );
   }
 
-  if (!kbStatus) {
-    return (
-      <Box sx={{ p: 2, textAlign: 'center', flexGrow: 1 }}>
-        <Typography variant="body2" color="text.secondary">
-          <FormattedMessage id="kbExplorer.noStatusAvailable" defaultMessage="Status details will appear here once available." />
-        </Typography>
-      </Box>
-    );
-  }
-
-  const getStatusChip = (status?: string) => {
-    if (!status) return null;
-    let color: "default" | "primary" | "secondary" | "error" | "info" | "success" | "warning" = "default";
-    switch (status) {
-      case 'syncing': color = 'info'; break;
-      case 'synced': color = 'success'; break;
-      case 'error': color = 'error'; break;
-      case 'pending': color = 'warning'; break;
-    }
-    return <Chip label={status.toUpperCase()} color={color} size="small" />;
-  };
-
+  // Content previously here is now removed or handled elsewhere.
+  // The main status display is moved to KBInfo.
+  // This component can be left to render an empty container or a minimal placeholder if needed.
 
   return (
     <Paper
@@ -68,9 +49,10 @@ const KBExplorer: React.FC<KBExplorerProps> = ({ kbStatus, isLoading, sx }) => {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
+        flexGrow: 1, // Ensure it still takes up space if needed by layout
       }}
     >
-      {/* Content omitted as requested */}
+      {/* Intentionally left empty as per requirements. Status is shown in KBInfo. */}
     </Paper>
   );
 };

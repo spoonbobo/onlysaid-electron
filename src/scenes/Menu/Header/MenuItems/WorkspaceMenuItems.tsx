@@ -1,6 +1,5 @@
 import { MenuItem, ListSubheader, Divider, Tooltip, IconButton, Box } from "@mui/material";
 import { FormattedMessage } from "react-intl";
-import SettingsIcon from "@mui/icons-material/Settings";
 import ExitToAppIcon from "@mui/icons-material/ExitToApp";
 import CalendarMonthIcon from "@mui/icons-material/CalendarMonth";
 import AddCommentIcon from "@mui/icons-material/AddComment";

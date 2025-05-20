@@ -5,7 +5,7 @@ import { FormattedMessage, useIntl } from "react-intl";
 import { useTopicStore, useCurrentTopicContext, KNOWLEDGE_BASE_SELECTION_KEY } from "@/stores/Topic/TopicStore";
 import { toast } from "@/utils/toast";
 import { EmbeddingModel, EmbeddingService } from "@/service/ai";
-import { IKnowledgeBase, IKnowledgeBaseRegisterArgs, IKBGetStatusIPCArgs } from "@/../../types/KnowledgeBase/KnowledgeBase";
+import { IKnowledgeBase, IKnowledgeBaseRegisterArgs, IKBGetStatusIPCArgs, IKBRegisterIPCArgs, IKBFullUpdateIPCArgs } from "@/../../types/KnowledgeBase/KnowledgeBase";
 import { useKBStore } from "@/stores/KB/KBStore";
 import CreateKBDialog, { DeleteKBConfirmationDialog } from "@/components/Dialog/CreateKBDialog";
 import { v4 as uuidv4 } from 'uuid';
@@ -14,6 +14,7 @@ import StorageIcon from "@mui/icons-material/Storage";
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import KBInfo from './KBInfo';
 import KBExplorer, { IKBStatus } from './KBExplorer';
+import { getUserTokenFromStore } from '@/utils/user';
 
 function KnowledgeBaseManagerComponent() {
   const intl = useIntl();
@@ -30,6 +31,8 @@ function KnowledgeBaseManagerComponent() {
     isCreateKBDialogOpen,
     closeCreateKBDialog,
     getKBStatus,
+    registerKB,
+    fullUpdateKB,
   } = useKBStore();
 
   const [selectedKnowledgeBase, setSelectedKnowledgeBase] = useState<IKnowledgeBase | null>(null);
@@ -96,16 +99,21 @@ function KnowledgeBaseManagerComponent() {
   useEffect(() => {
     if (currentWorkspaceId) {
       const viewKBStructure = useKBStore.getState().viewKnowledgeBaseStructure;
+      const kbIdToView = selectedKnowledgeBase?.id;
 
-      viewKBStructure(currentWorkspaceId)
+      viewKBStructure(currentWorkspaceId, kbIdToView)
         .then(result => {
-          console.log("KB structure response:", result);
+          if (kbIdToView) {
+            console.log(`KB structure response for ${kbIdToView}:`, result);
+          } else {
+            console.log("KB structure response for all KBs in workspace:", result);
+          }
         })
         .catch(err => {
-          console.error("Error testing KB view:", err);
+          console.error(`Error viewing KB structure for ${kbIdToView || 'all KBs'}:`, err);
         });
     }
-  }, [currentWorkspaceId]);
+  }, [currentWorkspaceId, selectedKnowledgeBase]);
 
   useEffect(() => {
     if (selectedKnowledgeBase && currentWorkspaceId) {
@@ -150,9 +158,10 @@ function KnowledgeBaseManagerComponent() {
 
   const handleEditDatabase = useCallback(async (data: { name: string; description: string; path: string; sourceType: string; /* embeddingEngine: string; */ }) => {
     if (selectedKnowledgeBase && currentWorkspaceId) {
-      const updates: Partial<Omit<IKnowledgeBase, 'id' | 'workspace_id' | 'create_at' | 'embedding_engine' | 'type' | 'source'>> = {
+      const updates: Partial<Omit<IKnowledgeBase, 'id' | 'workspace_id' | 'create_at' | 'embedding_engine' | 'type' | 'source'>> & { update_at: string } = {
         name: data.name,
         description: data.description,
+        update_at: new Date().toISOString(),
       };
       if (selectedKnowledgeBase.type === 'private' && data.path !== selectedKnowledgeBase.url) {
         updates.url = data.path;
@@ -199,18 +208,78 @@ function KnowledgeBaseManagerComponent() {
         toast.warning(intl.formatMessage({ id: "settings.kb.enable.notConfiguredWarn", defaultMessage: "Cannot enable/disable a non-configured knowledge base." }));
         return;
       }
-      const success = await updateKnowledgeBase(currentWorkspaceId, selectedKnowledgeBase.id, { enabled });
-      if (success) {
+
+      const userToken = getUserTokenFromStore();
+      if (!userToken) {
+        toast.error(intl.formatMessage({ id: "settings.kb.auth.tokenMissing", defaultMessage: "Authentication token is missing. Cannot update knowledge base status." }));
+        return;
+      }
+
+      // Attempt to update the knowledge base's enabled status in the primary data store.
+      const updatedKbFromStore = await updateKnowledgeBase(currentWorkspaceId, selectedKnowledgeBase.id, {
+        enabled,
+        update_at: new Date().toISOString(),
+      });
+
+      if (updatedKbFromStore) {
+        // Primary update was successful.
         toast.success(intl.formatMessage({
           id: enabled ? "settings.kb.enable.success" : "settings.kb.disable.success",
-          defaultMessage: `Knowledge base ${enabled ? 'enabled' : 'disabled'}.`
+          defaultMessage: enabled ? "Knowledge base enabled." : "Knowledge base disabled."
         }));
+        // Refresh UI from the source of truth immediately after successful update.
         fetchAndSetSelectedKbDetails(selectedKnowledgeBase.id);
+
+        if (enabled) {
+          // If enabling, proceed to register the KB using the fresh data.
+          // Ensure the kbData sent for registration reflects the latest state including update_at
+          const kbDataForRegistration = {
+            ...updatedKbFromStore, // This object already has the new 'enabled' and 'update_at'
+            // id, workspace_id, name, description, url, type, source, embedding_engine, configured are from updatedKbFromStore
+          };
+
+          const registerArgs: IKBRegisterIPCArgs = {
+            kbData: kbDataForRegistration,
+            token: userToken,
+          };
+          try {
+            const registrationResult = await registerKB(registerArgs);
+            if (registrationResult) {
+              toast.success(intl.formatMessage({ id: "settings.kb.register.success", defaultMessage: "Knowledge base registered successfully." }));
+            } else {
+              toast.error(intl.formatMessage({ id: "settings.kb.register.error", defaultMessage: "Failed to register knowledge base." }));
+            }
+          } catch (error: any) {
+            console.error("Error registering KB:", error);
+            toast.error(intl.formatMessage({ id: "settings.kb.register.exception", defaultMessage: "An error occurred during knowledge base registration." }) + ` ${error.message}`);
+          }
+        } else {
+          // If disabling, proceed with fullUpdateKB for backend synchronization, using fresh data.
+          // Ensure kbData sent for full update reflects the latest state including update_at
+          const kbDataForFullUpdate = {
+            ...updatedKbFromStore, // This object already has the new 'enabled' and 'update_at'
+          };
+          const fullUpdateArgs: IKBFullUpdateIPCArgs = {
+            kbId: updatedKbFromStore.id,
+            workspaceId: updatedKbFromStore.workspace_id,
+            token: userToken,
+            kbData: kbDataForFullUpdate
+          };
+          try {
+            await fullUpdateKB(fullUpdateArgs);
+            // Handle success/failure of fullUpdateKB if necessary, e.g., if it returns a status.
+            // For now, we assume the primary disable action is complete.
+          } catch (error: any) {
+            console.error("Error disabling KB via fullUpdateKB:", error);
+            toast.error(intl.formatMessage({ id: "settings.kb.update.error.exception", defaultMessage: "An error occurred while finalizing the disabling of the knowledge base." }) + ` ${error.message}`);
+          }
+        }
       } else {
+        // updateKnowledgeBase failed for either enabling or disabling.
         toast.error(intl.formatMessage({ id: "settings.kb.update.error", defaultMessage: "Failed to update knowledge base status." }));
       }
     }
-  }, [selectedKnowledgeBase, currentWorkspaceId, updateKnowledgeBase, intl, fetchAndSetSelectedKbDetails]);
+  }, [selectedKnowledgeBase, currentWorkspaceId, updateKnowledgeBase, intl, fetchAndSetSelectedKbDetails, registerKB, fullUpdateKB]);
 
   const getEmbeddingEngineName = useCallback((engineId: string) => {
     if (!engineId) return intl.formatMessage({ id: "settings.kb.embedding.notApplicable", defaultMessage: "N/A" });
@@ -241,28 +310,46 @@ function KnowledgeBaseManagerComponent() {
   }, [intl]);
 
   const settingsSectionTitle = intl.formatMessage({ id: "settings.kb.section.title", defaultMessage: "Knowledge Base Details" });
-  const kbStatusSectionTitleBase = intl.formatMessage({ id: "settings.kb.statusSection.title", defaultMessage: "Knowledge Base Status" });
 
-  // Determine the dynamic title for the status section
   const dynamicKbStatusSectionTitle = useMemo(() => {
-    if (isStatusLoading) {
-      return kbStatusSectionTitleBase; // Show "Knowledge Base Status" while loading
-    }
-    if (kbStatus && kbStatus.Status) { // Assuming 'Status' is the field from your status object
-      return kbStatus.Status;
-    }
-    // Fallback if status is not yet loaded/available but section is rendered
-    return kbStatusSectionTitleBase;
-  }, [kbStatus, isStatusLoading, kbStatusSectionTitleBase]);
+    return intl.formatMessage({ id: "settings.kb.explorerSection.title", defaultMessage: "KB Explorer" });
+  }, [intl]);
 
   const handleReinitialize = useCallback(async () => {
     if (selectedKnowledgeBase && currentWorkspaceId) {
       toast.info(intl.formatMessage(
-        { id: "settings.kb.reinitialize.placeholder", defaultMessage: "Reinitialize action for '{kbName}' needs to be implemented." },
+        { id: "settings.kb.reinitialize.placeholder", defaultMessage: "Synchronize action for '{kbName}' needs to be implemented." },
         { kbName: selectedKnowledgeBase.name }
       ));
     }
   }, [selectedKnowledgeBase, currentWorkspaceId, intl]);
+
+  const handleRefreshDetails = useCallback(() => {
+    if (selectedKnowledgeBase?.id) {
+      fetchAndSetSelectedKbDetails(selectedKnowledgeBase.id);
+      // Also re-fetch status when details are manually refreshed
+      if (currentWorkspaceId) {
+        const token = ""; // Or retrieve appropriately
+        setIsStatusLoading(true);
+        setKbStatus(null);
+        const args: IKBGetStatusIPCArgs = {
+          kbId: selectedKnowledgeBase.id,
+          workspaceId: currentWorkspaceId,
+          token: token,
+        };
+        getKBStatus(args)
+          .then(statusResult => {
+            setKbStatus({ ...statusResult, lastChecked: new Date().toISOString() });
+          })
+          .catch(err => {
+            setKbStatus({ errorDetails: err.message || 'Failed to fetch status', lastChecked: new Date().toISOString() });
+          })
+          .finally(() => {
+            setIsStatusLoading(false);
+          });
+      }
+    }
+  }, [selectedKnowledgeBase, fetchAndSetSelectedKbDetails, currentWorkspaceId, getKBStatus]);
 
   const handleCreateKnowledgeBase = useCallback(async (data: { name: string; description: string; path: string; sourceType: string; embeddingEngine: string; }) => {
     if (!currentWorkspaceId) {
@@ -316,9 +403,12 @@ function KnowledgeBaseManagerComponent() {
         ) : selectedKnowledgeBase && currentWorkspaceId ? (
           <KBInfo
             knowledgeBase={selectedKnowledgeBase}
+            kbRawStatus={kbStatus}
             isLoading={isLoadingDetails}
+            isKbStatusLoading={isStatusLoading}
             onToggleEnabled={handleToggleEnabled}
             onReinitialize={handleReinitialize}
+            onRefreshDetails={handleRefreshDetails}
             onEdit={handleOpenEditDialog}
             onDelete={handleOpenDeleteDialog}
             getEmbeddingEngineName={getEmbeddingEngineName}
@@ -347,10 +437,9 @@ function KnowledgeBaseManagerComponent() {
         )}
       </SettingsSection>
 
-      {/* KB Status Section - Title is now just the status value or a fallback */}
       {selectedKnowledgeBase && currentWorkspaceId && (
         <SettingsSection
-          title={dynamicKbStatusSectionTitle} // Use the updated dynamic title
+          title={dynamicKbStatusSectionTitle}
           sx={{
             mt: 2,
             flexGrow: 1,
@@ -372,7 +461,6 @@ function KnowledgeBaseManagerComponent() {
         </SettingsSection>
       )}
 
-      {/* Dialog for Editing existing KB */}
       {selectedKnowledgeBase && editDialogOpen && (
         <CreateKBDialog
           open={editDialogOpen}
@@ -383,7 +471,6 @@ function KnowledgeBaseManagerComponent() {
         />
       )}
 
-      {/* Dialog for Creating new KB - driven by global state */}
       <CreateKBDialog
         open={isCreateKBDialogOpen}
         onClose={closeCreateKBDialog}

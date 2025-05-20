@@ -2,180 +2,327 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { immer } from 'zustand/middleware/immer';
 
-interface FileNode {
-    id: string;
-    name: string;
-    path: string;
-    type: 'file' | 'directory';
-    children?: FileNode[];
-    isExpanded?: boolean;
+export interface FileNode {
+  id: string;
+  name: string;
+  label: string;
+  path: string;
+  type: 'file' | 'directory';
+  source: 'local' | 'remote';
+  workspaceId?: string;
+  children?: FileNode[];
+  isExpanded?: boolean;
 }
 
 interface FileExplorerState {
-    rootFolders: FileNode[];
-    selectedPath: string | null;
-    lastOpenedFolders: string[];
-    isLoading: boolean;
-    loadingPaths: Record<string, boolean>;
-    error: string | null;
+  rootFolders: FileNode[];
+  selectedId: string | null;
+  lastOpenedFolderIds: string[];
+  isLoading: boolean;
+  loadingNodeIds: Record<string, boolean>;
+  error: string | null;
 
-    // Actions
-    addRootFolder: () => Promise<void>;
-    removeRootFolder: (path: string) => void;
-    loadFolder: (path: string) => Promise<void>;
-    toggleFolder: (path: string) => void;
-    selectItem: (path: string) => void;
-    refreshFolder: (path: string) => Promise<void>;
+  // Actions
+  addLocalRootFolder: () => Promise<void>;
+  addRemoteWorkspaceRoot: (workspaceId: string, workspaceName: string, token: string) => Promise<void>;
+  removeRootFolder: (nodeId: string) => void;
+  loadFolder: (nodeId: string, token?: string) => Promise<void>;
+  toggleFolder: (nodeId: string) => void;
+  selectItem: (nodeId: string) => void;
+  refreshFolder: (nodeId: string, token?: string) => Promise<void>;
 }
 
-// Helper function to find and update a node recursively
-// Using Immer makes this much cleaner, but here's a manual recursive approach
-const updateNodeRecursively = (nodes: FileNode[], path: string, updateFn: (node: FileNode) => FileNode): FileNode[] => {
-    return nodes.map(node => {
-        if (node.path === path) {
-            return updateFn(node);
-        } else if (node.children && node.type === 'directory') {
-            // Only recurse if the path could potentially be inside this directory
-            if (path.startsWith(node.path + '/')) { // Basic check, adjust if path separators differ
-                const updatedChildren = updateNodeRecursively(node.children, path, updateFn);
-                // Return node with updated children only if children actually changed
-                return updatedChildren !== node.children ? { ...node, children: updatedChildren } : node;
-            }
-        }
-        return node;
-    });
+const generateNodeId = (source: 'local' | 'remote', path: string, workspaceId?: string): string => {
+  if (source === 'local') {
+    return `local:${path}`;
+  } else if (source === 'remote' && workspaceId) {
+    return `remote:${workspaceId}:${path}`;
+  }
+  console.error("Cannot generate ID for invalid node data", { source, path, workspaceId });
+  throw new Error("Cannot generate ID for invalid node data");
+};
+
+const mapRemoteContentsToChildren = (
+  contents: Array<{ name: string; type: 'file' | 'directory'; path: string }>,
+  workspaceId: string,
+  parentPath: string
+): FileNode[] => {
+  return contents.map(item => {
+    const relativePath = item.path;
+    return {
+      id: generateNodeId('remote', relativePath, workspaceId),
+      name: item.name,
+      label: item.name,
+      path: relativePath,
+      type: item.type,
+      source: 'remote',
+      workspaceId: workspaceId,
+      children: item.type === 'directory' ? [] : undefined,
+      isExpanded: false,
+    };
+  });
+};
+
+const mapLocalContentsToChildren = (
+  contents: Array<{ name: string; type: 'file' | 'directory'; path: string }>,
+  parentAbsolutePath: string
+): FileNode[] => {
+  return contents.map(item => {
+    const absolutePath = item.path;
+    return {
+      id: generateNodeId('local', absolutePath),
+      name: item.name,
+      label: item.name,
+      path: absolutePath,
+      type: item.type,
+      source: 'local',
+      children: item.type === 'directory' ? [] : undefined,
+      isExpanded: false,
+    };
+  });
+};
+
+const updateNodeRecursivelyById = (nodes: FileNode[], nodeId: string, updateFn: (node: FileNode) => FileNode): FileNode[] => {
+  return nodes.map(node => {
+    if (node.id === nodeId) {
+      return updateFn(node);
+    }
+    if (node.children && node.type === 'directory') {
+      const updatedChildren = updateNodeRecursivelyById(node.children, nodeId, updateFn);
+      return updatedChildren !== node.children ? { ...node, children: updatedChildren } : node;
+    }
+    return node;
+  });
+};
+
+const findNodeById = (nodes: FileNode[], nodeId: string): FileNode | null => {
+  for (const node of nodes) {
+    if (node.id === nodeId) {
+      return node;
+    }
+    if (node.children && node.type === 'directory') {
+      const foundInChildren = findNodeById(node.children, nodeId);
+      if (foundInChildren) {
+        return foundInChildren;
+      }
+    }
+  }
+  return null;
 };
 
 export const useFileExplorerStore = create<FileExplorerState>()(
-    persist(
-        (set, get) => ({
-            rootFolders: [],
-            selectedPath: null,
-            lastOpenedFolders: [],
-            isLoading: false,
-            loadingPaths: {},
-            error: null,
+  persist(
+    (set, get) => ({
+      rootFolders: [],
+      selectedId: null,
+      lastOpenedFolderIds: [],
+      isLoading: false,
+      loadingNodeIds: {},
+      error: null,
 
-            addRootFolder: async () => {
-                set({ isLoading: true, error: null });
-                try {
-                    const result = await window.electron.fileSystem.openFolderDialog();
+      addLocalRootFolder: async () => {
+        set({ isLoading: true, error: null });
+        try {
+          const result = await window.electron.fileSystem.openFolderDialog();
 
-                    if (!result.canceled && result.filePaths.length > 0) {
-                        const folderPath = result.filePaths[0];
-                        const existingFolder = get().rootFolders.find(f => f.path === folderPath);
-                        if (existingFolder) {
-                            set({ isLoading: false });
-                            return;
-                        }
+          if (!result.canceled && result.filePaths.length > 0) {
+            const folderPath = result.filePaths[0];
+            const folderId = generateNodeId('local', folderPath);
 
-                        const folderContents = await window.electron.fileSystem.getFolderContents(folderPath);
-                        const newFolder: FileNode = {
-                            id: `folder-${Date.now()}`,
-                            name: folderPath.split(/[\\/]/).pop() || folderPath,
-                            path: folderPath,
-                            type: 'directory',
-                            children: folderContents,
-                            isExpanded: true
-                        };
-
-                        set(state => ({
-                            rootFolders: [...state.rootFolders, newFolder],
-                            lastOpenedFolders: [folderPath, ...state.lastOpenedFolders].slice(0, 5),
-                            isLoading: false
-                        }));
-                    } else {
-                        set({ isLoading: false });
-                    }
-                } catch (err) {
-                    console.error('Error adding root folder:', err);
-                    set({
-                        isLoading: false,
-                        error: err instanceof Error ? err.message : 'Failed to add folder'
-                    });
-                }
-            },
-
-            removeRootFolder: (path: string) => {
-                set(state => ({
-                    rootFolders: state.rootFolders.filter(folder => folder.path !== path),
-                    lastOpenedFolders: state.lastOpenedFolders.filter(p => p !== path),
-                    selectedPath: state.selectedPath?.startsWith(path) ? null : state.selectedPath
-                }));
-            },
-
-            loadFolder: async (path: string) => {
-                set(state => ({
-                    loadingPaths: { ...state.loadingPaths, [path]: true },
-                    error: null
-                }));
-
-                try {
-                    const folderContents = await window.electron.fileSystem.getFolderContents(path);
-                    console.log('Folder contents for path:', path, folderContents);
-
-                    set(state => ({
-                        rootFolders: updateNodeRecursively(state.rootFolders, path, node => ({
-                            ...node,
-                            children: folderContents,
-                            isExpanded: true
-                        })),
-                        loadingPaths: { ...state.loadingPaths, [path]: false }
-                    }));
-                } catch (err) {
-                    console.error('Error loading folder:', path, err);
-                    set(state => ({
-                        loadingPaths: { ...state.loadingPaths, [path]: false },
-                        error: err instanceof Error ? err.message : 'Failed to load folder contents'
-                    }));
-                }
-            },
-
-            toggleFolder: (path: string) => {
-                set(state => ({
-                    rootFolders: updateNodeRecursively(state.rootFolders, path, node => ({
-                        ...node,
-                        isExpanded: !node.isExpanded
-                    }))
-                }));
-            },
-
-            selectItem: (path: string) => {
-                set({ selectedPath: path });
-            },
-
-            refreshFolder: async (path: string) => {
-                set({ isLoading: true, error: null });
-                try {
-                    const folderContents = await window.electron.fileSystem.getFolderContents(path);
-                    set(state => ({
-                        rootFolders: updateNodeRecursively(state.rootFolders, path, node => ({
-                            ...node,
-                            children: folderContents
-                        })),
-                        isLoading: false
-                    }));
-                } catch (err) {
-                    console.error('Error refreshing folder:', path, err);
-                    set({
-                        isLoading: false,
-                        error: err instanceof Error ? err.message : 'Failed to refresh folder'
-                    });
-                }
+            if (get().rootFolders.find(f => f.id === folderId)) {
+              set({ isLoading: false, selectedId: folderId });
+              return;
             }
-        }),
-        {
-            name: 'file-explorer',
-            partialize: (state) => ({
-                rootFolders: state.rootFolders,
-                lastOpenedFolders: state.lastOpenedFolders,
-            })
+
+            const folderContents = await window.electron.fileSystem.getFolderContents(folderPath);
+            const newFolder: FileNode = {
+              id: folderId,
+              name: folderPath.split(/[\\/]/).pop() || folderPath,
+              label: folderPath.split(/[\\/]/).pop() || folderPath,
+              path: folderPath,
+              type: 'directory',
+              source: 'local',
+              children: mapLocalContentsToChildren(folderContents, folderPath),
+              isExpanded: true
+            };
+
+            set(state => ({
+              rootFolders: [...state.rootFolders, newFolder],
+              lastOpenedFolderIds: [newFolder.id, ...state.lastOpenedFolderIds].slice(0, 10),
+              isLoading: false,
+              selectedId: newFolder.id,
+            }));
+          } else {
+            set({ isLoading: false });
+          }
+        } catch (err: any) {
+          console.error('Error adding local root folder:', err);
+          set({ isLoading: false, error: err.message || 'Failed to add folder' });
         }
-    )
+      },
+
+      addRemoteWorkspaceRoot: async (workspaceId: string, workspaceName: string, token: string) => {
+        const rootPath = '';
+        const rootId = generateNodeId('remote', rootPath, workspaceId);
+        set({ isLoading: true, error: null });
+
+        if (get().rootFolders.find(f => f.id === rootId)) {
+          set({ isLoading: false, selectedId: rootId });
+          return;
+        }
+
+        try {
+          const response = await window.electron.ipcRenderer.invoke('storage:list-contents', {
+            workspaceId,
+            token,
+            relativePath: rootPath,
+          });
+
+          if (response.error) {
+            throw new Error(response.error);
+          }
+
+          const children = mapRemoteContentsToChildren(response.data.contents, workspaceId, rootPath);
+
+          const newRemoteRoot: FileNode = {
+            id: rootId,
+            name: workspaceName,
+            label: workspaceName,
+            path: rootPath,
+            type: 'directory',
+            source: 'remote',
+            workspaceId: workspaceId,
+            children: children,
+            isExpanded: true,
+          };
+
+          set(state => ({
+            rootFolders: [...state.rootFolders, newRemoteRoot],
+            lastOpenedFolderIds: [newRemoteRoot.id, ...state.lastOpenedFolderIds].slice(0, 10),
+            isLoading: false,
+            selectedId: newRemoteRoot.id,
+          }));
+
+        } catch (err: any) {
+          console.error(`Error adding remote workspace ${workspaceId}:`, err);
+          set({ isLoading: false, error: err.message || `Failed to add workspace ${workspaceId}` });
+        }
+      },
+
+      removeRootFolder: (nodeId: string) => {
+        set(state => ({
+          rootFolders: state.rootFolders.filter(folder => folder.id !== nodeId),
+          lastOpenedFolderIds: state.lastOpenedFolderIds.filter(id => id !== nodeId),
+          selectedId: state.selectedId === nodeId ? null : state.selectedId,
+        }));
+      },
+
+      loadFolder: async (nodeId: string, token?: string) => {
+        const nodeToLoad = findNodeById(get().rootFolders, nodeId);
+        if (!nodeToLoad || nodeToLoad.type !== 'directory') {
+          console.warn('Cannot load folder: Node not found or not a directory', nodeId);
+          return;
+        }
+
+        set(state => ({
+          loadingNodeIds: { ...state.loadingNodeIds, [nodeId]: true },
+          error: null
+        }));
+
+        try {
+          let children: FileNode[] = [];
+          if (nodeToLoad.source === 'local') {
+            const localContents = await window.electron.fileSystem.getFolderContents(nodeToLoad.path);
+            children = mapLocalContentsToChildren(localContents, nodeToLoad.path);
+          } else if (nodeToLoad.source === 'remote') {
+            if (!nodeToLoad.workspaceId) {
+              throw new Error("Workspace ID missing for remote folder load.");
+            }
+            if (!token) {
+              throw new Error("Token missing for remote folder load.");
+            }
+            const response = await window.electron.ipcRenderer.invoke('storage:list-contents', {
+              workspaceId: nodeToLoad.workspaceId,
+              token,
+              relativePath: nodeToLoad.path,
+            });
+            if (response.error) throw new Error(response.error);
+            children = mapRemoteContentsToChildren(response.data.contents, nodeToLoad.workspaceId, nodeToLoad.path);
+          }
+
+          set(state => ({
+            rootFolders: updateNodeRecursivelyById(state.rootFolders, nodeId, node => ({
+              ...node,
+              children: children,
+              isExpanded: true
+            })),
+            loadingNodeIds: { ...state.loadingNodeIds, [nodeId]: false }
+          }));
+        } catch (err: any) {
+          console.error(`Error loading folder ${nodeId}:`, err);
+          set(state => ({
+            loadingNodeIds: { ...state.loadingNodeIds, [nodeId]: false },
+            error: err.message || 'Failed to load folder contents'
+          }));
+        }
+      },
+
+      toggleFolder: (nodeId: string) => {
+        set(state => ({
+          rootFolders: updateNodeRecursivelyById(state.rootFolders, nodeId, node => ({
+            ...node,
+            isExpanded: !node.isExpanded
+          }))
+        }));
+      },
+
+      selectItem: (nodeId: string) => {
+        set({ selectedId: nodeId });
+      },
+
+      refreshFolder: async (nodeId: string, token?: string) => {
+        const nodeToRefresh = findNodeById(get().rootFolders, nodeId);
+        if (!nodeToRefresh || nodeToRefresh.type !== 'directory') {
+          console.warn('Cannot refresh folder: Node not found or not a directory', nodeId);
+          return;
+        }
+        await get().loadFolder(nodeId, token);
+      }
+    }),
+    {
+      name: 'file-explorer-store',
+      partialize: (state) => ({
+        rootFolders: state.rootFolders.map(root => ({
+          id: root.id,
+          name: root.name,
+          label: root.label,
+          path: root.path,
+          type: root.type,
+          source: root.source,
+          workspaceId: root.workspaceId,
+          isExpanded: root.isExpanded,
+          children: root.isExpanded && root.children ?
+            root.children.map(c => ({ id: c.id, name: c.name, label: c.label, path: c.path, type: c.type, source: c.source, workspaceId: c.workspaceId, isExpanded: c.isExpanded }))
+            : []
+        })),
+        lastOpenedFolderIds: state.lastOpenedFolderIds,
+        selectedId: state.selectedId,
+      }),
+    }
+  )
 );
 
 export const selectors = {
-    selectIsNodeLoading: (path: string) => (state: FileExplorerState): boolean => {
-        return !!state.loadingPaths[path];
-    }
+  selectRootFolders: (state: FileExplorerState) => state.rootFolders,
+  selectSelectedNodeId: (state: FileExplorerState) => state.selectedId,
+  selectIsLoading: (state: FileExplorerState) => state.isLoading,
+  selectError: (state: FileExplorerState) => state.error,
+  selectLastOpenedFolderIds: (state: FileExplorerState) => state.lastOpenedFolderIds,
+  selectIsNodeLoading: (nodeId: string) => (state: FileExplorerState): boolean => {
+    return !!state.loadingNodeIds[nodeId];
+  },
+  selectNodeById: (nodeId: string | null) => (state: FileExplorerState): FileNode | null => {
+    if (!nodeId) return null;
+    return findNodeById(state.rootFolders, nodeId);
+  }
 };

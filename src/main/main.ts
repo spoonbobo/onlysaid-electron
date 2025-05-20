@@ -32,7 +32,7 @@ import { initializeDeeplinkHandling } from './deeplink';
 import { initializeKnowledgeBaseHandlers } from './api/v2/onlysaid_kb';
 import { setupFileHandlers } from './api/v2/file';
 import { setupSocketHandlers } from './socket';
-
+import { setupStorageHandlers } from './api/v2/storage';
 dotenv.config();
 
 setupChatroomHandlers();
@@ -46,6 +46,7 @@ setupRedisHandlers();
 setupWorkspaceHandlers();
 initializeDeeplinkHandling();
 setupFileHandlers();
+setupStorageHandlers();
 initAuth(process.env.ONLYSAID_API_URL || '', process.env.ONLYSAID_DOMAIN || '');
 initializeKnowledgeBaseHandlers();
 

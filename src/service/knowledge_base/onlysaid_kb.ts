@@ -38,9 +38,19 @@ export class OnylsaidKBService {
     return response.data;
   }
 
-  async viewKnowledgeBaseStructure(workspaceId: string): Promise<any[]> {
-    const response = await this.instance.get(
-      `${this.baseURL}/view/${workspaceId}`
+  async viewKnowledgeBaseStructure(workspaceId: string, kbId?: string): Promise<any[]> {
+    let url = `${this.baseURL}/view/${workspaceId}`;
+    if (kbId) {
+      url += `?kb_id=${kbId}`;
+    }
+    const response = await this.instance.get(url);
+    return response.data;
+  }
+
+  async updateKnowledgeBaseStatus(kbData: IKnowledgeBase): Promise<any> {
+    const response = await this.instance.post(
+      `${this.baseURL}/update_kb_status`,
+      kbData
     );
     return response.data;
   }

@@ -163,6 +163,7 @@ function ChatInput({
   return (
     <Box
       sx={{
+        px: 1,
         py: 2,
         bgcolor: theme => alpha(theme.palette.background.default, 0.8),
         backdropFilter: "blur(8px)",

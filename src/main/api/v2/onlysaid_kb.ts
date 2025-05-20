@@ -17,6 +17,11 @@ import {
 import onlysaidServiceInstance from './service';
 import axios, { AxiosError } from 'axios';
 
+// Define an updated interface for IKBViewIPCArgs if it doesn't already support kbId
+interface IKBViewIPCArgsUpdated extends IKBViewIPCArgs {
+  kbId?: string;
+}
+
 const KB_BASE_URL = process.env.KB_BASE_URL || 'http://onlysaid-dev.com/api/kb/';
 const kbService = new OnylsaidKBService(KB_BASE_URL);
 
@@ -147,12 +152,8 @@ export function initializeKnowledgeBaseHandlers(): void {
   });
 
   ipcMain.handle('kb:register', async (event, args: IKBRegisterIPCArgs) => {
-    const { kbData, token } = args;
-    console.log('kb:register called with:', kbData, 'token:', token ? 'present' : 'missing');
-    if (!token) {
-      console.error('Error registering knowledge base: Token is missing');
-      throw new Error('Authentication token is required for registering a knowledge base.');
-    }
+    const { kbData } = args;
+
     try {
       const registeredKb = await kbService.registerKnowledgeBase(kbData as IKnowledgeBase);
       console.log('KB Registered via service:', registeredKb);
@@ -162,13 +163,13 @@ export function initializeKnowledgeBaseHandlers(): void {
     }
   });
 
-  ipcMain.handle('kb:view', async (event, args: IKBViewIPCArgs) => {
-    const { workspaceId } = args;
+  ipcMain.handle('kb:view', async (event, args: IKBViewIPCArgsUpdated) => {
+    const { workspaceId, kbId } = args;
     try {
-      const response = await kbService.viewKnowledgeBaseStructure(workspaceId);
+      const response = await kbService.viewKnowledgeBaseStructure(workspaceId, kbId);
       return response;
     } catch (error) {
-      console.error(`Error viewing knowledge base structure for workspace ${workspaceId}:`, error);
+      console.error(`Error viewing knowledge base structure for workspace ${workspaceId}${kbId ? ` and KB ${kbId}` : ''}:`, error);
       if (axios.isAxiosError(error)) {
         throw handleAxiosError(error, 'viewing knowledge base structure');
       }
@@ -221,27 +222,33 @@ export function initializeKnowledgeBaseHandlers(): void {
   });
 
   ipcMain.handle('kb:fullUpdate', async (event, args: IKBFullUpdateIPCArgs) => {
-    try {
-      const { workspaceId, kbId, kbData, token } = args;
-      console.log(`kb:fullUpdate called for KB ID: ${kbId} in Workspace: ${workspaceId}`, 'with data:', kbData, 'token:', token ? 'present' : 'missing');
-      if (!token) {
-        throw new Error('Authentication token is required for updating a knowledge base.');
-      }
-      if (kbId !== kbData.id) {
-        console.warn(`Mismatch between kbId parameter (${kbId}) and kbData.id (${kbData.id}) in kb:fullUpdate. Using kbId parameter.`);
-      }
+    const { workspaceId, kbId, kbData /* token is in args but not used here */ } = args;
 
-      const updatedKb: IKnowledgeBase = {
-        ...kbData,
-        id: kbId,
-        workspace_id: workspaceId,
-        update_at: new Date().toISOString(),
-      };
-      console.log('[DUMMY] KB Full Update:', updatedKb);
-      return updatedKb;
+    // Construct the full IKnowledgeBase object.
+    // Assumes args.kbData is Partial<IKnowledgeBase> and args.kbId, args.workspaceId are authoritative for those fields.
+    const fullKbDataObject: IKnowledgeBase = {
+      ...(kbData as Partial<IKnowledgeBase>), // Spread partial data
+      id: kbId,                            // Set/override id
+      workspace_id: workspaceId,           // Set/override workspace_id
+    } as IKnowledgeBase; // Cast, assuming this now conforms to IKnowledgeBase
+
+    console.log(`kb:fullUpdate calling kbService.updateKnowledgeBaseStatus for KB ID: ${fullKbDataObject.id} in Workspace: ${fullKbDataObject.workspace_id}`);
+
+    try {
+      const result = await kbService.updateKnowledgeBaseStatus(fullKbDataObject);
+      console.log(`KB ${fullKbDataObject.id} status update successful:`, result);
+      return result;
     } catch (error) {
-      console.error('Error in kb:fullUpdate (dummy):', error);
-      throw error instanceof Error ? error : new Error('Failed to perform full update on knowledge base (dummy)');
+      // Construct the approximate full URL that was attempted by kbService.updateKnowledgeBaseStatus
+      // KB_BASE_URL already ends with a slash. 'update_kb_status' is the specific path segment.
+      const attemptedUrl = `${KB_BASE_URL}update_kb_status`;
+      throw handleAxiosError(
+        error,
+        `updating knowledge base status for ${kbId}`,
+        'POST',
+        attemptedUrl,
+        fullKbDataObject
+      );
     }
   });
 }

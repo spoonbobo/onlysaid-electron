@@ -46,7 +46,11 @@ type ApiWorkspaceChannels =
   | 'workspace:add_users'
   | 'workspace:remove_user'
   | 'workspace:get_users';
-type ApiChannels = ApiChatChannels | ApiUserChannels | ApiWorkspaceChannels;
+
+// Add new storage channels
+type ApiStorageChannels = 'storage:list-contents';
+
+type ApiChannels = ApiChatChannels | ApiUserChannels | ApiWorkspaceChannels | ApiStorageChannels;
 
 type RedisChannels = 'redis:connect' | 'redis:disconnect' | 'redis:get' | 'redis:set' |
   'redis:del' | 'redis:publish' | 'redis:start-server' | 'redis:stop-server';
@@ -122,6 +126,11 @@ const electronHandler = {
     update: (...args: unknown[]) => ipcRenderer.invoke('chat:update', ...args),
     delete: (...args: unknown[]) => ipcRenderer.invoke('chat:delete', ...args),
   },
+  // Add new storage handler
+  storage: {
+    listContents: (args: { workspaceId: string; relativePath?: string; token: string }) =>
+      ipcRenderer.invoke('storage:list-contents', args),
+  },
   streaming: {
     chat_stream_complete: (...args: unknown[]) => ipcRenderer.invoke('streaming:chat_stream_complete', ...args),
     chunk: (...args: unknown[]) => ipcRenderer.invoke('streaming:chunk', ...args),
@@ -152,7 +161,10 @@ const electronHandler = {
     getStatus: (operationId: string) => ipcRenderer.invoke('file:status', { operationId }),
     cancelOperation: (operationId: string) => ipcRenderer.invoke('file:cancel', { operationId }),
     onProgress: (callback: (data: { operationId: string, progress: number }) => void) => {
-      return ipcRenderer.on('file:progress-update', (_, data) => callback(data));
+      const channel: Channels = 'file:progress-update';
+      const subscription = (_: IpcRendererEvent, data: { operationId: string, progress: number }) => callback(data);
+      ipcRenderer.on(channel, subscription);
+      return () => ipcRenderer.removeListener(channel, subscription);
     },
   },
   homedir: () => os.homedir(),
