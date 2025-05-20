@@ -7,6 +7,9 @@ import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 import { useMemo } from 'react';
 
+// Define and export the key
+export const KNOWLEDGE_BASE_SELECTION_KEY = "knowledgeBaseMenu:selectedId";
+
 export interface TopicContext {
   id?: string;
   name: string;
@@ -98,22 +101,35 @@ export const useTopicStore = create<TopicStore>()(
               : state.selectedContext
         })),
 
-      setSelectedContext: (context) =>
+      setSelectedContext: (newContext) =>
         set((state) => {
           let lastSections = { ...state.lastSections };
           if (state.selectedContext?.section && state.selectedContext?.type) {
             lastSections[state.selectedContext.type] = state.selectedContext.section;
           }
 
-          const updatedContext = { ...context };
+          const updatedContext = { ...newContext };
 
           if (!updatedContext.section && lastSections[updatedContext.type]) {
             updatedContext.section = lastSections[updatedContext.type];
           }
 
+          let updatedSelectedTopics = state.selectedTopics;
+
+          const prevEffectiveWorkspaceId = state.selectedContext?.type === "workspace" ? state.selectedContext.id : null;
+          const newEffectiveWorkspaceId = newContext.type === "workspace" ? newContext.id : null;
+
+          if (prevEffectiveWorkspaceId !== newEffectiveWorkspaceId) {
+            if (state.selectedTopics[KNOWLEDGE_BASE_SELECTION_KEY]) {
+              updatedSelectedTopics = { ...state.selectedTopics };
+              delete updatedSelectedTopics[KNOWLEDGE_BASE_SELECTION_KEY];
+            }
+          }
+
           return {
             selectedContext: updatedContext,
-            lastSections
+            lastSections,
+            selectedTopics: updatedSelectedTopics,
           };
         }),
 
@@ -263,7 +279,7 @@ export const useTopicStore = create<TopicStore>()(
         contexts: state.contexts,
         scrollPositions: state.scrollPositions,
       }),
-      version: 7, // Increment version when changing store structure
+      version: 8, // Increment version when changing store structure
     }
   )
 );

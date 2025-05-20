@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { IKnowledgeBase, IKnowledgeBaseRegisterArgs } from '@/../../types/KnowledgeBase/KnowledgeBase';
+import { IKnowledgeBase, IKnowledgeBaseRegisterArgs, IKBRegisterIPCArgs, IKBGetStatusIPCArgs, IKBSynchronizeIPCArgs, IKBFullUpdateIPCArgs } from '@/../../types/KnowledgeBase/KnowledgeBase';
 import { getUserTokenFromStore } from '@/utils/user';
 
 
@@ -7,16 +7,30 @@ interface KBState {
   isLoading: boolean;
   error: string | null;
   kbsLastUpdated: number;
+  isCreateKBDialogOpen: boolean;
+
+  // onlysaid-app
   getKnowledgeBaseById: (workspaceId: string, kbId: string) => Promise<IKnowledgeBase | undefined>;
   createKnowledgeBase: (kbCreationArgs: IKnowledgeBaseRegisterArgs) => Promise<IKnowledgeBase | undefined>;
   updateKnowledgeBase: (workspaceId: string, kbId: string, updates: Partial<Omit<IKnowledgeBase, 'id' | 'workspace_id'>>) => Promise<IKnowledgeBase | undefined>;
   deleteKnowledgeBase: (workspaceId: string, kbId: string) => Promise<boolean>;
   getKnowledgeBaseDetailsList: (workspaceId?: string) => Promise<IKnowledgeBase[] | undefined>;
+
+  // onlysaid-kb
   viewKnowledgeBaseStructure: (workspaceId: string) => Promise<{
     dataSources: any[];
     folderStructures: Record<string, any>;
     documents: Record<string, any>;
   } | undefined>;
+
+  // New actions
+  registerKB: (args: IKBRegisterIPCArgs) => Promise<IKnowledgeBase | undefined>;
+  getKBStatus: (args: IKBGetStatusIPCArgs) => Promise<{ kbId: string; status: string; lastChecked: string;[key: string]: any } | undefined>;
+  synchronizeKB: (args: IKBSynchronizeIPCArgs) => Promise<{ kbId: string; syncStatus: string; lastSynced: string;[key: string]: any } | undefined>;
+  fullUpdateKB: (args: IKBFullUpdateIPCArgs) => Promise<IKnowledgeBase | undefined>;
+
+  openCreateKBDialog: () => void;
+  closeCreateKBDialog: () => void;
 }
 
 interface CreateKBIPCArgs {
@@ -29,6 +43,7 @@ export const useKBStore = create<KBState>((set, get) => ({
   isLoading: false,
   error: null,
   kbsLastUpdated: 0,
+  isCreateKBDialogOpen: false,
 
   getKnowledgeBaseDetailsList: async (workspaceId?: string) => {
     set({ isLoading: true, error: null });
@@ -121,6 +136,15 @@ export const useKBStore = create<KBState>((set, get) => ({
     try {
       const newKb: IKnowledgeBase = await window.electron.knowledgeBase.create(ipcArgs);
 
+      if (newKb) {
+        const registerArgs: IKBRegisterIPCArgs = {
+          kbData: kbCreationArgs,
+          token: token,
+        };
+        const registeredKb = await get().registerKB(registerArgs);
+        console.log("registeredKb", registeredKb);
+      }
+
       set({ isLoading: false, kbsLastUpdated: Date.now() });
       return newKb;
     } catch (err: any) {
@@ -210,6 +234,66 @@ export const useKBStore = create<KBState>((set, get) => ({
     } catch (err: any) {
       console.error("Error viewing knowledge base structure:", err);
       set({ error: err.message || 'Failed to view knowledge base structure', isLoading: false });
+      return undefined;
+    }
+  },
+
+  openCreateKBDialog: () => set({ isCreateKBDialogOpen: true }),
+  closeCreateKBDialog: () => set({ isCreateKBDialogOpen: false }),
+
+  registerKB: async (args: IKBRegisterIPCArgs) => {
+    try {
+      set({ isLoading: true, error: null });
+      const result = await window.electron.knowledgeBase.registerKB(args);
+      set({ isLoading: false });
+      return result;
+    } catch (err: any) {
+      set({ isLoading: false, error: err.message });
+      return undefined;
+    }
+  },
+
+  getKBStatus: async (args: IKBGetStatusIPCArgs) => {
+    try {
+      set({ isLoading: true, error: null });
+      const result = await window.electron.knowledgeBase.getKBStatus(args);
+      set({ isLoading: false });
+      return result;
+    } catch (err: any) {
+      set({ isLoading: false, error: err.message });
+      return undefined;
+    }
+  },
+
+  synchronizeKB: async (args: IKBSynchronizeIPCArgs) => {
+    try {
+      set({ isLoading: true, error: null });
+      const result = await window.electron.knowledgeBase.synchronizeKB(args);
+      set({ isLoading: false });
+      return result;
+    } catch (err: any) {
+      set({ isLoading: false, error: err.message });
+      return undefined;
+    }
+  },
+
+  fullUpdateKB: async (args: IKBFullUpdateIPCArgs) => {
+    set({ isLoading: true, error: null });
+    // Token is expected to be part of args.token directly by the IPC handler definition
+    if (!args.token) {
+      const errMsg = "Authentication token is missing in arguments. Cannot perform full update on knowledge base.";
+      console.error(errMsg);
+      set({ error: errMsg, isLoading: false });
+      return undefined;
+    }
+
+    try {
+      const updatedKb: IKnowledgeBase | undefined = await window.electron.knowledgeBase.fullUpdateKB(args);
+      set({ isLoading: false, kbsLastUpdated: Date.now() });
+      return updatedKb;
+    } catch (err: any) {
+      console.error(`Error performing full update on knowledge base ${args.kbId}:`, err);
+      set({ error: err.message || 'Failed to perform full update on knowledge base', isLoading: false });
       return undefined;
     }
   },

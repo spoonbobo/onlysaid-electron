@@ -1,13 +1,10 @@
 // onlysaid-electron/src/scenes/Menu/Workspace/KnowledgeBase/index.tsx
 import { Box, List, ListItem, ListItemButton, ListItemText, Typography, CircularProgress, Paper } from "@mui/material";
 import { useEffect, useState, useMemo, useCallback } from "react";
-import { useTopicStore, useCurrentTopicContext } from "@/stores/Topic/TopicStore";
+import { useTopicStore, useCurrentTopicContext, KNOWLEDGE_BASE_SELECTION_KEY } from "@/stores/Topic/TopicStore";
 import { useKBStore } from "@/stores/KB/KBStore";
 import { IKnowledgeBase } from "@/../../types/KnowledgeBase/KnowledgeBase";
 import { useIntl } from "react-intl";
-
-// Define a unique key for storing the selected knowledge base ID in TopicStore's selectedTopics
-const KNOWLEDGE_BASE_SELECTION_KEY = "knowledgeBaseMenu:selectedId";
 
 export default function KnowledgeBaseMenu() {
   const intl = useIntl();

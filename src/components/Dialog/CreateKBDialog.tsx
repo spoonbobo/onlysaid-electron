@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
   Dialog,
   DialogTitle,
@@ -78,6 +78,25 @@ export default function CreateKBDialog({
 
   const kbNameForPath = name.trim() || intl.formatMessage({ id: "dialog.createKB.placeholder.kbName", defaultMessage: "<KB_Name>" });
 
+  const resetForm = useCallback(() => {
+    setName("");
+    setDescription("");
+    setPath("");
+    setNameError(false);
+    setPathError(false);
+
+    const isWorkspaceContextAvailable = !!selectedContext?.id;
+    const initialSourceType = isWorkspaceContextAvailable ? "onlysaid-kb" : "local-store";
+    setSourceType(initialSourceType);
+
+    if (initialSourceType === "onlysaid-kb") {
+      setSelectedEmbeddingEngine("");
+    } else { // "local-store"
+      // Preliminary: Set based on defaultEmbeddingEngine. Refined when models load.
+      setSelectedEmbeddingEngine(defaultEmbeddingEngine && defaultEmbeddingEngine !== "none" ? defaultEmbeddingEngine : "");
+    }
+  }, [selectedContext, defaultEmbeddingEngine, setName, setDescription, setPath, setSourceType, setSelectedEmbeddingEngine, setNameError, setPathError]);
+
   useEffect(() => {
     if (open) {
       if (mode === 'edit' && database) {
@@ -93,16 +112,38 @@ export default function CreateKBDialog({
         new EmbeddingService().GetEmbeddingModels()
           .then(models => {
             setEmbeddingModels(models);
-            if (defaultEmbeddingEngine && defaultEmbeddingEngine !== "none" && models.find(m => m.id === defaultEmbeddingEngine)) {
-              setSelectedEmbeddingEngine(defaultEmbeddingEngine);
-            } else {
-              setSelectedEmbeddingEngine("");
-            }
           })
           .catch(error => console.error("Failed to load embedding models:", error));
       }
     }
-  }, [database, mode, open, defaultEmbeddingEngine]);
+  }, [database, mode, open, resetForm, setEmbeddingModels]);
+
+  useEffect(() => {
+    if (mode === 'create' && sourceType === 'local-store') {
+      if (embeddingModels.length > 0) {
+        // Models are loaded, check if defaultEmbeddingEngine is valid and available
+        if (defaultEmbeddingEngine && defaultEmbeddingEngine !== "none" && embeddingModels.find(m => m.id === defaultEmbeddingEngine)) {
+          setSelectedEmbeddingEngine(defaultEmbeddingEngine);
+        } else {
+          // Default engine not suitable, not specified, or not in loaded models; clear selection.
+          setSelectedEmbeddingEngine("");
+        }
+      } else {
+        // Models not loaded yet or no models exist.
+        // If defaultEmbeddingEngine was set by resetForm, and models load empty, it should be cleared.
+        // If there's a default engine but it's not "none", and models are empty, it should become ""
+        if (defaultEmbeddingEngine && defaultEmbeddingEngine !== "none") {
+          // This case implies models are empty, so default can't be valid
+          setSelectedEmbeddingEngine("");
+        } else {
+          // No default or default is "none", already handled by resetForm or above.
+          // Ensure it's "" if models are empty.
+          setSelectedEmbeddingEngine("");
+        }
+      }
+    }
+    // If sourceType is 'onlysaid-kb' or mode is 'edit', other logic handles selectedEmbeddingEngine
+  }, [mode, sourceType, embeddingModels, defaultEmbeddingEngine, setSelectedEmbeddingEngine]);
 
   const handleSubmit = () => {
     if (mode === "create" && sourceType === "local-store" && (!selectedEmbeddingEngine || selectedEmbeddingEngine === "none")) {
@@ -134,16 +175,6 @@ export default function CreateKBDialog({
     }
   };
 
-  const resetForm = () => {
-    setName("");
-    setDescription("");
-    setPath("");
-    setSourceType("local-store");
-    setSelectedEmbeddingEngine(defaultEmbeddingEngine !== "none" ? defaultEmbeddingEngine : "");
-    setNameError(false);
-    setPathError(false);
-  };
-
   const handleClose = () => {
     if (mode === 'create') {
       resetForm();
@@ -172,17 +203,19 @@ export default function CreateKBDialog({
     setPathError(false);
 
     if (newType === "local-store") {
+      // When switching to local-store, apply logic based on loaded models and default engine
       if (embeddingModels.length > 0) {
         if (defaultEmbeddingEngine && defaultEmbeddingEngine !== "none" && embeddingModels.find(m => m.id === defaultEmbeddingEngine)) {
           setSelectedEmbeddingEngine(defaultEmbeddingEngine);
         } else {
-          setSelectedEmbeddingEngine("");
+          setSelectedEmbeddingEngine(""); // Default not applicable or no models, prompt selection
         }
       } else {
-        setSelectedEmbeddingEngine(defaultEmbeddingEngine !== "none" ? defaultEmbeddingEngine : "");
+        // Models not loaded yet, preliminary set based on default (will be refined by useEffect if in create mode)
+        setSelectedEmbeddingEngine(defaultEmbeddingEngine && defaultEmbeddingEngine !== "none" ? defaultEmbeddingEngine : "");
       }
     } else if (newType === "onlysaid-kb") {
-      setSelectedEmbeddingEngine("");
+      setSelectedEmbeddingEngine(""); // No embedding engine for onlysaid-kb
     }
   };
 

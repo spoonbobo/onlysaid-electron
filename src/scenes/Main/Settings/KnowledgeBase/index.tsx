@@ -2,23 +2,18 @@ import { Box, Typography, Card, CardContent, Chip, Stack, CircularProgress, Divi
 import { useState, useEffect, useMemo, useCallback } from "react";
 import SettingsSection from "@/components/Settings/SettingsSection";
 import { FormattedMessage, useIntl } from "react-intl";
-import { useTopicStore, useCurrentTopicContext } from "@/stores/Topic/TopicStore";
+import { useTopicStore, useCurrentTopicContext, KNOWLEDGE_BASE_SELECTION_KEY } from "@/stores/Topic/TopicStore";
 import { toast } from "@/utils/toast";
 import { EmbeddingModel, EmbeddingService } from "@/service/ai";
-import { IKnowledgeBase, IKnowledgeBaseRegisterArgs } from "@/../../types/KnowledgeBase/KnowledgeBase";
+import { IKnowledgeBase, IKnowledgeBaseRegisterArgs, IKBGetStatusIPCArgs } from "@/../../types/KnowledgeBase/KnowledgeBase";
 import { useKBStore } from "@/stores/KB/KBStore";
 import CreateKBDialog, { DeleteKBConfirmationDialog } from "@/components/Dialog/CreateKBDialog";
 import { v4 as uuidv4 } from 'uuid';
 import CloudIcon from "@mui/icons-material/Cloud";
 import StorageIcon from "@mui/icons-material/Storage";
-import EditIcon from "@mui/icons-material/Edit";
-import DeleteIcon from "@mui/icons-material/Delete";
-import RefreshIcon from "@mui/icons-material/Refresh";
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
-import ReplayIcon from '@mui/icons-material/Replay';
-import { useKBConfigurationStore } from "@/stores/KB/KBConfigurationStore";
-
-const KNOWLEDGE_BASE_SELECTION_KEY = "knowledgeBaseMenu:selectedId";
+import KBInfo from './KBInfo';
+import KBExplorer, { IKBStatus } from './KBExplorer';
 
 function KnowledgeBaseManagerComponent() {
   const intl = useIntl();
@@ -32,9 +27,10 @@ function KnowledgeBaseManagerComponent() {
     updateKnowledgeBase,
     deleteKnowledgeBase,
     createKnowledgeBase,
+    isCreateKBDialogOpen,
+    closeCreateKBDialog,
+    getKBStatus,
   } = useKBStore();
-
-  const { isCreateKBDialogOpen, closeCreateKBDialog } = useKBConfigurationStore();
 
   const [selectedKnowledgeBase, setSelectedKnowledgeBase] = useState<IKnowledgeBase | null>(null);
   const [embeddingModels, setEmbeddingModels] = useState<EmbeddingModel[]>([]);
@@ -42,6 +38,9 @@ function KnowledgeBaseManagerComponent() {
 
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+
+  const [kbStatus, setKbStatus] = useState<IKBStatus | null>(null);
+  const [isStatusLoading, setIsStatusLoading] = useState(false);
 
   const currentWorkspaceId = useMemo(() => {
     return selectedContext?.type === "workspace" ? selectedContext.id : undefined;
@@ -60,6 +59,7 @@ function KnowledgeBaseManagerComponent() {
     const kbIdToUse = idToFetch || selectedKbId;
     if (kbIdToUse && currentWorkspaceId) {
       setIsLoadingDetails(true);
+      setKbStatus(null);
       if (!idToFetch) setSelectedKnowledgeBase(null);
       try {
         const kb = await getKnowledgeBaseById(currentWorkspaceId, kbIdToUse);
@@ -84,6 +84,7 @@ function KnowledgeBaseManagerComponent() {
       }
     } else {
       setSelectedKnowledgeBase(null);
+      setKbStatus(null);
       setIsLoadingDetails(false);
     }
   }, [selectedKbId, currentWorkspaceId, getKnowledgeBaseById, intl]);
@@ -94,8 +95,6 @@ function KnowledgeBaseManagerComponent() {
 
   useEffect(() => {
     if (currentWorkspaceId) {
-      console.log("Testing viewKnowledgeBaseStructure for workspace:", currentWorkspaceId);
-
       const viewKBStructure = useKBStore.getState().viewKnowledgeBaseStructure;
 
       viewKBStructure(currentWorkspaceId)
@@ -108,6 +107,37 @@ function KnowledgeBaseManagerComponent() {
     }
   }, [currentWorkspaceId]);
 
+  useEffect(() => {
+    if (selectedKnowledgeBase && currentWorkspaceId) {
+      const token = "";
+      setIsStatusLoading(true);
+      setKbStatus(null);
+
+      console.log(`Checking status for KB: ${selectedKnowledgeBase.id} in workspace ${currentWorkspaceId}`);
+      const args: IKBGetStatusIPCArgs = {
+        kbId: selectedKnowledgeBase.id,
+        workspaceId: currentWorkspaceId,
+        token: token,
+      };
+
+      getKBStatus(args)
+        .then(statusResult => {
+          console.log(`Status for KB ${selectedKnowledgeBase.id}:`, statusResult);
+          setKbStatus({ ...statusResult, lastChecked: new Date().toISOString() });
+        })
+        .catch(err => {
+          console.error(`Error getting status for KB ${selectedKnowledgeBase.id}:`, err);
+          setKbStatus({ errorDetails: err.message || 'Failed to fetch status', lastChecked: new Date().toISOString() });
+        })
+        .finally(() => {
+          setIsStatusLoading(false);
+        });
+    } else {
+      setKbStatus(null);
+      setIsStatusLoading(false);
+    }
+  }, [selectedKnowledgeBase, currentWorkspaceId, getKBStatus]);
+
   const handleOpenEditDialog = useCallback(() => {
     if (selectedKnowledgeBase) {
       setEditDialogOpen(true);
@@ -118,7 +148,7 @@ function KnowledgeBaseManagerComponent() {
     setEditDialogOpen(false);
   }, []);
 
-  const handleEditDatabase = useCallback(async (data: { name: string; description: string; path: string; sourceType: string; }) => {
+  const handleEditDatabase = useCallback(async (data: { name: string; description: string; path: string; sourceType: string; /* embeddingEngine: string; */ }) => {
     if (selectedKnowledgeBase && currentWorkspaceId) {
       const updates: Partial<Omit<IKnowledgeBase, 'id' | 'workspace_id' | 'create_at' | 'embedding_engine' | 'type' | 'source'>> = {
         name: data.name,
@@ -210,16 +240,20 @@ function KnowledgeBaseManagerComponent() {
     };
   }, [intl]);
 
-  const renderDetailItem = (labelId: string, defaultValue: string, value?: string | number | null) => (
-    <Typography variant="body2" gutterBottom sx={{ display: 'flex' }}>
-      <FormattedMessage id={labelId} defaultMessage={defaultValue} />:&nbsp;
-      <Typography component="span" fontWeight="bold">{value ?? "-"}</Typography>
-    </Typography>
-  );
+  const settingsSectionTitle = intl.formatMessage({ id: "settings.kb.section.title", defaultMessage: "Knowledge Base Details" });
+  const kbStatusSectionTitleBase = intl.formatMessage({ id: "settings.kb.statusSection.title", defaultMessage: "Knowledge Base Status" });
 
-  const title = selectedKnowledgeBase
-    ? selectedKnowledgeBase.name
-    : intl.formatMessage({ id: "settings.kb.selected.title", defaultMessage: "Knowledge Base Details" });
+  // Determine the dynamic title for the status section
+  const dynamicKbStatusSectionTitle = useMemo(() => {
+    if (isStatusLoading) {
+      return kbStatusSectionTitleBase; // Show "Knowledge Base Status" while loading
+    }
+    if (kbStatus && kbStatus.Status) { // Assuming 'Status' is the field from your status object
+      return kbStatus.Status;
+    }
+    // Fallback if status is not yet loaded/available but section is rendered
+    return kbStatusSectionTitleBase;
+  }, [kbStatus, isStatusLoading, kbStatusSectionTitleBase]);
 
   const handleReinitialize = useCallback(async () => {
     if (selectedKnowledgeBase && currentWorkspaceId) {
@@ -251,6 +285,7 @@ function KnowledgeBaseManagerComponent() {
       type: 'private',
       source: data.sourceType,
       embedding_engine: data.embeddingEngine,
+      configured: true,
     };
 
     const newKb = await createKnowledgeBase(args);
@@ -260,12 +295,12 @@ function KnowledgeBaseManagerComponent() {
     } else {
       toast.error(intl.formatMessage({ id: "settings.kb.create.error", defaultMessage: "Failed to create knowledge base." }));
     }
-  }, [currentWorkspaceId, createKnowledgeBase, intl, closeCreateKBDialog]);
+  }, [currentWorkspaceId, createKnowledgeBase, intl, closeCreateKBDialog, fetchAndSetSelectedKbDetails]);
 
   return (
-    <Box sx={{ mb: 4 }}>
+    <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       <SettingsSection
-        title={title}
+        title={settingsSectionTitle}
       >
         {isLoadingDetails || kbStoreIsLoadingGlobal ? (
           <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', py: 4 }}>
@@ -279,97 +314,16 @@ function KnowledgeBaseManagerComponent() {
             <FormattedMessage id="settings.kb.selected.loadErrorGlobal" defaultMessage="Error loading knowledge base system." /> {kbStoreErrorGlobal}
           </Typography>
         ) : selectedKnowledgeBase && currentWorkspaceId ? (
-          <Card sx={{ width: '100%' }} elevation={0}>
-            <CardContent>
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1 }}>
-                <Box sx={{ flexGrow: 1 }}>
-                  <Typography variant="body1" color="text.secondary" sx={{ mb: 2 }}>
-                    {selectedKnowledgeBase.description || intl.formatMessage({ id: "settings.kb.selected.noDescription", defaultMessage: "No description provided." })}
-                  </Typography>
-                </Box>
-                <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'center', flexShrink: 0 }}>
-                  <Tooltip title={intl.formatMessage({ id: "settings.kb.private.enableKB", defaultMessage: "Enable Knowledge Base" })}>
-                    <span>
-                      <Switch
-                        checked={selectedKnowledgeBase.enabled}
-                        onChange={(e) => handleToggleEnabled(e.target.checked)}
-                        disabled={!selectedKnowledgeBase.configured || isLoadingDetails}
-                        size="small"
-                      />
-                    </span>
-                  </Tooltip>
-                  <Tooltip title={intl.formatMessage({ id: "settings.kb.private.reinitialize", defaultMessage: "Reinitialize" })}>
-                    <IconButton size="small" color="secondary" onClick={handleReinitialize}>
-                      <RefreshIcon />
-                    </IconButton>
-                  </Tooltip>
-                  <Tooltip title={intl.formatMessage({ id: "settings.kb.private.edit", defaultMessage: "Edit" })}>
-                    <IconButton size="small" color="primary" onClick={handleOpenEditDialog}>
-                      <EditIcon />
-                    </IconButton>
-                  </Tooltip>
-                  <Tooltip title={intl.formatMessage({ id: "settings.kb.private.delete", defaultMessage: "Delete" })}>
-                    <IconButton size="small" color="error" onClick={handleOpenDeleteDialog}>
-                      <DeleteIcon />
-                    </IconButton>
-                  </Tooltip>
-                </Box>
-              </Box>
-
-              <Stack direction="row" spacing={1} sx={{ mb: 2, flexWrap: 'wrap' }}>
-                <Chip
-                  size="small"
-                  color={selectedKnowledgeBase.configured ? "success" : "warning"}
-                  label={intl.formatMessage({
-                    id: selectedKnowledgeBase.configured ? "settings.kb.status.configured" : "settings.kb.status.notConfigured",
-                    defaultMessage: selectedKnowledgeBase.configured ? "Configured" : "Not Configured"
-                  })}
-                />
-                {selectedKnowledgeBase.configured && (
-                  <Chip
-                    size="small"
-                    color={selectedKnowledgeBase.enabled ? "primary" : "default"}
-                    label={intl.formatMessage({
-                      id: selectedKnowledgeBase.enabled ? "settings.kb.status.enabled" : "settings.kb.status.disabled",
-                      defaultMessage: selectedKnowledgeBase.enabled ? "Enabled" : "Disabled"
-                    })}
-                  />
-                )}
-                <Chip
-                  size="small"
-                  icon={getKbSourceIconAndLabel(selectedKnowledgeBase).icon}
-                  label={getKbSourceIconAndLabel(selectedKnowledgeBase).label}
-                  color={getKbSourceIconAndLabel(selectedKnowledgeBase).color}
-                />
-                {selectedKnowledgeBase.embedding_engine && (
-                  <Chip
-                    size="small"
-                    variant="outlined"
-                    label={getEmbeddingEngineName(selectedKnowledgeBase.embedding_engine)}
-                    title={intl.formatMessage({ id: "settings.kb.embeddingEngineUsed", defaultMessage: "Embedding Engine" })}
-                  />
-                )}
-              </Stack>
-
-              <Divider sx={{ my: 2 }} />
-
-              {renderDetailItem("settings.kb.selected.id", "ID", selectedKnowledgeBase.id)}
-              {renderDetailItem("settings.kb.selected.documents", "Documents", selectedKnowledgeBase.configured ? selectedKnowledgeBase.documents : undefined)}
-              {renderDetailItem(
-                "settings.kb.selected.size", "Size (KB)",
-                selectedKnowledgeBase.configured && selectedKnowledgeBase.size != null ? (selectedKnowledgeBase.size / 1024).toFixed(2) : undefined
-              )}
-              {renderDetailItem(
-                "settings.kb.selected.createdAt", "Created",
-                new Date(selectedKnowledgeBase.create_at).toLocaleDateString()
-              )}
-              {selectedKnowledgeBase.type === 'private' && renderDetailItem(
-                "settings.kb.selected.path", "Path/URL",
-                selectedKnowledgeBase.url
-              )}
-
-            </CardContent>
-          </Card>
+          <KBInfo
+            knowledgeBase={selectedKnowledgeBase}
+            isLoading={isLoadingDetails}
+            onToggleEnabled={handleToggleEnabled}
+            onReinitialize={handleReinitialize}
+            onEdit={handleOpenEditDialog}
+            onDelete={handleOpenDeleteDialog}
+            getEmbeddingEngineName={getEmbeddingEngineName}
+            getKbSourceIconAndLabel={getKbSourceIconAndLabel}
+          />
         ) : (
           <Box sx={{ textAlign: 'center', py: 4, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1 }}>
             <InfoOutlinedIcon color="action" sx={{ fontSize: 40 }} />
@@ -393,6 +347,32 @@ function KnowledgeBaseManagerComponent() {
         )}
       </SettingsSection>
 
+      {/* KB Status Section - Title is now just the status value or a fallback */}
+      {selectedKnowledgeBase && currentWorkspaceId && (
+        <SettingsSection
+          title={dynamicKbStatusSectionTitle} // Use the updated dynamic title
+          sx={{
+            mt: 2,
+            flexGrow: 1,
+            display: 'flex',
+            flexDirection: 'column',
+            minHeight: 0,
+          }}
+        >
+          <KBExplorer
+            kbStatus={kbStatus}
+            isLoading={isStatusLoading}
+            sx={{
+              flexGrow: 1,
+              display: 'flex',
+              flexDirection: 'column',
+              overflow: 'auto',
+            }}
+          />
+        </SettingsSection>
+      )}
+
+      {/* Dialog for Editing existing KB */}
       {selectedKnowledgeBase && editDialogOpen && (
         <CreateKBDialog
           open={editDialogOpen}
@@ -403,6 +383,7 @@ function KnowledgeBaseManagerComponent() {
         />
       )}
 
+      {/* Dialog for Creating new KB - driven by global state */}
       <CreateKBDialog
         open={isCreateKBDialogOpen}
         onClose={closeCreateKBDialog}

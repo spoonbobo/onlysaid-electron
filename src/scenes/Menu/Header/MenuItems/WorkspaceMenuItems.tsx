@@ -11,12 +11,13 @@ import HomeIcon from "@mui/icons-material/Home";
 import TrendingUpIcon from "@mui/icons-material/TrendingUp";
 import AssignmentIcon from "@mui/icons-material/Assignment";
 import PersonAddIcon from "@mui/icons-material/PersonAdd";
+import LibraryAddIcon from "@mui/icons-material/LibraryAdd";
 import { useTopicStore } from "@/stores/Topic/TopicStore";
 import { useChatStore } from "@/stores/Chat/ChatStore";
 import { getUserFromStore } from "@/utils/user";
 import { useState } from "react";
 import { useWorkspaceStore } from "@/stores/Workspace/WorkspaceStore";
-import { useKBConfigurationStore } from "@/stores/KB/KBConfigurationStore";
+import { useKBStore } from "@/stores/KB/KBStore";
 import InviteUserDialog from "@/components/Dialog/Workspace/AddUser";
 import { IWorkspace } from "@/../../types/Workspace/Workspace";
 
@@ -118,7 +119,7 @@ export const RenderWorkspaceActions = ({
   const { selectedContext, setSelectedTopic } = useTopicStore();
   const currentUser = getUserFromStore();
   const { addUserToWorkspace } = useWorkspaceStore();
-  const { openCreateKBDialog } = useKBConfigurationStore();
+  const { openCreateKBDialog } = useKBStore();
   const [isInviteDialogOpen, setIsInviteDialogOpen] = useState(false);
 
   const handleInviteUser = async (email: string, role: string) => {
@@ -175,7 +176,7 @@ export const RenderWorkspaceActions = ({
               handleAction?.('openCreateKBDialog');
             }}
           >
-            <AddCommentIcon fontSize="small" />
+            <LibraryAddIcon fontSize="small" />
           </IconButton>
         </Tooltip>
       );

@@ -27,7 +27,11 @@ type KnowledgeBaseChannels =
   | 'kb:get'
   | 'kb:update'
   | 'kb:delete'
-  | 'kb:view';
+  | 'kb:view'
+  | 'kb:register'
+  | 'kb:getStatus'
+  | 'kb:synchronize'
+  | 'kb:fullUpdate';
 
 type SSEChannels = 'streaming:abort_stream' | 'streaming:chat_stream_complete' | 'streaming:chunk' | 'streaming:query_stream_complete';
 type MCPChannels = 'mcp:initialize_client' | 'mcp:list_tools';
@@ -175,6 +179,10 @@ const electronHandler = {
     update: (...args: unknown[]) => ipcRenderer.invoke('kb:update', ...args),
     delete: (...args: unknown[]) => ipcRenderer.invoke('kb:delete', ...args),
     view: (...args: unknown[]) => ipcRenderer.invoke('kb:view', ...args),
+    registerKB: (...args: unknown[]) => ipcRenderer.invoke('kb:register', ...args),
+    getKBStatus: (...args: unknown[]) => ipcRenderer.invoke('kb:getStatus', ...args),
+    synchronizeKB: (...args: unknown[]) => ipcRenderer.invoke('kb:synchronize', ...args),
+    fullUpdateKB: (...args: unknown[]) => ipcRenderer.invoke('kb:fullUpdate', ...args),
   },
 };
 
