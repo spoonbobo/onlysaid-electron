@@ -7,7 +7,7 @@ import { toast } from "@/utils/toast";
 import { EmbeddingModel, EmbeddingService } from "@/service/ai";
 import { IKnowledgeBase, IKnowledgeBaseRegisterArgs, IKBGetStatusIPCArgs, IKBRegisterIPCArgs, IKBFullUpdateIPCArgs } from "@/../../types/KnowledgeBase/KnowledgeBase";
 import { useKBStore } from "@/stores/KB/KBStore";
-import CreateKBDialog, { DeleteKBConfirmationDialog } from "@/components/Dialog/CreateKBDialog";
+import CreateKBDialog, { DeleteKBConfirmationDialog } from "@/components/Dialog/KB/CreateKBDialog";
 import { v4 as uuidv4 } from 'uuid';
 import CloudIcon from "@mui/icons-material/Cloud";
 import StorageIcon from "@mui/icons-material/Storage";

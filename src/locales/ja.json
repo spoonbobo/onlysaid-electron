@@ -418,5 +418,7 @@
   "dialog.createKB.placeholder.kbName": "<KB名>",
   "kb.menu.errorLoading": "ナレッジベースの読み込みに失敗しました。",
   "kb.menu.noKbsFound": "ナレッジベースが見つかりません。新しいナレッジベースを作成してください。",
-  "settings.kb.create.success": "ナレッジベースが作成されました。"
+  "settings.kb.create.success": "ナレッジベースが作成されました。",
+  "chat.knowledgeBases": "ナレッジベース",
+  "chat.selectKB": "ナレッジベースを選択"
 }

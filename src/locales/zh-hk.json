@@ -307,6 +307,12 @@
 
   "workspace.workspace:chatroom": "聊天室",
   "chat.mode.query": "查詢(AI)",
+  "chat.noKBsAvailable": "沒有可用的知識庫",
+  "chat.selectKB.multiple": "選擇知識庫",
+  "chat.allKBsSelected": "已選擇所有知識庫",
+  "chat.multipleKBsSelected": "已選擇 {count} 個知識庫",
+  "chat.kb.selectAll": "全選",
+  "chat.noKBsFoundInWorkspace": "在此工作空間中找不到知識庫",
   "dialog.createKB.name": "名稱",
   "dialog.createKB.description": "描述",
   "dialog.createKB.source": "來源類型",

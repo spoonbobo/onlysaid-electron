@@ -26,6 +26,7 @@ interface FileExplorerState {
   addLocalRootFolder: () => Promise<void>;
   addRemoteWorkspaceRoot: (workspaceId: string, workspaceName: string, token: string) => Promise<void>;
   removeRootFolder: (nodeId: string) => void;
+  removeRemoteRootFolderByWorkspaceId: (workspaceId: string) => void;
   loadFolder: (nodeId: string, token?: string) => Promise<void>;
   toggleFolder: (nodeId: string) => void;
   selectItem: (nodeId: string) => void;
@@ -210,11 +211,33 @@ export const useFileExplorerStore = create<FileExplorerState>()(
       },
 
       removeRootFolder: (nodeId: string) => {
-        set(state => ({
-          rootFolders: state.rootFolders.filter(folder => folder.id !== nodeId),
-          lastOpenedFolderIds: state.lastOpenedFolderIds.filter(id => id !== nodeId),
-          selectedId: state.selectedId === nodeId ? null : state.selectedId,
-        }));
+        set(state => {
+          const nodeToRemove = findNodeById(state.rootFolders, nodeId);
+          return {
+            rootFolders: state.rootFolders.filter(folder => folder.id !== nodeId),
+            lastOpenedFolderIds: state.lastOpenedFolderIds.filter(id => id !== nodeId),
+            selectedId: state.selectedId === nodeId ? null : state.selectedId,
+          };
+        });
+      },
+
+      removeRemoteRootFolderByWorkspaceId: (workspaceId: string) => {
+        set(state => {
+          const remoteRootNodeId = generateNodeId('remote', '', workspaceId); // Path is '' for root
+          const nodeToRemove = findNodeById(state.rootFolders, remoteRootNodeId);
+
+          if (!nodeToRemove || nodeToRemove.source !== 'remote' || nodeToRemove.path !== '') {
+            // Not a remote root folder or ID doesn't match expected pattern, do nothing or log warning
+            // console.warn(`Remote root folder for workspace ${workspaceId} not found or invalid.`);
+            return state; // Return current state if no change
+          }
+
+          return {
+            rootFolders: state.rootFolders.filter(folder => folder.id !== remoteRootNodeId),
+            lastOpenedFolderIds: state.lastOpenedFolderIds.filter(id => id !== remoteRootNodeId),
+            selectedId: state.selectedId === remoteRootNodeId ? null : state.selectedId,
+          };
+        });
       },
 
       loadFolder: async (nodeId: string, token?: string) => {

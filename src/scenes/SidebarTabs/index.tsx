@@ -7,7 +7,7 @@ import { useTopicStore, TopicContext } from "@/stores/Topic/TopicStore";
 import { useWorkspaceStore } from "@/stores/Workspace/WorkspaceStore";
 import { useUserStore } from "@/stores/User/UserStore";
 import AddTeamDialog from "@/components/Dialog/Workspace/AddWorkspace";
-import ExitWorkspaceDialog from "@/components/Dialog/ExitWorkspace";
+import ExitWorkspaceDialog from "@/components/Dialog/Workspace/ExitWorkspace";
 import { getUserFromStore } from "@/utils/user";
 import { IWorkspace } from "../../../../types/Workspace/Workspace";
 import { useChatStore } from "@/stores/Chat/ChatStore";

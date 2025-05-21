@@ -6,6 +6,8 @@ import AttachFileIcon from "@mui/icons-material/AttachFile";
 import { useSelectedModelStore } from "@/stores/LLM/SelectedModelStore";
 import ModelSelector from "./ModelSelector";
 import AIMode from "./AIMode";
+import KBSelector from "./KBSelector";
+import { useLLMConfigurationStore } from "@/stores/LLM/LLMConfiguration";
 
 interface ActionButtonsProps {
   input: string;
@@ -25,6 +27,7 @@ export default function ActionButtons({
   hasAttachments = false
 }: ActionButtonsProps) {
   const { modelId, provider } = useSelectedModelStore();
+  const { aiMode } = useLLMConfigurationStore();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -61,13 +64,14 @@ export default function ActionButtons({
         alignItems: "center",
         px: 2,
         py: 1,
-        justifyContent: "flex-end",
+        justifyContent: "space-between",
         bgcolor: theme => alpha(theme.palette.background.paper, 0.5),
       }}
     >
-      <Box sx={{ display: "flex", gap: 0.5 }}>
+      <Box sx={{ display: "flex", gap: 0.5, alignItems: "center" }}>
         <AIMode disabled={disabled} />
         <ModelSelector disabled={disabled} />
+        {aiMode === "query" && <KBSelector disabled={disabled} />}
       </Box>
 
       <Box sx={{ display: "flex", gap: 0.5 }}>

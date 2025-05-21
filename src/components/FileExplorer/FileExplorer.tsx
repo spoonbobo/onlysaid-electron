@@ -1,5 +1,5 @@
 import { useRef, useEffect, useState } from "react";
-import { Box, Typography, Button, List, ListItem, ListItemIcon, ListItemText, CircularProgress, Menu, MenuItem, Chip } from "@mui/material";
+import { Box, Typography, Button, List, ListItem, ListItemIcon, ListItemText, CircularProgress, Menu, MenuItem, Chip, IconButton, ListItemButton } from "@mui/material";
 import FolderIcon from "@mui/icons-material/Folder";
 import InsertDriveFileIcon from "@mui/icons-material/InsertDriveFile";
 import ExpandLess from "@mui/icons-material/ExpandLess";
@@ -65,7 +65,7 @@ function FileNodeItem({ node, level = 0 }: { node: FileNode, level?: number }) {
   }, [node.type, node.source, node.workspaceId, node.path, processedKbDocuments]);
 
   const handleClick = () => {
-    if (isLoading) return;
+    if (isLoading && node.type === 'directory') return;
 
     if (node.type === 'directory') {
       if (node.isExpanded || (node.children && node.children.length > 0)) {
@@ -78,11 +78,15 @@ function FileNodeItem({ node, level = 0 }: { node: FileNode, level?: number }) {
       }
     } else {
       selectItem(node.id);
-
       if (isLeafFile) {
         setShowFileClickDialog(true);
       }
     }
+  };
+
+  const handleExpansionClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    handleClick();
   };
 
   const handleDragStart = (e: React.DragEvent<HTMLDivElement>) => {
@@ -142,30 +146,31 @@ function FileNodeItem({ node, level = 0 }: { node: FileNode, level?: number }) {
         component="span"
         noWrap
         sx={{
-          lineHeight: 1.1,
+          lineHeight: 1,
           color: isSelected ? 'primary.main' : 'inherit',
           fontWeight: isSelected ? 500 : 'inherit',
-          fontSize: '0.875rem',
+          fontSize: '0.8rem',
           flexGrow: 1,
           overflow: 'hidden',
           textOverflow: 'ellipsis',
-          pr: isSynced ? 0.5 : 0,
+          pr: isSynced ? 0.25 : 0,
         }}
       >
         {node.label}
       </Typography>
       {isSynced && (
         <Chip
-          icon={<CloudDoneIcon sx={{ fontSize: '1rem !important', marginLeft: '2px !important', marginRight: '-2px !important' }} />}
+          icon={<CloudDoneIcon sx={{ fontSize: '0.8rem !important', marginLeft: '1px !important', marginRight: '-1px !important' }} />}
           label="Synced"
           size="small"
           color="success"
           variant="outlined"
           sx={{
-            height: '20px',
-            fontSize: '0.65rem',
+            height: '18px',
+            fontSize: '0.6rem',
             lineHeight: '1',
-            '.MuiChip-label': { px: '6px' },
+            '.MuiChip-label': { px: '4px' },
+            ml: 0.5,
           }}
         />
       )}
@@ -176,7 +181,7 @@ function FileNodeItem({ node, level = 0 }: { node: FileNode, level?: number }) {
     <div>
       <ListItem
         component="div"
-        onClick={handleClick}
+        onClick={isDraggable ? undefined : handleClick}
         onContextMenu={handleContextMenu}
         draggable={isDraggable}
         onDragStart={isDraggable ? handleDragStart : undefined}
@@ -184,41 +189,52 @@ function FileNodeItem({ node, level = 0 }: { node: FileNode, level?: number }) {
         onDragOver={handleDragOver}
         onDrop={handleDrop}
         sx={{
-          pl: 2 + level * 2,
-          py: 0.5,
-          cursor: isLoading ? 'default' : (isDraggable ? 'grab' : 'pointer'),
+          pl: 1 + level * 1.5,
+          py: 0.25,
+          cursor: isLoading ? 'default' : (isDraggable ? 'grab' : (node.type === 'directory' ? 'pointer' : 'pointer')),
           opacity: isLoading ? 0.7 : (isDragging ? 0.4 : 1),
           bgcolor: isSelected ? 'action.selected' : 'transparent',
           '&:hover': { bgcolor: isLoading ? 'transparent' : (isSelected ? 'action.selected' : 'action.hover') },
-          height: 36,
-          minHeight: 36,
+          height: 30,
+          minHeight: 30,
           boxSizing: 'border-box',
           userSelect: 'none',
           WebkitUserSelect: 'none',
           MozUserSelect: 'none',
           msUserSelect: 'none',
+          display: 'flex',
+          alignItems: 'center',
         }}
       >
-        <ListItemIcon sx={{ minWidth: 36 }}>
+        <ListItemIcon sx={{ minWidth: 24, p: 0, m: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           {node.type === 'directory' ? (
             isLoading ? (
-              <CircularProgress size={20} color="inherit" />
-            ) : node.isExpanded ? (
-              <FolderOpenIcon fontSize="small" color={iconColor as "primary" | "secondary" | "info" | "success" | "warning" | "error" | "inherit" | undefined} />
+              <CircularProgress size={16} color="inherit" sx={{ p: 0, m: 0 }} />
             ) : (
-              <FolderIcon fontSize="small" color={iconColor as "primary" | "secondary" | "info" | "success" | "warning" | "error" | "inherit" | undefined} />
+              <IconButton onClick={handleExpansionClick} size="small" sx={{ p: 0.25 }}>
+                {node.isExpanded ? <ExpandLess sx={{ fontSize: '1rem' }} /> : <ExpandMore sx={{ fontSize: '1rem' }} />}
+              </IconButton>
             )
           ) : (
-            <InsertDriveFileIcon fontSize="small" color={fileIconColor} />
+            <Box sx={{ width: 24, height: 24 }} />
+          )}
+        </ListItemIcon>
+        <ListItemIcon sx={{ minWidth: 30, mr: 0.5, ml: 0.25 }}>
+          {node.type === 'directory' ? (
+            node.isExpanded ? (
+              <FolderOpenIcon sx={{ fontSize: '1.1rem' }} color={iconColor as "primary" | "secondary" | "info" | "success" | "warning" | "error" | "inherit" | undefined} />
+            ) : (
+              <FolderIcon sx={{ fontSize: '1.1rem' }} color={iconColor as "primary" | "secondary" | "info" | "success" | "warning" | "error" | "inherit" | undefined} />
+            )
+          ) : (
+            <InsertDriveFileIcon sx={{ fontSize: '1.1rem' }} color={fileIconColor} />
           )}
         </ListItemIcon>
         <ListItemText
           primary={primaryTextContent}
-          sx={{ overflow: 'hidden' }}
+          sx={{ my: 0, overflow: 'hidden', cursor: (node.type === 'file' && !isLoading ? 'pointer' : 'default') }}
+          onClick={node.type === 'file' && !isLoading ? handleClick : undefined}
         />
-        {node.type === 'directory' && !isLoading && (
-          node.isExpanded ? <ExpandLess fontSize="small" /> : <ExpandMore fontSize="small" />
-        )}
       </ListItem>
 
       <Menu
@@ -236,16 +252,24 @@ function FileNodeItem({ node, level = 0 }: { node: FileNode, level?: number }) {
       >
         <MenuItem
           onClick={handleRemoveFolder}
-          sx={{ minHeight: 36, fontSize: 14 }}
+          sx={{
+            minHeight: 24,
+            fontSize: '0.75rem',
+            py: 0.25,
+          }}
         >
-          <ListItemIcon sx={{ minWidth: 36, color: 'error.main' }}>
-            <DeleteOutlineIcon fontSize="small" />
+          <ListItemIcon
+            sx={{
+              minWidth: 28,
+              color: 'error.main',
+              mr: 0.5
+            }}
+          >
+            <DeleteOutlineIcon sx={{ fontSize: '1rem' }} />
           </ListItemIcon>
           <ListItemText
             primary={<FormattedMessage id="menu.fileExplorer.removeFolder" defaultMessage="Remove Folder" />}
-            slotProps={{
-              primary: { fontSize: '0.875rem' }
-            }}
+            primaryTypographyProps={{ fontSize: '0.75rem' }}
           />
         </MenuItem>
       </Menu>
@@ -272,15 +296,15 @@ function FileNodeItem({ node, level = 0 }: { node: FileNode, level?: number }) {
           !isLoading && (
             <ListItem
               sx={{
-                pl: 4 + level * 2,
-                py: 0.5,
-                height: 36,
-                minHeight: 36,
+                pl: 1 + (level + 1) * 1.5 + (24 / 8 / 2),
+                py: 0.25,
+                height: 30,
+                minHeight: 30,
                 boxSizing: 'border-box',
                 userSelect: 'none',
               }}
             >
-              <Typography variant="body2" color="text.secondary">
+              <Typography variant="body2" sx={{ fontSize: '0.75rem' }} color="text.secondary">
                 <FormattedMessage id="file.emptyFolder" defaultMessage="Empty folder" />
               </Typography>
             </ListItem>
@@ -339,7 +363,7 @@ function FileExplorer({ minContentHeightAbove }: FileExplorerProps) {
       const menuContainerRect = menuContainer.getBoundingClientRect();
       const menuHeaderRect = menuHeaderWrapper.getBoundingClientRect();
 
-      const minExplorerHeight = 40;
+      const minExplorerHeight = 30;
 
       const maxTopYAllowed = menuContainerRect.top + menuHeaderRect.height + minContentHeightAbove;
 
@@ -380,7 +404,7 @@ function FileExplorer({ minContentHeightAbove }: FileExplorerProps) {
       {isExpanded && (
         <Box
           sx={{
-            height: "4px",
+            height: "3px",
             cursor: "ns-resize",
             position: "absolute",
             top: 0,
@@ -393,20 +417,40 @@ function FileExplorer({ minContentHeightAbove }: FileExplorerProps) {
         />
       )}
 
-      <MenuSection>
+      <MenuSection sx={{ p: 0, '& .MuiList-root': { p: 0, m: 0 } }}>
         <Box>
-          <MenuListItem
-            icon={<FolderIcon color="primary" fontSize="small" />}
-            label={<FormattedMessage id="menu.fileExplorer" />}
-            isSelected={false}
-            textColor="primary.main"
+          <ListItemButton
             onClick={() => setIsExpanded(!isExpanded)}
-            endIcon={isExpanded ? <ExpandLess /> : <ExpandMore />}
             sx={{
-              fontWeight: 700,
-              fontSize: "0.95rem"
+              py: 0.375,
+              px: 0.75,
+              minHeight: 32,
+              height: 32,
+              display: 'flex',
+              alignItems: 'center'
             }}
-          />
+          >
+            <IconButton size="small" sx={{ p: 0.1, mr: 0.5 }}>
+              {isExpanded ? <ExpandLess sx={{ fontSize: '1rem' }} /> : <ExpandMore sx={{ fontSize: '1rem' }} />}
+            </IconButton>
+            <ListItemIcon sx={{ minWidth: 'auto', mr: 0.75 }}>
+              <FolderIcon color="primary" sx={{ fontSize: '1.1rem' }} />
+            </ListItemIcon>
+            <ListItemText
+              primary={<FormattedMessage id="menu.fileExplorer" />}
+              slotProps={{
+                primary: {
+                  sx: {
+                    fontWeight: 500,
+                    fontSize: "0.8rem",
+                    color: "primary.main",
+                    lineHeight: 1,
+                  }
+                }
+              }}
+              sx={{ my: 0 }}
+            />
+          </ListItemButton>
 
           {isExpanded && (
             <Box
@@ -417,8 +461,8 @@ function FileExplorer({ minContentHeightAbove }: FileExplorerProps) {
               }}
             >
               {isLoading && (
-                <Box display="flex" justifyContent="center" p={2}>
-                  <CircularProgress size={24} />
+                <Box display="flex" justifyContent="center" p={1.5}>
+                  <CircularProgress size={20} />
                 </Box>
               )}
 
@@ -429,18 +473,18 @@ function FileExplorer({ minContentHeightAbove }: FileExplorerProps) {
                   alignItems="center"
                   justifyContent="center"
                   height="100%"
-                  p={2}
+                  p={1.5}
                   textAlign="center"
                 >
-                  <Typography color="text.secondary" gutterBottom>
+                  <Typography color="text.secondary" sx={{ fontSize: '0.8rem' }} gutterBottom>
                     <FormattedMessage id="menu.fileExplorer.empty" defaultMessage="No folders found" />
                   </Typography>
                   <Button
-                    startIcon={<CreateNewFolderIcon />}
+                    startIcon={<CreateNewFolderIcon sx={{ fontSize: '1.1rem' }} />}
                     variant="outlined"
                     size="small"
                     color="primary"
-                    sx={{ mt: 1 }}
+                    sx={{ mt: 0.5, fontSize: '0.75rem', py: 0.25 }}
                     onClick={addLocalRootFolder}
                   >
                     <FormattedMessage id="menu.fileExplorer.addFolder" defaultMessage="Add Folder" />
@@ -454,21 +498,19 @@ function FileExplorer({ minContentHeightAbove }: FileExplorerProps) {
                   <ListItem
                     onClick={addLocalRootFolder}
                     sx={{
-                      pl: 2,
-                      py: 0.5,
+                      pl: 1.5,
+                      py: 0.25,
                       cursor: 'pointer',
-                      height: 36,
-                      minHeight: 36
+                      height: 30,
+                      minHeight: 30
                     }}
                   >
-                    <ListItemIcon sx={{ minWidth: 36 }}>
-                      <CreateNewFolderIcon fontSize="small" color="primary" />
+                    <ListItemIcon sx={{ minWidth: 30, mr: 0.5 }}>
+                      <CreateNewFolderIcon sx={{ fontSize: '1.1rem' }} color="primary" />
                     </ListItemIcon>
                     <ListItemText
                       primary={<FormattedMessage id="menu.fileExplorer.addFolder" defaultMessage="Add Folder" />}
-                      slotProps={{
-                        primary: { fontSize: '0.875rem' }
-                      }}
+                      primaryTypographyProps={{ fontSize: '0.8rem' }}
                     />
                   </ListItem>
                 </div>

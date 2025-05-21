@@ -5,6 +5,8 @@ import { getUserFromStore, getUserTokenFromStore } from "@/utils/user";
 import { IWorkspace, IWorkspaceUser, IWorkspaceWithRole } from "@/../../types/Workspace/Workspace";
 import { toast } from "@/utils/toast";
 import { useToastStore } from "../Notification/ToastStore";
+import { useKBStore } from "@/stores/KB/KBStore";
+import { useFileExplorerStore } from "@/stores/File/FileExplorerStore";
 
 interface WorkspaceCreateData extends Partial<IWorkspace> {
   name: string;
@@ -162,6 +164,9 @@ export const useWorkspaceStore = create<WorkspaceState>()((set, get) => ({
         isLoading: false
       }));
 
+      useKBStore.getState().clearProcessedDocumentsForWorkspace(workspaceId);
+      useFileExplorerStore.getState().removeRemoteRootFolderByWorkspaceId(workspaceId);
+
       toast.success("Workspace deleted successfully");
     } catch (error: any) {
       set({ error: error.message, isLoading: false });
@@ -217,6 +222,9 @@ export const useWorkspaceStore = create<WorkspaceState>()((set, get) => ({
         workspaces: state.workspaces.filter(w => w.id !== workspaceId),
         isLoading: false
       }));
+
+      useKBStore.getState().clearProcessedDocumentsForWorkspace(workspaceId);
+      useFileExplorerStore.getState().removeRemoteRootFolderByWorkspaceId(workspaceId);
 
       toast.success(`Exited workspace: ${existingWorkspace.name}`);
     } catch (error: any) {

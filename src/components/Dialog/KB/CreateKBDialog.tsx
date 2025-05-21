@@ -29,7 +29,7 @@ import CloudIcon from "@mui/icons-material/Cloud";
 import { FormattedMessage, useIntl } from "react-intl";
 import { useKBSettingsStore } from "@/stores/KB/KBSettingStore";
 import { EmbeddingModel, EmbeddingService } from "@/service/ai";
-import { IKnowledgeBase } from "../../../../types/KnowledgeBase/KnowledgeBase";
+import { IKnowledgeBase } from "../../../../../types/KnowledgeBase/KnowledgeBase";
 import { useCurrentTopicContext } from "@/stores/Topic/TopicStore";
 import { useWorkspaceStore } from "@/stores/Workspace/WorkspaceStore";
 

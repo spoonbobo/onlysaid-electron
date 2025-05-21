@@ -39,6 +39,7 @@ interface KBState {
 
   openCreateKBDialog: () => void;
   closeCreateKBDialog: () => void;
+  clearProcessedDocumentsForWorkspace: (workspaceId: string) => void;
 }
 
 interface CreateKBIPCArgs {
@@ -367,6 +368,18 @@ export const useKBStore = create<KBState>()(
           set({ error: err.message || 'Failed to perform full update on knowledge base', isLoading: false });
           return undefined;
         }
+      },
+
+      clearProcessedDocumentsForWorkspace: (workspaceId: string) => {
+        set(state => {
+          const newProcessedDocs = { ...state.processedKbDocuments };
+          if (newProcessedDocs[workspaceId]) {
+            delete newProcessedDocs[workspaceId];
+          }
+          return {
+            processedKbDocuments: newProcessedDocs,
+          };
+        });
       },
     }),
     {
