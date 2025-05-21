@@ -35,7 +35,6 @@ export const useAgentStore = create<AgentState>()(
         }
         set({ isLoading: true, error: null });
         try {
-          console.log(`[AgentStore] Fetching agent with ID: ${agentId}`);
           // @ts-ignore
           const response = await window.electron.user.get({
             token,
@@ -49,11 +48,9 @@ export const useAgentStore = create<AgentState>()(
           if (response.data?.data && Array.isArray(response.data.data) && response.data.data.length > 0) {
             const agentData = response.data.data[0] as IUser;
             set({ agent: agentData, isLoading: false, error: null });
-            console.log('[AgentStore] Agent data fetched and set:', agentData);
           } else if (response.data?.data) { // Handle if API returns single object not in array
             const agentData = response.data.data as IUser;
             set({ agent: agentData, isLoading: false, error: null });
-            console.log('[AgentStore] Agent data fetched and set (single object):', agentData);
           }
 
           else {
@@ -81,8 +78,6 @@ export const useAgentStore = create<AgentState>()(
         let experienceToReachNext = calculateExperienceForLevel(newLevel === 0 ? 1 : newLevel + 1); // Corrected to next level calc
         let leveledUp = false;
 
-        console.log(`[AgentStore] Initial XP: ${currentXP}, Amount: ${amount}, ExpToNext (${newLevel + 1}): ${experienceToReachNext}`);
-
 
         while (newExperience >= experienceToReachNext && experienceToReachNext > 0) {
           newExperience -= experienceToReachNext;
@@ -90,11 +85,9 @@ export const useAgentStore = create<AgentState>()(
           experienceToReachNext = calculateExperienceForLevel(newLevel + 1);
           toast.success(`Agent leveled up! Now level ${newLevel}!`);
           leveledUp = true;
-          console.log(`[AgentStore] Leveled up to ${newLevel}. New XP: ${newExperience}. ExpToNext (${newLevel + 1}): ${experienceToReachNext}`);
         }
 
         if (!leveledUp && newExperience === currentXP) { // No change if not enough for level and no partial XP gain
-          console.log("[AgentStore] No change in XP or level.");
           // return; // Removed to allow saving partial XP gain even if no level up
         }
 
@@ -106,14 +99,12 @@ export const useAgentStore = create<AgentState>()(
         };
 
         set({ agent: updatedAgentObject });
-        console.log('[AgentStore] Agent state updated locally:', updatedAgentObject);
 
         try {
           const { token } = useUserTokenStore.getState();
           if (!token) {
             throw new Error("User token not found for backend update.");
           }
-          console.log('[AgentStore] Updating agent on backend...', updatedAgentObject);
           // @ts-ignore
           const response = await window.electron.user.update({
             user: updatedAgentObject, // API expects 'user' field for the object to update
@@ -126,7 +117,6 @@ export const useAgentStore = create<AgentState>()(
 
           if (response.data?.data) {
             set({ agent: response.data.data, error: null }); // Update with backend response
-            console.log('[AgentStore] Agent data updated from backend:', response.data.data);
           } else {
             console.warn('[AgentStore] Backend did not return updated agent data as expected after gainExperience.');
           }
@@ -155,7 +145,6 @@ export const useAgentStore = create<AgentState>()(
 
         set({ agent: updatedAgentObject });
         toast.success(`Agent leveled up! Now level ${newLevel}!`);
-        console.log('[AgentStore] Agent state updated locally for levelUp:', updatedAgentObject);
 
 
         try {
@@ -175,7 +164,6 @@ export const useAgentStore = create<AgentState>()(
 
           if (response.data?.data) {
             set({ agent: response.data.data, error: null });
-            console.log('[AgentStore] Agent data updated from backend after levelUp:', response.data.data);
           } else {
             console.warn('[AgentStore] Backend did not return updated agent data as expected after levelUp.');
           }

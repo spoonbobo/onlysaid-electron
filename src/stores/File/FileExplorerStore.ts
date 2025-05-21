@@ -12,6 +12,7 @@ export interface FileNode {
   workspaceId?: string;
   children?: FileNode[];
   isExpanded?: boolean;
+  fileDbId?: string;
 }
 
 interface FileExplorerState {
@@ -43,25 +44,89 @@ const generateNodeId = (source: 'local' | 'remote', path: string, workspaceId?: 
   throw new Error("Cannot generate ID for invalid node data");
 };
 
-const mapRemoteContentsToChildren = (
-  contents: Array<{ name: string; type: 'file' | 'directory'; path: string }>,
+const mapRemoteContentsToChildren = async (
+  rawContents: Array<{ name: string; type: 'file' | 'directory'; path: string }>,
   workspaceId: string,
-  parentPath: string
-): FileNode[] => {
-  return contents.map(item => {
-    const relativePath = item.path;
-    return {
-      id: generateNodeId('remote', relativePath, workspaceId),
-      name: item.name,
-      label: item.name,
-      path: relativePath,
-      type: item.type,
+  token: string
+): Promise<FileNode[]> => {
+  const fileNodes: FileNode[] = [];
+  const rawFiles = rawContents.filter(item => item.type === 'file');
+  const rawDirectories = rawContents.filter(item => item.type === 'directory');
+
+  const fileIdsToFetch = rawFiles.map(rf => rf.name);
+
+  if (fileIdsToFetch.length > 0) {
+    try {
+      const metadataResponse = await window.electron.fileSystem.getFilesMetadata({
+        workspaceId,
+        fileIds: fileIdsToFetch,
+        token,
+      });
+
+      const metadataMap = new Map((metadataResponse.data as any[]).map(m => [m.id, m]));
+
+      for (const rawFile of rawFiles) {
+        const meta = metadataMap.get(rawFile.name);
+        if (meta) {
+          const node: FileNode = {
+            id: generateNodeId('remote', rawFile.path, workspaceId),
+            name: meta.name,
+            label: meta.name,
+            path: rawFile.path,
+            type: 'file',
+            source: 'remote',
+            workspaceId: workspaceId,
+            fileDbId: meta.id,
+          };
+          fileNodes.push(node);
+        } else {
+          console.warn(`Metadata not found for remote file UUID: ${rawFile.name}. Using UUID as name.`);
+          const fallbackNode: FileNode = {
+            id: generateNodeId('remote', rawFile.path, workspaceId),
+            name: rawFile.name,
+            label: rawFile.name,
+            path: rawFile.path,
+            type: 'file',
+            source: 'remote',
+            workspaceId: workspaceId,
+            fileDbId: rawFile.name,
+          };
+          fileNodes.push(fallbackNode);
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching multiple file metadata:', error);
+      rawFiles.forEach(rawFile => {
+        fileNodes.push({
+          id: generateNodeId('remote', rawFile.path, workspaceId),
+          name: rawFile.name,
+          label: rawFile.name,
+          path: rawFile.path,
+          type: 'file',
+          source: 'remote',
+          workspaceId: workspaceId,
+          fileDbId: rawFile.name,
+        });
+      });
+    }
+  }
+
+  for (const rawDirectory of rawDirectories) {
+    const node: FileNode = {
+      id: generateNodeId('remote', rawDirectory.path, workspaceId),
+      name: rawDirectory.name,
+      label: rawDirectory.name,
+      path: rawDirectory.path,
+      type: 'directory',
       source: 'remote',
       workspaceId: workspaceId,
-      children: item.type === 'directory' ? [] : undefined,
+      children: [],
       isExpanded: false,
     };
-  });
+    fileNodes.push(node);
+  }
+
+  return fileNodes;
 };
 
 const mapLocalContentsToChildren = (
@@ -183,7 +248,7 @@ export const useFileExplorerStore = create<FileExplorerState>()(
             throw new Error(response.error);
           }
 
-          const children = mapRemoteContentsToChildren(response.data.contents, workspaceId, rootPath);
+          const children = await mapRemoteContentsToChildren(response.data.contents, workspaceId, token);
 
           const newRemoteRoot: FileNode = {
             id: rootId,
@@ -223,13 +288,11 @@ export const useFileExplorerStore = create<FileExplorerState>()(
 
       removeRemoteRootFolderByWorkspaceId: (workspaceId: string) => {
         set(state => {
-          const remoteRootNodeId = generateNodeId('remote', '', workspaceId); // Path is '' for root
+          const remoteRootNodeId = generateNodeId('remote', '', workspaceId);
           const nodeToRemove = findNodeById(state.rootFolders, remoteRootNodeId);
 
           if (!nodeToRemove || nodeToRemove.source !== 'remote' || nodeToRemove.path !== '') {
-            // Not a remote root folder or ID doesn't match expected pattern, do nothing or log warning
-            // console.warn(`Remote root folder for workspace ${workspaceId} not found or invalid.`);
-            return state; // Return current state if no change
+            return state;
           }
 
           return {
@@ -270,7 +333,7 @@ export const useFileExplorerStore = create<FileExplorerState>()(
               relativePath: nodeToLoad.path,
             });
             if (response.error) throw new Error(response.error);
-            children = mapRemoteContentsToChildren(response.data.contents, nodeToLoad.workspaceId, nodeToLoad.path);
+            children = await mapRemoteContentsToChildren(response.data.contents, nodeToLoad.workspaceId, token);
           }
 
           set(state => ({
@@ -324,8 +387,9 @@ export const useFileExplorerStore = create<FileExplorerState>()(
           source: root.source,
           workspaceId: root.workspaceId,
           isExpanded: root.isExpanded,
+          fileDbId: root.fileDbId,
           children: root.isExpanded && root.children ?
-            root.children.map(c => ({ id: c.id, name: c.name, label: c.label, path: c.path, type: c.type, source: c.source, workspaceId: c.workspaceId, isExpanded: c.isExpanded }))
+            root.children.map(c => ({ id: c.id, name: c.name, label: c.label, path: c.path, type: c.type, source: c.source, workspaceId: c.workspaceId, isExpanded: c.isExpanded, fileDbId: c.fileDbId }))
             : []
         })),
         lastOpenedFolderIds: state.lastOpenedFolderIds,

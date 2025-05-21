@@ -10,22 +10,33 @@ import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import CloudDoneIcon from '@mui/icons-material/CloudDone';
 import MenuListItem from "@/components/Navigation/MenuListItem";
 import MenuSection from "@/components/Navigation/MenuSection";
-import { useFileExplorerStore } from "@/stores/Layout/FileExplorerResize";
-import { useFileExplorerStore as useFilesStore, selectors, FileNode } from "@/stores/File/FileExplorerStore";
 import { FormattedMessage } from "react-intl";
 import FileDropDialog from "@/components/Dialog/File";
 import FileClickDialog from "@/components/Dialog/File/FileClickDialog";
-import { useTopicStore } from "@/stores/Topic/TopicStore";
 import { getUserTokenFromStore } from "@/utils/user";
+import { useTopicStore } from "@/stores/Topic/TopicStore";
+import { useFileExplorerStore } from "@/stores/Layout/FileExplorerResize";
+import { useFileExplorerStore as useFilesStore, selectors, FileNode } from "@/stores/File/FileExplorerStore";
 import { useKBStore } from '@/stores/KB/KBStore';
+import { toast } from "@/utils/toast";
 
 // Define props interface
 interface FileExplorerProps {
   minContentHeightAbove: number;
 }
 
+// Helper function to read file as Data URL
+const readFileAsDataURL = (file: File): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = (error) => reject(error);
+    reader.readAsDataURL(file);
+  });
+};
+
 function FileNodeItem({ node, level = 0 }: { node: FileNode, level?: number }) {
-  const { loadFolder, toggleFolder, selectItem, removeRootFolder, selectedId } = useFilesStore();
+  const { loadFolder, toggleFolder, selectItem, removeRootFolder, selectedId, refreshFolder } = useFilesStore();
   const isLoading = useFilesStore(selectors.selectIsNodeLoading(node.id));
   const [isDragging, setIsDragging] = useState(false);
   const [menuAnchorEl, setMenuAnchorEl] = useState<null | HTMLElement>(null);
@@ -34,6 +45,7 @@ function FileNodeItem({ node, level = 0 }: { node: FileNode, level?: number }) {
   const [showFileDropDialog, setShowFileDropDialog] = useState(false);
   const [showFileClickDialog, setShowFileClickDialog] = useState(false);
   const [draggedNodeId, setDraggedNodeId] = useState<string | null>(null);
+  const [externalDropInfo, setExternalDropInfo] = useState<{ count: number; names: string[] } | null>(null);
 
   const isRootNode = level === 0;
   const isRemoteRoot = isRootNode && node.source === 'remote';
@@ -68,7 +80,7 @@ function FileNodeItem({ node, level = 0 }: { node: FileNode, level?: number }) {
     if (isLoading && node.type === 'directory') return;
 
     if (node.type === 'directory') {
-      if (node.isExpanded || (node.children && node.children.length > 0)) {
+      if (node.isExpanded) {
         toggleFolder(node.id);
       } else {
         const token = getUserTokenFromStore();
@@ -114,11 +126,120 @@ function FileNodeItem({ node, level = 0 }: { node: FileNode, level?: number }) {
     e.dataTransfer.dropEffect = 'move';
   };
 
-  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
+  const handleDrop = async (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
-    const dNodeId = e.dataTransfer.getData('text/plain');
-    console.log(`Dropped ${dNodeId} onto ${node.id}`);
 
+    const droppedFiles = e.dataTransfer.files;
+
+    if (droppedFiles && droppedFiles.length > 0) {
+      const targetNodeForUpload = node;
+
+      console.log("[FileExplorer DEBUG] Drop Target Node:", {
+        id: targetNodeForUpload.id,
+        name: targetNodeForUpload.name,
+        label: targetNodeForUpload.label,
+        path: targetNodeForUpload.path,
+        type: targetNodeForUpload.type,
+        source: targetNodeForUpload.source,
+        workspaceId: targetNodeForUpload.workspaceId,
+      });
+
+      if (targetNodeForUpload.type === 'directory' && targetNodeForUpload.source === 'remote' && targetNodeForUpload.workspaceId) {
+        const token = getUserTokenFromStore();
+        if (!token) {
+          toast.error("Authentication token not found. Cannot upload files.");
+          console.error("[FileExplorer DEBUG] Auth token missing for upload.");
+          return;
+        }
+        const workspaceId = targetNodeForUpload.workspaceId;
+        const targetDirectoryPathInWorkspace = targetNodeForUpload.path;
+
+        console.log("[FileExplorer DEBUG] Workspace ID for Upload:", workspaceId);
+        console.log("[FileExplorer DEBUG] Target Directory Path in Workspace (from node.path):", targetDirectoryPathInWorkspace);
+
+        let uploadInitiatedCount = 0;
+
+        for (let i = 0; i < droppedFiles.length; i++) {
+          const file = droppedFiles[i];
+
+          console.log(`[FileExplorer DEBUG] Processing file ${i + 1}:`, { name: file.name, size: file.size, type: file.type });
+
+          try {
+            toast.info(`Processing: ${file.name}`);
+            const fileData = await readFileAsDataURL(file);
+
+            const remoteFileName = file.name;
+            const finalTargetPathInWorkspace = targetDirectoryPathInWorkspace ? `${targetDirectoryPathInWorkspace}/${remoteFileName}` : remoteFileName;
+
+            console.log("[FileExplorer DEBUG] Original remoteFileName:", remoteFileName);
+            console.log("[FileExplorer DEBUG] Calculated finalTargetPathInWorkspace:", finalTargetPathInWorkspace);
+
+            const metadata = {
+              targetPath: finalTargetPathInWorkspace,
+            };
+            console.log("[FileExplorer DEBUG] Metadata to be sent:", metadata);
+
+            window.electron.fileSystem.uploadFile({
+              workspaceId,
+              fileData,
+              fileName: file.name,
+              token,
+              metadata
+            }).then((response: { operationId?: string; error?: string }) => {
+              if (response.error) {
+                toast.error(`Upload failed for ${file.name}: ${response.error}`);
+                console.error(`[FileExplorer DEBUG] Upload failed for ${file.name}:`, response.error);
+              } else if (response.operationId) {
+                console.log(`[FileExplorer DEBUG] Upload queued for ${file.name}, OpID: ${response.operationId}`);
+              }
+            }).catch((uploadError: any) => {
+              toast.error(`Upload error for ${file.name}: ${uploadError.message || 'Unknown error'}`);
+              console.error(`[FileExplorer DEBUG] Catch block for upload error of ${file.name}:`, uploadError);
+            });
+            uploadInitiatedCount++;
+          } catch (err: any) {
+            toast.error(`Failed to process ${file.name} for upload: ${err.message}`);
+            console.error(`[FileExplorer DEBUG] Error processing or initiating file upload for ${file.name}:`, err);
+          }
+        }
+
+        if (uploadInitiatedCount > 0) {
+          setTimeout(() => {
+            const token = getUserTokenFromStore();
+            if (token) {
+              refreshFolder(targetNodeForUpload.id, token);
+              toast.info(`Refreshed folder: ${targetNodeForUpload.name} after uploads.`);
+              console.log(`[FileExplorer DEBUG] Refreshed folder: ${targetNodeForUpload.name}`);
+            }
+          }, 5000 + uploadInitiatedCount * 1000);
+        }
+        return;
+      }
+
+      console.log("[FileExplorer DEBUG] Fallback: External file(s) dropped, but not onto a remote directory or missing info. Target:", {
+        id: targetNodeForUpload.id,
+        name: targetNodeForUpload.name,
+        path: targetNodeForUpload.path,
+        type: targetNodeForUpload.type,
+        source: targetNodeForUpload.source
+      });
+      const filesArray = Array.from(droppedFiles);
+      const fileNames = filesArray.map(f => f.name).slice(0, 3);
+      const fileCount = filesArray.length;
+
+      setDraggedNodeId(null);
+      setExternalDropInfo({ count: fileCount, names: fileNames });
+      setShowFileDropDialog(true);
+      return;
+    }
+
+    const dNodeId = e.dataTransfer.getData('text/plain');
+    if (!dNodeId) {
+      console.warn("Internal drop event, but no 'text/plain' data (node ID) found.");
+      return;
+    }
+
+    setExternalDropInfo(null);
     setDraggedNodeId(dNodeId);
     setShowFileDropDialog(true);
   };
@@ -276,9 +397,14 @@ function FileNodeItem({ node, level = 0 }: { node: FileNode, level?: number }) {
 
       <FileDropDialog
         open={showFileDropDialog}
-        onClose={() => setShowFileDropDialog(false)}
+        onClose={() => {
+          setShowFileDropDialog(false);
+          setDraggedNodeId(null);
+          setExternalDropInfo(null);
+        }}
         sourceNodeId={draggedNodeId}
         targetNodeId={node.id}
+        externalFileDetails={externalDropInfo}
       />
 
       <FileClickDialog

@@ -7,15 +7,19 @@ import {
   Typography,
   Box,
   IconButton,
+  CircularProgress,
 } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
 import { FormattedMessage } from "react-intl";
-import { useFileExplorerStore, selectors } from "@/stores/File/FileExplorerStore"; // Import store and selector
+import { useFileExplorerStore, selectors, FileNode } from "@/stores/File/FileExplorerStore";
+import { useEffect, useState } from "react";
+import { IFile } from "@/../../types/File/File";
+import { getUserTokenFromStore } from "@/utils/user";
 
 interface FileClickDialogProps {
   open: boolean;
   onClose: () => void;
-  nodeId: string; // Changed from filePath
+  nodeId: string;
 }
 
 export default function FileClickDialog({
@@ -23,11 +27,73 @@ export default function FileClickDialog({
   onClose,
   nodeId
 }: FileClickDialogProps) {
-  // Fetch node details from the store
   const node = useFileExplorerStore(selectors.selectNodeById(nodeId));
+  const [fileDetails, setFileDetails] = useState<IFile | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
 
-  const nodeDisplayName = node?.label || node?.name || "Unknown Item";
-  const nodePath = node?.path || "N/A";
+  const nodeDisplayNameFromStore = node?.label || node?.name || "Unknown Item";
+
+  useEffect(() => {
+    const fetchDetails = async () => {
+      if (!open || !node) {
+        setFileDetails(null);
+        setIsLoading(false);
+        return;
+      }
+
+      if (node.source === 'remote' && node.type === 'file' && node.workspaceId && node.fileDbId) {
+        setIsLoading(true);
+        setFileDetails(null);
+        const token = getUserTokenFromStore();
+        if (!token) {
+          console.warn("FileClickDialog: No token found for fetching file metadata.");
+          setIsLoading(false);
+          return;
+        }
+        try {
+          const result = await window.electron.fileSystem.getFileMetadata({
+            workspaceId: node.workspaceId,
+            fileId: node.fileDbId,
+            token,
+          });
+          if (result && result.data) {
+            setFileDetails(result.data as IFile);
+          } else {
+            console.warn("FileClickDialog: Metadata not found or error in response for node:", node.id, result);
+          }
+        } catch (error) {
+          console.error("Error fetching file metadata for click dialog:", error);
+        } finally {
+          setIsLoading(false);
+        }
+      } else {
+        setFileDetails(null);
+        setIsLoading(false);
+      }
+    };
+
+    fetchDetails();
+  }, [open, node]);
+
+  let displayPath: string | null = "N/A";
+  if (node) {
+    if (node.source === 'local') {
+      displayPath = node.path;
+    } else if (node.source === 'remote' && node.workspaceId) {
+      if (node.type === 'file') {
+        const parentDir = node.path.includes('/') ? node.path.substring(0, node.path.lastIndexOf('/')) : '';
+        const logicalFileName = fileDetails?.name || node.name;
+        const fullLogicalPath = parentDir ? `${parentDir}/${logicalFileName}` : logicalFileName;
+        displayPath = `/storage/${node.workspaceId}/${fullLogicalPath}`;
+      } else {
+        displayPath = `/storage/${node.workspaceId}${node.path ? `/${node.path}` : ''}`;
+      }
+    } else {
+      displayPath = node.path;
+    }
+  }
+
+  const finalDisplayName = fileDetails?.name || nodeDisplayNameFromStore;
 
   return (
     <Dialog
@@ -39,7 +105,7 @@ export default function FileClickDialog({
       <DialogTitle>
         <Box display="flex" justifyContent="space-between" alignItems="center">
           <Typography variant="h6">
-            <FormattedMessage id="dialog.item.click.title" defaultMessage="Item Selected" />
+            <FormattedMessage id="dialog.item.click.title" defaultMessage="Item Details" />
           </Typography>
           <IconButton onClick={onClose} size="small">
             <CloseIcon />
@@ -51,23 +117,59 @@ export default function FileClickDialog({
           <Typography variant="body1" gutterBottom>
             <FormattedMessage
               id="dialog.item.click.info"
-              defaultMessage="You selected: {item}"
+              defaultMessage="Selected: {item}"
               values={{
-                item: <Box component="span" fontWeight="bold">{nodeDisplayName}</Box>
+                item: <Box component="span" fontWeight="bold">{finalDisplayName}</Box>
               }}
             />
           </Typography>
           <Typography variant="caption" display="block" sx={{ mt: 1 }}>
-            Path: {nodePath}
+            Path: {displayPath}
           </Typography>
           {node && node.source === 'remote' && node.workspaceId && (
             <Typography variant="caption" display="block">
-              Workspace ID: {node.workspaceId} ({node.source})
+              Type: {node.type === 'file' ? 'Remote File' : 'Remote Directory'} (Workspace: {node.workspaceId})
             </Typography>
           )}
           {node && node.source === 'local' && (
             <Typography variant="caption" display="block">
-              Source: {node.source}
+              Type: {node.type === 'file' ? 'Local File' : 'Local Directory'}
+            </Typography>
+          )}
+          {node?.fileDbId && (
+            <Typography variant="caption" display="block">
+              File DB ID: {node.fileDbId}
+            </Typography>
+          )}
+
+          {isLoading && (
+            <Box sx={{ display: 'flex', alignItems: 'center', mt: 2, justifyContent: 'center' }}>
+              <CircularProgress size={24} sx={{ mr: 1 }} />
+              <Typography variant="body2" color="text.secondary">Loading details...</Typography>
+            </Box>
+          )}
+
+          {fileDetails && !isLoading && (
+            <Box mt={2} p={1.5} border={1} borderColor="divider" borderRadius={1}>
+              <Typography variant="subtitle2" gutterBottom>File Metadata Details:</Typography>
+              <Typography variant="caption" display="block">Server Logical Path: {fileDetails.logicalPath || 'N/A'}</Typography>
+              <Typography variant="caption" display="block">Size: {fileDetails.size} bytes</Typography>
+              <Typography variant="caption" display="block">MIME Type: {fileDetails.mime_type}</Typography>
+              <Typography variant="caption" display="block">Created: {new Date(fileDetails.created_at).toLocaleString()}</Typography>
+              {fileDetails.updated_at && (
+                <Typography variant="caption" display="block">Modified: {new Date(fileDetails.updated_at).toLocaleString()}</Typography>
+              )}
+            </Box>
+          )}
+          {node && node.type === 'directory' && !isLoading && (
+            <Typography variant="body2" sx={{ mt: 2, textAlign: 'center' }}>This is a directory.</Typography>
+          )}
+          {node && node.type === 'file' && node.source === 'local' && !isLoading && (
+            <Typography variant="body2" sx={{ mt: 2, textAlign: 'center' }}>This is a local file.</Typography>
+          )}
+          {node && node.type === 'file' && node.source === 'remote' && !fileDetails && !isLoading && (
+            <Typography variant="body2" sx={{ mt: 2, textAlign: 'center' }} color="text.secondary">
+              Could not load full metadata for this remote file.
             </Typography>
           )}
         </Box>

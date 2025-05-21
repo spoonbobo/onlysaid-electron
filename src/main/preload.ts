@@ -18,7 +18,9 @@ type FileSystemChannels =
   | 'file:download'
   | 'file:status'
   | 'file:cancel'
-  | 'file:progress-update';
+  | 'file:progress-update'
+  | 'file:get-metadata'
+  | 'file:get-multiple-metadata';
 
 type KnowledgeBaseChannels =
   | 'kb:list'
@@ -166,6 +168,10 @@ const electronHandler = {
       ipcRenderer.on(channel, subscription);
       return () => ipcRenderer.removeListener(channel, subscription);
     },
+    getFileMetadata: (args: { workspaceId: string; fileId: string; token: string }) =>
+      ipcRenderer.invoke('file:get-metadata', args),
+    getFilesMetadata: (args: { workspaceId: string; fileIds: string[]; token: string }) =>
+      ipcRenderer.invoke('file:get-multiple-metadata', args),
   },
   homedir: () => os.homedir(),
   session: {

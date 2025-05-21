@@ -6,7 +6,6 @@ import ChatInput from "./ChatInput";
 import { IChatMessage } from "@/../../types/Chat/Message";
 import { getUserFromStore } from "@/utils/user";
 import { IUser } from "@/../../types/User/User";
-import { IFile } from "@/../../types/File/File";
 import { v4 as uuidv4 } from 'uuid';
 import { Typography } from "@mui/material";
 import { useChatStore } from "@/stores/Chat/ChatStore";
@@ -182,7 +181,7 @@ function Chat() {
 
   const handleSend = async (messageData: Partial<IChatMessage>) => {
     if (
-      (messageData.text?.trim() || messageData.files)
+      (messageData.text?.trim() || messageData.files?.length)
       && activeChatId
     ) {
       try {
@@ -191,9 +190,6 @@ function Chat() {
         if (replyingToId) {
           messageData.reply_to = replyingToId;
         }
-
-        const fileIds = messageData.files?.map(file => file.id);
-        messageData.files = fileIds as unknown as IFile[];
 
         const messageId = await sendMessage(activeChatId, messageData, workspaceId);
 

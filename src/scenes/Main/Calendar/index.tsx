@@ -285,16 +285,27 @@ export default function Calendar() {
 
   return (
     <Box sx={{ height: "100%", display: 'flex', flexDirection: 'column' }}>
+      <Typography
+        variant="h5"
+        component="h1"
+        gutterBottom
+        sx={{
+          fontWeight: 500,
+          px: 2,
+          pt: 1.5,
+          color: 'text.primary'
+        }}
+      >
+        <FormattedMessage id="calendar.pageTitle" defaultMessage="Calendar" />
+      </Typography>
+
       <Box
         sx={{
           display: "flex",
           alignItems: "center",
+          justifyContent: 'space-between',
           p: 1.5,
           flexShrink: 0,
-          bgcolor: 'background.paper',
-          color: 'text.primary',
-          borderBottom: 1,
-          borderColor: 'divider'
         }}
       >
         <Box sx={{ display: "flex", alignItems: "center" }}>
@@ -306,8 +317,6 @@ export default function Calendar() {
             <ChevronRightIcon />
           </IconButton>
         </Box>
-
-        <Box sx={{ flexGrow: 1 }} />
 
         <Box sx={{ display: "flex", alignItems: "center" }}>
           <FormControl size="small"

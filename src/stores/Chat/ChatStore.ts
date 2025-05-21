@@ -342,8 +342,6 @@ export const useChatStore = create<ChatState>()(
             sent_at: sent_at || new Date().toISOString(),
             status: status
           }
-          console.log("workspaceId", workspaceId);
-          console.log("sendMessage", message);
 
           await window.electron.db.query({
             query: `
@@ -369,7 +367,6 @@ export const useChatStore = create<ChatState>()(
       },
 
       updateMessage: async (chatId, messageId, data) => {
-        console.log("updateMessage", messageId, data);
         set({ isLoading: true, error: null });
         try {
           set((state) => ({

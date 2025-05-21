@@ -50,17 +50,14 @@ const ChatBubble = memo(({
   const toggleReaction = useChatStore(state => state.toggleReaction);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
-  // Get active chat ID using selectedContext and selectedTopics
   const activeChatId = selectedContext?.section ? selectedTopics[selectedContext.section] || null : null;
 
-  // Format time as HH:MM for continued messages
   const getTimeString = () => {
     if (!msg.created_at) return "";
     const date = new Date(msg.created_at);
     return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
   };
 
-  // Use useCallback for event handlers to prevent unnecessary re-renders
   const handleReplyClick = useCallback(() => {
     if (onReply) {
       onReply(msg);
@@ -88,7 +85,6 @@ const ChatBubble = memo(({
     setMenuPosition(null);
   }, []);
 
-  // Handle clicks outside to close the menu
   useEffect(() => {
     const handleClickOutside = () => {
       handleMenuClose();
@@ -147,7 +143,6 @@ const ChatBubble = memo(({
           display: "flex",
           alignItems: "center"
         }}>
-          {/* Small timestamp for continued messages - only shown on hover */}
           {isHovered && (
             <Typography
               noWrap
@@ -257,15 +252,24 @@ const ChatBubble = memo(({
           </Box>
         )}
 
-        {/* Only show MarkdownRenderer when there's content to display */}
-        {(msg.text || (isStreaming && streamContent)) && (
-          <MarkdownRenderer
-            content={msg.text}
-            isStreaming={isStreaming}
-            isConnecting={isConnecting}
-            streamContent={streamContent}
-          />
-        )}
+        {
+          (msg.text || isStreaming) ? (
+            (isStreaming && !msg.text && !streamContent) ? (
+              <Typography sx={{ color: "text.secondary", fontStyle: 'italic', whiteSpace: 'pre-wrap' }}>...</Typography>
+            ) : (
+              <MarkdownRenderer
+                content={msg.text}
+                isStreaming={isStreaming}
+                isConnecting={isConnecting}
+                streamContent={streamContent}
+              />
+            )
+          ) : (
+            <Typography sx={{ color: "text.secondary", fontStyle: 'italic' }}>
+              <FormattedMessage id="chat.emptyMessage" defaultMessage="[Message is empty]" />
+            </Typography>
+          )
+        }
 
         {msg.reactions && msg.reactions.length > 0 && (
           <Box sx={{
@@ -363,29 +367,24 @@ const ChatBubble = memo(({
     </Box>
   );
 }, (prevProps, nextProps) => {
-  // Quick reference checks first
   if (prevProps.isStreaming !== nextProps.isStreaming ||
     prevProps.isConnecting !== nextProps.isConnecting ||
     prevProps.isHovered !== nextProps.isHovered) {
     return false;
   }
 
-  // Check for streaming content changes only when streaming
   if (nextProps.isStreaming && prevProps.streamContent !== nextProps.streamContent) {
     return false;
   }
 
-  // Only check message text when not streaming
   if (!nextProps.isStreaming && prevProps.message.text !== nextProps.message.text) {
     return false;
   }
 
-  // Check IDs
   if (prevProps.message.id !== nextProps.message.id) {
     return false;
   }
 
-  // Shallow comparison for reactions
   if (!prevProps.message.reactions || !nextProps.message.reactions) {
     if (prevProps.message.reactions !== nextProps.message.reactions) {
       return false;
@@ -393,15 +392,13 @@ const ChatBubble = memo(({
   } else if (prevProps.message.reactions.length !== nextProps.message.reactions.length) {
     return false;
   } else {
-    // Instead of deep equality check, just check if arrays are same instances
-    // or if their stringified versions are equal (faster than Ramda deep check)
     if (prevProps.message.reactions !== nextProps.message.reactions &&
       JSON.stringify(prevProps.message.reactions) !== JSON.stringify(nextProps.message.reactions)) {
       return false;
     }
   }
 
-  return true; // Skip re-render
+  return true;
 });
 
 export default ChatBubble;

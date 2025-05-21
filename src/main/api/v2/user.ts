@@ -57,7 +57,6 @@ export const setupUserHandlers = () => {
           }
         }
       );
-      console.log('[User] Update user response:', user);
       return { data: user.data };
     } catch (error: any) {
       console.error('Error in main process API call (update_user):', error.message);

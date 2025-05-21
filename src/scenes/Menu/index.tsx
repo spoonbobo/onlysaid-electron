@@ -4,25 +4,22 @@ import UserSettings from "./UserSettings";
 import { useCurrentTopicContext } from "@/stores/Topic/TopicStore";
 import { useFileExplorerStore } from "@/stores/Layout/FileExplorerResize";
 import HomeMenu from "./Home";
-import FileExplorer from "@/components/FileExplorer/FileExplorer";
+import FileExplorer from "@/scenes/Menu/FileExplorer";
 import MenuHeader from "./Header";
 import React from "react";
 
-// Define minimum height for the content area above the file explorer
-const MIN_CONTENT_HEIGHT = 50; // px
+const MIN_CONTENT_HEIGHT = 50;
 
 function Menu() {
   const { selectedContext } = useCurrentTopicContext();
   const selectedContextType = selectedContext?.type || "";
   const { isExpanded } = useFileExplorerStore();
 
-  // Use memoization to prevent excessive rerenders
   const menuKey = React.useMemo(() =>
     `${selectedContextType}-${selectedContext?.name || "unknown"}`,
     [selectedContextType, selectedContext?.name]
   );
 
-  // Render the menu component
   const MenuComponent = React.useMemo(() => {
     switch (selectedContextType) {
       case "workspace": return WorkspaceMenu;

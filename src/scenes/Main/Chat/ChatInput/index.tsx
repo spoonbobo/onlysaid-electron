@@ -70,7 +70,7 @@ function ChatInput({
           }
 
           if (result && result.success) {
-            const fileData: IFile = {
+            const fileData: any = {
               id: result.id,
               created_at: new Date().toISOString(),
               file_url: result.url,
@@ -164,7 +164,8 @@ function ChatInput({
     <Box
       sx={{
         px: 1,
-        py: 2,
+        pt: 2,
+        pb: 0.5,
         bgcolor: theme => alpha(theme.palette.background.default, 0.8),
         backdropFilter: "blur(8px)",
       }}

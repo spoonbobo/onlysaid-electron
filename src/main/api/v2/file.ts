@@ -243,6 +243,57 @@ export function setupFileHandlers(): void {
       throw error;
     }
   });
+
+  // Handler to get metadata for a single file
+  ipcMain.handle('file:get-metadata', async (event, args: { workspaceId: string; fileId: string; token: string }) => {
+    const { workspaceId, fileId, token } = args;
+    if (!workspaceId || !fileId || !token) {
+      // Consider throwing an error or returning a structured error response
+      console.error('Missing workspaceId, fileId, or token for file:get-metadata');
+      throw new Error('Missing workspaceId, fileId, or token for file:get-metadata');
+    }
+    try {
+      const response = await onlysaidServiceInstance.get(
+        // The service instance likely prepends the base URL
+        `workspace/${workspaceId}/file/metadata?fileId=${fileId}`,
+        {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+          },
+        }
+      );
+      return response.data; // Assuming response.data contains { message: string, data: IFile }
+    } catch (error: any) {
+      console.error(`Error fetching metadata for file ${fileId} in workspace ${workspaceId}:`, error.response?.data || error.message);
+      throw error.response?.data || new Error('Failed to get file metadata');
+    }
+  });
+
+  // Handler to get metadata for multiple files
+  ipcMain.handle('file:get-multiple-metadata', async (event, args: { workspaceId: string; fileIds: string[]; token: string }) => {
+    const { workspaceId, fileIds, token } = args;
+    if (!workspaceId || !fileIds || !Array.isArray(fileIds) || !token) {
+      console.error('Missing or invalid workspaceId, fileIds, or token for file:get-multiple-metadata');
+      throw new Error('Missing or invalid workspaceId, fileIds, or token for file:get-multiple-metadata');
+    }
+    try {
+      const response = await onlysaidServiceInstance.post(
+        // The service instance likely prepends the base URL
+        `workspace/${workspaceId}/file/metadata`,
+        { fileIds }, // body
+        {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+      return response.data; // Assuming response.data contains { message: string, data: IFile[] }
+    } catch (error: any) {
+      console.error(`Error fetching metadata for multiple files in workspace ${workspaceId}:`, error.response?.data || error.message);
+      throw error.response?.data || new Error('Failed to get multiple files metadata');
+    }
+  });
 }
 
 // Extract the upload logic to a separate function
