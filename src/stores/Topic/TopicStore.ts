@@ -27,6 +27,7 @@ interface StreamState {
   messageId: string | null;
   chatId: string | null;
   streamId: string | null;
+  completionTime?: number;
 }
 
 interface TopicStore {
@@ -199,7 +200,8 @@ export const useTopicStore = create<TopicStore>()(
               completedStreams: {
                 ...state.completedStreams,
                 [state.streamingState.chatId]: {
-                  ...state.streamingState
+                  ...state.streamingState,
+                  completionTime: Date.now()
                 }
               }
             };
@@ -220,11 +222,14 @@ export const useTopicStore = create<TopicStore>()(
 
           // If there's a streaming state for this chatId, save it as completed
           if (state.streamingState.chatId === chatId && state.streamingState.messageId) {
+            const streamToComplete = { ...state.streamingState };
+            const updatedCompletedStreams = { ...state.completedStreams };
+            updatedCompletedStreams[chatId] = {
+              ...streamToComplete,
+              completionTime: Date.now()
+            };
             return {
-              completedStreams: {
-                ...state.completedStreams,
-                [chatId]: { ...state.streamingState }
-              }
+              completedStreams: updatedCompletedStreams
             };
           }
           return state;

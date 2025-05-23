@@ -13,10 +13,6 @@ export const getUserFromStore = () => {
   return useUserStore.getState().user;
 };
 
-export const getAgentFromStore = () => {
-  return useAgentStore.getState().agent;
-};
-
 export const getCurrentWorkspace = () => {
   const workspaceId = useTopicStore.getState().selectedContext?.id;
   if (!workspaceId) {

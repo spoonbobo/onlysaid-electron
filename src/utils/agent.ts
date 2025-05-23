@@ -1,0 +1,99 @@
+import { useAgentStore } from "@/stores/Agent/AgentStore";
+import { useUserTokenStore } from "@/stores/User/UserToken";
+import { useChatStore } from "@/stores/Chat/ChatStore";
+import { useStreamStore } from "@/stores/SSE/StreamStore";
+import { useTopicStore } from "@/stores/Topic/TopicStore";
+import { useSelectedModelStore } from "@/stores/LLM/SelectedModelStore";
+import { useUserStore } from "@/stores/User/UserStore";
+
+// Get agent from store
+export const getAgentFromStore = () => {
+  return useAgentStore.getState().agent;
+};
+
+// Get agent processing state
+export const isAgentProcessing = () => {
+  return useAgentStore.getState().isProcessingResponse;
+};
+
+// Fetch agent by ID
+export const fetchAgent = async (agentId: string) => {
+  const token = useUserTokenStore.getState().getToken();
+  if (!token) {
+    throw new Error("No user token available");
+  }
+
+  return useAgentStore.getState().fetchAgent(agentId, token);
+};
+
+// Send agent message with automatic store integration
+export const sendAgentMessage = async (
+  chatId: string,
+  prompt: string,
+  mode: "ask" | "query" | "agent" = "ask"
+) => {
+  return useAgentStore.getState().sendAgentMessage(chatId, prompt, mode);
+};
+
+// Quick agent response without chat integration
+export const getQuickAgentResponse = async (
+  prompt: string,
+  mode: "ask" = "ask"
+) => {
+  return useAgentStore.getState().quickResponse(prompt, mode);
+};
+
+// Process agent response with full context
+export const processAgentResponse = async (
+  chatId: string,
+  userMessage: string,
+  mode: "ask" | "query" | "agent" = "ask",
+  workspaceId?: string
+) => {
+  const agent = getAgentFromStore();
+  if (!agent) {
+    throw new Error("No agent available");
+  }
+
+  const { appendMessage, updateMessage } = useChatStore.getState();
+  const { streamChatCompletion } = useStreamStore.getState();
+  const { setStreamingState, markStreamAsCompleted } = useTopicStore.getState();
+  const { modelId, provider } = useSelectedModelStore.getState();
+  const { user: currentUser } = useUserStore.getState();
+
+  if (!modelId) {
+    throw new Error("No model selected");
+  }
+
+  const messages = useChatStore.getState().messages[chatId] || [];
+
+  return useAgentStore.getState().processAgentResponse({
+    activeChatId: chatId,
+    userMessageText: userMessage,
+    modelId,
+    provider: provider || "openai",
+    currentUser,
+    existingMessages: messages,
+    workspaceId,
+    aiMode: mode,
+    appendMessage,
+    updateMessage,
+    setStreamingState,
+    markStreamAsCompleted,
+    streamChatCompletion,
+  });
+};
+
+// Agent experience utilities
+export const gainAgentExperience = async (amount: number) => {
+  return useAgentStore.getState().gainExperience(amount);
+};
+
+export const levelUpAgent = async (addedXP: number) => {
+  return useAgentStore.getState().levelUp(addedXP);
+};
+
+// Calculate experience for level
+export const calculateExperienceForLevel = (level: number): number => {
+  return 50 * level;
+};

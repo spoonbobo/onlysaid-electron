@@ -66,6 +66,7 @@ export async function processAskModeAIResponse({
     created_at: new Date().toISOString(),
     sent_at: new Date().toISOString(),
     status: "pending",
+    reactions: [],
   };
 
   appendMessage(activeChatId, assistantMessage);

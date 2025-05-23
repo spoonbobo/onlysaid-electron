@@ -20,6 +20,7 @@ import { processAskModeAIResponse } from './Mode/Ask';
 import { processQueryModeAIResponse } from './Mode/Query';
 import { processAgentModeAIResponse } from './Mode/Agent';
 import { useMCPClientStore } from '@/stores/MCP/MCPClient';
+import { toast } from "@/utils/toast";
 
 function Chat() {
   const {
@@ -56,7 +57,11 @@ function Chat() {
   const contextId = selectedContext ? `${selectedContext.name}:${selectedContext.type}` : '';
   const activeChatId = selectedContext?.section ? selectedTopics[selectedContext.section] || null : null;
   const { user: currentUser } = useUserStore();
-  const { agent, gainExperience: agentGainExperience } = useAgentStore();
+  const {
+    agent,
+    isProcessingResponse,
+    processAgentResponse
+  } = useAgentStore();
   const { aiMode } = useLLMConfigurationStore();
   const isLocal = currentUser?.id ? false : true;
   let workspaceId = '';
@@ -98,12 +103,44 @@ function Chat() {
 
   const input = getInput(activeChatId || '', contextId);
 
+  const fetchMessagesTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
-    if (activeChatId && useChatStore.getState().chats.some(chat => chat.id === activeChatId)) {
-      fetchMessages(activeChatId);
+    if (fetchMessagesTimeoutRef.current) {
+      clearTimeout(fetchMessagesTimeoutRef.current);
     }
-  }, [activeChatId, fetchMessages]);
+
+    if (activeChatId && useChatStore.getState().chats.some(chat => chat.id === activeChatId)) {
+      const topicStoreState = useTopicStore.getState();
+      const completedStreamData = topicStoreState.completedStreams[activeChatId];
+      let isRecentCompletion = false;
+
+      if (completedStreamData && completedStreamData.completionTime) {
+        if ((Date.now() - completedStreamData.completionTime) < 1500) { // Stream completed in the last 1.5 seconds
+          isRecentCompletion = true;
+        } else {
+          // Optional: Clean up very old completedStream entry if it's no longer relevant for this delay logic
+          // This might be better done elsewhere, e.g. when a chat is truly "left"
+          // useTopicStore.getState().clearCompletedStream(activeChatId); // Be careful with this
+        }
+      }
+
+      if (isRecentCompletion) {
+        console.log(`[Chat/index.tsx] Delaying fetchMessages for ${activeChatId} due to recent stream completion.`);
+        fetchMessagesTimeoutRef.current = setTimeout(() => {
+          fetchMessages(activeChatId);
+        }, 750); // Delay fetch by 750ms
+      } else {
+        fetchMessages(activeChatId);
+      }
+    }
+
+    return () => {
+      if (fetchMessagesTimeoutRef.current) {
+        clearTimeout(fetchMessagesTimeoutRef.current);
+      }
+    };
+  }, [activeChatId, fetchMessages]); // fetchMessages is stable from Zustand
 
   const previousActiveChatIdRef = useRef<string | null>(null);
   const previousContextIdRef = useRef<string | null>(null);
@@ -188,6 +225,12 @@ function Chat() {
       && activeChatId
     ) {
       try {
+        // Clear any pending fetch for this chat if user sends a message
+        if (fetchMessagesTimeoutRef.current && useTopicStore.getState().completedStreams[activeChatId]) {
+          // If we were delaying a fetch for this active chat, sending a message should probably trigger a fetch or rely on append.
+          // For now, let the optimistic append handle the new message. The delayed fetch will eventually run if not cleared.
+        }
+
         messageData.created_at = new Date().toISOString();
 
         if (replyingToId) {
@@ -216,115 +259,47 @@ function Chat() {
           setInput(activeChatId, '', contextId);
           setReplyingTo(null);
 
-          if (aiMode === "ask" && modelId && provider && messageData.text && activeChatId) {
+          // Process AI response based on mode
+          if (aiMode && aiMode !== "none" && modelId && messageData.text && activeChatId) {
             setCurrentStreamContent("");
             streamStartTimeRef.current = null;
             tokenCountRef.current = 0;
             setTokenRate(0);
 
             try {
-              const result = await processAskModeAIResponse({
+              const result = await processAgentResponse({
                 activeChatId,
                 userMessageText: messageData.text,
                 modelId,
-                provider,
-                agent,
+                provider: provider || "openai",
                 currentUser,
                 existingMessages: messages,
+                workspaceId: aiMode === "query" ? selectedContext?.id : undefined,
+                aiMode,
                 appendMessage,
                 updateMessage,
                 setStreamingState,
                 markStreamAsCompleted,
                 streamChatCompletion,
               });
+
               if (!result.success) {
-                console.error("Ask mode AI response failed:", result.error);
+                console.error(`${aiMode} mode AI response failed:`, result.error);
+                toast.error(`Failed to process ${aiMode} response`);
               }
             } catch (e) {
-              console.error("Critical error processing Ask mode AI response:", e);
+              console.error(`Critical error processing ${aiMode} mode AI response:`, e);
+              toast.error(`Critical error in ${aiMode} mode`);
             } finally {
-              const earnedXP = Math.floor(tokenCountRef.current / 10);
-              agentGainExperience(earnedXP);
-            }
-          } else if (aiMode === "query" && modelId && messageData.text && activeChatId) {
-            const currentWorkspaceId = selectedContext?.id;
-            if (!currentWorkspaceId) {
-              console.error("Query Mode: Workspace ID is missing from selectedContext.");
-              return;
-            }
-
-            console.log("Processing Query Mode AI Response with streaming in Chat/index.tsx");
-            setCurrentStreamContent("");
-            setTokenRate(0);
-
-            const queryProvider = "onlysaid-kb" as OpenAIStreamOptions['provider'];
-
-            try {
-              const result = await processQueryModeAIResponse({
-                activeChatId,
-                workspaceId: currentWorkspaceId,
-                userMessageText: messageData.text,
-                modelId: modelId,
-                provider: queryProvider,
-                agent,
-                currentUser,
-                existingMessages: messages,
-                appendMessage,
-                updateMessage,
-                setStreamingState,
-                markStreamAsCompleted,
-                streamChatCompletion,
-              });
-              if (result.success) {
-                console.log("Query mode streaming response processed in Chat/index.tsx:", result.responseText);
-              } else {
-                console.error("Query mode AI streaming response failed in Chat/index.tsx:", result.error);
+              if (aiMode === "agent") {
+                setStreamingState(null, null);
               }
-            } catch (e) {
-              console.error("Critical error processing Query mode AI streaming response in Chat/index.tsx:", e);
-              setStreamingState(null, null);
-            }
-          } else if (aiMode === "agent" && modelId && provider && messageData.text && activeChatId) {
-            setCurrentStreamContent("");
-            streamStartTimeRef.current = null;
-            tokenCountRef.current = 0;
-            setTokenRate(0);
-
-            const { ListMCPTool } = useMCPClientStore.getState();
-            try {
-              console.log("Listing tools for agent mode...");
-              const tools = await ListMCPTool("default");
-              console.log("Tools available for agent:", tools);
-            } catch (error) {
-              console.error("Failed to list tools for agent mode:", error);
-            }
-
-            try {
-              const result = await processAgentModeAIResponse({
-                activeChatId,
-                userMessageText: messageData.text,
-                agent,
-                currentUser,
-                existingMessages: messages,
-                appendMessage,
-                updateMessage,
-                setStreamingState,
-                markStreamAsCompleted,
-              });
-              if (!result.success) {
-                console.error("Agent mode AI response failed:", result.error);
-              }
-            } catch (e) {
-              console.error("Critical error processing Agent mode AI response:", e);
-            } finally {
-              const earnedXP = Math.floor(tokenCountRef.current / 10);
-              agentGainExperience(earnedXP);
-              setStreamingState(null, null);
             }
           }
         }
       } catch (error) {
         console.error("Error sending message:", error);
+        toast.error("Failed to send message");
       }
     }
   };
@@ -402,14 +377,12 @@ function Chat() {
                   streamingMessageId={
                     streamingState.chatId === activeChatId
                       ? streamingState.messageId
-                      : (useTopicStore.getState().completedStreams[activeChatId || '']?.messageId || null)
+                      : null
                   }
                   streamContentForBubble={
                     streamingState.chatId === activeChatId
                       ? currentStreamContent
-                      : (useTopicStore.getState().completedStreams[activeChatId || '']?.messageId
-                        ? streamDataForId[`stream-${useTopicStore.getState().completedStreams[activeChatId || '']?.messageId}`]?.full || ""
-                        : "")
+                      : ""
                   }
                   isConnectingForBubble={
                     streamingState.chatId === activeChatId

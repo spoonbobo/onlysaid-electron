@@ -3,21 +3,52 @@ import { persist } from "zustand/middleware";
 import { IUser } from "@/../../types/User/User"; // Assuming IUser is in this path
 import { useUserTokenStore } from "@/stores/User/UserToken"; // For fetching the token
 import { toast } from "@/utils/toast"; // For notifications
+import { IChatMessage } from "@/../../types/Chat/Message";
+import { processAskModeAIResponse } from "@/scenes/Main/Chat/Mode/Ask";
+import { processQueryModeAIResponse } from "@/scenes/Main/Chat/Mode/Query";
+import { processAgentModeAIResponse } from "@/scenes/Main/Chat/Mode/Agent";
+import { useMCPClientStore } from '@/stores/MCP/MCPClient';
+import { useChatStore } from "@/stores/Chat/ChatStore";
+import { useStreamStore } from "@/stores/SSE/StreamStore";
+import { useTopicStore } from "@/stores/Topic/TopicStore";
+import { useSelectedModelStore } from "@/stores/LLM/SelectedModelStore";
+import { useUserStore } from "@/stores/User/UserStore";
+import { calculateExperienceForLevel } from "@/utils/agent";
 
-// Moved from UserStore
-const calculateExperienceForLevel = (level: number): number => {
-  return 50 * level;
-};
+interface AgentResponseParams {
+  activeChatId: string;
+  userMessageText: string;
+  modelId: string;
+  provider: string;
+  currentUser: IUser | null;
+  existingMessages: IChatMessage[];
+  workspaceId?: string;
+  aiMode: "ask" | "query" | "agent";
+  appendMessage: (chatId: string, message: IChatMessage) => void;
+  updateMessage: (chatId: string, messageId: string, updates: Partial<IChatMessage>) => Promise<void>;
+  setStreamingState: (messageId: string | null, chatId: string | null) => void;
+  markStreamAsCompleted: (chatId: string, messageText: string) => void;
+  streamChatCompletion: any; // Type this properly based on your StreamStore
+}
 
 interface AgentState {
   agent: IUser | null;
   isLoading: boolean;
   error: string | null;
+  isProcessingResponse: boolean;
   setAgent: (agent: IUser | null) => void;
   clearAgent: () => void;
   fetchAgent: (agentId: string, token: string) => Promise<void>;
   gainExperience: (amount: number) => Promise<void>; // New
   levelUp: (addedXP: number) => Promise<void>; // New
+
+  // New agent response methods
+  processAgentResponse: (params: AgentResponseParams) => Promise<{ success: boolean; assistantMessageId?: string; error?: any }>;
+  setProcessingResponse: (isProcessing: boolean) => void;
+
+  // Simplified methods
+  sendAgentMessage: (chatId: string, prompt: string, mode?: "ask" | "query" | "agent") => Promise<{ success: boolean; messageId?: string; error?: any }>;
+  quickResponse: (prompt: string, mode?: "ask") => Promise<{ success: boolean; response?: string; error?: any }>;
 }
 
 export const useAgentStore = create<AgentState>()(
@@ -26,6 +57,7 @@ export const useAgentStore = create<AgentState>()(
       agent: null,
       isLoading: false,
       error: null,
+      isProcessingResponse: false,
       setAgent: (agent) => set({ agent, isLoading: false, error: null }),
       clearAgent: () => set({ agent: null, isLoading: false, error: null }),
       fetchAgent: async (agentId: string, token: string) => {
@@ -75,9 +107,8 @@ export const useAgentStore = create<AgentState>()(
 
         let newExperience = currentXP + amount;
         let newLevel = currentLevel;
-        let experienceToReachNext = calculateExperienceForLevel(newLevel === 0 ? 1 : newLevel + 1); // Corrected to next level calc
+        let experienceToReachNext = calculateExperienceForLevel(newLevel === 0 ? 1 : newLevel + 1);
         let leveledUp = false;
-
 
         while (newExperience >= experienceToReachNext && experienceToReachNext > 0) {
           newExperience -= experienceToReachNext;
@@ -90,7 +121,6 @@ export const useAgentStore = create<AgentState>()(
         if (!leveledUp && newExperience === currentXP) { // No change if not enough for level and no partial XP gain
           // return; // Removed to allow saving partial XP gain even if no level up
         }
-
 
         const updatedAgentObject: IUser = {
           ...currentAgent,
@@ -146,7 +176,6 @@ export const useAgentStore = create<AgentState>()(
         set({ agent: updatedAgentObject });
         toast.success(`Agent leveled up! Now level ${newLevel}!`);
 
-
         try {
           const { token } = useUserTokenStore.getState();
           if (!token) {
@@ -172,7 +201,204 @@ export const useAgentStore = create<AgentState>()(
           toast.error(`Failed to save agent level up: ${error.message}`);
           // Optionally revert state: set({ agent: currentAgent });
         }
-      }
+      },
+
+      setProcessingResponse: (isProcessing) => set({ isProcessingResponse: isProcessing }),
+
+      processAgentResponse: async (params: AgentResponseParams) => {
+        const {
+          activeChatId,
+          userMessageText,
+          modelId,
+          provider,
+          currentUser,
+          existingMessages,
+          workspaceId,
+          aiMode,
+          appendMessage,
+          updateMessage,
+          setStreamingState,
+          markStreamAsCompleted,
+          streamChatCompletion
+        } = params;
+
+        const currentAgent = get().agent;
+        if (!currentAgent) {
+          console.error("[AgentStore] No agent available for response processing");
+          return { success: false, error: "No agent available" };
+        }
+
+        set({ isProcessingResponse: true, error: null });
+
+        try {
+          let result;
+
+          switch (aiMode) {
+            case "ask":
+              result = await processAskModeAIResponse({
+                activeChatId,
+                userMessageText,
+                modelId,
+                provider,
+                agent: currentAgent,
+                currentUser,
+                existingMessages,
+                appendMessage,
+                updateMessage,
+                setStreamingState,
+                markStreamAsCompleted,
+                streamChatCompletion,
+              });
+              break;
+
+            case "query":
+              if (!workspaceId) {
+                throw new Error("Workspace ID is required for query mode");
+              }
+              result = await processQueryModeAIResponse({
+                activeChatId,
+                workspaceId,
+                userMessageText,
+                modelId,
+                provider: "onlysaid-kb",
+                agent: currentAgent,
+                currentUser,
+                existingMessages,
+                appendMessage,
+                updateMessage,
+                setStreamingState,
+                markStreamAsCompleted,
+                streamChatCompletion,
+              });
+              break;
+
+            case "agent":
+              // Initialize MCP tools if needed
+              try {
+                const { ListMCPTool } = useMCPClientStore.getState();
+                const tools = await ListMCPTool("default");
+                console.log("Tools available for agent:", tools);
+              } catch (error) {
+                console.error("Failed to list tools for agent mode:", error);
+              }
+
+              result = await processAgentModeAIResponse({
+                activeChatId,
+                userMessageText,
+                agent: currentAgent,
+                currentUser,
+                existingMessages,
+                appendMessage,
+                updateMessage,
+                setStreamingState,
+                markStreamAsCompleted,
+              });
+              break;
+
+            default:
+              throw new Error(`Unsupported AI mode: ${aiMode}`);
+          }
+
+          if (result.success) {
+            // Calculate and award experience based on response
+            const tokenCount = result.responseText?.length || 0;
+            const earnedXP = Math.floor(tokenCount / 10);
+            if (earnedXP > 0) {
+              await get().gainExperience(earnedXP);
+            }
+          }
+
+          set({ isProcessingResponse: false });
+          return {
+            success: result.success,
+            assistantMessageId: result.assistantMessageId,
+            error: result.error
+          };
+
+        } catch (error: any) {
+          console.error("[AgentStore] Error processing agent response:", error);
+          set({ isProcessingResponse: false, error: error.message });
+          return { success: false, error };
+        }
+      },
+
+      sendAgentMessage: async (chatId: string, prompt: string, mode: "ask" | "query" | "agent" = "ask") => {
+        const currentAgent = get().agent;
+        if (!currentAgent) {
+          return { success: false, error: "No agent available" };
+        }
+
+        try {
+          // Get required stores
+          const { appendMessage, updateMessage, fetchMessages } = useChatStore.getState();
+          const { streamChatCompletion } = useStreamStore.getState();
+          const { setStreamingState, markStreamAsCompleted } = useTopicStore.getState();
+          const { modelId, provider } = useSelectedModelStore.getState();
+          const { user: currentUser } = useUserStore.getState();
+
+          if (!modelId) {
+            return { success: false, error: "No model selected" };
+          }
+
+          // Get existing messages
+          const messages = useChatStore.getState().messages[chatId] || [];
+
+          const result = await get().processAgentResponse({
+            activeChatId: chatId,
+            userMessageText: prompt,
+            modelId,
+            provider: provider || "openai",
+            currentUser,
+            existingMessages: messages,
+            aiMode: mode,
+            appendMessage,
+            updateMessage,
+            setStreamingState,
+            markStreamAsCompleted,
+            streamChatCompletion,
+          });
+
+          return {
+            success: result.success,
+            messageId: result.assistantMessageId,
+            error: result.error
+          };
+
+        } catch (error: any) {
+          console.error("[AgentStore] Error in sendAgentMessage:", error);
+          return { success: false, error: error.message };
+        }
+      },
+
+      quickResponse: async (prompt: string, mode: "ask" = "ask") => {
+        const currentAgent = get().agent;
+        if (!currentAgent) {
+          return { success: false, error: "No agent available" };
+        }
+
+        try {
+          // This could be used for getting responses without saving to chat
+          // You'd implement a simpler version that just returns the text
+          const { modelId, provider } = useSelectedModelStore.getState();
+          const { user: currentUser } = useUserStore.getState();
+
+          if (!modelId) {
+            return { success: false, error: "No model selected" };
+          }
+
+          // Create a temporary chat context for the response
+          const tempChatId = `temp-${Date.now()}`;
+
+          // Simplified response logic here...
+          // This would be a lighter version without full chat integration
+
+          return { success: true, response: "Agent response here" };
+
+        } catch (error: any) {
+          console.error("[AgentStore] Error in quickResponse:", error);
+          return { success: false, error: error.message };
+        }
+      },
     }),
     {
       name: "agent-storage", // Updated persistence key name

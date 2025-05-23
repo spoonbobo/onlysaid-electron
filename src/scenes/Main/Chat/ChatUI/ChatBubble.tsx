@@ -1,6 +1,6 @@
 import { Box, Typography, Avatar, IconButton, Menu, MenuItem, Button } from "@mui/material";
 import { IChatMessage } from "@/../../types/Chat/Message";
-import { useState, useRef, useEffect, useCallback, memo } from "react";
+import { useState, useRef, useEffect, useCallback, memo, useMemo } from "react";
 import ThumbUpIcon from '@mui/icons-material/ThumbUp';
 import FavoriteIcon from '@mui/icons-material/Favorite';
 import EmojiEmotionsIcon from '@mui/icons-material/EmojiEmotions';
@@ -123,11 +123,18 @@ const ChatBubble = memo(({
     };
   }, [menuPosition]);
 
+  const textForCopy = useMemo(() => {
+    if (isStreaming && typeof streamContent === 'string' && streamContent) {
+      return streamContent;
+    }
+    return msg.text;
+  }, [isStreaming, streamContent, msg.text]);
+
   const handleCopyText = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
-    navigator.clipboard.writeText(msg.text || (msg.tool_calls ? "Tool call data" : ""));
+    navigator.clipboard.writeText(textForCopy || (msg.tool_calls ? "Tool call data" : ""));
     handleMenuClose();
-  }, [msg.text, msg.tool_calls, handleMenuClose]);
+  }, [textForCopy, msg.tool_calls, handleMenuClose]);
 
   const handleDelete = useCallback(() => {
     setDeleteDialogOpen(true);
@@ -280,8 +287,8 @@ const ChatBubble = memo(({
           (!msg.text?.trim() && msg.tool_calls && msg.tool_calls.length > 0) ? (
             <ToolDisplay toolCalls={msg.tool_calls} chatId={msg.chat_id} messageId={msg.id} />
           ) : (
-            (msg.text || isStreaming) ? (
-              (isStreaming && !msg.text && !streamContent) ? (
+            (msg.text || isStreaming || streamContent) ? (
+              (isStreaming && !textForCopy && !streamContent) ? (
                 <Typography sx={{ color: "text.secondary", whiteSpace: 'pre-wrap' }}>
                   <FormattedMessage id="chat.thinkingDuration" defaultMessage="Thinking ({duration}s)" values={{ duration: thinkingDuration }} />
                 </Typography>

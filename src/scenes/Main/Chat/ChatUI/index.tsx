@@ -8,6 +8,7 @@ import { throttle } from "lodash";
 import { useCurrentTopicContext } from "@/stores/Topic/TopicStore";
 import { useAgentStore } from "@/stores/Agent/AgentStore";
 import { useChatStore } from "@/stores/Chat/ChatStore";
+import { useTopicStore } from "@/stores/Topic/TopicStore";
 
 interface ChatUIProps {
   messages: IChatMessage[];
@@ -225,41 +226,42 @@ function ChatUI({ messages, onReply, streamingMessageId, streamContentForBubble,
   const processedMessages = useMemo(() => {
     let messagesToProcess = [...messages];
 
-    if (streamingMessageId && !messagesToProcess.some(m => m.id === streamingMessageId)) {
+    if (streamingMessageId) {
+      // Check if the streaming message already exists in the store
+      const existingStreamingMessage = messagesToProcess.find(m => m.id === streamingMessageId);
 
-      const assistantUser = agent || {
-        id: "assistant",
-        username: "Assistant",
-        email: "",
-        avatar: ""
-      };
+      if (!existingStreamingMessage) {
+        // Only create placeholder if it doesn't exist in store yet
+        let lastUserMessageTime = new Date(0);
+        let lastUserMessageIndex = -1;
 
-      let lastUserMessageTime = new Date(0);
-      let lastUserMessageIndex = -1;
-
-      for (let i = messagesToProcess.length - 1; i >= 0; i--) {
-        if (messagesToProcess[i].sender === userId) {
-          lastUserMessageTime = new Date(messagesToProcess[i].created_at);
-          lastUserMessageIndex = i;
-          break;
+        for (let i = messagesToProcess.length - 1; i >= 0; i--) {
+          if (messagesToProcess[i].sender === userId) {
+            lastUserMessageTime = new Date(messagesToProcess[i].created_at);
+            lastUserMessageIndex = i;
+            break;
+          }
         }
-      }
 
-      const streamMessageTime = new Date(lastUserMessageTime.getTime() + 100);
+        const streamMessageTime = new Date(lastUserMessageTime.getTime() + 100);
 
-      const placeholderMessage = {
-        id: streamingMessageId,
-        chat_id: chatId || '',
-        sender: assistantUser.id ?? "assistant",
-        sender_object: assistantUser,
-        text: "",
-        created_at: streamMessageTime.toISOString(),
-      };
+        const placeholderMessage: IChatMessage = {
+          id: streamingMessageId,
+          chat_id: chatId || '',
+          sender: agent?.id ?? "assistant",
+          sender_object: agent,
+          text: "",
+          created_at: streamMessageTime.toISOString(),
+          sent_at: streamMessageTime.toISOString(),
+          status: "pending",
+          reactions: [], // Ensure reactions array is initialized
+        };
 
-      if (lastUserMessageIndex >= 0) {
-        messagesToProcess.splice(lastUserMessageIndex + 1, 0, placeholderMessage as IChatMessage);
-      } else {
-        messagesToProcess.push(placeholderMessage as IChatMessage);
+        if (lastUserMessageIndex >= 0) {
+          messagesToProcess.splice(lastUserMessageIndex + 1, 0, placeholderMessage);
+        } else {
+          messagesToProcess.push(placeholderMessage);
+        }
       }
     }
 
@@ -289,7 +291,7 @@ function ChatUI({ messages, onReply, streamingMessageId, streamContentForBubble,
         messageKey: msg.id || `message-${index}-${Date.now()}`
       };
     });
-  }, [messages, userId, streamingMessageId, chatId]);
+  }, [messages, userId, streamingMessageId, chatId, agent]);
 
   useEffect(() => {
     // Update metrics on resize
@@ -363,10 +365,13 @@ function ChatUI({ messages, onReply, streamingMessageId, streamContentForBubble,
           {processedMessages.map(({ msg, isCurrentUser, isContinuation, isLastInSequence, replyToMessage, messageKey }) => {
             const isThisMessageStreaming = streamingMessageId === msg.id;
 
+            // Use the message as-is since it's already from the store or properly created placeholder
+            let messageToUse = msg;
+
             return (
               <MemoizedChatBubble
                 key={messageKey}
-                message={msg}
+                message={messageToUse}
                 isCurrentUser={isCurrentUser}
                 isContinuation={isContinuation}
                 isLastInSequence={isLastInSequence}
@@ -375,8 +380,8 @@ function ChatUI({ messages, onReply, streamingMessageId, streamContentForBubble,
                 isStreaming={isThisMessageStreaming}
                 isConnecting={isThisMessageStreaming ? isConnectingForBubble : false}
                 streamContent={isThisMessageStreaming ? (streamContentForBubble || "") : ""}
-                isHovered={hoveredMessageId === msg.id}
-                onMouseEnter={() => handleMessageMouseEnter(msg.id)}
+                isHovered={hoveredMessageId === messageToUse.id}
+                onMouseEnter={() => handleMessageMouseEnter(messageToUse.id)}
                 onMouseLeave={handleMessageMouseLeave}
               />
             );

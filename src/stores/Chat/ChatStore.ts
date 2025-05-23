@@ -367,7 +367,11 @@ export const useChatStore = create<ChatState>()(
             messages: {
               ...state.messages,
               [chatId]: (state.messages[chatId] || []).map(msg =>
-                msg.id === messageId ? { ...msg, ...data } : msg
+                msg.id === messageId ? {
+                  ...msg,
+                  ...data,
+                  reactions: data.reactions !== undefined ? data.reactions : (msg.reactions || [])
+                } : msg
               )
             }
           }));
@@ -538,10 +542,16 @@ export const useChatStore = create<ChatState>()(
                 updatedMessages = [...currentMessages, ...processedMessages.filter(msg =>
                   !currentMessages.some(m => m.id === msg.id))];
               } else {
-                updatedMessages = processedMessages;
+                const memoryOnlyMessages = currentMessages.filter(msg =>
+                  !processedMessages.some(dbMsg => dbMsg.id === msg.id)
+                );
+                updatedMessages = [...processedMessages, ...memoryOnlyMessages];
               }
 
-              // Limit to maximum 35 messages
+              updatedMessages.sort((a, b) =>
+                new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+              );
+
               const limitedMessages = updatedMessages.slice(-MESSAGE_FETCH_LIMIT);
 
               return {
@@ -650,11 +660,36 @@ export const useChatStore = create<ChatState>()(
         set(state => {
           const currentMessages = state.messages[chatId] || [];
 
-          if (currentMessages.some(msg => msg.id === message.id)) {
-            return state;
+          // Check if message already exists
+          const existingMessageIndex = currentMessages.findIndex(msg => msg.id === message.id);
+
+          if (existingMessageIndex !== -1) {
+            // Message exists, update it while preserving reactions and other fields
+            const existingMessage = currentMessages[existingMessageIndex];
+            const updatedMessage = {
+              ...existingMessage,
+              ...message,
+              reactions: message.reactions || existingMessage.reactions || []
+            };
+
+            const updatedMessages = [...currentMessages];
+            updatedMessages[existingMessageIndex] = updatedMessage;
+
+            return {
+              messages: {
+                ...state.messages,
+                [chatId]: updatedMessages.slice(-MESSAGE_FETCH_LIMIT)
+              }
+            };
           }
 
-          const updatedMessages = [...currentMessages, message];
+          // New message, ensure it has reactions initialized
+          const messageWithReactions = {
+            ...message,
+            reactions: message.reactions || [],
+          };
+
+          const updatedMessages = [...currentMessages, messageWithReactions];
           const limitedMessages = updatedMessages.slice(-MESSAGE_FETCH_LIMIT);
 
           return {
@@ -723,8 +758,22 @@ export const useChatStore = create<ChatState>()(
 
       toggleReaction: async (chatId, messageId, reaction) => {
         try {
+          console.log('[ChatStore] toggleReaction called with:', { chatId, messageId, reaction });
+
           const currentUser = getUserFromStore();
-          if (!currentUser || !currentUser.id) return;
+          if (!currentUser || !currentUser.id) {
+            console.log('[ChatStore] No current user found');
+            return;
+          }
+
+          const messages = get().messages[chatId] || [];
+          const message = messages.find(m => m.id === messageId);
+          if (!message) {
+            console.log('[ChatStore] Message not found:', { chatId, messageId, availableMessages: messages.map(m => m.id) });
+            return;
+          }
+
+          console.log('[ChatStore] Found message:', { messageId, hasReactions: !!message.reactions, reactionsLength: message.reactions?.length });
 
           const existingReaction = await window.electron.db.query({
             query: `
@@ -744,17 +793,16 @@ export const useChatStore = create<ChatState>()(
           const reactionId = reactionExists ? existingReaction[0]?.id : uuidv4();
           const createdAt = new Date().toISOString();
 
-          const messages = get().messages[chatId] || [];
-          const message = messages.find(m => m.id === messageId);
-          if (!message) return;
-
           const currentReactions = message.reactions || [];
 
           set((state) => {
             const messages = state.messages[chatId] || [];
             const messageIndex = messages.findIndex(m => m.id === messageId);
 
-            if (messageIndex === -1) return state;
+            if (messageIndex === -1) {
+              console.log('[ChatStore] Message index not found in state update');
+              return state;
+            }
 
             const updatedReactions = reactionExists
               ? currentReactions.filter(r => !(r.reaction === reaction && r.user_id === currentUser.id))
@@ -771,6 +819,8 @@ export const useChatStore = create<ChatState>()(
               { ...message, reactions: updatedReactions as IReaction[] },
               messages
             );
+
+            console.log('[ChatStore] Updated reactions:', { messageId, newReactionsLength: updatedReactions.length });
 
             return {
               messages: {
