@@ -163,7 +163,7 @@ function ChatInput({
   return (
     <Box
       sx={{
-        px: 1,
+        px: 0.5,
         pt: 2,
         pb: 0.5,
         bgcolor: theme => alpha(theme.palette.background.default, 0.8),

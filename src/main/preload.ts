@@ -35,6 +35,8 @@ type KnowledgeBaseChannels =
   | 'kb:synchronize'
   | 'kb:fullUpdate';
 
+type AIChannels = 'ai:get_completion';
+
 type SSEChannels = 'streaming:abort_stream' | 'streaming:chat_stream_complete' | 'streaming:chunk' | 'streaming:query_stream_complete';
 type MCPChannels = 'mcp:initialize_client' | 'mcp:list_tools';
 
@@ -85,7 +87,8 @@ export type Channels =
   | FileSystemChannels
   | RedisChannels
   | SocketChannels
-  | KnowledgeBaseChannels;
+  | KnowledgeBaseChannels
+  | AIChannels;
 
 const electronHandler = {
   ipcRenderer: {
@@ -201,6 +204,9 @@ const electronHandler = {
     getKBStatus: (...args: unknown[]) => ipcRenderer.invoke('kb:getStatus', ...args),
     synchronizeKB: (...args: unknown[]) => ipcRenderer.invoke('kb:synchronize', ...args),
     fullUpdateKB: (...args: unknown[]) => ipcRenderer.invoke('kb:fullUpdate', ...args),
+  },
+  ai: {
+    getCompletion: (args: { messages: any[], options: any }) => ipcRenderer.invoke('ai:get_completion', args),
   },
 };
 

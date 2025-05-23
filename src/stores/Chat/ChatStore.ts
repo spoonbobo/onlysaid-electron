@@ -8,19 +8,12 @@ import { IChatMessage, IReaction } from "@/../../types/Chat/Message";
 import { IChatRoom, IUpdateChatArgs } from "@/../../types/Chat/Chatroom";
 import { IUser } from "@/../../types/User/User";
 import { useSocketStore } from "../Socket/SocketStore";
+import { useLLMStore } from '@/stores/LLM/LLMStore';
+import { IChatMessageToolCall } from '@/../../types/Chat/Message';
+import { DBTABLES } from '@/../../constants/db';
 
 const MESSAGE_FETCH_LIMIT = 35;
 
-const DBTABLES = {
-  CHATROOM: 'chat',
-  PLANS: 'plans',
-  TASKS: 'tasks',
-  LOGS: 'logs',
-  SKILLS: 'skills',
-  USERS: 'users',
-  WORKSPACES: 'workspaces',
-  WORKSPACE_USERS: 'workspace_users',
-}
 
 interface ChatState {
   activeChatByContext: Record<string, string | null>;
@@ -50,6 +43,7 @@ interface ChatState {
   editMessage: (chatId: string, messageId: string, content: string) => Promise<void>;
   appendMessage: (chatId: string, message: IChatMessage) => void;
   getMessageById: (chatId: string, messageId: string) => Promise<IChatMessage | null>;
+  refreshMessage: (chatId: string, messageId: string) => Promise<void>;
 
   setInput: (chatId: string, input: string, contextId?: string) => void;
   getInput: (chatId: string, contextId?: string) => string;
@@ -516,17 +510,35 @@ export const useChatStore = create<ChatState>()(
             const chatMessageMap = messagesByIdCache.get(chatId)!;
             fetchedMessages.forEach(msg => chatMessageMap.set(msg.id, msg));
 
+            const llmStore = useLLMStore.getState();
+            const processedMessages: IChatMessage[] = [];
+            const currentUser = getUserFromStore();
+
+            for (const msg of messagesWithUsersAndReactions) {
+              let fetchedToolCalls: IChatMessageToolCall[] | undefined = undefined;
+              if (msg.sender !== currentUser?.id && !msg.is_tool_response) {
+                const calls = await llmStore.getToolCallsByMessageId(msg.id);
+                if (calls.length > 0) {
+                  fetchedToolCalls = calls;
+                }
+              }
+              processedMessages.push({
+                ...msg,
+                tool_calls: fetchedToolCalls,
+              });
+            }
+
             set(state => {
               const currentMessages = state.messages[chatId] || [];
 
               let updatedMessages;
               if (loadMore) {
-                updatedMessages = [...messagesWithUsersAndReactions, ...currentMessages];
+                updatedMessages = [...processedMessages, ...currentMessages];
               } else if (preserveHistory) {
-                updatedMessages = [...currentMessages, ...messagesWithUsersAndReactions.filter(msg =>
+                updatedMessages = [...currentMessages, ...processedMessages.filter(msg =>
                   !currentMessages.some(m => m.id === msg.id))];
               } else {
-                updatedMessages = messagesWithUsersAndReactions;
+                updatedMessages = processedMessages;
               }
 
               // Limit to maximum 35 messages
@@ -667,6 +679,46 @@ export const useChatStore = create<ChatState>()(
         });
 
         return result.data[0] || null;
+      },
+
+      refreshMessage: async (chatId: string, messageId: string): Promise<void> => {
+        try {
+          const llmStore = useLLMStore.getState();
+          const updatedToolCalls = await llmStore.getToolCallsByMessageId(messageId);
+
+          set(state => {
+            const currentMessages = state.messages[chatId] || [];
+            const messageIndex = currentMessages.findIndex(m => m.id === messageId);
+
+            if (messageIndex === -1) {
+              console.warn(`[ChatStore] refreshMessage: Message ${messageId} not found in chat ${chatId}.`);
+              return state;
+            }
+
+            const existingMessage = currentMessages[messageIndex];
+            const refreshedMessage: IChatMessage = { // Ensure IChatMessage type
+              ...existingMessage,
+              tool_calls: updatedToolCalls,
+            };
+
+            const newMessagesForChat = [
+              ...currentMessages.slice(0, messageIndex),
+              refreshedMessage,
+              ...currentMessages.slice(messageIndex + 1),
+            ];
+
+            return {
+              ...state,
+              messages: {
+                ...state.messages,
+                [chatId]: newMessagesForChat,
+              },
+            };
+          });
+        } catch (error) {
+          console.error(`[ChatStore] Error refreshing message ${messageId} for chat ${chatId}:`, error);
+          // Optionally, update error state in the store if needed
+        }
       },
 
       toggleReaction: async (chatId, messageId, reaction) => {

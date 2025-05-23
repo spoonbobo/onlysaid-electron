@@ -7,6 +7,7 @@ import { useSelectedModelStore } from "@/stores/LLM/SelectedModelStore";
 import ModelSelector from "./ModelSelector";
 import AIMode from "./AIMode";
 import KBSelector from "./KBSelector";
+import MCPSelector from "./MCPSelector";
 import { useLLMConfigurationStore } from "@/stores/LLM/LLMConfiguration";
 
 interface ActionButtonsProps {
@@ -68,10 +69,11 @@ export default function ActionButtons({
         bgcolor: theme => alpha(theme.palette.background.paper, 0.5),
       }}
     >
-      <Box sx={{ display: "flex", gap: 0.5, alignItems: "center" }}>
+      <Box sx={{ display: "flex", gap: 0.5, alignItems: "center", flexWrap: "nowrap", overflowX: "auto" }}>
         <AIMode disabled={disabled} />
         <ModelSelector disabled={disabled} />
         {aiMode === "query" && <KBSelector disabled={disabled} />}
+        {aiMode === "agent" && <MCPSelector disabled={disabled} />}
       </Box>
 
       <Box sx={{ display: "flex", gap: 0.5 }}>

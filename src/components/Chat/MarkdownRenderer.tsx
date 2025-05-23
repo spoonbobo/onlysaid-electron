@@ -130,7 +130,7 @@ const markdownStyles = {
   '& .copy-icon': {
     width: 16,
     height: 16,
-    color: 'text.secondary'
+    color: 'action.active'
   },
   '& .check-icon': {
     color: 'success.main'
@@ -230,7 +230,6 @@ const markdownStyles = {
 };
 
 const COPY_SVG_PATH = 'M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z';
-const CHECK_SVG_PATH = 'M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z';
 
 const highlightCache = new Map<string, string>();
 
@@ -320,6 +319,7 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = React.memo(({
           <div class="copy-button-container" data-id="${codeBlockId}">
             <button class="copy-button" data-id="${codeBlockId}" aria-label="Copy code" onclick="document.dispatchEvent(new CustomEvent('onlysaid-copy', {detail: '${codeBlockId}'}))">
               <svg class="copy-icon" viewBox="0 0 24 24"><path d="${COPY_SVG_PATH}"></path></svg>
+              <span class="copied-text-icon" style="display: none; color: white; font-size: 1.1em; line-height: 1; vertical-align: middle; margin-right: 4px;">✓</span>
               <span class="copy-text">Copied!</span>
             </button>
           </div>
@@ -432,29 +432,38 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = React.memo(({
     const copiedButton = markdownContainerRef.current.querySelector(`.copy-button[data-id="${copiedId}"]`);
     if (!copiedButton) return;
 
-    const copyText = copiedButton.querySelector('.copy-text');
-    if (copyText) {
-      (copyText as HTMLElement).style.display = 'inline-block';
-    }
+    const copyTextLabel = copiedButton.querySelector('.copy-text') as HTMLElement | null;
+    const svgIcon = copiedButton.querySelector('.copy-icon') as HTMLElement | null;
+    const textIconReplacement = copiedButton.querySelector('.copied-text-icon') as HTMLElement | null;
 
-    const copyIcon = copiedButton.querySelector('.copy-icon');
-    if (copyIcon) {
-      copyIcon.classList.add('check-icon');
-      (copyIcon as SVGElement).innerHTML = `<path d="${CHECK_SVG_PATH}"></path>`;
+    if (svgIcon) {
+      svgIcon.style.display = 'none';
+    }
+    if (textIconReplacement) {
+      textIconReplacement.style.display = 'inline-block';
+    }
+    if (copyTextLabel) {
+      copyTextLabel.style.display = 'inline-block';
+      copyTextLabel.style.color = 'white';
     }
 
     return () => {
       if (markdownContainerRef.current) {
         const resetButton = markdownContainerRef.current.querySelector(`.copy-button[data-id="${copiedId}"]`);
         if (resetButton) {
-          const copyText = resetButton.querySelector('.copy-text');
-          if (copyText) {
-            (copyText as HTMLElement).style.display = 'none';
+          const resetCopyTextLabel = resetButton.querySelector('.copy-text') as HTMLElement | null;
+          const resetSvgIcon = resetButton.querySelector('.copy-icon') as HTMLElement | null;
+          const resetTextIconReplacement = resetButton.querySelector('.copied-text-icon') as HTMLElement | null;
+
+          if (resetCopyTextLabel) {
+            resetCopyTextLabel.style.display = 'none';
+            resetCopyTextLabel.style.color = '';
           }
-          const copyIcon = resetButton.querySelector('.copy-icon');
-          if (copyIcon) {
-            copyIcon.classList.remove('check-icon');
-            (copyIcon as SVGElement).innerHTML = `<path d="${COPY_SVG_PATH}"></path>`;
+          if (resetSvgIcon) {
+            resetSvgIcon.style.display = 'inline-block';
+          }
+          if (resetTextIconReplacement) {
+            resetTextIconReplacement.style.display = 'none';
           }
         }
       }

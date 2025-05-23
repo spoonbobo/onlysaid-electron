@@ -2,12 +2,12 @@ import { Box, Typography, Stack } from "@mui/material";
 import { useRef, useEffect, useState, useCallback, useMemo, memo } from "react";
 import { IChatMessage } from "@/../../types/Chat/Message";
 import { getUserFromStore } from "@/utils/user";
-import { useChatStore } from "@/stores/Chat/ChatStore";
-import ChatBubble from "@/components/Chat/ChatBubble";
-import { useCurrentTopicContext } from "@/stores/Topic/TopicStore";
+import ChatBubble from "@/scenes/Main/Chat/ChatUI/ChatBubble";
 import { useIntl } from "react-intl";
 import { throttle } from "lodash";
+import { useCurrentTopicContext } from "@/stores/Topic/TopicStore";
 import { useAgentStore } from "@/stores/Agent/AgentStore";
+import { useChatStore } from "@/stores/Chat/ChatStore";
 
 interface ChatUIProps {
   messages: IChatMessage[];

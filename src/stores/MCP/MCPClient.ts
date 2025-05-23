@@ -7,7 +7,7 @@ interface MCPClientState {
   ListMCPTool: (serverName: string) => Promise<any>;
 
 
-  createPlan: (prompt: string) => Promise<void>;
+  // createPlan: (prompt: string) => Promise<void>;
   executeTool: (toolName: string, params: any) => Promise<void>;
 }
 
@@ -29,9 +29,9 @@ export const useMCPClientStore = create<MCPClientState>()((set, get) => ({
     }
   },
 
-  createPlan: async (prompt: string) => {
-    console.log("createPlan action called with prompt:", prompt);
-  },
+  // createPlan: async (prompt: string) => {
+  //   console.log("createPlan action called with prompt:", prompt);
+  // },
 
   executeTool: async (toolName: string, params: any) => {
     console.log("executeTool action called with toolName:", toolName, "params:", params);

@@ -57,6 +57,11 @@ const mapRemoteContentsToChildren = async (
 
   if (fileIdsToFetch.length > 0) {
     try {
+      console.log("[FileExplorerStore DEBUG] Calling getFilesMetadata with:", {
+        workspaceId,
+        fileIds: fileIdsToFetch,
+        tokenProvided: !!token, // Just to check if token is present, not logging the token itself
+      });
       const metadataResponse = await window.electron.fileSystem.getFilesMetadata({
         workspaceId,
         fileIds: fileIdsToFetch,

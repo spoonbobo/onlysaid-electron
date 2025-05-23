@@ -37,10 +37,10 @@ export const featureMigrations = [
     chat_id TEXT,
     sender TEXT,
     status TEXT, -- pending, sent, error
-    reactions TEXT[], -- Stored as JSON string
+    reactions TEXT, -- Stored as JSON string for array of reactions
     reply_to TEXT,
-    mentions TEXT[], -- Stored as JSON string
-    files TEXT[], -- Stored as JSON string
+    mentions TEXT, -- Stored as JSON string for array of mentions
+    files TEXT, -- Stored as JSON string for array of files
     poll TEXT,
     contact TEXT,
     gif TEXT,
@@ -57,6 +57,21 @@ export const featureMigrations = [
     FOREIGN KEY (message_id) REFERENCES messages(id)
   )`,
 
+  // Tool Calls table
+  `CREATE TABLE IF NOT EXISTS tool_calls (
+    id TEXT PRIMARY KEY,
+    message_id TEXT NOT NULL,
+    call_index INTEGER NOT NULL,
+    type TEXT,
+    function_name TEXT,
+    function_arguments TEXT,
+    tool_description TEXT,
+    status TEXT DEFAULT 'pending',
+    result TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (message_id) REFERENCES messages(id) ON DELETE CASCADE
+  )`,
+
   // Files table
   `CREATE TABLE IF NOT EXISTS files (
     id TEXT PRIMARY KEY,
@@ -65,7 +80,6 @@ export const featureMigrations = [
     file_type TEXT NOT NULL,
     file_name TEXT NOT NULL
   )`,
-
 
   // Notifications table
   `CREATE TABLE IF NOT EXISTS notifications (
@@ -117,11 +131,9 @@ export const featureMigrations = [
   `CREATE TABLE IF NOT EXISTS logs (
     id TEXT PRIMARY KEY,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    type TEXT,
-    plan_id TEXT,
-    task_id TEXT,
-    skill_id TEXT,
-    content TEXT
+    content TEXT,
+    reference_id TEXT,
+    reference_type TEXT
   )`,
 
   // Skill table
@@ -195,7 +207,10 @@ export const featureMigrations = [
    FROM
       documents
    ORDER BY
-      ingested_at DESC`
+      ingested_at DESC`,
+
+  // Add index for the new reference columns in the logs table
+  `CREATE INDEX IF NOT EXISTS idx_logs_reference ON logs(reference_id, reference_type)`
 ];
 
 // Combined migrations array for all schema updates

@@ -35,6 +35,25 @@ const readFileAsDataURL = (file: File): Promise<string> => {
   });
 };
 
+// Helper functions for basic path operations
+const getPathExtension = (filePath: string): string => {
+  const lastDot = filePath.lastIndexOf('.');
+  if (lastDot === -1 || lastDot === 0 || lastDot === filePath.length - 1) { // No extension or hidden file like .bashrc
+    return '';
+  }
+  return filePath.substring(lastDot); // Includes the dot, e.g., ".txt"
+};
+
+const getPathBasename = (filePath: string, ext?: string): string => {
+  const lastSlash = Math.max(filePath.lastIndexOf('/'), filePath.lastIndexOf('\\'));
+  const fileName = lastSlash === -1 ? filePath : filePath.substring(lastSlash + 1);
+
+  if (ext && fileName.endsWith(ext)) {
+    return fileName.substring(0, fileName.length - ext.length);
+  }
+  return fileName;
+};
+
 function FileNodeItem({ node, level = 0 }: { node: FileNode, level?: number }) {
   const { loadFolder, toggleFolder, selectItem, removeRootFolder, selectedId, refreshFolder } = useFilesStore();
   const isLoading = useFilesStore(selectors.selectIsNodeLoading(node.id));
@@ -62,11 +81,19 @@ function FileNodeItem({ node, level = 0 }: { node: FileNode, level?: number }) {
   const [isSynced, setIsSynced] = useState(false);
 
   useEffect(() => {
-    if (node.type === 'file' && node.source === 'remote' && node.workspaceId) {
-      const workspaceDocsByKb = processedKbDocuments[node.workspaceId];
-      if (workspaceDocsByKb) {
-        const allDocsForWorkspace = Object.values(workspaceDocsByKb).flat();
-        const found = allDocsForWorkspace.some(doc => doc.filePath === node.path);
+    if (node.type === 'file' && node.source === 'remote' && node.workspaceId && node.fileDbId) {
+      const workspaceKbsData = processedKbDocuments[node.workspaceId];
+      if (workspaceKbsData) {
+        const allDocsForWorkspace = Object.values(workspaceKbsData).flat();
+
+        const found = allDocsForWorkspace.some(doc => {
+          if (doc.title) {
+            const ext = getPathExtension(doc.title);
+            const docFileUuid = ext ? getPathBasename(doc.title, ext) : doc.title;
+            return docFileUuid === node.fileDbId;
+          }
+          return false;
+        });
         setIsSynced(found);
       } else {
         setIsSynced(false);
@@ -74,7 +101,7 @@ function FileNodeItem({ node, level = 0 }: { node: FileNode, level?: number }) {
     } else {
       setIsSynced(false);
     }
-  }, [node.type, node.source, node.workspaceId, node.path, processedKbDocuments]);
+  }, [node.type, node.source, node.workspaceId, node.fileDbId, processedKbDocuments]);
 
   const handleClick = () => {
     if (isLoading && node.type === 'directory') return;

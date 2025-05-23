@@ -420,5 +420,20 @@
   "kb.menu.noKbsFound": "ナレッジベースが見つかりません。新しいナレッジベースを作成してください。",
   "settings.kb.create.success": "ナレッジベースが作成されました。",
   "chat.knowledgeBases": "ナレッジベース",
-  "chat.selectKB": "ナレッジベースを選択"
+  "chat.selectKB": "ナレッジベースを選択",
+  "settings.kb.section.title": "ナレッジベース詳細",
+  "settings.kb.explorerSection.title": "KBエクスプローラー",
+  "dialog.item.click.title": "アイテム詳細",
+  "dialog.item.click.info": "選択済み: {item}",
+  "settings.kb.private.refreshDetails": "詳細を更新",
+  "settings.kb.private.synchronize": "同期",
+  "statusBadge.notFound": "見つかりません",
+  "settings.kb.selected.updatedAt": "最終更新日",
+  "kbExplorer.loadingStatus": "ステータスを読み込み中...",
+  "statusBadge.initializing": "初期化中",
+  "statusBadge.running": "実行中",
+  "chat.noKBsAvailable": "利用可能なナレッジベースがありません",
+  "chat.noKBsFoundInWorkspace": "ワークスペースにナレッジベースが見つかりません",
+  "statusBadge.disabled": "無効",
+  "chat.thinkingDuration": "思考中 ({duration}s)"
 }

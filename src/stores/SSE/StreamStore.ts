@@ -29,14 +29,7 @@ interface StreamState {
     messages: OpenAIMessage[],
     options: OpenAIStreamOptions
   ) => Promise<string>;
-  // chatCompletion: (
-  //   messages: OpenAIMessage[],
-  //   options: Omit<OpenAIStreamOptions, 'streamId'>
-  // ) => Promise<string>;
-  // generateImage: (
-  //   prompt: string,
-  //   options?: { size?: '256x256' | '512x512' | '1024x1024' | '1792x1024' | '1024x1792' }
-  // ) => Promise<string | undefined>;
+
 }
 
 export interface OpenAIMessage {
@@ -49,7 +42,8 @@ export interface OpenAIStreamOptions {
   temperature?: number;
   maxTokens?: number;
   streamId: string;
-  provider?: "openai" | "deepseek" | "ollama" | null;
+  provider?: "openai" | "deepseek" | "ollama" | "onlysaid-kb" | null;
+  kbIds?: string[];
 }
 
 // Helper function to get API configuration based on provider
@@ -257,7 +251,8 @@ export const useStreamStore = create<StreamState>((set, get) => {
     },
 
     streamChatCompletion: async (messages, options) => {
-      const { streamId, model = 'gpt-4', temperature, provider = "openai" } = options;
+      console.log("streamChatCompletion called with messages:", messages, "and options:", options);
+      const { streamId, model = 'gpt-4', temperature, provider = "openai", ...restOptions } = options;
       const { clearMessages } = get();
       const config = useLLMConfigurationStore.getState();
 
@@ -269,29 +264,32 @@ export const useStreamStore = create<StreamState>((set, get) => {
       }));
 
       try {
-        // Include streamId in the options
+        const backendOptions = {
+          model,
+          temperature: temperature ?? config.temperature,
+          maxTokens: options.maxTokens,
+          provider,
+          streamId,
+          ...restOptions,
+          apiKeys: {
+            openAI: config.openAIKey,
+            deepSeek: config.deepSeekKey
+          },
+          ollamaConfig: {
+            baseUrl: config.ollamaBaseURL,
+            model: config.ollamaModel
+          },
+          providerStatus: {
+            openAIEnabled: config.openAIEnabled && config.openAIVerified,
+            deepSeekEnabled: config.deepSeekEnabled && config.deepSeekVerified,
+            ollamaEnabled: config.ollamaEnabled && config.ollamaVerified
+          }
+        };
+        console.log("Sending options to backend (chat_stream_complete):", backendOptions);
+
         const result = await window.electron.streaming.chat_stream_complete({
           messages,
-          options: {
-            model,
-            temperature: temperature ?? config.temperature,
-            maxTokens: options.maxTokens,
-            provider,
-            streamId, // Pass streamId to backend
-            apiKeys: {
-              openAI: config.openAIKey,
-              deepSeek: config.deepSeekKey
-            },
-            ollamaConfig: {
-              baseUrl: config.ollamaBaseURL,
-              model: config.ollamaModel
-            },
-            providerStatus: {
-              openAIEnabled: config.openAIEnabled && config.openAIVerified,
-              deepSeekEnabled: config.deepSeekEnabled && config.deepSeekVerified,
-              ollamaEnabled: config.ollamaEnabled && config.ollamaVerified
-            }
-          }
+          options: backendOptions,
         });
 
         if (!result.success && !result.aborted) {
@@ -310,61 +308,6 @@ export const useStreamStore = create<StreamState>((set, get) => {
       }
     },
 
-    // chatCompletion: async (messages, options = {}) => {
-    //     const { model = 'gpt-4', temperature, maxTokens, provider = "openai" } = options;
-    //     const config = useLLMConfigurationStore.getState();
 
-    //     const result = await window.electron.streaming.chat_complete({
-    //         messages,
-    //         options: {
-    //             model,
-    //             temperature: temperature ?? config.temperature,
-    //             maxTokens,
-    //             provider,
-    //             // All API keys passed in one object
-    //             apiKeys: {
-    //                 openAI: config.openAIKey,
-    //                 deepSeek: config.deepSeekKey
-    //             },
-    //             ollamaConfig: {
-    //                 baseUrl: config.ollamaBaseURL,
-    //                 model: config.ollamaModel
-    //             },
-    //             providerStatus: {
-    //                 openAIEnabled: config.openAIEnabled && config.openAIVerified,
-    //                 deepSeekEnabled: config.deepSeekEnabled && config.deepSeekVerified,
-    //                 ollamaEnabled: config.ollamaEnabled && config.ollamaVerified
-    //             }
-    //         }
-    //     });
-
-    //     if (!result.success) {
-    //         throw new Error(result.error);
-    //     }
-
-    //     return result.content;
-    // },
-
-    // generateImage: async (prompt, options = {}) => {
-    //     const config = useLLMConfigurationStore.getState();
-
-    //     const result = await window.electron.streaming.generate_image({
-    //         prompt,
-    //         options: {
-    //             ...options,
-    //             // Pass all keys, let backend decide which to use
-    //             apiKeys: {
-    //                 openAI: config.openAIKey,
-    //                 deepSeek: config.deepSeekKey
-    //             }
-    //         }
-    //     });
-
-    //     if (!result.success) {
-    //         throw new Error(result.error);
-    //     }
-
-    //     return result.url;
-    // }
   };
 });

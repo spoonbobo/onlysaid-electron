@@ -23,7 +23,7 @@ import { setupUserHandlers } from './api/v2/user';
 import { setupFileSystemHandlers } from './filesystem';
 import { setupWindowHandlers } from './window';
 import { setupResourceHandlers } from './system';
-import { setupSSEHandlers } from './streaming';
+import { setupSSEHandlers } from './openai';
 import { setupMCPHandlers } from './mcp';
 import { setupContentHandlers } from './filesystem';
 import { setupRedisHandlers } from './redis';

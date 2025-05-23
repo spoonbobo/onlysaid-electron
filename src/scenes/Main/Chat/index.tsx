@@ -11,12 +11,15 @@ import { Typography } from "@mui/material";
 import { useChatStore } from "@/stores/Chat/ChatStore";
 import { useCurrentTopicContext, useTopicStore } from "@/stores/Topic/TopicStore";
 import { useSelectedModelStore } from "@/stores/LLM/SelectedModelStore";
-import { useStreamStore, OpenAIMessage } from "@/stores/SSE/StreamStore";
+import { useStreamStore, OpenAIMessage, OpenAIStreamOptions } from "@/stores/SSE/StreamStore";
 import { useUserStore } from "@/stores/User/UserStore";
 import { useAgentStore } from "@/stores/Agent/AgentStore";
 import { useWorkspaceStore } from "@/stores/Workspace/WorkspaceStore";
 import { useLLMConfigurationStore } from "@/stores/LLM/LLMConfiguration";
 import { processAskModeAIResponse } from './Mode/Ask';
+import { processQueryModeAIResponse } from './Mode/Query';
+import { processAgentModeAIResponse } from './Mode/Agent';
+import { useMCPClientStore } from '@/stores/MCP/MCPClient';
 
 function Chat() {
   const {
@@ -219,8 +222,6 @@ function Chat() {
             tokenCountRef.current = 0;
             setTokenRate(0);
 
-            let askModeProcessingSuccess = false;
-
             try {
               const result = await processAskModeAIResponse({
                 activeChatId,
@@ -236,12 +237,85 @@ function Chat() {
                 markStreamAsCompleted,
                 streamChatCompletion,
               });
-              askModeProcessingSuccess = result.success;
               if (!result.success) {
                 console.error("Ask mode AI response failed:", result.error);
               }
             } catch (e) {
               console.error("Critical error processing Ask mode AI response:", e);
+            } finally {
+              const earnedXP = Math.floor(tokenCountRef.current / 10);
+              agentGainExperience(earnedXP);
+            }
+          } else if (aiMode === "query" && modelId && messageData.text && activeChatId) {
+            const currentWorkspaceId = selectedContext?.id;
+            if (!currentWorkspaceId) {
+              console.error("Query Mode: Workspace ID is missing from selectedContext.");
+              return;
+            }
+
+            console.log("Processing Query Mode AI Response with streaming in Chat/index.tsx");
+            setCurrentStreamContent("");
+            setTokenRate(0);
+
+            const queryProvider = "onlysaid-kb" as OpenAIStreamOptions['provider'];
+
+            try {
+              const result = await processQueryModeAIResponse({
+                activeChatId,
+                workspaceId: currentWorkspaceId,
+                userMessageText: messageData.text,
+                modelId: modelId,
+                provider: queryProvider,
+                agent,
+                currentUser,
+                existingMessages: messages,
+                appendMessage,
+                updateMessage,
+                setStreamingState,
+                markStreamAsCompleted,
+                streamChatCompletion,
+              });
+              if (result.success) {
+                console.log("Query mode streaming response processed in Chat/index.tsx:", result.responseText);
+              } else {
+                console.error("Query mode AI streaming response failed in Chat/index.tsx:", result.error);
+              }
+            } catch (e) {
+              console.error("Critical error processing Query mode AI streaming response in Chat/index.tsx:", e);
+              setStreamingState(null, null);
+            }
+          } else if (aiMode === "agent" && modelId && provider && messageData.text && activeChatId) {
+            setCurrentStreamContent("");
+            streamStartTimeRef.current = null;
+            tokenCountRef.current = 0;
+            setTokenRate(0);
+
+            const { ListMCPTool } = useMCPClientStore.getState();
+            try {
+              console.log("Listing tools for agent mode...");
+              const tools = await ListMCPTool("default");
+              console.log("Tools available for agent:", tools);
+            } catch (error) {
+              console.error("Failed to list tools for agent mode:", error);
+            }
+
+            try {
+              const result = await processAgentModeAIResponse({
+                activeChatId,
+                userMessageText: messageData.text,
+                agent,
+                currentUser,
+                existingMessages: messages,
+                appendMessage,
+                updateMessage,
+                setStreamingState,
+                markStreamAsCompleted,
+              });
+              if (!result.success) {
+                console.error("Agent mode AI response failed:", result.error);
+              }
+            } catch (e) {
+              console.error("Critical error processing Agent mode AI response:", e);
             } finally {
               const earnedXP = Math.floor(tokenCountRef.current / 10);
               agentGainExperience(earnedXP);

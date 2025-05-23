@@ -41,10 +41,6 @@ export function setupMCPHandlers() {
             inputSchema: tool.inputSchema
           };
         });
-        // console.log(
-        //   `Connected to ${serverName} server with tools:`,
-        //   tools.map(({ name }) => name)
-        // );
       } catch (error) {
         console.warn(`Could not get tools from ${serverName} server:`, error);
       }
@@ -73,10 +69,10 @@ export function setupMCPHandlers() {
       if (!client) {
         return { success: false, error: `No active MCP client found` };
       }
-      console.log("client", client);
+      // console.log("client", client);
 
       const tools = await client.listTools();
-      console.log("tools", tools);
+      // console.log("tools", tools);
 
       return { success: true, data: tools };
     } catch (error: any) {

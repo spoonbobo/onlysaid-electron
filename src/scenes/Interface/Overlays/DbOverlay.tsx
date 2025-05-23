@@ -19,7 +19,6 @@ export default function DbOverlay() {
 
   const executeQuery = async (queryId: string) => {
     const activeChatId = selectedContext?.section ? selectedTopics[selectedContext.section] : null;
-    console.log("Active chat ID:", activeChatId);
 
     if (!activeChatId) {
       setResult("No active topic selected");

@@ -1,7 +1,7 @@
 import { Box, Button, FormControl, InputLabel, Select, MenuItem, Pagination, SelectChangeEvent, TextField, InputAdornment } from "@mui/material";
 import { useState } from "react";
 import { useMCPStore } from "@/stores/MCP/MCPStore";
-import { useMCPPageStore } from "@/stores/MCP/MCPPageStore";
+import { useMCPSettingsStore } from "@/stores/MCP/MCPSettingsStore";
 import Servers from "./Servers";
 import ServiceDialog from "./Dialogs";
 import { FormattedMessage } from "react-intl";
@@ -33,7 +33,7 @@ function MCPSettings() {
     setPage,
     setItemsPerPage,
     setSelectedCategory
-  } = useMCPPageStore();
+  } = useMCPSettingsStore();
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [serviceType, setServiceType] = useState("");

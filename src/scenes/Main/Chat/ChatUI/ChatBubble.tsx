@@ -1,4 +1,4 @@
-import { Box, Typography, Avatar, IconButton, Menu, MenuItem } from "@mui/material";
+import { Box, Typography, Avatar, IconButton, Menu, MenuItem, Button } from "@mui/material";
 import { IChatMessage } from "@/../../types/Chat/Message";
 import { useState, useRef, useEffect, useCallback, memo } from "react";
 import ThumbUpIcon from '@mui/icons-material/ThumbUp';
@@ -15,6 +15,9 @@ import CircularProgress from '@mui/material/CircularProgress';
 import MarkdownRenderer from "@/components/Chat/MarkdownRenderer";
 import { FormattedMessage } from "react-intl";
 import DeleteMessageDialog from "@/components/Dialog/DeleteMessage";
+import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
+import CancelOutlinedIcon from '@mui/icons-material/CancelOutlined';
+import ToolDisplay from "@/scenes/Main/Chat/ChatUI/ToolDisplay";
 
 interface ChatBubbleProps {
   message: IChatMessage;
@@ -49,8 +52,29 @@ const ChatBubble = memo(({
   const { selectedTopics, selectedContext } = useCurrentTopicContext();
   const toggleReaction = useChatStore(state => state.toggleReaction);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [thinkingDuration, setThinkingDuration] = useState(0);
 
   const activeChatId = selectedContext?.section ? selectedTopics[selectedContext.section] || null : null;
+
+  useEffect(() => {
+    let timerId: NodeJS.Timeout | null = null;
+    const isCurrentlyThinking = isStreaming && !msg.text && !streamContent;
+
+    if (isCurrentlyThinking) {
+      setThinkingDuration(0); // Reset duration when thinking starts
+      timerId = setInterval(() => {
+        setThinkingDuration(prevDuration => prevDuration + 1);
+      }, 1000);
+    } else {
+      setThinkingDuration(0); // Reset if no longer thinking
+    }
+
+    return () => {
+      if (timerId) {
+        clearInterval(timerId);
+      }
+    };
+  }, [isStreaming, msg.text, streamContent]);
 
   const getTimeString = () => {
     if (!msg.created_at) return "";
@@ -101,9 +125,9 @@ const ChatBubble = memo(({
 
   const handleCopyText = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
-    navigator.clipboard.writeText(msg.text);
+    navigator.clipboard.writeText(msg.text || (msg.tool_calls ? "Tool call data" : ""));
     handleMenuClose();
-  }, [msg.text, handleMenuClose]);
+  }, [msg.text, msg.tool_calls, handleMenuClose]);
 
   const handleDelete = useCallback(() => {
     setDeleteDialogOpen(true);
@@ -253,21 +277,27 @@ const ChatBubble = memo(({
         )}
 
         {
-          (msg.text || isStreaming) ? (
-            (isStreaming && !msg.text && !streamContent) ? (
-              <Typography sx={{ color: "text.secondary", fontStyle: 'italic', whiteSpace: 'pre-wrap' }}>...</Typography>
-            ) : (
-              <MarkdownRenderer
-                content={msg.text}
-                isStreaming={isStreaming}
-                isConnecting={isConnecting}
-                streamContent={streamContent}
-              />
-            )
+          (!msg.text?.trim() && msg.tool_calls && msg.tool_calls.length > 0) ? (
+            <ToolDisplay toolCalls={msg.tool_calls} chatId={msg.chat_id} messageId={msg.id} />
           ) : (
-            <Typography sx={{ color: "text.secondary", fontStyle: 'italic' }}>
-              <FormattedMessage id="chat.emptyMessage" defaultMessage="[Message is empty]" />
-            </Typography>
+            (msg.text || isStreaming) ? (
+              (isStreaming && !msg.text && !streamContent) ? (
+                <Typography sx={{ color: "text.secondary", whiteSpace: 'pre-wrap' }}>
+                  <FormattedMessage id="chat.thinkingDuration" defaultMessage="Thinking ({duration}s)" values={{ duration: thinkingDuration }} />
+                </Typography>
+              ) : (
+                <MarkdownRenderer
+                  content={msg.text}
+                  isStreaming={isStreaming}
+                  isConnecting={isConnecting}
+                  streamContent={streamContent}
+                />
+              )
+            ) : (
+              <Typography sx={{ color: "text.secondary", fontStyle: 'italic' }}>
+                <FormattedMessage id="chat.emptyMessage" defaultMessage="[Message is empty]" />
+              </Typography>
+            )
           )
         }
 
@@ -378,6 +408,10 @@ const ChatBubble = memo(({
   }
 
   if (!nextProps.isStreaming && prevProps.message.text !== nextProps.message.text) {
+    return false;
+  }
+
+  if (JSON.stringify(prevProps.message.tool_calls) !== JSON.stringify(nextProps.message.tool_calls)) {
     return false;
   }
 

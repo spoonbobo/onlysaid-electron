@@ -5,14 +5,14 @@ import SettingsActionBar from "@/components/Settings/SettingsActionBar";
 import { Button } from "@mui/material";
 import { useState } from "react";
 import TextFieldWithOptions from "@/components/Text/TextFieldWithOptions";
-import { useMCPConfigurationStore } from "@/stores/MCP/MCPConfiguration";
+import { useMCPSettingsStore } from "@/stores/MCP/MCPSettingsStore";
 import { toast } from "@/utils/toast";
 import { FormattedMessage } from "react-intl";
 import { useIntl } from "react-intl";
 
 function MCPSettings() {
     // Get store values and actions
-    const { smitheryKey, smitheryVerified, setSmitheryKey, setSmitheryVerified } = useMCPConfigurationStore();
+    const { smitheryKey, smitheryVerified, setSmitheryKey, setSmitheryVerified } = useMCPSettingsStore();
     const intl = useIntl();
     // Local state
     const [inputKey, setInputKey] = useState(smitheryKey);
