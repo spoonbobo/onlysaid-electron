@@ -6,11 +6,28 @@ import withReset from "../withReset";
 interface WeatherForecastServerProps {
     onConfigure: () => void;
     onReset?: () => void;
+    isAutoApproved?: boolean;
+    onAutoApprovalToggle?: (autoApproved: boolean) => void;
 }
 
-const WeatherForecastServer = ({ onConfigure, onReset }: WeatherForecastServerProps) => {
-    const { weatherForecastEnabled, setWeatherForecastEnabled, isWeatherForecastConfigured } = useMCPStore();
-    const isConfigured = isWeatherForecastConfigured();
+const WeatherForecastServer = ({
+    onConfigure,
+    onReset,
+    isAutoApproved = false,
+    onAutoApprovalToggle
+}: WeatherForecastServerProps) => {
+    const { setServerEnabled, isServerConfigured, getAllConfiguredServers } = useMCPStore();
+    const servers = getAllConfiguredServers();
+    const weatherForecastEnabled = servers.weatherForecast?.enabled || false;
+    const isConfigured = isServerConfigured('weatherForecast');
+
+    const handleToggle = (enabled: boolean) => {
+        setServerEnabled('weatherForecast', enabled);
+    };
+
+    const handleAutoApprovalToggle = (autoApproved: boolean) => {
+        onAutoApprovalToggle?.(autoApproved);
+    };
 
     return (
         <ServerCard
@@ -19,7 +36,9 @@ const WeatherForecastServer = ({ onConfigure, onReset }: WeatherForecastServerPr
             version="1.2.0"
             isEnabled={weatherForecastEnabled}
             isConfigured={isConfigured}
-            onToggle={setWeatherForecastEnabled}
+            isAutoApproved={isAutoApproved}
+            onToggle={handleToggle}
+            onAutoApprovalToggle={handleAutoApprovalToggle}
             onConfigure={onConfigure}
             onReset={onReset}
             icon={<WbSunny />}

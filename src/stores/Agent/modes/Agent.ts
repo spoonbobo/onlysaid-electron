@@ -7,7 +7,6 @@ import { useMCPSettingsStore } from '@/stores/MCP/MCPSettingsStore';
 import { useLLMStore } from '@/stores/LLM/LLMStore';
 import { getAgentFromStore } from '@/utils/agent';
 import type OpenAI from 'openai';
-import { useMCPStore } from '@/stores/MCP/MCPStore';
 
 export const agentModeSystemPrompt = (user: IUser, agent: IUser) => {
   return `
@@ -127,7 +126,7 @@ export async function processAgentModeAIResponse({
     chat_id: activeChatId,
     sender: assistantSenderId,
     sender_object: assistantSender as IUser,
-    text: "Thinking...(AgentMode)",
+    text: "Searching for tools...",
     created_at: new Date().toISOString(),
     sent_at: new Date().toISOString(),
     status: "pending",

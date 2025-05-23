@@ -11,12 +11,9 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import { useChatStore } from "@/stores/Chat/ChatStore";
 import { useCurrentTopicContext } from "@/stores/Topic/TopicStore";
 import * as R from 'ramda';
-import CircularProgress from '@mui/material/CircularProgress';
 import MarkdownRenderer from "@/components/Chat/MarkdownRenderer";
 import { FormattedMessage } from "react-intl";
 import DeleteMessageDialog from "@/components/Dialog/DeleteMessage";
-import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
-import CancelOutlinedIcon from '@mui/icons-material/CancelOutlined';
 import ToolDisplay from "@/scenes/Main/Chat/ChatUI/ToolDisplay";
 
 interface ChatBubbleProps {

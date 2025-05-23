@@ -37,9 +37,9 @@ export interface LLMStoreState {
   createToolCalls: (messageId: string, toolCalls: IChatMessageToolCall[]) => Promise<void>;
   getToolCallsByMessageId: (messageId: string) => Promise<IChatMessageToolCall[]>;
   updateToolCallStatus: (toolCallId: string, status: string) => Promise<void>;
-  updateToolCallResult: (toolCallId: string, result: string | Record<string, any>) => Promise<void>;
+  updateToolCallResult: (toolCallId: string, result: string | Record<string, any>, executionTimeSeconds?: number) => Promise<void>;
   addLogForToolCall: (toolCallId: string, logContent: string) => Promise<void>;
-  getLogsForToolCall: (toolCallId: string) => Promise<IToolLog[]>; // Updated return type
+  getLogsForToolCall: (toolCallId: string) => Promise<IToolLog[]>;
   deleteToolCall: (toolCallId: string) => Promise<void>;
 }
 
@@ -168,7 +168,7 @@ export const useLLMStore = create<LLMStoreState>((set, get) => ({
     try {
       const results = await window.electron.db.query({
         query: `
-          select id, type, function_name, function_arguments, call_index, tool_description, mcp_server, status, result
+          select id, type, function_name, function_arguments, call_index, tool_description, mcp_server, status, result, execution_time_seconds
           from ${DBTABLES.TOOL_CALLS}
           where message_id = @messageId
           order by call_index asc
@@ -188,6 +188,7 @@ export const useLLMStore = create<LLMStoreState>((set, get) => ({
           mcp_server: row.mcp_server,
           status: row.status,
           result: row.result ? JSON.parse(row.result) : undefined,
+          execution_time_seconds: row.execution_time_seconds,
         }));
       }
       return [];
@@ -212,19 +213,25 @@ export const useLLMStore = create<LLMStoreState>((set, get) => ({
       console.error(`[LLMStore] Error updating tool call ${toolCallId} status to ${status}:`, error);
     }
   },
-  updateToolCallResult: async (toolCallId, result) => {
+  updateToolCallResult: async (toolCallId, result, executionTimeSeconds) => {
     try {
       const resultString = typeof result === 'string' ? result : JSON.stringify(result);
       await window.electron.db.query({
         query: `
           update ${DBTABLES.TOOL_CALLS}
-          set result = @result, status = @status
+          set result = @result, status = @status, execution_time_seconds = @execution_time_seconds
           where id = @toolCallId
         `,
-        params: { toolCallId, result: resultString, status: 'executed' }
+        params: {
+          toolCallId,
+          result: resultString,
+          status: 'executed',
+          execution_time_seconds: executionTimeSeconds || null
+        }
       });
       // Add a log entry when result is updated
-      await get().addLogForToolCall(toolCallId, `Tool call result updated. Status: executed.`);
+      const timeInfo = executionTimeSeconds ? ` (${executionTimeSeconds}s)` : '';
+      await get().addLogForToolCall(toolCallId, `Tool call result updated. Status: executed${timeInfo}.`);
     } catch (error: any) {
       console.error(`[LLMStore] Error updating tool call ${toolCallId} result:`, error);
     }

@@ -6,11 +6,28 @@ import withReset from "../withReset";
 interface IPLocationServerProps {
     onConfigure: () => void;
     onReset?: () => void;
+    isAutoApproved?: boolean;
+    onAutoApprovalToggle?: (autoApproved: boolean) => void;
 }
 
-const IPLocationServer = ({ onConfigure, onReset }: IPLocationServerProps) => {
-    const { ipLocationEnabled, setIPLocationEnabled, isIPLocationConfigured } = useMCPStore();
-    const isConfigured = isIPLocationConfigured();
+const IPLocationServer = ({
+    onConfigure,
+    onReset,
+    isAutoApproved = false,
+    onAutoApprovalToggle
+}: IPLocationServerProps) => {
+    const { setServerEnabled, isServerConfigured, getAllConfiguredServers } = useMCPStore();
+    const servers = getAllConfiguredServers();
+    const ipLocationEnabled = servers.ipLocation?.enabled || false;
+    const isConfigured = isServerConfigured('ipLocation');
+
+    const handleToggle = (enabled: boolean) => {
+        setServerEnabled('ipLocation', enabled);
+    };
+
+    const handleAutoApprovalToggle = (autoApproved: boolean) => {
+        onAutoApprovalToggle?.(autoApproved);
+    };
 
     return (
         <ServerCard
@@ -19,7 +36,9 @@ const IPLocationServer = ({ onConfigure, onReset }: IPLocationServerProps) => {
             version="Unknown"
             isEnabled={ipLocationEnabled}
             isConfigured={isConfigured}
-            onToggle={setIPLocationEnabled}
+            isAutoApproved={isAutoApproved}
+            onToggle={handleToggle}
+            onAutoApprovalToggle={handleAutoApprovalToggle}
             onConfigure={onConfigure}
             onReset={onReset}
             icon={<LocationOn />}

@@ -1,74 +1,70 @@
 import { toast } from "@/utils/toast";
-import type { IServerModule, ILocationConfig } from "@/../../types/MCP/server";
+import type { IServerModule, IWhatsAppConfig } from "@/../../types/MCP/server";
 
-export const createLocationServer = (
+export const createWhatsAppServer = (
   get: () => any,
   set: (partial: any) => void,
   initializeClient: (serviceType: string) => Promise<{ success: boolean; message?: string; error?: string }>
-): IServerModule<ILocationConfig> => {
+): IServerModule<IWhatsAppConfig> => {
 
-  const defaultConfig: ILocationConfig = {
-    path: "",
+  const defaultConfig: IWhatsAppConfig = {
+    path: ""
   };
 
-  const isConfigured = (config: ILocationConfig): boolean => {
+  const isConfigured = (config: IWhatsAppConfig): boolean => {
     return !!config.path;
   };
 
-  const createClientConfig = (config: ILocationConfig, homedir: string) => ({
+  const createClientConfig = (config: IWhatsAppConfig, homedir: string) => ({
     enabled: getEnabled(),
     command: `${homedir}/.local/bin/uv`,
     args: [
       "--directory",
       config.path,
       "run",
-      "osm-mcp-server"
+      "main.py"
     ],
-    clientName: "onlysaid-location-client",
-    clientVersion: "1.0.0"
+    clientName: "whatsapp-client",
+    clientVersion: "0.8.0"
   });
 
   const setEnabled = async (enabled: boolean) => {
-    if (enabled && !isConfigured(getConfig())) {
-      // Don't enable if not configured
-      return;
-    }
+    if (enabled && !isConfigured(getConfig())) return;
 
     set((state: any) => ({
       ...state,
-      locationEnabled: enabled
+      whatsAppEnabled: enabled
     }));
 
-    // Initialize the client if being enabled
     if (enabled) {
-      const result = await initializeClient("location");
+      const result = await initializeClient("whatsapp");
       if (!result.success) {
-        toast.error(`Location service error: ${result.error}`);
+        toast.error(`WhatsApp service error: ${result.error}`);
         set((state: any) => ({
           ...state,
-          locationEnabled: false
+          whatsAppEnabled: false
         }));
       } else {
-        toast.success("Location service enabled successfully");
+        toast.success("WhatsApp service enabled successfully");
       }
     }
   };
 
-  const setConfig = (config: Partial<ILocationConfig>) => {
+  const setConfig = (config: Partial<IWhatsAppConfig>) => {
     set((state: any) => ({
       ...state,
-      locationConfig: { ...getConfig(), ...config }
+      whatsAppConfig: { ...getConfig(), ...config }
     }));
   };
 
   const getEnabled = () => {
     const state = get();
-    return state.locationEnabled || false;
+    return state.whatsAppEnabled || false;
   };
 
   const getConfig = () => {
     const state = get();
-    return state.locationConfig || defaultConfig;
+    return state.whatsAppConfig || defaultConfig;
   };
 
   const getConfigured = () => isConfigured(getConfig());
@@ -76,13 +72,13 @@ export const createLocationServer = (
   const setAutoApproved = (autoApproved: boolean) => {
     set((state: any) => ({
       ...state,
-      locationAutoApproved: autoApproved
+      whatsAppAutoApproved: autoApproved
     }));
   };
 
   const getAutoApproved = () => {
     const state = get();
-    return state.locationAutoApproved || false;
+    return state.whatsAppAutoApproved || false;
   };
 
   return {
@@ -99,7 +95,6 @@ export const createLocationServer = (
   };
 };
 
-// Export for backward compatibility
-export const isLocationConfigured = (config: ILocationConfig): boolean => {
+export const isWhatsAppConfigured = (config: IWhatsAppConfig): boolean => {
   return !!config.path;
 };

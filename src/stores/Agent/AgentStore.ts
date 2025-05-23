@@ -14,6 +14,7 @@ import { useTopicStore } from "@/stores/Topic/TopicStore";
 import { useSelectedModelStore } from "@/stores/LLM/SelectedModelStore";
 import { useUserStore } from "@/stores/User/UserStore";
 import { calculateExperienceForLevel } from "@/utils/agent";
+import { summarizeToolCallResults } from "@/stores/Agent/modes/Ask";
 
 interface AgentResponseParams {
   activeChatId: string;
@@ -49,6 +50,27 @@ interface AgentState {
   // Simplified methods
   sendAgentMessage: (chatId: string, prompt: string, mode?: "ask" | "query" | "agent") => Promise<{ success: boolean; messageId?: string; error?: any }>;
   quickResponse: (prompt: string, mode?: "ask") => Promise<{ success: boolean; response?: string; error?: any }>;
+
+  // Add new method for tool result summarization
+  summarizeToolCallResults: (params: {
+    activeChatId: string;
+    toolCallResults: Array<{
+      toolName: string;
+      result: any;
+      executionTime?: number;
+      status: string;
+    }>;
+    modelId: string;
+    provider: string;
+    agent?: IUser | null;
+    currentUser: IUser | null;
+    existingMessages: IChatMessage[];
+    appendMessage: (chatId: string, message: IChatMessage) => void;
+    updateMessage: (chatId: string, messageId: string, updates: Partial<IChatMessage>) => Promise<void>;
+    setStreamingState: (messageId: string | null, chatId: string | null) => void;
+    markStreamAsCompleted: (chatId: string, messageText: string) => void;
+    streamChatCompletion: any;
+  }) => Promise<{ success: boolean; responseText?: string; assistantMessageId?: string; error?: any }>;
 }
 
 export const useAgentStore = create<AgentState>()(
@@ -397,6 +419,39 @@ export const useAgentStore = create<AgentState>()(
         } catch (error: any) {
           console.error("[AgentStore] Error in quickResponse:", error);
           return { success: false, error: error.message };
+        }
+      },
+
+      summarizeToolCallResults: async (params) => {
+        const currentAgent = get().agent;
+        if (!currentAgent) {
+          console.error("[AgentStore] No agent available for tool result summarization");
+          return { success: false, error: "No agent available" };
+        }
+
+        set({ isProcessingResponse: true, error: null });
+
+        try {
+          const result = await summarizeToolCallResults({
+            ...params,
+            agent: currentAgent,
+          });
+
+          if (result.success) {
+            // Award experience for summarization
+            const earnedXP = Math.floor((result.responseText?.length || 0) / 20);
+            if (earnedXP > 0) {
+              await get().gainExperience(earnedXP);
+            }
+          }
+
+          set({ isProcessingResponse: false });
+          return result;
+
+        } catch (error: any) {
+          console.error("[AgentStore] Error summarizing tool results:", error);
+          set({ isProcessingResponse: false, error: error.message });
+          return { success: false, error };
         }
       },
     }),

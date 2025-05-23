@@ -1,31 +1,32 @@
 import { toast } from "@/utils/toast";
-import type { IServerModule, ITavilyConfig, ITavilyState } from "@/../../types/MCP/server";
+import type { IServerModule, IIPLocationConfig } from "@/../../types/MCP/server";
 
-export const createTavilyServer = (
+export const createIPLocationServer = (
   get: () => any,
   set: (partial: any) => void,
   initializeClient: (serviceType: string) => Promise<{ success: boolean; message?: string; error?: string }>
-): IServerModule<ITavilyConfig> => {
+): IServerModule<IIPLocationConfig> => {
 
-  const defaultConfig: ITavilyConfig = {
-    apiKey: "",
+  const defaultConfig: IIPLocationConfig = {
+    apiKey: ""
   };
 
-  const isConfigured = (config: ITavilyConfig): boolean => {
+  const isConfigured = (config: IIPLocationConfig): boolean => {
     return !!config.apiKey;
   };
 
-  const createClientConfig = (config: ITavilyConfig, homedir: string) => ({
+  const createClientConfig = (config: IIPLocationConfig, homedir: string) => ({
     enabled: getEnabled(),
-    command: "npx",
+    command: `${homedir}/.local/bin/uvx`,
     args: [
-      "-y",
-      "tavily-mcp@0.1.4"
+      "--from",
+      "git+https://github.com/briandconnelly/mcp-server-ipinfo.git",
+      "mcp-server-ipinfo"
     ],
     env: {
-      "TAVILY_API_KEY": config.apiKey
+      "IPINFO_API_TOKEN": config.apiKey
     },
-    clientName: "tavily-client",
+    clientName: "ip-location-client",
     clientVersion: "1.0.0"
   });
 
@@ -34,38 +35,38 @@ export const createTavilyServer = (
 
     set((state: any) => ({
       ...state,
-      tavilyEnabled: enabled
+      ipLocationEnabled: enabled
     }));
 
     if (enabled) {
-      const result = await initializeClient("tavily");
+      const result = await initializeClient("ip-location");
       if (!result.success) {
-        toast.error(`Tavily service error: ${result.error}`);
+        toast.error(`IP location service error: ${result.error}`);
         set((state: any) => ({
           ...state,
-          tavilyEnabled: false
+          ipLocationEnabled: false
         }));
       } else {
-        toast.success("Tavily service enabled successfully");
+        toast.success("IP location service enabled successfully");
       }
     }
   };
 
-  const setConfig = (config: Partial<ITavilyConfig>) => {
+  const setConfig = (config: Partial<IIPLocationConfig>) => {
     set((state: any) => ({
       ...state,
-      tavilyConfig: { ...getConfig(), ...config }
+      ipLocationConfig: { ...getConfig(), ...config }
     }));
   };
 
   const getEnabled = () => {
     const state = get();
-    return state.tavilyEnabled || false;
+    return state.ipLocationEnabled || false;
   };
 
   const getConfig = () => {
     const state = get();
-    return state.tavilyConfig || defaultConfig;
+    return state.ipLocationConfig || defaultConfig;
   };
 
   const getConfigured = () => isConfigured(getConfig());
@@ -73,13 +74,13 @@ export const createTavilyServer = (
   const setAutoApproved = (autoApproved: boolean) => {
     set((state: any) => ({
       ...state,
-      tavilyAutoApproved: autoApproved
+      ipLocationAutoApproved: autoApproved
     }));
   };
 
   const getAutoApproved = () => {
     const state = get();
-    return state.tavilyAutoApproved || false;
+    return state.ipLocationAutoApproved || false;
   };
 
   return {
@@ -96,7 +97,6 @@ export const createTavilyServer = (
   };
 };
 
-// Export for backward compatibility
-export const isTavilyConfigured = (config: ITavilyConfig): boolean => {
+export const isIPLocationConfigured = (config: IIPLocationConfig): boolean => {
   return !!config.apiKey;
 };

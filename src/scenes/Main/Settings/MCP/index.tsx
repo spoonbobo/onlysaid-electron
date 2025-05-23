@@ -10,20 +10,9 @@ import SearchIcon from "@mui/icons-material/Search";
 
 function MCPSettings() {
   const {
-    weatherEnabled, locationEnabled, ipLocationEnabled, weatherForecastEnabled,
-    weatherConfig, locationConfig, ipLocationConfig, weatherForecastConfig,
-    nearbySearchEnabled, web3ResearchEnabled, doorDashEnabled, whatsAppEnabled, gitHubEnabled, airbnbEnabled,
-    nearbySearchConfig, web3ResearchConfig, doorDashConfig, whatsAppConfig, gitHubConfig,
-    setWeatherEnabled, setLocationEnabled, setIPLocationEnabled, setWeatherForecastEnabled,
-    setWeatherConfig, setLocationConfig, setIPLocationConfig, setWeatherForecastConfig,
-    setNearbySearchConfig, setWeb3ResearchConfig, setDoorDashConfig, setWhatsAppConfig, setGitHubConfig,
-    setNearbySearchEnabled, setWeb3ResearchEnabled, setDoorDashEnabled, setWhatsAppEnabled, setGitHubEnabled,
-    setAirbnbEnabled,
-    tavilyEnabled, tavilyConfig,
-    setTavilyEnabled, setTavilyConfig,
-    initializeClient,
-    linkedInEnabled, linkedInConfig,
-    setLinkedInEnabled, setLinkedInConfig
+    getAllConfiguredServers,
+    setServerConfig,
+    initializeClient
   } = useMCPStore();
 
   const {
@@ -37,8 +26,10 @@ function MCPSettings() {
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [serviceType, setServiceType] = useState("");
-
   const [searchTerm, setSearchTerm] = useState("");
+
+  // Get current server states
+  const allServers = getAllConfiguredServers();
 
   const serviceCategories = [
     { value: "all", label: "All Services" },
@@ -51,88 +42,101 @@ function MCPSettings() {
     { value: "accommodation", label: "Accommodation Services" }
   ];
 
+  // Map server names to service types and categories
   const serviceConfigs = [
     {
       type: "weather",
-      enabledFlag: weatherEnabled,
-      config: weatherConfig,
+      serverName: "weather",
+      enabledFlag: allServers.weather?.enabled || false,
+      config: allServers.weather?.config || {},
       humanName: "Weather",
       category: "weather"
     },
     {
       type: "weather-forecast",
-      enabledFlag: weatherForecastEnabled,
-      config: weatherForecastConfig,
+      serverName: "weatherForecast",
+      enabledFlag: allServers.weatherForecast?.enabled || false,
+      config: allServers.weatherForecast?.config || {},
       humanName: "Weather Forecast",
       category: "weather"
     },
     {
       type: "location",
-      enabledFlag: locationEnabled,
-      config: locationConfig,
+      serverName: "location",
+      enabledFlag: allServers.location?.enabled || false,
+      config: allServers.location?.config || {},
       humanName: "Location",
       category: "location"
     },
     {
       type: "ip-location",
-      enabledFlag: ipLocationEnabled,
-      config: ipLocationConfig,
+      serverName: "ipLocation",
+      enabledFlag: allServers.ipLocation?.enabled || false,
+      config: allServers.ipLocation?.config || {},
       humanName: "IP Location",
       category: "location"
     },
     {
       type: "nearby-search",
-      enabledFlag: nearbySearchEnabled,
-      config: nearbySearchConfig,
+      serverName: "nearbySearch",
+      enabledFlag: allServers.nearbySearch?.enabled || false,
+      config: allServers.nearbySearch?.config || {},
       humanName: "Nearby Search",
       category: "location"
     },
     {
       type: "web3-research",
-      enabledFlag: web3ResearchEnabled,
-      config: web3ResearchConfig,
+      serverName: "web3Research",
+      enabledFlag: allServers.web3Research?.enabled || false,
+      config: allServers.web3Research?.config || {},
       humanName: "Web3 Research",
       category: "research"
     },
     {
       type: "doordash",
-      enabledFlag: doorDashEnabled,
-      config: doorDashConfig,
+      serverName: "doorDash",
+      enabledFlag: allServers.doorDash?.enabled || false,
+      config: allServers.doorDash?.config || {},
       humanName: "DoorDash",
       category: "delivery"
     },
     {
       type: "whatsapp",
-      enabledFlag: whatsAppEnabled,
-      config: whatsAppConfig,
+      serverName: "whatsApp",
+      enabledFlag: allServers.whatsApp?.enabled || false,
+      config: allServers.whatsApp?.config || {},
       humanName: "WhatsApp",
       category: "communication"
     },
     {
       type: "github",
-      enabledFlag: gitHubEnabled,
-      config: gitHubConfig,
+      serverName: "github",
+      enabledFlag: allServers.github?.enabled || false,
+      config: allServers.github?.config || {},
       humanName: "GitHub",
       category: "development"
     },
     {
       type: "airbnb",
-      enabledFlag: airbnbEnabled,
-      config: {},
+      serverName: "airbnb",
+      enabledFlag: allServers.airbnb?.enabled || false,
+      config: allServers.airbnb?.config || {},
       humanName: "Airbnb",
       category: "accommodation"
     },
     {
       type: "tavily",
-      enabledFlag: tavilyEnabled,
-      config: tavilyConfig,
+      serverName: "tavily",
+      enabledFlag: allServers.tavily?.enabled || false,
+      config: allServers.tavily?.config || {},
       humanName: "Tavily",
       category: "research"
     },
     {
       type: "linkedin",
-      enabledFlag: linkedInEnabled,
-      config: linkedInConfig,
+      serverName: "linkedIn",
+      enabledFlag: allServers.linkedIn?.enabled || false,
+      config: allServers.linkedIn?.config || {},
       humanName: "LinkedIn",
       category: "communication"
     }
@@ -169,63 +173,9 @@ function MCPSettings() {
     setPage(1);
   };
 
-  const openWeatherDialog = () => {
-    setServiceType("weather");
-    setDialogOpen(true);
-  };
-
-  const openLocationDialog = () => {
-    setServiceType("location");
-    setDialogOpen(true);
-  };
-
-  const openNearbySearchDialog = () => {
-    setServiceType("nearby-search");
-    setDialogOpen(true);
-  };
-
-  const openWeb3ResearchDialog = () => {
-    setServiceType("web3-research");
-    setDialogOpen(true);
-  };
-
-  const openDoorDashDialog = () => {
-    setServiceType("doordash");
-    setDialogOpen(true);
-  };
-
-  const openWhatsAppDialog = () => {
-    setServiceType("whatsapp");
-    setDialogOpen(true);
-  };
-
-  const openGitHubDialog = () => {
-    setServiceType("github");
-    setDialogOpen(true);
-  };
-
-  const openIPLocationDialog = () => {
-    setServiceType("ip-location");
-    setDialogOpen(true);
-  };
-
-  const openWeatherForecastDialog = () => {
-    setServiceType("weather-forecast");
-    setDialogOpen(true);
-  };
-
-  const openAirbnbDialog = () => {
-    setServiceType("airbnb");
-    setDialogOpen(true);
-  };
-
-  const openTavilyDialog = () => {
-    setServiceType("tavily");
-    setDialogOpen(true);
-  };
-
-  const openLinkedInDialog = () => {
-    setServiceType("linkedin");
+  // Create dialog handlers dynamically
+  const createDialogHandler = (type: string) => () => {
+    setServiceType(type);
     setDialogOpen(true);
   };
 
@@ -234,114 +184,22 @@ function MCPSettings() {
   };
 
   const handleSaveDialog = async (data: Record<string, any>) => {
-    switch (serviceType) {
-      case "weather":
-        setWeatherConfig(data);
-        if (weatherEnabled) {
-          const result = await initializeClient("weather");
-          if (result.success) {
-            toast.success("Weather service configuration updated successfully");
-          }
-        }
-        break;
-      case "weather-forecast":
-        setWeatherForecastConfig(data);
-        if (weatherForecastEnabled) {
-          const result = await initializeClient("weather-forecast");
-          if (result.success) {
-            toast.success("Weather forecast service configuration updated successfully");
-          }
-        }
-        break;
-      case "location":
-        setLocationConfig(data);
-        if (locationEnabled) {
-          const result = await initializeClient("location");
-          if (result.success) {
-            toast.success("Location service configuration updated successfully");
-          }
-        }
-        break;
-      case "nearby-search":
-        setNearbySearchConfig(data);
-        if (nearbySearchEnabled) {
-          const result = await initializeClient("nearby-search");
-          if (result.success) {
-            toast.success("Nearby search service configuration updated successfully");
-          }
-        }
-        break;
-      case "web3-research":
-        setWeb3ResearchConfig(data);
-        if (web3ResearchEnabled) {
-          const result = await initializeClient("web3-research");
-          if (result.success) {
-            toast.success("Web3 research service configuration updated successfully");
-          }
-        }
-        break;
-      case "doordash":
-        setDoorDashConfig(data);
-        if (doorDashEnabled) {
-          const result = await initializeClient("doordash");
-          if (result.success) {
-            toast.success("DoorDash service configuration updated successfully");
-          }
-        }
-        break;
-      case "whatsapp":
-        setWhatsAppConfig(data);
-        if (whatsAppEnabled) {
-          const result = await initializeClient("whatsapp");
-          if (result.success) {
-            toast.success("WhatsApp service configuration updated successfully");
-          }
-        }
-        break;
-      case "github":
-        setGitHubConfig(data);
-        if (gitHubEnabled) {
-          const result = await initializeClient("github");
-          if (result.success) {
-            toast.success("GitHub service configuration updated successfully");
-          }
-        }
-        break;
-      case "ip-location":
-        setIPLocationConfig(data);
-        if (ipLocationEnabled) {
-          const result = await initializeClient("ip-location");
-          if (result.success) {
-            toast.success("IP location service configuration updated successfully");
-          }
-        }
-        break;
-      case "airbnb":
-        setAirbnbEnabled(true);
-        const airbnbResult = await initializeClient("airbnb");
-        if (airbnbResult.success) {
-          toast.success("Airbnb service enabled successfully");
-        }
-        break;
-      case "tavily":
-        setTavilyConfig(data);
-        if (tavilyEnabled) {
-          const result = await initializeClient("tavily");
-          if (result.success) {
-            toast.success("Tavily service configuration updated successfully");
-          }
-        }
-        break;
-      case "linkedin":
-        setLinkedInConfig(data);
-        if (linkedInEnabled) {
-          const result = await initializeClient("linkedin");
-          if (result.success) {
-            toast.success("LinkedIn service configuration updated successfully");
-          }
-        }
-        break;
+    const serviceConfig = serviceConfigs.find(s => s.type === serviceType);
+    if (!serviceConfig) return;
+
+    // Update server config using generic method
+    setServerConfig(serviceConfig.serverName, data);
+
+    // If server is enabled, reinitialize
+    if (serviceConfig.enabledFlag) {
+      const result = await initializeClient(serviceType);
+      if (result.success) {
+        toast.success(`${serviceConfig.humanName} service configuration updated successfully`);
+      } else {
+        toast.error(`${serviceConfig.humanName} service error: ${result.error}`);
+      }
     }
+
     setDialogOpen(false);
   };
 
@@ -360,18 +218,12 @@ function MCPSettings() {
       }
     };
 
-    if (weatherEnabled) await runInitialize("weather", "Weather");
-    if (locationEnabled) await runInitialize("location", "Location");
-    if (nearbySearchEnabled) await runInitialize("nearby-search", "Nearby search");
-    if (web3ResearchEnabled) await runInitialize("web3-research", "Web3 research");
-    if (doorDashEnabled) await runInitialize("doordash", "DoorDash");
-    if (whatsAppEnabled) await runInitialize("whatsapp", "WhatsApp");
-    if (gitHubEnabled) await runInitialize("github", "GitHub");
-    if (ipLocationEnabled) await runInitialize("ip-location", "IP location");
-    if (weatherForecastEnabled) await runInitialize("weather-forecast", "Weather forecast");
-    if (airbnbEnabled) await runInitialize("airbnb", "Airbnb");
-    if (tavilyEnabled) await runInitialize("tavily", "Tavily");
-    if (linkedInEnabled) await runInitialize("linkedin", "LinkedIn");
+    // Initialize all enabled services
+    for (const service of serviceConfigs) {
+      if (service.enabledFlag) {
+        await runInitialize(service.type, service.humanName);
+      }
+    }
 
     if (successCount > 0 && failCount === 0) {
       toast.success(`All services (${successCount}) initialized successfully`);
@@ -380,20 +232,11 @@ function MCPSettings() {
     }
   };
 
-  const configureHandlers: Record<string, () => void> = {
-    "weather": openWeatherDialog,
-    "location": openLocationDialog,
-    "nearby-search": openNearbySearchDialog,
-    "web3-research": openWeb3ResearchDialog,
-    "doordash": openDoorDashDialog,
-    "whatsapp": openWhatsAppDialog,
-    "github": openGitHubDialog,
-    "ip-location": openIPLocationDialog,
-    "weather-forecast": openWeatherForecastDialog,
-    "airbnb": openAirbnbDialog,
-    "tavily": openTavilyDialog,
-    "linkedin": openLinkedInDialog
-  };
+  // Create configure handlers dynamically
+  const configureHandlers: Record<string, () => void> = {};
+  serviceConfigs.forEach(service => {
+    configureHandlers[service.type] = createDialogHandler(service.type);
+  });
 
   return (
     <Box sx={{ mb: 4 }}>
@@ -491,21 +334,8 @@ function MCPSettings() {
         onClose={handleCloseDialog}
         onSave={handleSaveDialog}
         initialData={(() => {
-          switch (serviceType) {
-            case "weather": return weatherConfig;
-            case "location": return locationConfig;
-            case "nearby-search": return nearbySearchConfig;
-            case "web3-research": return web3ResearchConfig;
-            case "doordash": return doorDashConfig;
-            case "whatsapp": return whatsAppConfig;
-            case "github": return gitHubConfig;
-            case "ip-location": return ipLocationConfig;
-            case "weather-forecast": return weatherForecastConfig;
-            case "airbnb": return {};
-            case "tavily": return tavilyConfig;
-            case "linkedin": return linkedInConfig;
-            default: return {};
-          }
+          const serviceConfig = serviceConfigs.find(s => s.type === serviceType);
+          return serviceConfig?.config || {};
         })()}
       />
     </Box>

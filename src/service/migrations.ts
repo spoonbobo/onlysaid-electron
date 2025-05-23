@@ -211,7 +211,10 @@ export const featureMigrations = [
       ingested_at DESC`,
 
   // Add index for the new reference columns in the logs table
-  `CREATE INDEX IF NOT EXISTS idx_logs_reference ON logs(reference_id, reference_type)`
+  `CREATE INDEX IF NOT EXISTS idx_logs_reference ON logs(reference_id, reference_type)`,
+
+  // Add execution_time_seconds column to tool_calls table
+  `ALTER TABLE tool_calls ADD COLUMN execution_time_seconds INTEGER DEFAULT NULL`
 ];
 
 // Combined migrations array for all schema updates

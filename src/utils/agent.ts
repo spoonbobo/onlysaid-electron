@@ -117,3 +117,42 @@ export const executeToolAuto = async (
   // based on your MCP settings store
   return executeAgentTool('default', toolName, args);
 };
+
+// Summarize tool call results
+export const summarizeToolResults = async (
+  chatId: string,
+  toolCallResults: Array<{
+    toolName: string;
+    result: any;
+    executionTime?: number;
+    status: string;
+  }>
+) => {
+  const { appendMessage, updateMessage } = useChatStore.getState();
+  const { streamChatCompletion } = useStreamStore.getState();
+  const { setStreamingState, markStreamAsCompleted } = useTopicStore.getState();
+  const { modelId, provider } = useSelectedModelStore.getState();
+  const { user: currentUser } = useUserStore.getState();
+  const agent = getAgentFromStore();
+
+  if (!modelId) {
+    throw new Error("No model selected for summarization");
+  }
+
+  const messages = useChatStore.getState().messages[chatId] || [];
+
+  return useAgentStore.getState().summarizeToolCallResults({
+    activeChatId: chatId,
+    toolCallResults,
+    modelId,
+    provider: provider || "openai",
+    agent,
+    currentUser,
+    existingMessages: messages,
+    appendMessage,
+    updateMessage,
+    setStreamingState,
+    markStreamAsCompleted,
+    streamChatCompletion,
+  });
+};

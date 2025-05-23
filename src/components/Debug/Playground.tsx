@@ -27,8 +27,23 @@ const Playground = () => {
 
     Object.entries(allServers).forEach(([key, value]) => {
       if (value.enabled) {
-        const serviceKey = key.toLowerCase().replace(/category$/, '');
-        const displayName = key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase()).trim();
+        const serviceTypeMapping: Record<string, string> = {
+          tavily: 'tavily',
+          weather: 'weather',
+          location: 'location',
+          weatherForecast: 'weather-forecast',
+          nearbySearch: 'nearby-search',
+          web3Research: 'web3-research',
+          doorDash: 'doordash',
+          whatsApp: 'whatsapp',
+          github: 'github',
+          ipLocation: 'ip-location',
+          airbnb: 'airbnb',
+          linkedIn: 'linkedin'
+        };
+
+        const serviceKey = serviceTypeMapping[key] || key;
+        const displayName = mcpStore.formatServerName(key);
 
         enabledServices[serviceKey] = {
           name: displayName,

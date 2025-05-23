@@ -60,7 +60,8 @@ function App() {
       const servers = getAllConfiguredServers();
 
       const serviceTypeMap: Record<string, string> = {
-        weatherCategory: 'weather',
+        tavily: 'tavily',
+        weather: 'weather',
         location: 'location',
         weatherForecast: 'weather-forecast',
         nearbySearch: 'nearby-search',
@@ -70,7 +71,6 @@ function App() {
         github: 'github',
         ipLocation: 'ip-location',
         airbnb: 'airbnb',
-        tavily: 'tavily',
         linkedIn: 'linkedin'
       };
 

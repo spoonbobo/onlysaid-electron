@@ -1,32 +1,32 @@
 import { toast } from "@/utils/toast";
-import type { IServerModule, IWeatherConfig } from "@/../../types/MCP/server";
+import type { IServerModule, IDoorDashConfig } from "@/../../types/MCP/server";
 
-export const createWeatherServer = (
+export const createDoorDashServer = (
   get: () => any,
   set: (partial: any) => void,
   initializeClient: (serviceType: string) => Promise<{ success: boolean; message?: string; error?: string }>
-): IServerModule<IWeatherConfig> => {
+): IServerModule<IDoorDashConfig> => {
 
-  const defaultConfig: IWeatherConfig = {
+  const defaultConfig: IDoorDashConfig = {
     apiKey: "",
     endpoint: "",
-    units: "metric"
+    region: "us"
   };
 
-  const isConfigured = (config: IWeatherConfig): boolean => {
-    return !!config.apiKey && !!config.endpoint && !!config.units;
+  const isConfigured = (config: IDoorDashConfig): boolean => {
+    return !!config.apiKey && !!config.endpoint && !!config.region;
   };
 
-  const createClientConfig = (config: IWeatherConfig, homedir: string) => ({
+  const createClientConfig = (config: IDoorDashConfig, homedir: string) => ({
     enabled: getEnabled(),
     command: "node",
     args: [
       config.endpoint,
       "--api-key", config.apiKey,
-      "--units", config.units
+      "--region", config.region
     ],
-    clientName: "onlysaid-weather-client",
-    clientVersion: "1.0.0"
+    clientName: "doordash-client",
+    clientVersion: "1.1.0"
   });
 
   const setEnabled = async (enabled: boolean) => {
@@ -34,38 +34,38 @@ export const createWeatherServer = (
 
     set((state: any) => ({
       ...state,
-      weatherEnabled: enabled
+      doorDashEnabled: enabled
     }));
 
     if (enabled) {
-      const result = await initializeClient("weather");
+      const result = await initializeClient("doordash");
       if (!result.success) {
-        toast.error(`Weather service error: ${result.error}`);
+        toast.error(`DoorDash service error: ${result.error}`);
         set((state: any) => ({
           ...state,
-          weatherEnabled: false
+          doorDashEnabled: false
         }));
       } else {
-        toast.success("Weather service enabled successfully");
+        toast.success("DoorDash service enabled successfully");
       }
     }
   };
 
-  const setConfig = (config: Partial<IWeatherConfig>) => {
+  const setConfig = (config: Partial<IDoorDashConfig>) => {
     set((state: any) => ({
       ...state,
-      weatherConfig: { ...getConfig(), ...config }
+      doorDashConfig: { ...getConfig(), ...config }
     }));
   };
 
   const getEnabled = () => {
     const state = get();
-    return state.weatherEnabled || false;
+    return state.doorDashEnabled || false;
   };
 
   const getConfig = () => {
     const state = get();
-    return state.weatherConfig || defaultConfig;
+    return state.doorDashConfig || defaultConfig;
   };
 
   const getConfigured = () => isConfigured(getConfig());
@@ -73,13 +73,13 @@ export const createWeatherServer = (
   const setAutoApproved = (autoApproved: boolean) => {
     set((state: any) => ({
       ...state,
-      weatherAutoApproved: autoApproved
+      doorDashAutoApproved: autoApproved
     }));
   };
 
   const getAutoApproved = () => {
     const state = get();
-    return state.weatherAutoApproved || false;
+    return state.doorDashAutoApproved || false;
   };
 
   return {
@@ -96,7 +96,6 @@ export const createWeatherServer = (
   };
 };
 
-// Export for backward compatibility
-export const isWeatherConfigured = (config: IWeatherConfig): boolean => {
-  return !!config.apiKey && !!config.endpoint && !!config.units;
+export const isDoorDashConfigured = (config: IDoorDashConfig): boolean => {
+  return !!config.apiKey && !!config.endpoint && !!config.region;
 };

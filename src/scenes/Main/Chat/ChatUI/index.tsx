@@ -8,7 +8,6 @@ import { throttle } from "lodash";
 import { useCurrentTopicContext } from "@/stores/Topic/TopicStore";
 import { useAgentStore } from "@/stores/Agent/AgentStore";
 import { useChatStore } from "@/stores/Chat/ChatStore";
-import { useTopicStore } from "@/stores/Topic/TopicStore";
 
 interface ChatUIProps {
   messages: IChatMessage[];
