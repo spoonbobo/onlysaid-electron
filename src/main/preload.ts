@@ -22,6 +22,9 @@ type FileSystemChannels =
   | 'file:get-metadata'
   | 'file:get-multiple-metadata';
 
+// Add dialog channels
+type DialogChannels = 'dialog:showSaveDialog';
+
 type KnowledgeBaseChannels =
   | 'kb:list'
   | 'kb:query'
@@ -85,6 +88,7 @@ export type Channels =
   | SSEChannels
   | MCPChannels
   | FileSystemChannels
+  | DialogChannels
   | RedisChannels
   | SocketChannels
   | KnowledgeBaseChannels

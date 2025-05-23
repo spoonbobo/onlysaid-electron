@@ -135,6 +135,17 @@ ipcMain.handle('session:set-cookie', async (event, cookieDetails) => {
   }
 });
 
+// Add dialog handler for save dialog
+ipcMain.handle('dialog:showSaveDialog', async (event, options) => {
+  try {
+    const result = await dialog.showSaveDialog(mainWindow!, options);
+    return result;
+  } catch (error) {
+    console.error('Error showing save dialog:', error);
+    throw error;
+  }
+});
+
 if (isDebug) {
   require('electron-debug').default();
 }

@@ -224,6 +224,7 @@
   "settings.mcp.verifying": "検証中...",
   "settings.mcp.verified": "検証済み",
   "settings.mcp.verify": "検証",
+  "settings.mcp.autoApprove": "リクエストを自動承認",
   "settings.llmModels.private.ollamaConfiguration": "Ollama設定",
   "settings.llmModels.private.ollamaBaseURL": "Ollama Base URL",
   "settings.llmModels.private.ollamaBaseURLPlaceholder": "Ollama Base URLを入力してください",
@@ -473,5 +474,13 @@
   "mcp.selectServices": "MCPを選択",
   "mcp.allServicesSelected": "すべてのMCP",
   "mcp.singleServiceSelected": "1個のMCPを選択",
-  "mcp.multipleServicesSelected": "{count}個のMCPを選択"
+  "mcp.multipleServicesSelected": "{count}個のMCPを選択",
+  "kb.selectDialog.title": "ナレッジベースを選択",
+  "chat.selectKB.multiple": "ナレッジベースを選択",
+  "chat.allKBsSelected": "すべてのナレッジベースを選択",
+  "chat.multipleKBsSelected": "{count}個のナレッジベースを選択",
+  "chat.kb.selectAll": "すべて選択",
+
+  "dialog.file.download": "ダウンロード",
+  "dialog.file.downloading": "ダウンロード中..."
 }

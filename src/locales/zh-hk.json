@@ -221,6 +221,7 @@
   "settings.mcp.verifying": "驗證中...",
   "settings.mcp.verified": "已驗證",
   "settings.mcp.verify": "驗證",
+  "settings.mcp.autoApprove": "自動批准請求",
   "settings.llmModels.private.ollamaConfiguration": "Ollama 設定",
   "settings.llmModels.private.ollamaBaseURL": "Ollama Base URL",
   "settings.llmModels.private.ollamaBaseURLPlaceholder": "請輸入您的 Ollama Base URL",
@@ -359,5 +360,8 @@
   "toolDisplay.executed": "已執行",
   "toolDisplay.result": "結果",
   "toolDisplay.execute": "執行",
-  "toolDisplay.executing": "執行中"
+  "toolDisplay.executing": "執行中",
+
+  "dialog.file.download": "下載",
+  "dialog.file.downloading": "下載中..."
 }

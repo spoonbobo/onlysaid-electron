@@ -176,7 +176,7 @@ export function setupFileHandlers(): void {
 
     const opId = fileQueue.addOperation(async () => {
       const response = await onlysaidServiceInstance.get(
-        `workspace/${workspaceId}/file/${fileId}`,
+        `workspace/${workspaceId}/file?fileId=${fileId}`,
         {
           headers: {
             Authorization: `Bearer ${token}`

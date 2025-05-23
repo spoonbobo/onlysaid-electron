@@ -76,43 +76,49 @@ const ServerCard = ({
         {description}
       </Typography>
 
-      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-        <Tooltip title={!isConfigured ? "This service must be configured before it can be enabled" : ""}>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mt: 2 }}>
+        <Box sx={{ flex: 1, mr: 2 }}>
+          <Tooltip title={!isConfigured ? "This service must be configured before it can be enabled" : ""}>
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={isEnabled}
+                  onChange={(e) => onToggle(e.target.checked)}
+                  disabled={!isConfigured}
+                />
+              }
+              label={
+                <Box component="span" sx={{ display: 'flex', alignItems: 'center' }}>
+                  {isEnabled ? "Enabled" : "Disabled"}
+                  {!isConfigured && (
+                    <Typography variant="caption" color="error" sx={{ ml: 1 }}>
+                      <FormattedMessage id="settings.mcp.requiresConfiguration" />
+                    </Typography>
+                  )}
+                </Box>
+              }
+              sx={{ m: 0 }}
+            />
+          </Tooltip>
+        </Box>
+
+        <Box sx={{ flex: 0, minWidth: 'auto' }}>
           <FormControlLabel
             control={
               <Switch
-                checked={isEnabled}
-                onChange={(e) => onToggle(e.target.checked)}
-                disabled={!isConfigured}
+                checked={isAutoApproved}
+                onChange={(e) => onAutoApprovalToggle(e.target.checked)}
+                size="small"
               />
             }
             label={
-              <Box component="span" sx={{ display: 'flex', alignItems: 'center' }}>
-                {isEnabled ? "Enabled" : "Disabled"}
-                {!isConfigured && (
-                  <Typography variant="caption" color="error" sx={{ ml: 1 }}>
-                    <FormattedMessage id="settings.mcp.requiresConfiguration" />
-                  </Typography>
-                )}
-              </Box>
+              <Typography variant="body2" color="text.secondary" sx={{ whiteSpace: 'nowrap' }}>
+                <FormattedMessage id="settings.mcp.autoApprove" defaultMessage="Auto-approve requests" />
+              </Typography>
             }
+            sx={{ m: 0 }}
           />
-        </Tooltip>
-
-        <FormControlLabel
-          control={
-            <Switch
-              checked={isAutoApproved}
-              onChange={(e) => onAutoApprovalToggle(e.target.checked)}
-              size="small"
-            />
-          }
-          label={
-            <Typography variant="body2" color="text.secondary">
-              <FormattedMessage id="settings.mcp.autoApprove" defaultMessage="Auto-approve requests" />
-            </Typography>
-          }
-        />
+        </Box>
       </Box>
     </Paper>
   );

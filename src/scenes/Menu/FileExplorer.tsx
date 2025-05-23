@@ -19,6 +19,8 @@ import { useFileExplorerStore } from "@/stores/Layout/FileExplorerResize";
 import { useFileExplorerStore as useFilesStore, selectors, FileNode } from "@/stores/File/FileExplorerStore";
 import { useKBStore } from '@/stores/KB/KBStore';
 import { toast } from "@/utils/toast";
+import DownloadIcon from "@mui/icons-material/Download";
+import { useToastStore } from "@/stores/Notification/ToastStore";
 
 // Define props interface
 interface FileExplorerProps {
@@ -272,7 +274,7 @@ function FileNodeItem({ node, level = 0 }: { node: FileNode, level?: number }) {
   };
 
   const handleContextMenu = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (level === 0) {
+    if (level === 0 || (node.type === 'file' && node.source === 'remote' && node.workspaceId && node.fileDbId)) {
       e.preventDefault();
       e.stopPropagation();
       setMenuAnchorEl(e.currentTarget);
@@ -285,6 +287,81 @@ function FileNodeItem({ node, level = 0 }: { node: FileNode, level?: number }) {
 
   const handleRemoveFolder = () => {
     removeRootFolder(node.id);
+    handleCloseMenu();
+  };
+
+  const handleDownloadFile = async () => {
+    if (!node || node.type !== 'file' || !node.workspaceId || !node.fileDbId) {
+      toast.error("Cannot download: Invalid file information");
+      handleCloseMenu();
+      return;
+    }
+
+    const token = getUserTokenFromStore();
+    if (!token) {
+      toast.error("Authentication token not found");
+      handleCloseMenu();
+      return;
+    }
+
+    try {
+      const result = await window.electron.ipcRenderer.invoke('dialog:showSaveDialog', {
+        defaultPath: node.name,
+        filters: [
+          { name: 'All Files', extensions: ['*'] }
+        ]
+      });
+
+      if (result.canceled || !result.filePath) {
+        handleCloseMenu();
+        return;
+      }
+
+      const toastId = useToastStore.getState().addToast(`Downloading: ${node.name}`, "info", 0);
+
+      const downloadResult = await window.electron.fileSystem.download(
+        node.workspaceId,
+        node.fileDbId,
+        result.filePath,
+        token
+      );
+
+      if (downloadResult.operationId) {
+        const progressUnsubscribe = window.electron.fileSystem.onProgress((data) => {
+          if (data.operationId === downloadResult.operationId && toastId) {
+            useToastStore.getState().updateToastProgress(toastId, data.progress);
+          }
+        });
+
+        const checkStatus = async () => {
+          const status = await window.electron.fileSystem.getStatus(downloadResult.operationId);
+          if (status?.status === 'completed') {
+            if (toastId) {
+              useToastStore.getState().updateToastProgress(toastId, 100);
+              setTimeout(() => {
+                useToastStore.getState().removeToast(toastId);
+                toast.success(`Download completed: ${node.name}`);
+              }, 1000);
+            }
+            progressUnsubscribe();
+          } else if (status?.status === 'failed') {
+            if (toastId) {
+              useToastStore.getState().removeToast(toastId);
+            }
+            toast.error(`Download failed: ${status.error || 'Unknown error'}`);
+            progressUnsubscribe();
+          } else {
+            setTimeout(checkStatus, 1000);
+          }
+        };
+
+        checkStatus();
+      }
+    } catch (error) {
+      console.error("Download error:", error);
+      toast.error(`Download failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+
     handleCloseMenu();
   };
 
@@ -398,28 +475,55 @@ function FileNodeItem({ node, level = 0 }: { node: FileNode, level?: number }) {
           horizontal: 'right',
         }}
       >
-        <MenuItem
-          onClick={handleRemoveFolder}
-          sx={{
-            minHeight: 24,
-            fontSize: '0.75rem',
-            py: 0.25,
-          }}
-        >
-          <ListItemIcon
+        {level === 0 && (
+          <MenuItem
+            onClick={handleRemoveFolder}
             sx={{
-              minWidth: 28,
-              color: 'error.main',
-              mr: 0.5
+              minHeight: 24,
+              fontSize: '0.75rem',
+              py: 0.25,
             }}
           >
-            <DeleteOutlineIcon sx={{ fontSize: '1rem' }} />
-          </ListItemIcon>
-          <ListItemText
-            primary={<FormattedMessage id="menu.fileExplorer.removeFolder" defaultMessage="Remove Folder" />}
-            primaryTypographyProps={{ fontSize: '0.75rem' }}
-          />
-        </MenuItem>
+            <ListItemIcon
+              sx={{
+                minWidth: 28,
+                color: 'error.main',
+                mr: 0.5
+              }}
+            >
+              <DeleteOutlineIcon sx={{ fontSize: '1rem' }} />
+            </ListItemIcon>
+            <ListItemText
+              primary={<FormattedMessage id="menu.fileExplorer.removeFolder" defaultMessage="Remove Folder" />}
+              primaryTypographyProps={{ fontSize: '0.75rem' }}
+            />
+          </MenuItem>
+        )}
+
+        {node.type === 'file' && node.source === 'remote' && node.workspaceId && node.fileDbId && (
+          <MenuItem
+            onClick={handleDownloadFile}
+            sx={{
+              minHeight: 24,
+              fontSize: '0.75rem',
+              py: 0.25,
+            }}
+          >
+            <ListItemIcon
+              sx={{
+                minWidth: 28,
+                color: 'primary.main',
+                mr: 0.5
+              }}
+            >
+              <DownloadIcon sx={{ fontSize: '1rem' }} />
+            </ListItemIcon>
+            <ListItemText
+              primary={<FormattedMessage id="dialog.file.download" defaultMessage="Download" />}
+              primaryTypographyProps={{ fontSize: '0.75rem' }}
+            />
+          </MenuItem>
+        )}
       </Menu>
 
       <FileDropDialog

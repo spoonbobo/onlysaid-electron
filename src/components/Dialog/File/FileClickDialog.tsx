@@ -10,11 +10,14 @@ import {
   CircularProgress,
 } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
+import DownloadIcon from "@mui/icons-material/Download";
 import { FormattedMessage } from "react-intl";
 import { useFileExplorerStore, selectors, FileNode } from "@/stores/File/FileExplorerStore";
 import { useEffect, useState } from "react";
 import { IFile } from "@/../../types/File/File";
 import { getUserTokenFromStore } from "@/utils/user";
+import { toast } from "@/utils/toast";
+import { useToastStore } from "@/stores/Notification/ToastStore";
 
 interface FileClickDialogProps {
   open: boolean;
@@ -30,6 +33,8 @@ export default function FileClickDialog({
   const node = useFileExplorerStore(selectors.selectNodeById(nodeId));
   const [fileDetails, setFileDetails] = useState<IFile | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [isDownloading, setIsDownloading] = useState(false);
+  const [downloadToastId, setDownloadToastId] = useState<string | null>(null);
 
   const nodeDisplayNameFromStore = node?.label || node?.name || "Unknown Item";
 
@@ -75,6 +80,96 @@ export default function FileClickDialog({
     fetchDetails();
   }, [open, node]);
 
+  const handleDownload = async () => {
+    if (!node || node.type !== 'file' || !node.workspaceId || !node.fileDbId) {
+      toast.error("Cannot download: Invalid file information");
+      return;
+    }
+
+    const token = getUserTokenFromStore();
+    if (!token) {
+      toast.error("Authentication token not found");
+      return;
+    }
+
+    setIsDownloading(true);
+    try {
+      // Open save dialog to let user choose download location
+      const result = await window.electron.ipcRenderer.invoke('dialog:showSaveDialog', {
+        defaultPath: fileDetails?.name || node.name,
+        filters: [
+          { name: 'All Files', extensions: ['*'] }
+        ]
+      });
+
+      if (result.canceled || !result.filePath) {
+        setIsDownloading(false);
+        return;
+      }
+
+      // Create progress toast
+      const toastId = useToastStore.getState().addToast(`Downloading: ${fileDetails?.name || node.name}`, "info", 0);
+      setDownloadToastId(toastId);
+
+      // Start download
+      const downloadResult = await window.electron.fileSystem.download(
+        node.workspaceId,
+        node.fileDbId,
+        result.filePath,
+        token
+      );
+
+      if (downloadResult.operationId) {
+        // Monitor download progress
+        const progressUnsubscribe = window.electron.fileSystem.onProgress((data) => {
+          if (data.operationId === downloadResult.operationId && toastId) {
+            // Update toast progress
+            useToastStore.getState().updateToastProgress(toastId, data.progress);
+          }
+        });
+
+        // Check status periodically
+        const checkStatus = async () => {
+          const status = await window.electron.fileSystem.getStatus(downloadResult.operationId);
+          if (status?.status === 'completed') {
+            if (toastId) {
+              useToastStore.getState().updateToastProgress(toastId, 100);
+              // Remove the progress toast and show success
+              setTimeout(() => {
+                useToastStore.getState().removeToast(toastId);
+                toast.success(`Download completed: ${fileDetails?.name || node.name}`);
+              }, 1000);
+            }
+            progressUnsubscribe();
+            setIsDownloading(false);
+            setDownloadToastId(null);
+          } else if (status?.status === 'failed') {
+            if (toastId) {
+              useToastStore.getState().removeToast(toastId);
+            }
+            toast.error(`Download failed: ${status.error || 'Unknown error'}`);
+            progressUnsubscribe();
+            setIsDownloading(false);
+            setDownloadToastId(null);
+          } else {
+            // Still in progress, check again
+            setTimeout(checkStatus, 1000);
+          }
+        };
+
+        checkStatus();
+      }
+    } catch (error) {
+      console.error("Download error:", error);
+      if (downloadToastId) {
+        useToastStore.getState().removeToast(downloadToastId);
+      }
+      toast.error(`Download failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      setIsDownloading(false);
+      setDownloadToastId(null);
+    }
+  };
+
   let displayPath: string | null = "N/A";
   if (node) {
     if (node.source === 'local') {
@@ -94,6 +189,7 @@ export default function FileClickDialog({
   }
 
   const finalDisplayName = fileDetails?.name || nodeDisplayNameFromStore;
+  const canDownload = node?.type === 'file' && node?.source === 'remote' && node?.workspaceId && node?.fileDbId;
 
   return (
     <Dialog
@@ -175,6 +271,21 @@ export default function FileClickDialog({
         </Box>
       </DialogContent>
       <DialogActions>
+        {canDownload && (
+          <Button
+            onClick={handleDownload}
+            disabled={isDownloading}
+            startIcon={isDownloading ? <CircularProgress size={16} /> : <DownloadIcon />}
+            variant="outlined"
+            color="primary"
+          >
+            {isDownloading ? (
+              <FormattedMessage id="dialog.file.downloading" defaultMessage="Downloading..." />
+            ) : (
+              <FormattedMessage id="dialog.file.download" defaultMessage="Download" />
+            )}
+          </Button>
+        )}
         <Button onClick={onClose}>
           <FormattedMessage id="common.close" defaultMessage="Close" />
         </Button>
