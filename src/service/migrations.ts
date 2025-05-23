@@ -66,6 +66,7 @@ export const featureMigrations = [
     function_name TEXT,
     function_arguments TEXT,
     tool_description TEXT,
+    mcp_server TEXT,
     status TEXT DEFAULT 'pending',
     result TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,

@@ -145,14 +145,15 @@ export const useLLMStore = create<LLMStoreState>((set, get) => ({
             function_name: toolCall.function.name,
             function_arguments: JSON.stringify(toolCall.function.arguments),
             tool_description: toolCall.tool_description || null,
+            mcp_server: toolCall.mcp_server || null,
             status: toolCall.status || 'pending',
           };
           await window.electron.db.query({
             query: `
               insert into ${DBTABLES.TOOL_CALLS}
-              (id, message_id, call_index, type, function_name, function_arguments, tool_description, status, created_at)
+              (id, message_id, call_index, type, function_name, function_arguments, tool_description, mcp_server, status, created_at)
               values
-              (@id, @message_id, @call_index, @type, @function_name, @function_arguments, @tool_description, @status, CURRENT_TIMESTAMP)
+              (@id, @message_id, @call_index, @type, @function_name, @function_arguments, @tool_description, @mcp_server, @status, CURRENT_TIMESTAMP)
             `,
             params: params
           });
@@ -167,7 +168,7 @@ export const useLLMStore = create<LLMStoreState>((set, get) => ({
     try {
       const results = await window.electron.db.query({
         query: `
-          select id, type, function_name, function_arguments, call_index, tool_description, status, result
+          select id, type, function_name, function_arguments, call_index, tool_description, mcp_server, status, result
           from ${DBTABLES.TOOL_CALLS}
           where message_id = @messageId
           order by call_index asc
@@ -184,6 +185,7 @@ export const useLLMStore = create<LLMStoreState>((set, get) => ({
             arguments: JSON.parse(row.function_arguments || '{}')
           },
           tool_description: row.tool_description,
+          mcp_server: row.mcp_server,
           status: row.status,
           result: row.result ? JSON.parse(row.result) : undefined,
         }));

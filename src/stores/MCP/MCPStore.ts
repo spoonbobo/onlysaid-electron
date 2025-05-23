@@ -163,6 +163,12 @@ interface MCPState {
 
   // Add function to get tools for a service
   getServiceTools: (serviceType: string) => MCPTool[];
+
+  // Add a method to get server ID by tool name
+  getServerIdByToolName: (toolName: string) => string | null;
+
+  // Add utility method for consistent formatting
+  formatServerName: (serverId: string) => string;
 }
 
 const DEFAULT_CONFIG = {
@@ -560,6 +566,27 @@ export const useMCPStore = create<MCPState>()(
         return serviceTools[serviceType] || [];
       },
 
+      // Add a method to get server ID by tool name
+      getServerIdByToolName: (toolName: string) => {
+        const { serviceTools } = get();
+        for (const [serverId, tools] of Object.entries(serviceTools)) {
+          if (tools.some(tool => tool.name === toolName)) {
+            return serverId;
+          }
+        }
+        return null;
+      },
+
+      // Add utility method for consistent formatting
+      formatServerName: (serverId: string): string => {
+        return serverId
+          .replace(/([A-Z])/g, ' $1')
+          .replace(/^./, (str) => str.toUpperCase())
+          .trim()
+          .replace(/Category$/, '')
+          .trim();
+      },
+
       // Update initializeClient to handle tools
       initializeClient: async (serviceType: string) => {
         const state = get();
@@ -893,7 +920,7 @@ export const useMCPStore = create<MCPState>()(
             config: state.linkedInConfig
           }
         };
-      }
+      },
     }),
     {
       name: "mcp-service-storage"

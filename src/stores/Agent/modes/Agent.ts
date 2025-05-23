@@ -1,12 +1,13 @@
 import { v4 as uuidv4 } from 'uuid';
 import { IChatMessage, IChatMessageToolCall } from '@/../../types/Chat/Message';
 import { IUser } from '@/../../types/User/User';
-import { OpenAIMessage, OpenAIStreamOptions } from '@/stores/SSE/StreamStore';
+import { OpenAIMessage } from '@/stores/SSE/StreamStore';
 import { useMCPClientStore } from '@/stores/MCP/MCPClient';
 import { useMCPSettingsStore } from '@/stores/MCP/MCPSettingsStore';
 import { useLLMStore } from '@/stores/LLM/LLMStore';
-import { useChatStore } from '@/stores/Chat/ChatStore';
+import { getAgentFromStore } from '@/utils/agent';
 import type OpenAI from 'openai';
+import { useMCPStore } from '@/stores/MCP/MCPStore';
 
 export const agentModeSystemPrompt = (user: IUser, agent: IUser) => {
   return `
@@ -23,7 +24,7 @@ Your primary goal is to be an effective assistant within this chat.
 interface ProcessAgentModeAIResponseParams {
   activeChatId: string;
   userMessageText: string;
-  agent: IUser | null;
+  agent?: IUser | null;
   currentUser: IUser | null;
   existingMessages: IChatMessage[];
   appendMessage: (chatId: string, message: IChatMessage) => void;
@@ -42,11 +43,13 @@ export async function processAgentModeAIResponse({
   updateMessage,
   setStreamingState,
   markStreamAsCompleted,
-}: Omit<ProcessAgentModeAIResponseParams, 'modelId' | 'provider' | 'streamChatCompletion'>): Promise<{ success: boolean; responseText?: string; assistantMessageId?: string; error?: any; toolCalls?: OpenAI.Chat.Completions.ChatCompletionMessageToolCall[] }> {
-  const assistantSender = agent;
-  const assistantSenderId = agent?.id || "agent-assistant";
-  if (!agent) {
-    // console.warn("[AgentMode] Agent not found in store, using fallback ID for assistant message sender.");
+}: ProcessAgentModeAIResponseParams): Promise<{ success: boolean; responseText?: string; assistantMessageId?: string; error?: any; toolCalls?: OpenAI.Chat.Completions.ChatCompletionMessageToolCall[] }> {
+  // Use provided agent or get from store
+  const assistantSender = agent || getAgentFromStore();
+  const assistantSenderId = assistantSender?.id || "agent-assistant";
+
+  if (!assistantSender) {
+    console.warn("[AgentMode] No agent available, using fallback ID for assistant message sender.");
   }
 
   const { selectedMcpServerIds } = useMCPSettingsStore.getState();
@@ -54,9 +57,27 @@ export async function processAgentModeAIResponse({
   const getOpenAICompletion = useLLMStore.getState().getOpenAICompletion;
   let allSelectedToolsFromMCPs: OpenAI.Chat.Completions.ChatCompletionTool[] = [];
 
+  // Create mapping from tool name to MCP server
+  const toolToServerMap = new Map<string, string>();
+  const serverNameMap = new Map<string, string>();
+
   if (selectedMcpServerIds && selectedMcpServerIds.length > 0) {
-    // console.log("[AgentMode] Fetching tools for selected MCP servers:", selectedMcpServerIds);
     try {
+      // Get server names using formatMCPName function
+      const formatMCPName = (key: string): string => {
+        return key
+          .replace(/([A-Z])/g, ' $1')
+          .replace(/^./, (str) => str.toUpperCase())
+          .trim()
+          .replace(/Category$/, '')
+          .trim();
+      };
+
+      // Build server name mapping
+      selectedMcpServerIds.forEach(serverId => {
+        serverNameMap.set(serverId, formatMCPName(serverId));
+      });
+
       const toolPromises = selectedMcpServerIds.map(serverId => ListMCPTool(serverId) as Promise<{ success: boolean, data?: { tools?: any[] }, error?: string }>);
       const results = await Promise.allSettled(toolPromises);
 
@@ -67,21 +88,20 @@ export async function processAgentModeAIResponse({
           if (wrapper.success && wrapper.data && Array.isArray(wrapper.data.tools)) {
             const toolsFromServer = (wrapper.data.tools as any[])
               .filter(tool => tool && typeof tool.name === 'string' && tool.inputSchema)
-              .map(tool => ({
-                type: "function" as const,
-                function: {
-                  name: tool.name,
-                  description: typeof tool.description === 'string' ? tool.description : "No description available.",
-                  parameters: tool.inputSchema,
-                }
-              }));
+              .map(tool => {
+                // Map tool name to server ID
+                toolToServerMap.set(tool.name, serverId);
+                return {
+                  type: "function" as const,
+                  function: {
+                    name: tool.name,
+                    description: typeof tool.description === 'string' ? tool.description : "No description available.",
+                    parameters: tool.inputSchema,
+                  }
+                };
+              });
             allSelectedToolsFromMCPs.push(...toolsFromServer);
-            // console.log(`[AgentMode] Successfully processed ${toolsFromServer.length} tools for server: ${serverId}`);
-          } else {
-            // console.warn(`[AgentMode] Failed to get tools or tools in unexpected format for server ${serverId}. Response:`, wrapper);
           }
-        } else if (result.status === 'rejected') {
-          // console.error(`[AgentMode] Exception fetching tools for server ${serverId}:`, result.reason);
         }
       });
 
@@ -92,17 +112,14 @@ export async function processAgentModeAIResponse({
         }
       });
       allSelectedToolsFromMCPs = Array.from(uniqueToolsMap.values());
-      // console.log("[AgentMode] Compiled unique tools for OpenAI API:", JSON.stringify(allSelectedToolsFromMCPs, null, 2));
     } catch (error) {
-      // console.error("[AgentMode] Error processing tool fetching promises:", error);
+      console.error("[AgentMode] Error processing tool fetching promises:", error);
     }
-  } else {
-    // console.log("[AgentMode] No MCP servers selected, proceeding without tools for OpenAI API.");
   }
 
   let systemPromptText = "";
-  if (currentUser && agent) {
-    systemPromptText = agentModeSystemPrompt(currentUser, agent);
+  if (currentUser && assistantSender) {
+    systemPromptText = agentModeSystemPrompt(currentUser, assistantSender);
   }
 
   const assistantMessage: IChatMessage = {
@@ -147,12 +164,6 @@ export async function processAgentModeAIResponse({
       content: `[${new Date().toISOString()}] ${currentUserName}: ${userMessageText}`
     });
 
-    // console.log("[AgentMode] System Prompt:", systemPromptText);
-    // console.log("[AgentMode] lastMessages for LLM:", JSON.stringify(lastMessages, null, 2));
-    if (allSelectedToolsFromMCPs.length > 0) {
-      // console.log("[AgentMode] Tools being sent to OpenAI:", JSON.stringify(allSelectedToolsFromMCPs, null, 2));
-    }
-
     const completionResponse = await getOpenAICompletion(
       lastMessages,
       allSelectedToolsFromMCPs.length > 0 ? allSelectedToolsFromMCPs : undefined,
@@ -161,7 +172,7 @@ export async function processAgentModeAIResponse({
 
     if (!completionResponse) {
       const errorMsg = useLLMStore.getState().error || "LLM completion failed without specific error.";
-      // console.error("[AgentMode] LLM completion failed:", errorMsg);
+      console.error("[AgentMode] LLM completion failed:", errorMsg);
       await updateMessage(activeChatId, assistantMessage.id, {
         text: `Error: ${errorMsg}`,
         status: "failed"
@@ -174,9 +185,6 @@ export async function processAgentModeAIResponse({
     let finalResponseText = responseMessage?.content || "";
     const rawToolCalls = responseMessage?.tool_calls;
     const openAIToolCalls: OpenAI.Chat.Completions.ChatCompletionMessageToolCall[] | undefined = rawToolCalls ? JSON.parse(JSON.stringify(rawToolCalls)) : undefined;
-
-    // console.log("[AgentMode] Initial finalResponseText:", finalResponseText);
-    // console.log("[AgentMode] Initial toolCalls:", openAIToolCalls);
 
     let assistantMessageUpdate: Partial<IChatMessage> = {
       sender: assistantSenderId,
@@ -197,9 +205,13 @@ export async function processAgentModeAIResponse({
           try {
             parsedArgs = JSON.parse(tc.function.arguments);
           } catch (error) {
-            // console.error("[AgentMode] Error parsing tool call arguments:", error, "Raw arguments:", tc.function.arguments);
+            console.error("[AgentMode] Error parsing tool call arguments:", error, "Raw arguments:", tc.function.arguments);
           }
         }
+
+        // Get MCP server info for this tool
+        const serverId = toolToServerMap.get(tc.function.name);
+
         return {
           id: tc.id,
           type: tc.type as 'function',
@@ -208,8 +220,7 @@ export async function processAgentModeAIResponse({
             arguments: parsedArgs,
           },
           tool_description: toolDescriptionsMap.get(tc.function.name) || "Description not found.",
-          // status is set by default in createToolCalls
-          // logs are no longer part of IChatMessageToolCall here
+          mcp_server: serverId || undefined,
         };
       });
 
@@ -230,9 +241,8 @@ export async function processAgentModeAIResponse({
       try {
         const llmStoreActions = useLLMStore.getState();
         await llmStoreActions.createToolCalls(assistantMessage.id, assistantMessageUpdate.tool_calls);
-        // console.log(`[AgentMode] Stored ${assistantMessageUpdate.tool_calls.length} tool call(s) for message ${assistantMessage.id}`);
       } catch (dbError) {
-        // console.error("[AgentMode] Failed to store tool calls to DB:", dbError);
+        console.error("[AgentMode] Failed to store tool calls to DB:", dbError);
       }
     }
 
@@ -246,7 +256,7 @@ export async function processAgentModeAIResponse({
     };
 
   } catch (error: any) {
-    // console.error("[AgentMode] Error in AgentMode processing:", error);
+    console.error("[AgentMode] Error in AgentMode processing:", error);
     await updateMessage(activeChatId, assistantMessage.id, {
       text: "Error generating response in Agent Mode. Please try again.",
       status: "failed"

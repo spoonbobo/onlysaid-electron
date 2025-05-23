@@ -353,5 +353,11 @@
   "toolDisplay.logs": "日誌",
   "toolDisplay.idLabel": "ID：",
   "toolDisplay.statusLabel": "狀態：",
-  "toolDisplay.statusPending": "待處理"
+  "toolDisplay.statusPending": "待處理",
+  "toolDisplay.reset": "重置",
+  "toolDisplay.allServers": "所有伺服器",
+  "toolDisplay.executed": "已執行",
+  "toolDisplay.result": "結果",
+  "toolDisplay.execute": "執行",
+  "toolDisplay.executing": "執行中"
 }

@@ -38,7 +38,7 @@ type KnowledgeBaseChannels =
 type AIChannels = 'ai:get_completion';
 
 type SSEChannels = 'streaming:abort_stream' | 'streaming:chat_stream_complete' | 'streaming:chunk' | 'streaming:query_stream_complete';
-type MCPChannels = 'mcp:initialize_client' | 'mcp:list_tools';
+type MCPChannels = 'mcp:initialize_client' | 'mcp:list_tools' | 'mcp:execute_tool';
 
 type ApiChatChannels = 'chat:get' | 'chat:create' | 'chat:update' | 'chat:delete';
 type ApiUserChannels = 'user:auth' | 'user:get' | 'user:get_one' | 'user:update';
@@ -152,6 +152,8 @@ const electronHandler = {
   mcp: {
     initialize_client: (...args: unknown[]) => ipcRenderer.invoke('mcp:initialize_client', ...args),
     list_tools: (...args: unknown[]) => ipcRenderer.invoke('mcp:list_tools', ...args),
+    execute_tool: (args: { serverName: string; toolName: string; arguments: Record<string, any> }) =>
+      ipcRenderer.invoke('mcp:execute_tool', args),
   },
   fileSystem: {
     openFolderDialog: () => ipcRenderer.invoke('folder:open-dialog'),

@@ -5,10 +5,7 @@ interface MCPClientState {
   // Actions only
   getMCPPrompts: () => Promise<void>;
   ListMCPTool: (serverName: string) => Promise<any>;
-
-
-  // createPlan: (prompt: string) => Promise<void>;
-  executeTool: (toolName: string, params: any) => Promise<void>;
+  executeTool: (serverName: string, toolName: string, args: Record<string, any>) => Promise<any>;
 }
 
 export const useMCPClientStore = create<MCPClientState>()((set, get) => ({
@@ -29,13 +26,21 @@ export const useMCPClientStore = create<MCPClientState>()((set, get) => ({
     }
   },
 
-  // createPlan: async (prompt: string) => {
-  //   console.log("createPlan action called with prompt:", prompt);
-  // },
+  executeTool: async (serverName: string, toolName: string, args: Record<string, any>) => {
+    try {
+      console.log("executeTool action called with:", { serverName, toolName, args });
 
-  executeTool: async (toolName: string, params: any) => {
-    console.log("executeTool action called with toolName:", toolName, "params:", params);
+      const result = await window.electron.mcp.execute_tool({
+        serverName,
+        toolName,
+        arguments: args
+      });
+
+      console.log("executeTool returned:", result);
+      return result;
+    } catch (error) {
+      console.error("Error in executeTool:", error);
+      throw error;
+    }
   },
-
-
 }));

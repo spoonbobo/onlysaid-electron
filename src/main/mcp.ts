@@ -80,4 +80,42 @@ export function setupMCPHandlers() {
       return { success: false, error: error.message };
     }
   });
+
+  ipcMain.handle('mcp:execute_tool', async (event, params) => {
+    try {
+      const { serverName = 'default', toolName, arguments: toolArgs } = params;
+
+      const client = serverName === 'default'
+        ? Object.values(activeClients)[0]
+        : activeClients[serverName];
+
+      if (!client) {
+        return { success: false, error: `No active MCP client found for server: ${serverName}` };
+      }
+
+      console.log(`Executing tool ${toolName} with args:`, toolArgs);
+
+      const result = await client.callTool({
+        name: toolName,
+        arguments: toolArgs || {}
+      });
+
+      console.log(`Tool ${toolName} execution result:`, result);
+
+      return {
+        success: true,
+        data: result,
+        toolName,
+        serverName
+      };
+    } catch (error: any) {
+      console.error(`Error executing tool ${params?.toolName}:`, error);
+      return {
+        success: false,
+        error: error.message,
+        toolName: params?.toolName,
+        serverName: params?.serverName
+      };
+    }
+  });
 }

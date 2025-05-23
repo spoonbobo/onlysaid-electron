@@ -5,6 +5,7 @@ import { useStreamStore } from "@/stores/SSE/StreamStore";
 import { useTopicStore } from "@/stores/Topic/TopicStore";
 import { useSelectedModelStore } from "@/stores/LLM/SelectedModelStore";
 import { useUserStore } from "@/stores/User/UserStore";
+import { useMCPClientStore } from '@/stores/MCP/MCPClient';
 
 // Get agent from store
 export const getAgentFromStore = () => {
@@ -96,4 +97,23 @@ export const levelUpAgent = async (addedXP: number) => {
 // Calculate experience for level
 export const calculateExperienceForLevel = (level: number): number => {
   return 50 * level;
+};
+
+// Execute MCP tool
+export const executeAgentTool = async (
+  serverName: string,
+  toolName: string,
+  args: Record<string, any>
+) => {
+  return useMCPClientStore.getState().executeTool(serverName, toolName, args);
+};
+
+// Execute tool with automatic server detection (if you have MCP settings)
+export const executeToolAuto = async (
+  toolName: string,
+  args: Record<string, any>
+) => {
+  // You can enhance this to automatically detect the right server
+  // based on your MCP settings store
+  return executeAgentTool('default', toolName, args);
 };

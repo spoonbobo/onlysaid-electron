@@ -2,6 +2,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { IChatMessage } from '@/../../types/Chat/Message';
 import { IUser } from '@/../../types/User/User';
 import { OpenAIMessage } from '@/stores/SSE/StreamStore';
+import { getAgentFromStore } from '@/utils/agent';
 
 export const askModeSystemPrompt = (user: IUser, agent: IUser) => {
   return `
@@ -20,7 +21,7 @@ interface ProcessAskModeAIResponseParams {
   userMessageText: string;
   modelId: string;
   provider: string;
-  agent: IUser | null;
+  agent?: IUser | null;
   currentUser: IUser | null;
   existingMessages: IChatMessage[];
   appendMessage: (chatId: string, message: IChatMessage) => void;
@@ -47,14 +48,17 @@ export async function processAskModeAIResponse({
   markStreamAsCompleted,
   streamChatCompletion,
 }: ProcessAskModeAIResponseParams): Promise<{ success: boolean; responseText?: string; assistantMessageId?: string; error?: any }> {
-  const assistantSender = agent;
-  const assistantSenderId = agent?.id || "assistant"; // Fallback ID
-  if (!agent) {
-    console.warn("[AskMode] Agent not found in store, using fallback ID for assistant message sender.");
+  // Use provided agent or get from store
+  const assistantSender = agent || getAgentFromStore();
+  const assistantSenderId = assistantSender?.id || "assistant";
+
+  if (!assistantSender) {
+    console.warn("[AskMode] No agent available, using fallback ID for assistant message sender.");
   }
+
   let systemPrompt = "";
-  if (currentUser && agent) {
-    systemPrompt = askModeSystemPrompt(currentUser, agent);
+  if (currentUser && assistantSender) {
+    systemPrompt = askModeSystemPrompt(currentUser, assistantSender);
   }
 
   const assistantMessage: IChatMessage = {
@@ -96,7 +100,6 @@ export async function processAskModeAIResponse({
       role: "user",
       content: `[${new Date().toISOString()}] ${currentUserName}: ${userMessageText}`
     });
-    console.log("lastMessages", lastMessages);
 
     const response = await streamChatCompletion(
       lastMessages as OpenAIMessage[],
@@ -109,7 +112,7 @@ export async function processAskModeAIResponse({
 
     await updateMessage(activeChatId, assistantMessage.id, {
       text: response,
-      sender: assistantSenderId, // Ensure sender is updated if it was a fallback
+      sender: assistantSenderId,
       status: "completed"
     });
 

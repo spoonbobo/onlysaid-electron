@@ -3,7 +3,7 @@ import { IChatMessage } from '@/../../types/Chat/Message';
 import { IUser } from '@/../../types/User/User';
 import { useKBSettingsStore } from '@/stores/KB/KBSettingStore';
 import { OpenAIMessage, OpenAIStreamOptions } from '@/stores/SSE/StreamStore';
-import { useTopicStore } from '@/stores/Topic/TopicStore';
+import { getAgentFromStore } from '@/utils/agent';
 
 // System prompt for Query Mode
 export const queryModeSystemPrompt = (
@@ -42,7 +42,7 @@ interface ProcessQueryModeAIResponseParams {
   userMessageText: string;
   modelId: string;
   provider: OpenAIStreamOptions['provider'];
-  agent: IUser | null;
+  agent?: IUser | null;
   currentUser: IUser | null;
   existingMessages: IChatMessage[];
   appendMessage: (chatId: string, message: IChatMessage) => void;
@@ -76,10 +76,12 @@ export async function processQueryModeAIResponse({
   markStreamAsCompleted,
   streamChatCompletion,
 }: ProcessQueryModeAIResponseParams): Promise<{ success: boolean; responseText?: string; assistantMessageId?: string; error?: any }> {
-  const assistantSender = agent;
-  const assistantSenderId = agent?.id || "query-assistant";
-  if (!agent) {
-    console.warn("[QueryMode] Agent not found, using fallback ID.");
+  // Use provided agent or get from store
+  const assistantSender = agent || getAgentFromStore();
+  const assistantSenderId = assistantSender?.id || "query-assistant";
+
+  if (!assistantSender) {
+    console.warn("[QueryMode] No agent available, using fallback ID.");
   }
 
   const { selectedKbIds, queryEngineLLM, embeddingEngine } = useKBSettingsStore.getState();
@@ -110,7 +112,6 @@ export async function processQueryModeAIResponse({
       ...conversationHistoryForPayload,
       { role: "user", content: userMessageText }
     ];
-
 
     const effectiveModelId = queryEngineLLM || modelId;
 
@@ -151,7 +152,7 @@ export async function processQueryModeAIResponse({
   } catch (error: any) {
     console.error("Stream error in QueryMode:", error);
     const isAborted = error.name === 'AbortError' || (error.message && error.message.includes('aborted'));
-    const errorText = isAborted ? "Knowledge Base query stopped." : `Sorry, I (Agent: ${agent?.username || assistantSenderId}) encountered an error with the Knowledge Base query.`;
+    const errorText = isAborted ? "Knowledge Base query stopped." : `Sorry, I (Agent: ${assistantSender?.username || assistantSenderId}) encountered an error with the Knowledge Base query.`;
 
     await updateMessage(activeChatId, assistantMessage.id, {
       text: errorText,

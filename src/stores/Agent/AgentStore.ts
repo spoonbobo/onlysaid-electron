@@ -4,9 +4,9 @@ import { IUser } from "@/../../types/User/User"; // Assuming IUser is in this pa
 import { useUserTokenStore } from "@/stores/User/UserToken"; // For fetching the token
 import { toast } from "@/utils/toast"; // For notifications
 import { IChatMessage } from "@/../../types/Chat/Message";
-import { processAskModeAIResponse } from "@/scenes/Main/Chat/Mode/Ask";
-import { processQueryModeAIResponse } from "@/scenes/Main/Chat/Mode/Query";
-import { processAgentModeAIResponse } from "@/scenes/Main/Chat/Mode/Agent";
+import { processAskModeAIResponse } from "@/stores/Agent/modes/Ask";
+import { processQueryModeAIResponse } from "@/stores/Agent/modes/Query";
+import { processAgentModeAIResponse } from "@/stores/Agent/modes/Agent";
 import { useMCPClientStore } from '@/stores/MCP/MCPClient';
 import { useChatStore } from "@/stores/Chat/ChatStore";
 import { useStreamStore } from "@/stores/SSE/StreamStore";

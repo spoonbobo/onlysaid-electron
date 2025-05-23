@@ -16,9 +16,9 @@ import { useUserStore } from "@/stores/User/UserStore";
 import { useAgentStore } from "@/stores/Agent/AgentStore";
 import { useWorkspaceStore } from "@/stores/Workspace/WorkspaceStore";
 import { useLLMConfigurationStore } from "@/stores/LLM/LLMConfiguration";
-import { processAskModeAIResponse } from './Mode/Ask';
-import { processQueryModeAIResponse } from './Mode/Query';
-import { processAgentModeAIResponse } from './Mode/Agent';
+import { processAskModeAIResponse } from '../../../stores/Agent/modes/Ask';
+import { processQueryModeAIResponse } from '../../../stores/Agent/modes/Query';
+import { processAgentModeAIResponse } from '../../../stores/Agent/modes/Agent';
 import { useMCPClientStore } from '@/stores/MCP/MCPClient';
 import { toast } from "@/utils/toast";
 
