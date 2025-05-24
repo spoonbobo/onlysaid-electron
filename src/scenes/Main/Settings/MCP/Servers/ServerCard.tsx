@@ -1,22 +1,7 @@
 import { Box, Typography, Paper, Button, Switch, FormControlLabel, Tooltip, Link } from "@mui/material";
 import { OpenInNew, RestartAlt } from "@mui/icons-material";
-import { ReactNode } from "react";
 import { FormattedMessage } from "react-intl";
-
-interface ServerCardProps {
-  title: string;
-  description: string;
-  version: string;
-  isEnabled: boolean;
-  isConfigured: boolean;
-  isAutoApproved: boolean;
-  onToggle: (enabled: boolean) => void;
-  onAutoApprovalToggle: (autoApproved: boolean) => void;
-  onConfigure: () => void;
-  onReset?: () => void;
-  icon?: ReactNode;
-  sourceUrl?: string;
-}
+import { IServerCardProps } from "@/../../types/MCP/server";
 
 const ServerCard = ({
   title,
@@ -31,7 +16,7 @@ const ServerCard = ({
   onReset,
   icon,
   sourceUrl
-}: ServerCardProps) => {
+}: IServerCardProps) => {
   return (
     <Paper sx={{ p: 2, mb: 2 }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>

@@ -1,77 +1,43 @@
 import { useMCPStore } from "@/stores/MCP/MCPStore";
 import { ComponentType } from "react";
-
-// Define the service types
-type ServiceType =
-  | "weather"
-  | "location"
-  | "nearby-search"
-  | "web3-research"
-  | "doordash"
-  | "whatsapp"
-  | "github"
-  | "ip-location"
-  | "weather-forecast"
-  | "airbnb"
-  | "tavily"
-  | "linkedin";
-
-// Map service types to server names
-const SERVICE_TO_SERVER_MAP: Record<ServiceType, string> = {
-  "weather": "weather",
-  "location": "location",
-  "nearby-search": "nearbySearch",
-  "web3-research": "web3Research",
-  "doordash": "doorDash",
-  "whatsapp": "whatsApp",
-  "github": "github",
-  "ip-location": "ipLocation",
-  "weather-forecast": "weatherForecast",
-  "airbnb": "airbnb",
-  "tavily": "tavily",
-  "linkedin": "linkedIn"
-};
-
-// Define the props interface for components that can be enhanced
-interface ConfigurableComponentProps {
-  onConfigure: () => void;
-}
-
-// Define the enhanced props
-interface EnhancedComponentProps extends ConfigurableComponentProps {
-  onReset?: () => void;
-  isAutoApproved?: boolean;
-  onAutoApprovalToggle?: (autoApproved: boolean) => void;
-}
+import { serverRegistry } from "../Registry/ServerRegistry";
+import { IConfigurableComponentProps, IEnhancedComponentProps } from "@/../../types/MCP/server";
 
 // Create the HOC
-const withReset = <P extends ConfigurableComponentProps>(
+const withReset = <P extends IConfigurableComponentProps>(
   WrappedComponent: ComponentType<P>,
-  serviceType: ServiceType
+  defaultServerKey: string
 ) => {
-  const EnhancedComponent = (props: Omit<P, keyof EnhancedComponentProps> & EnhancedComponentProps) => {
-    const { setServerEnabled, setServerConfig, setServerAutoApproved, getServerAutoApproved, servers } = useMCPStore();
+  const EnhancedComponent = (props: Omit<P, keyof IEnhancedComponentProps> & IEnhancedComponentProps) => {
+    const {
+      setServerEnabled,
+      setServerConfig,
+      setServerAutoApproved,
+      getServerAutoApproved,
+      getAllConfiguredServers,
+      isServerConfigured
+    } = useMCPStore();
+
+    // Use serverKey from props if available, otherwise use default
+    const serverKey = (props as any).serverKey || defaultServerKey;
+
+    const servers = getAllConfiguredServers();
+    const serverModule = serverRegistry.get(serverKey);
 
     const handleReset = () => {
-      const serverName = SERVICE_TO_SERVER_MAP[serviceType];
-      const server = servers[serverName];
-
-      if (server) {
-        // Reset to default config, disable, and reset auto-approval
-        server.setConfig(server.defaultConfig);
-        server.setEnabled(false);
-        server.setAutoApproved && server.setAutoApproved(false);
-      } else {
-        console.warn(`Unknown server for service type: ${serviceType}`);
+      if (serverModule) {
+        // Reset to default config from module
+        setServerConfig(serverKey, serverModule.defaultConfig);
+        setServerEnabled(serverKey, false);
+        setServerAutoApproved(serverKey, false);
       }
     };
 
     const handleAutoApprovalToggle = (autoApproved: boolean) => {
-      const serverName = SERVICE_TO_SERVER_MAP[serviceType];
-      setServerAutoApproved(serverName, autoApproved);
+      setServerAutoApproved(serverKey, autoApproved);
     };
 
-    const isAutoApproved = getServerAutoApproved(SERVICE_TO_SERVER_MAP[serviceType]);
+    const isAutoApproved = getServerAutoApproved(serverKey);
 
     // Enhanced component with reset and auto-approval functionality
     return (
