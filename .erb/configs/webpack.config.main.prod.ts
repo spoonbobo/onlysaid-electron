@@ -19,75 +19,78 @@ checkNodeEnv('production');
 deleteSourceMaps();
 
 const configuration: webpack.Configuration = {
-    devtool: 'source-map',
+  devtool: 'source-map',
 
-    mode: 'production',
+  mode: 'production',
 
-    target: 'electron-main',
+  target: 'electron-main',
 
-    entry: {
-        main: path.join(webpackPaths.srcMainPath, 'main.ts'),
-        preload: path.join(webpackPaths.srcMainPath, 'preload.ts'),
+  entry: {
+    main: path.join(webpackPaths.srcMainPath, 'main.ts'),
+    preload: path.join(webpackPaths.srcMainPath, 'preload.ts'),
+  },
+
+  output: {
+    path: webpackPaths.distMainPath,
+    filename: '[name].js',
+    library: {
+      type: 'umd',
     },
+  },
 
-    output: {
-        path: webpackPaths.distMainPath,
-        filename: '[name].js',
-        library: {
-            type: 'umd',
-        },
-    },
-
-    optimization: {
-        minimizer: [
-            new TerserPlugin({
-                parallel: true,
-            }),
-        ],
-    },
-
-    plugins: [
-        new BundleAnalyzerPlugin({
-            analyzerMode: process.env.ANALYZE === 'true' ? 'server' : 'disabled',
-            analyzerPort: 8888,
-        }),
-
-        /**
-         * Create global constants which can be configured at compile time.
-         *
-         * Useful for allowing different behaviour between development builds and
-         * release builds
-         *
-         * NODE_ENV should be production so that modules do not perform certain
-         * development checks
-         */
-        new webpack.EnvironmentPlugin({
-            NODE_ENV: 'production',
-            DEBUG_PROD: false,
-            START_MINIMIZED: false,
-            ONLYSAID_API_URL: process.env.ONLYSAID_API_URL,
-            ONLYSAID_DOMAIN: process.env.ONLYSAID_DOMAIN,
-        }),
-
-        new webpack.DefinePlugin({
-            'process.type': '"browser"',
-        }),
+  optimization: {
+    minimizer: [
+      new TerserPlugin({
+        parallel: true,
+      }),
     ],
+  },
+
+  plugins: [
+    new BundleAnalyzerPlugin({
+      analyzerMode: process.env.ANALYZE === 'true' ? 'server' : 'disabled',
+      analyzerPort: 8888,
+    }),
 
     /**
-     * Disables webpack processing of __dirname and __filename.
-     * If you run the bundle in node.js it falls back to these values of node.js.
-     * https://github.com/webpack/webpack/issues/2010
+     * Create global constants which can be configured at compile time.
+     *
+     * Useful for allowing different behaviour between development builds and
+     * release builds
+     *
+     * NODE_ENV should be production so that modules do not perform certain
+     * development checks
      */
-    node: {
-        __dirname: false,
-        __filename: false,
-    },
+    new webpack.EnvironmentPlugin({
+      NODE_ENV: 'production',
+      DEBUG_PROD: false,
+      START_MINIMIZED: false,
+      ONLYSAID_API_URL: process.env.ONLYSAID_API_URL,
+      ONLYSAID_DOMAIN: process.env.ONLYSAID_DOMAIN,
+      SOCKET_SERVER_URL: process.env.SOCKET_SERVER_URL,
+      KB_BASE_URL: process.env.KB_BASE_URL,
+    }),
 
-    externals: {
-        '@openbnb/mcp-server-airbnb': 'commonjs2 @openbnb/mcp-server-airbnb',
-        '@smithery/sdk': 'commonjs2 @smithery/sdk',
-    },
+    new webpack.DefinePlugin({
+      'process.type': '"browser"',
+    }),
+  ],
+
+  /**
+   * Disables webpack processing of __dirname and __filename.
+   * If you run the bundle in node.js it falls back to these values of node.js.
+   * https://github.com/webpack/webpack/issues/2010
+   */
+  node: {
+    __dirname: false,
+    __filename: false,
+  },
+
+  externals: {
+    '@openbnb/mcp-server-airbnb': 'commonjs2 @openbnb/mcp-server-airbnb',
+    '@smithery/sdk': 'commonjs2 @smithery/sdk',
+    'better-sqlite3': 'commonjs2 better-sqlite3',
+  },
 };
 
 export default merge(baseConfig, configuration);
