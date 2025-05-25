@@ -12,6 +12,7 @@ import MCPSettings from "./MCP/index";
 import MCPConfiguration from "./MCP/MCPSettings";
 import PrivateKB from "./KnowledgeBase";
 import KBSettings from "./KnowledgeBase/KBSettings";
+import UserAPIKeys from "./UserSettings/UserAPIKeys";
 
 function Settings() {
   const { selectedTopics } = useCurrentTopicContext();
@@ -22,6 +23,9 @@ function Settings() {
     switch (selectedSubcategory) {
       case UserSettingsSubcategories.User:
         return <UserPreferences />;
+
+      case UserSettingsSubcategories.UserAPIKeys:
+        return <UserAPIKeys />;
 
       case UserSettingsSubcategories.DeleteAccount:
         return <DeleteAccount />;

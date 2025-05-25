@@ -33,8 +33,11 @@ import { initializeKnowledgeBaseHandlers } from './api/v2/onlysaid_kb';
 import { setupFileHandlers } from './api/v2/file';
 import { setupSocketHandlers } from './socket';
 import { setupStorageHandlers } from './api/v2/storage';
+
+// Load environment variables
 dotenv.config();
 
+// Initialize all handlers and services
 setupChatroomHandlers();
 setupUserHandlers();
 setupFileSystemHandlers();
@@ -47,7 +50,27 @@ setupWorkspaceHandlers();
 initializeDeeplinkHandling();
 setupFileHandlers();
 setupStorageHandlers();
+
+// Initialize authentication modules
 initAuth(process.env.ONLYSAID_API_URL || '', process.env.ONLYSAID_DOMAIN || '');
+
+// Initialize Google Auth in async function
+async function initializeGoogleAuth() {
+  console.log('[Main] ===== INITIALIZING GOOGLE AUTH =====');
+  try {
+    // @ts-ignore
+    const { initGoogleAuth } = await import('./google');
+    initGoogleAuth();
+    console.log('[Main] Google Auth initialized successfully');
+  } catch (error) {
+    console.warn('[Main] Google Auth initialization failed:', error);
+  }
+}
+
+// Call the initialization
+initializeGoogleAuth();
+
+// Initialize knowledge base handlers
 initializeKnowledgeBaseHandlers();
 
 if (process.env.NODE_ENV === 'production') {
@@ -57,7 +80,6 @@ if (process.env.NODE_ENV === 'production') {
 
 const isDebug =
   process.env.NODE_ENV === 'development' || process.env.DEBUG_PROD === 'true';
-
 
 class AppUpdater {
   constructor() {
@@ -80,7 +102,6 @@ ipcMain.handle('db:initialize', async () => {
     initializeDatabase();
     runMigrations(allMigrations);
     console.log('Database initialized');
-
     return true;
   } catch (error) {
     console.error('Failed to initialize database:', error);
@@ -164,20 +185,25 @@ const installExtensions = async () => {
 };
 
 const createWindow = async () => {
+  console.log('[Main] ===== CREATE WINDOW STARTED =====');
+
   if (isDebug) {
+    console.log('[Main] Installing extensions...');
     await installExtensions();
+    console.log('[Main] Extensions installed');
   }
 
   // Initialize database directly during app startup
   try {
-    console.log('Initializing database during app startup...');
+    console.log('[Main] Initializing database during app startup...');
     const db = initializeDatabase();
     runMigrations(allMigrations);
-    console.log('Database initialized and migrations applied successfully');
+    console.log('[Main] Database initialized and migrations applied successfully');
   } catch (error) {
-    console.error('Failed to initialize database during startup:', error);
+    console.error('[Main] Failed to initialize database during startup:', error);
   }
 
+  console.log('[Main] Setting up resources path...');
   const RESOURCES_PATH = app.isPackaged
     ? path.join(process.resourcesPath, 'assets')
     : path.join(__dirname, '../../assets');
@@ -186,6 +212,7 @@ const createWindow = async () => {
     return path.join(RESOURCES_PATH, ...paths);
   };
 
+  console.log('[Main] Creating BrowserWindow...');
   mainWindow = new BrowserWindow({
     show: true,
     width: 1024,
@@ -201,14 +228,20 @@ const createWindow = async () => {
       webSecurity: true
     },
   });
+  console.log('[Main] BrowserWindow created');
 
   // Call setupSocketHandlers immediately after BrowserWindow creation
   // and before loading the URL
+  console.log('[Main] Setting up socket handlers...');
   setupSocketHandlers(mainWindow);
+  console.log('[Main] Socket handlers set up');
 
+  console.log('[Main] Loading URL...');
   mainWindow.loadURL(resolveHtmlPath('index.html'));
+  console.log('[Main] URL loaded');
 
   mainWindow.on('ready-to-show', () => {
+    console.log('[Main] Window ready-to-show event fired');
     if (!mainWindow) {
       throw new Error('"mainWindow" is not defined');
     }
@@ -220,11 +253,14 @@ const createWindow = async () => {
   });
 
   mainWindow.on('closed', () => {
+    console.log('[Main] Window closed event fired');
     mainWindow = null;
   });
 
+  console.log('[Main] Building menu...');
   const menuBuilder = new MenuBuilder(mainWindow);
   menuBuilder.buildMenu();
+  console.log('[Main] Menu built');
 
   // Open urls in the user's browser
   mainWindow.webContents.setWindowOpenHandler((edata) => {
@@ -234,9 +270,15 @@ const createWindow = async () => {
 
   // Remove this if your app does not use auto updates
   // eslint-disable-next-line
+  console.log('[Main] Creating AppUpdater...');
   new AppUpdater();
+  console.log('[Main] AppUpdater created');
 
+  console.log('[Main] Setting up window handlers...');
   setupWindowHandlers(mainWindow);
+  console.log('[Main] Window handlers set up');
+
+  console.log('[Main] ===== CREATE WINDOW COMPLETED =====');
 };
 
 /**

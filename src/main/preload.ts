@@ -5,6 +5,7 @@ import os from 'os';
 
 // namespace
 type AuthChannels = 'auth:sign-in' | 'auth:signed-in';
+type GoogleAuthChannels = 'google-auth:request-calendar' | 'google-auth:result' | 'google-auth:disconnect' | 'google-auth:disconnected' | 'google-calendar:fetch-calendars' | 'google-calendar:fetch-events';
 type MenuChannels = 'menu:close-tab' | 'menu:new-tab';
 type MiscChannels = 'ipc-example';
 type DbChannels = 'db:initialize' | 'db:query' | 'db:transaction' | 'db:close';
@@ -80,6 +81,7 @@ type SocketChannels =
 
 export type Channels =
   | AuthChannels
+  | GoogleAuthChannels
   | DbChannels
   | ApiChannels
   | MenuChannels
@@ -104,9 +106,28 @@ const electronHandler = {
     },
     once: (channel: Channels, func: (event: IpcRendererEvent, ...args: unknown[]) => void) => ipcRenderer.once(channel, (event, ...args) => func(event, ...args)),
     invoke: (channel: Channels, ...args: unknown[]) => ipcRenderer.invoke(channel, ...args),
+    send: (channel: Channels, ...args: unknown[]) => ipcRenderer.send(channel, ...args),
+    removeListener: (channel: Channels, func: (...args: unknown[]) => void) => ipcRenderer.removeListener(channel, func),
   },
   auth: {
     signIn: (...args: unknown[]) => ipcRenderer.invoke('auth:sign-in', ...args),
+  },
+  googleAuth: {
+    requestCalendar: () => ipcRenderer.send('google-auth:request-calendar'),
+    disconnect: () => ipcRenderer.send('google-auth:disconnect'),
+    onResult: (callback: (event: IpcRendererEvent, result: any) => void) => {
+      ipcRenderer.on('google-auth:result', callback);
+      return () => ipcRenderer.removeListener('google-auth:result', callback);
+    },
+    onDisconnected: (callback: (event: IpcRendererEvent, result: any) => void) => {
+      ipcRenderer.on('google-auth:disconnected', callback);
+      return () => ipcRenderer.removeListener('google-auth:disconnected', callback);
+    },
+  },
+  googleCalendar: {
+    fetchCalendars: (token: string) => ipcRenderer.invoke('google-calendar:fetch-calendars', token),
+    fetchEvents: (params: { token: string; calendarId?: string; timeMin?: string; timeMax?: string; maxResults?: number }) =>
+      ipcRenderer.invoke('google-calendar:fetch-events', params),
   },
   db: {
     initialize: (...args: unknown[]) => ipcRenderer.invoke('db:initialize', ...args),

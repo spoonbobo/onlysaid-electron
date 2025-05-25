@@ -22,6 +22,12 @@ export default function UserSettingsSection({
         onClick={() => setSelectedSubcategory(UserSettingsSubcategories.User)}
         sx={{ pl: 4, py: 0.5, minHeight: 28, fontSize: 14 }}
       />
+      <MenuListItem
+        label={<FormattedMessage id="settings.apiKeys" />}
+        isSelected={selectedSubcategory === UserSettingsSubcategories.UserAPIKeys}
+        onClick={() => setSelectedSubcategory(UserSettingsSubcategories.UserAPIKeys)}
+        sx={{ pl: 4, py: 0.5, minHeight: 28, fontSize: 14 }}
+      />
     </Box>
   );
 }

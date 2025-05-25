@@ -364,5 +364,16 @@
 
   "dialog.file.download": "下載",
   "dialog.file.downloading": "下載中...",
-  "settings.mcp.category.productivity": "生產力"
+  "settings.mcp.category.productivity": "生產力",
+
+  "settings.apiKeys": "API 密鑰",
+  "settings.userAPIKeys": "用戶 API 密鑰",
+
+  "googleCalendar.title": "Google 日曆",
+  "googleCalendar.description": "連接你的 Google 日曆以同步事件和管理你的日程安排。",
+  "googleCalendar.connect": "連接 Google 日曆",
+  "googleCalendar.connecting": "連接中...",
+  "googleCalendar.connected": "Google 日曆已連接",
+  "googleCalendar.disconnect": "斷開連接",
+  "googleCalendar.error": "錯誤：{error}"
 }

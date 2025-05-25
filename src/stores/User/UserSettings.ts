@@ -4,6 +4,7 @@ import { persist, createJSONStorage } from "zustand/middleware";
 export const UserSettingsSubcategories = {
   // General
   User: "user",
+  UserAPIKeys: "userAPIKeys",
   DebugMode: "debug_mode",
 
   // LLM
@@ -26,8 +27,6 @@ export const UserSettingsSubcategories = {
 } as const;
 
 type UserSettingsSubcategory = typeof UserSettingsSubcategories[keyof typeof UserSettingsSubcategories];
-
-export type UserSectionName = 'General' | 'LLM' | 'KnowledgeBase' | 'MCP' | 'Developer' | 'DangerZone';
 
 interface UserSettingsStore {
   selectedSubcategory: UserSettingsSubcategory;
