@@ -22,7 +22,7 @@ function MenuHeader() {
   const [menuPosition, setMenuPosition] = useState<{ top: number, left: number } | null>(null);
   const open = Boolean(anchorEl) || Boolean(menuPosition);
   const [showAddFriendDialog, setShowAddFriendDialog] = useState(false);
-  const isLocal = user?.id ? false : true;
+  const isLocal = user?.id ? false : true
 
   // Parse section from the context
   const selectedSection = selectedContext?.type === 'workspace' ?
@@ -51,6 +51,10 @@ function MenuHeader() {
   const handleClose = () => {
     setAnchorEl(null);
     setMenuPosition(null);
+    // Ensure focus is properly managed when menu closes
+    if (document.activeElement && document.activeElement !== document.body) {
+      (document.activeElement as HTMLElement).blur();
+    }
   };
 
   // FIXME: only for home context
@@ -201,6 +205,9 @@ function MenuHeader() {
               vertical: 'top',
               horizontal: 'left',
             }}
+            disableAutoFocus
+            disableEnforceFocus
+            disableRestoreFocus
           >
             {renderMenuItems()}
           </Menu>

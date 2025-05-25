@@ -1,5 +1,4 @@
 import { useMemo, useState } from "react";
-import { Box } from "@mui/material";
 import * as Icons from "@mui/icons-material";
 import ServerCard from "./ServerCard";
 import GenericDialog from "./GenericDialog";

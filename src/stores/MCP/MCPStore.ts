@@ -12,6 +12,9 @@ import { createGitHubServer } from "./Servers/GitHubServer";
 import { createIPLocationServer } from "./Servers/IPLocationServer";
 import { createAirbnbServer } from "./Servers/AirbnbServer";
 import { createLinkedInServer } from "./Servers/LinkedInServer";
+import { createMS365Server } from "./Servers/MS365Server";
+import { createMSTeamsServer } from "./Servers/MSTeamsServer";
+import { createGoogleCalendarServer } from "./Servers/GoogleCalendarServer";
 import type { IMCPTool } from "@/../../types/MCP/tool";
 import type {
   ITavilyState,
@@ -26,6 +29,9 @@ import type {
   IIPLocationState,
   IAirbnbState,
   ILinkedInState,
+  IMS365State,
+  IMSTeamsState,
+  IGoogleCalendarState,
   IServerModule
 } from "@/../../types/MCP/server";
 
@@ -43,6 +49,9 @@ const SERVER_REGISTRY = {
   ipLocation: createIPLocationServer,
   airbnb: createAirbnbServer,
   linkedIn: createLinkedInServer,
+  ms365: createMS365Server,
+  msTeams: createMSTeamsServer,
+  googleCalendar: createGoogleCalendarServer,
 };
 
 const SERVICE_TYPE_MAPPING: Record<string, string> = {
@@ -58,6 +67,9 @@ const SERVICE_TYPE_MAPPING: Record<string, string> = {
   'airbnb': 'airbnb',
   'tavily': 'tavily',
   'linkedin': 'linkedIn',
+  'ms365': 'ms365',
+  'ms-teams': 'msTeams',
+  'google-calendar': 'googleCalendar',
 };
 
 interface MCPState extends
@@ -72,7 +84,10 @@ interface MCPState extends
   IGitHubState,
   IIPLocationState,
   IAirbnbState,
-  ILinkedInState {
+  ILinkedInState,
+  IMS365State,
+  IMSTeamsState,
+  IGoogleCalendarState {
 
   serviceTools: Record<string, IMCPTool[]>;
   servers: Record<string, IServerModule>;

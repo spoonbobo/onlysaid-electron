@@ -363,5 +363,6 @@
   "toolDisplay.executing": "執行中",
 
   "dialog.file.download": "下載",
-  "dialog.file.downloading": "下載中..."
+  "dialog.file.downloading": "下載中...",
+  "settings.mcp.category.productivity": "生產力"
 }

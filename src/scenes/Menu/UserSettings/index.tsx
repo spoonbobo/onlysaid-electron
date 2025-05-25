@@ -1,8 +1,6 @@
 import { Box } from "@mui/material";
-import { FormattedMessage } from "react-intl";
 import { UserSettingsSubcategories } from "@/stores/User/UserSettings";
 import { useCurrentTopicContext } from "@/stores/Topic/TopicStore";
-import MenuListItem from "@/components/Navigation/MenuListItem";
 import UserSettingsSection from "./User";
 import LLMSettingsSection from "./LLM";
 import KBSettingsSection from "./KnowledgeBase";

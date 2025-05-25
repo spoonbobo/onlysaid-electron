@@ -482,5 +482,6 @@
   "chat.kb.selectAll": "すべて選択",
 
   "dialog.file.download": "ダウンロード",
-  "dialog.file.downloading": "ダウンロード中..."
+  "dialog.file.downloading": "ダウンロード中...",
+  "settings.mcp.category.productivity": "生産性"
 }

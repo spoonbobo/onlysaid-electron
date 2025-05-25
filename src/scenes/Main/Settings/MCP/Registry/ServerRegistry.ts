@@ -1,5 +1,4 @@
 import { IServerRegistry, IEnhancedServerModule } from "@/../../types/MCP/server";
-import { WhatsAppServerModule } from "./modules/WhatsAppServerModule";
 
 class ServerRegistry {
   private servers: IServerRegistry = {};
@@ -23,27 +22,6 @@ class ServerRegistry {
       )
     );
   }
-
-  // Backward compatibility - get server by old service type mapping
-  getByServiceType(serviceType: string): IEnhancedServerModule | undefined {
-    const serviceToServerMap: Record<string, string> = {
-      "whatsapp": "whatsApp",
-      "weather": "weather",
-      "weather-forecast": "weatherForecast",
-      "location": "location",
-      "nearby-search": "nearbySearch",
-      "web3-research": "web3Research",
-      "doordash": "doorDash",
-      "github": "github",
-      "ip-location": "ipLocation",
-      "airbnb": "airbnb",
-      "tavily": "tavily",
-      "linkedin": "linkedIn"
-    };
-
-    const serverKey = serviceToServerMap[serviceType];
-    return serverKey ? this.get(serverKey) : undefined;
-  }
 }
 
 export const serverRegistry = new ServerRegistry();
@@ -61,3 +39,6 @@ import "./modules/GitHubServerModule";
 import "./modules/LinkedInServerModule";
 import "./modules/IPLocationServerModule";
 import "./modules/LocationServerModule";
+import "./modules/MS365ServerModule";
+import "./modules/MSTeamsServerModule";
+import "./modules/GoogleCalendarServerModule";
