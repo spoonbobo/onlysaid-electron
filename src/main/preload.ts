@@ -1,6 +1,6 @@
 // Disable no-unused-vars, broken for spread args
 /* eslint no-unused-vars: off */
-import { contextBridge, ipcRenderer, IpcRendererEvent } from 'electron';
+import { contextBridge, ipcRenderer, IpcRendererEvent, shell } from 'electron';
 import os from 'os';
 
 // namespace
@@ -234,6 +234,9 @@ const electronHandler = {
   },
   ai: {
     getCompletion: (args: { messages: any[], options: any }) => ipcRenderer.invoke('ai:get_completion', args),
+  },
+  shell: {
+    openExternal: (url: string) => shell.openExternal(url),
   },
 };
 

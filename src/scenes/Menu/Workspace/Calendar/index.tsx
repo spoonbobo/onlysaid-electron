@@ -7,6 +7,8 @@ import GoogleIcon from "@mui/icons-material/Google";
 import { useTopicStore, useSelectedCalendarDate } from "../../../../stores/Topic/TopicStore";
 import { useGoogleCalendarStore } from "../../../../stores/Google/GoogleCalendarStore";
 import { useUserTokenStore } from "../../../../stores/User/UserToken";
+import WorkIcon from "@mui/icons-material/Work";
+import EmailIcon from "@mui/icons-material/Email";
 
 // Define a type for the day objects to include full date for potential future use
 interface CalendarDay {
@@ -189,80 +191,84 @@ export default function MenuCalendar() {
         </Box>
       ))}
 
+      <Divider sx={{ my: 2 }} />
+
       {/* Calendars Section */}
-      {googleCalendarConnected && (
-        <>
-          <Divider sx={{ my: 2 }} />
-          <Box>
-            <Typography variant="body2" fontWeight="medium" sx={{ mb: 1 }}>
-              {intl.formatMessage({ id: "calendar.calendars", defaultMessage: "日曆" })}
-            </Typography>
+      <Box>
+        <Typography variant="body2" fontWeight="medium" sx={{ mb: 1 }}>
+          {intl.formatMessage({ id: "calendar.calendars", defaultMessage: "日曆" })}
+        </Typography>
 
-            {/* Google Calendar Subsection */}
-            <Box sx={{ mb: 1 }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 1 }}>
-                <GoogleIcon sx={{ fontSize: '1rem', color: 'text.secondary' }} />
-                <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 500 }}>
-                  Google
-                </Typography>
-              </Box>
-
-              {loading ? (
-                <Box sx={{ display: 'flex', justifyContent: 'center', p: 1, pl: 3 }}>
-                  <CircularProgress size={16} />
-                </Box>
-              ) : (
-                <Box sx={{ maxHeight: 200, overflow: 'auto', pl: 1 }}>
-                  {calendars.map((calendar) => (
-                    <FormControlLabel
-                      key={calendar.id}
-                      control={
-                        <Checkbox
-                          checked={calendar.selected}
-                          onChange={() => handleCalendarToggle(calendar.id)}
-                          size="small"
-                          sx={{
-                            color: calendar.color || 'primary.main',
-                            '&.Mui-checked': {
-                              color: calendar.color || 'primary.main',
-                            },
-                          }}
-                        />
-                      }
-                      label={
-                        <Typography variant="body2" sx={{ fontSize: '0.875rem' }}>
-                          {calendar.name}
-                          {calendar.primary && (
-                            <Typography component="span" variant="caption" sx={{ ml: 0.5, color: 'text.secondary' }}>
-                              ({intl.formatMessage({ id: "calendar.primary", defaultMessage: "主要" })})
-                            </Typography>
-                          )}
-                        </Typography>
-                      }
-                      sx={{
-                        width: '100%',
-                        m: 0,
-                        '& .MuiFormControlLabel-label': {
-                          width: '100%',
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          whiteSpace: 'nowrap'
-                        }
-                      }}
-                    />
-                  ))}
-
-                  {calendars.length === 0 && !loading && (
-                    <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', p: 1 }}>
-                      {intl.formatMessage({ id: "calendar.noCalendars", defaultMessage: "沒有可用的日曆" })}
-                    </Typography>
-                  )}
-                </Box>
-              )}
-            </Box>
+        {/* Workspaces Section */}
+        <Box sx={{ mb: 2 }}>
+          <Typography variant="subtitle2" sx={{ mb: 1, color: 'text.secondary', display: 'flex', alignItems: 'center', gap: 1 }}>
+            <WorkIcon sx={{ fontSize: 16 }} />
+            {intl.formatMessage({ id: "calendar.workspaces", defaultMessage: "工作區" })}
+          </Typography>
+          <Box sx={{ pl: 2 }}>
+            {/* Empty for now */}
           </Box>
-        </>
-      )}
+        </Box>
+
+        {/* Google Calendar Section */}
+        <Box sx={{ mb: 2 }}>
+          <Typography variant="subtitle2" sx={{ mb: 1, color: 'text.secondary', display: 'flex', alignItems: 'center', gap: 1 }}>
+            <GoogleIcon sx={{ fontSize: 16 }} />
+            Google
+          </Typography>
+          <Box sx={{ pl: 2 }}>
+            {calendars.map((calendar) => (
+              <FormControlLabel
+                key={calendar.id}
+                control={
+                  <Checkbox
+                    checked={calendar.selected}
+                    onChange={() => handleCalendarToggle(calendar.id)}
+                    size="small"
+                    sx={{
+                      color: calendar.color || 'primary.main',
+                      '&.Mui-checked': {
+                        color: calendar.color || 'primary.main',
+                      },
+                    }}
+                  />
+                }
+                label={
+                  <Typography variant="body2" sx={{ fontSize: '0.875rem' }}>
+                    {calendar.name}
+                    {calendar.primary && (
+                      <Typography component="span" variant="caption" sx={{ ml: 0.5, color: 'text.secondary' }}>
+                        ({intl.formatMessage({ id: "calendar.primary", defaultMessage: "主要" })})
+                      </Typography>
+                    )}
+                  </Typography>
+                }
+                sx={{
+                  width: '100%',
+                  m: 0,
+                  '& .MuiFormControlLabel-label': {
+                    width: '100%',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap'
+                  }
+                }}
+              />
+            ))}
+          </Box>
+        </Box>
+
+        {/* Outlook Section */}
+        <Box sx={{ mb: 2 }}>
+          <Typography variant="subtitle2" sx={{ mb: 1, color: 'text.secondary', display: 'flex', alignItems: 'center', gap: 1 }}>
+            <EmailIcon sx={{ fontSize: 16 }} />
+            {intl.formatMessage({ id: "calendar.outlook", defaultMessage: "Outlook (Microsoft)" })}
+          </Typography>
+          <Box sx={{ pl: 2 }}>
+            {/* Empty for now */}
+          </Box>
+        </Box>
+      </Box>
     </Box>
   );
 }

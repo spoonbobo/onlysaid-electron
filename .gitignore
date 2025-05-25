@@ -1,6 +1,8 @@
 # Logs
 logs
 *.log
+.env
+
 
 # Runtime data
 pids
@@ -27,3 +29,4 @@ npm-debug.log.*
 *.css.d.ts
 *.sass.d.ts
 *.scss.d.ts
+

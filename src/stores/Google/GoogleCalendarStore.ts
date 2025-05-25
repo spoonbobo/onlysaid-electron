@@ -11,7 +11,9 @@ interface IGoogleCalendarStore {
   // Actions
   fetchCalendars: () => Promise<void>;
   fetchEvents: (calendarId?: string, timeMin?: string, timeMax?: string) => Promise<void>;
+  fetchEventsForSelectedCalendars: (timeMin: string, timeMax: string) => Promise<void>;
   toggleCalendar: (calendarId: string) => void;
+  getVisibleEvents: () => ICalendarEvent[];
   clearError: () => void;
 }
 
@@ -82,7 +84,7 @@ export const useGoogleCalendarStore = create<IGoogleCalendarStore>((set, get) =>
         calendarId,
         timeMin,
         timeMax,
-        maxResults: 50
+        maxResults: 100
       });
 
       if (!result.success) {
@@ -127,8 +129,13 @@ export const useGoogleCalendarStore = create<IGoogleCalendarStore>((set, get) =>
         color: item.colorId,
       }));
 
-      set({ events, loading: false });
-      console.log('[Google Calendar Store] Fetched events:', events);
+      // Merge events instead of replacing them
+      const currentEvents = get().events;
+      const filteredEvents = currentEvents.filter(e => e.calendarId !== calendarId);
+      const allEvents = [...filteredEvents, ...events];
+
+      set({ events: allEvents, loading: false });
+      console.log('[Google Calendar Store] Fetched events for calendar:', calendarId, events.length);
 
     } catch (error) {
       console.error('[Google Calendar Store] Error fetching events:', error);
@@ -136,6 +143,33 @@ export const useGoogleCalendarStore = create<IGoogleCalendarStore>((set, get) =>
         error: error instanceof Error ? error.message : 'Failed to fetch events',
         loading: false
       });
+    }
+  },
+
+  fetchEventsForSelectedCalendars: async (timeMin: string, timeMax: string) => {
+    const { calendars } = get();
+    const selectedCalendars = calendars.filter(cal => cal.selected);
+
+    if (selectedCalendars.length === 0) {
+      set({ events: [] });
+      return;
+    }
+
+    set({ loading: true, error: null });
+
+    try {
+      // Clear existing events
+      set({ events: [] });
+
+      // Fetch events for each selected calendar
+      for (const calendar of selectedCalendars) {
+        await get().fetchEvents(calendar.id, timeMin, timeMax);
+      }
+
+      set({ loading: false });
+    } catch (error) {
+      console.error('[Google Calendar Store] Error fetching events for selected calendars:', error);
+      set({ loading: false });
     }
   },
 
@@ -147,6 +181,12 @@ export const useGoogleCalendarStore = create<IGoogleCalendarStore>((set, get) =>
         : calendar
     );
     set({ calendars: updatedCalendars });
+  },
+
+  getVisibleEvents: () => {
+    const { events, calendars } = get();
+    const selectedCalendarIds = new Set(calendars.filter(cal => cal.selected).map(cal => cal.id));
+    return events.filter(event => selectedCalendarIds.has(event.calendarId));
   },
 
   clearError: () => set({ error: null }),

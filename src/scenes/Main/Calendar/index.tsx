@@ -1,4 +1,4 @@
-import { Box, Typography, Paper, Divider, IconButton, Button, Select, MenuItem, FormControl, InputLabel, SelectChangeEvent } from "@mui/material";
+import { Box, Typography, Paper, Divider, IconButton, Button, Select, MenuItem, FormControl, InputLabel, SelectChangeEvent, Chip } from "@mui/material";
 import { FormattedMessage, useIntl } from "react-intl";
 import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
 import ChevronRightIcon from "@mui/icons-material/ChevronRight";
@@ -6,17 +6,26 @@ import { useState, useEffect } from "react";
 import { useTopicStore, useSelectedCalendarDate, CalendarViewMode } from "../../../stores/Topic/TopicStore";
 import DayView from "./DayView/DayView";
 import WeekView from "./WeekView/WeekView";
+import { useGoogleCalendarStore } from "../../../stores/Google/GoogleCalendarStore";
+import { useUserTokenStore } from "../../../stores/User/UserToken";
+import CalendarEventPopover from "../../../components/Popover/CalendarEventPopover";
+import type { ICalendarEvent } from "@/../../types/Calendar/Calendar";
 
 interface MonthViewInternalProps {
   displayDate: Date;
+  onEventClick: (event: React.MouseEvent<HTMLElement>, calendarEvent: ICalendarEvent) => void;
 }
 
-function MonthViewInternal({ displayDate }: MonthViewInternalProps) {
+function MonthViewInternal({ displayDate, onEventClick }: MonthViewInternalProps) {
   const intl = useIntl();
   const { setSelectedCalendarDate, setCalendarViewMode } = useTopicStore();
 
+  // Get events for month view
+  const { getVisibleEvents, calendars } = useGoogleCalendarStore();
+  const allEvents = getVisibleEvents();
+
   const handleDayClick = (clickedDate: Date) => {
-    setSelectedCalendarDate(new Date(clickedDate)); // Ensure a new Date object is set
+    setSelectedCalendarDate(new Date(clickedDate));
     setCalendarViewMode('day');
   };
 
@@ -72,6 +81,11 @@ function MonthViewInternal({ displayDate }: MonthViewInternalProps) {
     weeksToRender.push(calendarCellsData.slice(i, i + 7));
   }
 
+  const getEventColor = (event: any) => {
+    const calendar = calendars.find(cal => cal.id === event.calendarId);
+    return calendar?.color || '#1976d2';
+  };
+
   return (
     <Paper elevation={0} sx={{ m: 1, mt: 0, mb: 0, overflow: "hidden", flexGrow: 1, display: 'flex', flexDirection: 'column', border: '1px solid', borderColor: 'divider', borderTop: 0 }}>
       <Box sx={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)" }}>
@@ -85,10 +99,28 @@ function MonthViewInternal({ displayDate }: MonthViewInternalProps) {
         {weeksToRender.map((weekData, weekIndex) => (
           <Box key={`week-${weekIndex}`} sx={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", flexGrow: 1, borderBottom: weekIndex < weeksToRender.length - 1 ? 1 : 0, borderColor: 'divider' }}>
             {weekData.map((cellData, dayIndex) => {
+              // Get events for this day
+              let dayEvents: any[] = [];
+              if (cellData.date && cellData.isCurrentMonth) {
+                const dayStart = new Date(cellData.date.getFullYear(), cellData.date.getMonth(), cellData.date.getDate());
+                const dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000);
+
+                dayEvents = allEvents.filter(event => {
+                  const eventStart = event.start.dateTime ? new Date(event.start.dateTime) :
+                    event.start.date ? new Date(event.start.date) : null;
+                  const eventEnd = event.end.dateTime ? new Date(event.end.dateTime) :
+                    event.end.date ? new Date(event.end.date) : null;
+
+                  if (!eventStart) return false;
+
+                  return eventStart < dayEnd && (!eventEnd || eventEnd > dayStart);
+                }).slice(0, 3); // Show max 3 events per day
+              }
+
               return (
                 <Box
-                  key={cellData.date.toISOString()}
-                  onClick={cellData.isCurrentMonth ? () => handleDayClick(cellData.date) : undefined}
+                  key={cellData.date?.toISOString() || `empty-${weekIndex}-${dayIndex}`}
+                  onClick={cellData.isCurrentMonth ? () => handleDayClick(cellData.date!) : undefined}
                   sx={{
                     p: 0.5,
                     borderRight: dayIndex < 6 ? 1 : 0,
@@ -98,7 +130,7 @@ function MonthViewInternal({ displayDate }: MonthViewInternalProps) {
                     flexDirection: 'column',
                     alignItems: 'flex-start',
                     justifyContent: 'flex-start',
-                    minHeight: '100px', // Adjust as needed, image implies ~1/6th of available height
+                    minHeight: '100px',
                     cursor: cellData.isCurrentMonth ? 'pointer' : 'default',
                     '&:hover': {
                       bgcolor: cellData.isCurrentMonth && !cellData.isToday ? 'action.hover' : undefined,
@@ -113,7 +145,7 @@ function MonthViewInternal({ displayDate }: MonthViewInternalProps) {
                         cellData.isToday ? {
                           bgcolor: 'primary.main',
                           color: 'common.white',
-                          width: 24, // Smaller circle
+                          width: 24,
                           height: 24,
                           borderRadius: '50%',
                           display: 'flex',
@@ -124,24 +156,76 @@ function MonthViewInternal({ displayDate }: MonthViewInternalProps) {
                         } : {
                           fontSize: '0.8rem',
                           fontWeight: cellData.isCurrentMonth ? 'medium' : 'normal',
-                          p: '3px', // to align with circle size
+                          p: '3px',
                           color: cellData.isCurrentMonth ? 'text.primary' : 'text.secondary',
                         }
                       }
                     >
                       {cellData.day}
                     </Typography>
-                    {/* Placeholder for Lunar Date */}
-                    {cellData.lunar && (
-                      <Typography variant="caption" sx={{ fontSize: '0.7rem', color: cellData.isCurrentMonth ? 'text.secondary' : 'text.disabled', pt: '2px' }}>
-                        {cellData.lunar}
-                      </Typography>
-                    )}
                   </Box>
+
+                  {/* Events for this day */}
                   {cellData.isCurrentMonth && (
-                    <Box sx={{ flexGrow: 1, mt: 0.5, width: '100%', overflowY: 'auto', p: 0.5, fontSize: '0.75rem' }}>
-                      {/* Event rendering area. Example: */}
-                      {/* {cellData.day === 1 && <Chip label="Labour Day" size="small" sx={{backgroundColor: '#e6f4ea', color: '#137333', maxWidth: '100%'}} />} */}
+                    <Box sx={{ flexGrow: 1, mt: 0.5, width: '100%', overflowY: 'hidden', p: 0.5, display: 'flex', flexDirection: 'column', gap: 0.25 }}>
+                      {dayEvents.map((event, eventIndex) => (
+                        <Chip
+                          key={`${event.id}-${eventIndex}`}
+                          label={event.summary}
+                          size="small"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onEventClick(e, event);
+                          }}
+                          sx={{
+                            backgroundColor: getEventColor(event),
+                            color: 'white',
+                            fontSize: '0.65rem',
+                            height: 18,
+                            maxWidth: '100%',
+                            cursor: 'pointer',
+                            '&:hover': {
+                              opacity: 0.9,
+                            },
+                            '& .MuiChip-label': {
+                              px: 0.5,
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              whiteSpace: 'nowrap'
+                            }
+                          }}
+                        />
+                      ))}
+                      {allEvents.filter(event => {
+                        if (!cellData.date) return false;
+                        const dayStart = new Date(cellData.date.getFullYear(), cellData.date.getMonth(), cellData.date.getDate());
+                        const dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000);
+
+                        const eventStart = event.start.dateTime ? new Date(event.start.dateTime) :
+                          event.start.date ? new Date(event.start.date) : null;
+                        const eventEnd = event.end.dateTime ? new Date(event.end.dateTime) :
+                          event.end.date ? new Date(event.end.date) : null;
+
+                        if (!eventStart) return false;
+
+                        return eventStart < dayEnd && (!eventEnd || eventEnd > dayStart);
+                      }).length > 3 && (
+                          <Typography variant="caption" sx={{ fontSize: '0.65rem', color: 'text.secondary', textAlign: 'center' }}>
+                            +{allEvents.filter(event => {
+                              const dayStart = new Date(cellData.date!.getFullYear(), cellData.date!.getMonth(), cellData.date!.getDate());
+                              const dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000);
+
+                              const eventStart = event.start.dateTime ? new Date(event.start.dateTime) :
+                                event.start.date ? new Date(event.start.date) : null;
+                              const eventEnd = event.end.dateTime ? new Date(event.end.dateTime) :
+                                event.end.date ? new Date(event.end.date) : null;
+
+                              if (!eventStart) return false;
+
+                              return eventStart < dayEnd && (!eventEnd || eventEnd > dayStart);
+                            }).length - 3} more
+                          </Typography>
+                        )}
                     </Box>
                   )}
                 </Box>
@@ -160,8 +244,63 @@ export default function Calendar() {
   const calendarViewMode = useTopicStore((state) => state.calendarViewMode);
   const { setCalendarViewMode, setSelectedCalendarDate } = useTopicStore();
 
+  // Google Calendar integration
+  const { fetchEventsForSelectedCalendars, calendars } = useGoogleCalendarStore();
+  const { googleCalendarConnected } = useUserTokenStore();
+
   const [activeDateForView, setActiveDateForView] = useState<Date>(() => selectedDate || new Date());
   const [headerDisplayDate, setHeaderDisplayDate] = useState<Date>(() => activeDateForView);
+
+  // Popover state
+  const [popoverAnchorEl, setPopoverAnchorEl] = useState<HTMLElement | null>(null);
+  const [selectedEvent, setSelectedEvent] = useState<ICalendarEvent | null>(null);
+
+  const handleEventClick = (event: React.MouseEvent<HTMLElement>, calendarEvent: ICalendarEvent) => {
+    event.stopPropagation();
+    setPopoverAnchorEl(event.currentTarget);
+    setSelectedEvent(calendarEvent);
+  };
+
+  const handlePopoverClose = () => {
+    setPopoverAnchorEl(null);
+    setSelectedEvent(null);
+  };
+
+  // Fetch events when view mode or date changes
+  useEffect(() => {
+    if (!googleCalendarConnected || calendars.length === 0) return;
+
+    const fetchEventsForCurrentView = () => {
+      let timeMin: string, timeMax: string;
+      const baseDate = new Date(activeDateForView);
+
+      switch (calendarViewMode) {
+        case 'day':
+          timeMin = new Date(baseDate.getFullYear(), baseDate.getMonth(), baseDate.getDate()).toISOString();
+          timeMax = new Date(baseDate.getFullYear(), baseDate.getMonth(), baseDate.getDate() + 1).toISOString();
+          break;
+        case 'week':
+          const weekStart = new Date(baseDate);
+          weekStart.setDate(baseDate.getDate() - baseDate.getDay() + (baseDate.getDay() === 0 ? -6 : 1));
+          const weekEnd = new Date(weekStart);
+          weekEnd.setDate(weekStart.getDate() + 7);
+          timeMin = weekStart.toISOString();
+          timeMax = weekEnd.toISOString();
+          break;
+        case 'month':
+        default:
+          const monthStart = new Date(baseDate.getFullYear(), baseDate.getMonth(), 1);
+          const monthEnd = new Date(baseDate.getFullYear(), baseDate.getMonth() + 1, 0);
+          timeMin = monthStart.toISOString();
+          timeMax = new Date(monthEnd.getFullYear(), monthEnd.getMonth(), monthEnd.getDate() + 1).toISOString();
+          break;
+      }
+
+      fetchEventsForSelectedCalendars(timeMin, timeMax);
+    };
+
+    fetchEventsForCurrentView();
+  }, [calendarViewMode, activeDateForView, googleCalendarConnected, calendars, fetchEventsForSelectedCalendars]);
 
   useEffect(() => {
     setActiveDateForView(currentActiveDate => {
@@ -279,7 +418,7 @@ export default function Calendar() {
           {new Intl.DateTimeFormat(intl.locale, { month: 'long', year: 'numeric' }).format(headerDisplayDate)}
         </Typography>
       );
-      viewContent = <MonthViewInternal displayDate={headerDisplayDate} />;
+      viewContent = <MonthViewInternal displayDate={headerDisplayDate} onEventClick={handleEventClick} />;
       break;
   }
 
@@ -350,6 +489,16 @@ export default function Calendar() {
       <Box sx={{ flexGrow: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', p: 0, m: 0 }}>
         {viewContent}
       </Box>
+
+      {/* Event Popover for Month View */}
+      {calendarViewMode === 'month' && (
+        <CalendarEventPopover
+          event={selectedEvent}
+          anchorEl={popoverAnchorEl}
+          open={Boolean(popoverAnchorEl)}
+          onClose={handlePopoverClose}
+        />
+      )}
     </Box>
   );
 }

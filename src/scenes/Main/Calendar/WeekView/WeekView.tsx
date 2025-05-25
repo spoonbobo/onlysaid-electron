@@ -3,6 +3,9 @@ import { FormattedMessage, useIntl } from "react-intl";
 // import ChevronLeftIcon from "@mui/icons-material/ChevronLeft"; // Removed
 // import ChevronRightIcon from "@mui/icons-material/ChevronRight"; // Removed
 import { useState, useEffect, useRef } from "react";
+import { useGoogleCalendarStore } from "../../../../stores/Google/GoogleCalendarStore";
+import type { ICalendarEvent } from "@/../../types/Calendar/Calendar";
+import CalendarEventPopover from "../../../../components/Popover/CalendarEventPopover";
 
 const HOUR_HEIGHT = 60;
 const TOTAL_HOURS = 24;
@@ -23,6 +26,23 @@ const getWeekStartDate = (date: Date): Date => {
   return d;
 };
 
+// Helper function to get event position for week view
+const getEventPositionWeek = (event: ICalendarEvent, dayStart: Date) => {
+  const eventStart = event.start.dateTime ? new Date(event.start.dateTime) : dayStart;
+  const eventEnd = event.end.dateTime ? new Date(event.end.dateTime) : new Date(dayStart.getTime() + 24 * 60 * 60 * 1000);
+
+  const startMinutes = eventStart.getHours() * 60 + eventStart.getMinutes();
+  const endMinutes = eventEnd.getHours() * 60 + eventEnd.getMinutes();
+  const durationMinutes = endMinutes - startMinutes;
+
+  return {
+    top: (startMinutes / 60) * HOUR_HEIGHT,
+    height: Math.max((durationMinutes / 60) * HOUR_HEIGHT, 20),
+    startTime: eventStart,
+    endTime: eventEnd,
+  };
+};
+
 export default function WeekView({ currentDate, onDateChange }: WeekViewProps) {
   const intl = useIntl();
   const [currentWeekStartDate, setCurrentWeekStartDate] = useState<Date>(getWeekStartDate(currentDate));
@@ -30,6 +50,10 @@ export default function WeekView({ currentDate, onDateChange }: WeekViewProps) {
   const timelineScrollContainerRef = useRef<HTMLDivElement>(null);
   const dayHeadersRef = useRef<HTMLDivElement>(null); // Ref for day headers container
   const eventGridAreaRef = useRef<HTMLDivElement>(null); // Ref for event grid area
+
+  // Get events for this week
+  const { getVisibleEvents, calendars } = useGoogleCalendarStore();
+  const allEvents = getVisibleEvents();
 
   useEffect(() => {
     setCurrentWeekStartDate(getWeekStartDate(currentDate));
@@ -98,6 +122,43 @@ export default function WeekView({ currentDate, onDateChange }: WeekViewProps) {
       setScrollbarWidth(currentScrollbarWidth > 0 ? currentScrollbarWidth : 0);
     }
   }, []); // Calculate on mount, might need resize observer for dynamic changes
+
+  // Group events by day
+  const eventsByDay = daysInWeek.map(day => {
+    const dayStart = new Date(day.getFullYear(), day.getMonth(), day.getDate());
+    const dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000);
+
+    return allEvents.filter(event => {
+      const eventStart = event.start.dateTime ? new Date(event.start.dateTime) :
+        event.start.date ? new Date(event.start.date) : null;
+      const eventEnd = event.end.dateTime ? new Date(event.end.dateTime) :
+        event.end.date ? new Date(event.end.date) : null;
+
+      if (!eventStart) return false;
+
+      return eventStart < dayEnd && (!eventEnd || eventEnd > dayStart);
+    });
+  });
+
+  const getEventColor = (event: ICalendarEvent) => {
+    const calendar = calendars.find(cal => cal.id === event.calendarId);
+    return calendar?.color || '#1976d2';
+  };
+
+  // Popover state
+  const [popoverAnchorEl, setPopoverAnchorEl] = useState<HTMLElement | null>(null);
+  const [selectedEvent, setSelectedEvent] = useState<ICalendarEvent | null>(null);
+
+  const handleEventClick = (event: React.MouseEvent<HTMLElement>, calendarEvent: ICalendarEvent) => {
+    event.stopPropagation();
+    setPopoverAnchorEl(event.currentTarget);
+    setSelectedEvent(calendarEvent);
+  };
+
+  const handlePopoverClose = () => {
+    setPopoverAnchorEl(null);
+    setSelectedEvent(null);
+  };
 
   return (
     <Box sx={{ height: "100%", display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
@@ -220,59 +281,119 @@ export default function WeekView({ currentDate, onDateChange }: WeekViewProps) {
                       borderColor: 'divider',
                       boxSizing: 'border-box',
                     }}
-                  >
-                    {/* Placeholder event from image */}
-                    {dayIndex === 0 && hourIndex === 10 && ( // Assuming event starts at 10 AM on the first day shown
-                      <Paper elevation={1} sx={{
-                        position: 'absolute',
-                        top: HOUR_HEIGHT * 10 + 2, // Starts at 10 AM, +2 for slight offset
-                        left: '2px',
-                        width: `calc(100% - 4px)`,
-                        height: HOUR_HEIGHT * 9 - 4, // Spans 9 hours (10 AM to 7 PM), -4 for padding
-                        bgcolor: 'primary.light', // Changed to primary.light for better contrast if primary.dark is very dark
-                        opacity: 0.9, // Adjusted opacity
-                        borderRadius: 1,
-                        p: 0.5,
-                        fontSize: '0.65rem',
-                        overflow: 'hidden',
-                        zIndex: 1, // Below current time indicator but above grid lines
-                        boxSizing: 'border-box',
-                        color: 'primary.contrastText' // Ensuring text in event is readable
-                      }}>
-                        <Typography variant="caption" fontWeight="bold" component="div" noWrap sx={{ fontSize: 'inherit' }}>
-                          <FormattedMessage id="calendar.event.untitled" defaultMessage="(無標題)" />
-                        </Typography>
-                        <Typography variant="caption" component="div" noWrap sx={{ fontSize: 'inherit' }}>
-                          <FormattedMessage id="calendar.event.timeRange" defaultMessage="上午10點 - 下午7點" />
+                  />
+                ))}
+
+                {/* Render Events for this day */}
+                {eventsByDay[dayIndex]?.map((event) => {
+                  const dayStart = new Date(day.getFullYear(), day.getMonth(), day.getDate());
+
+                  if (event.allDay) {
+                    return (
+                      <Paper
+                        key={event.id}
+                        elevation={1}
+                        onClick={(e) => handleEventClick(e, event)}
+                        sx={{
+                          position: 'absolute',
+                          top: 2,
+                          left: '2px',
+                          width: `calc(100% - 4px)`,
+                          height: 20,
+                          bgcolor: getEventColor(event),
+                          color: 'white',
+                          borderRadius: 1,
+                          p: 0.25,
+                          fontSize: '0.65rem',
+                          overflow: 'hidden',
+                          zIndex: 1,
+                          display: 'flex',
+                          alignItems: 'center',
+                          cursor: 'pointer',
+                          '&:hover': {
+                            opacity: 0.9,
+                          }
+                        }}
+                      >
+                        <Typography variant="caption" noWrap sx={{ fontWeight: 500, fontSize: 'inherit' }}>
+                          {event.summary}
                         </Typography>
                       </Paper>
-                    )}
-                  </Box>
-                ))}
+                    );
+                  }
+
+                  const { top, height, startTime, endTime } = getEventPositionWeek(event, dayStart);
+
+                  return (
+                    <Paper
+                      key={event.id}
+                      elevation={1}
+                      onClick={(e) => handleEventClick(e, event)}
+                      sx={{
+                        position: 'absolute',
+                        top: top + 24,
+                        left: '2px',
+                        width: `calc(100% - 4px)`,
+                        height: height,
+                        bgcolor: getEventColor(event),
+                        color: 'white',
+                        opacity: 0.9,
+                        borderRadius: 1,
+                        p: 0.25,
+                        fontSize: '0.65rem',
+                        overflow: 'hidden',
+                        zIndex: 1,
+                        cursor: 'pointer',
+                        '&:hover': {
+                          opacity: 1,
+                        }
+                      }}
+                    >
+                      <Typography variant="caption" fontWeight="bold" component="div" noWrap sx={{ fontSize: 'inherit' }}>
+                        {event.summary}
+                      </Typography>
+                      {height > 30 && (
+                        <Typography variant="caption" component="div" sx={{ fontSize: 'inherit', opacity: 0.9 }}>
+                          {startTime.toLocaleTimeString(intl.locale, {
+                            hour: 'numeric',
+                            minute: '2-digit',
+                            hour12: false
+                          })}
+                        </Typography>
+                      )}
+                    </Paper>
+                  );
+                })}
               </Box>
             ))}
-            {/* Current Time Line - Spans across all day columns */}
+
+            {/* Current Time Line */}
             {isViewingCurrentWeek() && currentTimeLineTop > 0 && currentTimeLineTop < TOTAL_HOURS * HOUR_HEIGHT && (
               <Box
                 sx={{
-                  position: 'absolute', // Positioned relative to the horizontally scrolling day columns container
-                  top: currentTimeLineTop,
-                  left: 0, // Starts from the beginning of the first day column
-                  width: '100%', // Spans the entire width of the visible day columns
+                  position: 'absolute',
+                  top: currentTimeLineTop + 24, // Offset for all-day events
+                  left: 0,
+                  width: '100%',
                   height: '2px',
                   bgcolor: 'error.main',
-                  zIndex: 3, // Highest zIndex to be on top
+                  zIndex: 3,
                 }}
               >
-                {/* The dot needs to be positioned relative to the main scroll container's left edge for consistency */}
-                {/* This is tricky because the line itself is on a scrolling container. */}
-                {/* A simpler approach for the dot is to attach it to the start of the line, assuming LTR layout */}
                 <Box sx={{ position: 'absolute', top: -3, left: -4, width: 8, height: 8, borderRadius: '50%', bgcolor: 'error.main' }} />
               </Box>
             )}
           </Box>
         </Box>
       </Box>
+
+      {/* Event Popover */}
+      <CalendarEventPopover
+        event={selectedEvent}
+        anchorEl={popoverAnchorEl}
+        open={Boolean(popoverAnchorEl)}
+        onClose={handlePopoverClose}
+      />
     </Box>
   );
 }
