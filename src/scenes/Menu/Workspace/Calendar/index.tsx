@@ -1,9 +1,12 @@
-import { Box, Typography, IconButton } from "@mui/material";
-import { useState } from "react";
+import { Box, Typography, IconButton, Checkbox, FormControlLabel, Divider, CircularProgress } from "@mui/material";
+import { useState, useEffect } from "react";
 import { useIntl } from "react-intl";
 import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
 import ChevronRightIcon from "@mui/icons-material/ChevronRight";
-import { useTopicStore, useSelectedCalendarDate } from "../../../../stores/Topic/TopicStore"; // Import store and selector
+import GoogleIcon from "@mui/icons-material/Google";
+import { useTopicStore, useSelectedCalendarDate } from "../../../../stores/Topic/TopicStore";
+import { useGoogleCalendarStore } from "../../../../stores/Google/GoogleCalendarStore";
+import { useUserTokenStore } from "../../../../stores/User/UserToken";
 
 // Define a type for the day objects to include full date for potential future use
 interface CalendarDay {
@@ -16,7 +19,18 @@ export default function MenuCalendar() {
   const intl = useIntl();
   const [currentDisplayDate, setCurrentDisplayDate] = useState(new Date());
   const { setSelectedCalendarDate } = useTopicStore();
-  const selectedDate = useSelectedCalendarDate(); // Get the currently selected Date object or null
+  const selectedDate = useSelectedCalendarDate();
+
+  // Google Calendar state
+  const { calendars, loading, fetchCalendars, toggleCalendar } = useGoogleCalendarStore();
+  const { googleCalendarConnected, googleCalendarToken } = useUserTokenStore();
+
+  // Fetch calendars when connected
+  useEffect(() => {
+    if (googleCalendarConnected && googleCalendarToken && calendars.length === 0) {
+      fetchCalendars();
+    }
+  }, [googleCalendarConnected, googleCalendarToken, calendars.length, fetchCalendars]);
 
   const handleDayClick = (date: Date | null) => {
     if (date) {
@@ -27,7 +41,7 @@ export default function MenuCalendar() {
   const handlePrevMonth = () => {
     setCurrentDisplayDate(prevDate => {
       const newDate = new Date(prevDate);
-      newDate.setDate(1); // Avoid issues with day numbers when changing months
+      newDate.setDate(1);
       newDate.setMonth(newDate.getMonth() - 1);
       return newDate;
     });
@@ -36,16 +50,20 @@ export default function MenuCalendar() {
   const handleNextMonth = () => {
     setCurrentDisplayDate(prevDate => {
       const newDate = new Date(prevDate);
-      newDate.setDate(1); // Avoid issues with day numbers when changing months
+      newDate.setDate(1);
       newDate.setMonth(newDate.getMonth() + 1);
       return newDate;
     });
   };
 
+  const handleCalendarToggle = (calendarId: string) => {
+    toggleCalendar(calendarId);
+  };
+
   const currentMonth = currentDisplayDate.getMonth();
   const currentYear = currentDisplayDate.getFullYear();
 
-  // Days of the week starting with Monday, as per the image
+  // Days of the week starting with Monday
   const daysOfWeekMenu = [
     intl.formatMessage({ id: "calendar.menu.day.mon", defaultMessage: "一" }),
     intl.formatMessage({ id: "calendar.menu.day.tue", defaultMessage: "二" }),
@@ -57,9 +75,8 @@ export default function MenuCalendar() {
   ];
 
   const firstDayOfMonth = new Date(currentYear, currentMonth, 1);
-  // Adjust startingDay for Monday-first week (0=Sun, 1=Mon, ..., 6=Sat)
-  let startingDayOfWeek = firstDayOfMonth.getDay(); // 0 for Sunday, 1 for Monday...
-  let blankCellsBefore = (startingDayOfWeek === 0) ? 6 : startingDayOfWeek - 1; // Monday is 0 blanks
+  let startingDayOfWeek = firstDayOfMonth.getDay();
+  let blankCellsBefore = (startingDayOfWeek === 0) ? 6 : startingDayOfWeek - 1;
 
   const lastDayOfMonth = new Date(currentYear, currentMonth + 1, 0);
   const daysInMonth = lastDayOfMonth.getDate();
@@ -78,8 +95,7 @@ export default function MenuCalendar() {
     calendarDays.push({ dayOfMonth: i, isToday, date });
   }
 
-  // Fill remaining cells to make a full grid (optional, but good for consistent layout)
-  const totalCells = 42; // Max 6 weeks * 7 days
+  const totalCells = 42;
   while (calendarDays.length < totalCells && calendarDays.length % 7 !== 0) {
     calendarDays.push({ dayOfMonth: null, isToday: false, date: null });
   }
@@ -88,24 +104,19 @@ export default function MenuCalendar() {
   for (let i = 0; i < calendarDays.length; i += 7) {
     weeks.push(calendarDays.slice(i, i + 7));
   }
-  // Trim empty weeks from the end if they are all null, but ensure at least 5 weeks for stability.
   while (weeks.length > 5 && weeks[weeks.length - 1].every(day => day.dayOfMonth === null)) {
     weeks.pop();
   }
 
-
   const monthYearFormatOptions: Intl.DateTimeFormatOptions = { month: 'numeric', year: 'numeric' };
-  // For "YYYY年M月" format, we might need specific handling if intl.locale doesn't directly support it.
-  // Using a template for now, assuming intl.locale is 'ja' or 'zh' which might produce something close.
-  // A more robust solution might involve custom formatting based on locale.
   let formattedMonthYear = new Intl.DateTimeFormat(intl.locale, monthYearFormatOptions).format(currentDisplayDate);
   if (intl.locale.startsWith('ja') || intl.locale.startsWith('zh')) {
     formattedMonthYear = `${currentYear}${intl.formatMessage({ id: "calendar.yearLabel", defaultMessage: "年" })}${currentMonth + 1}${intl.formatMessage({ id: "calendar.monthLabel", defaultMessage: "月" })}`;
   }
 
-
   return (
-    <Box sx={{ p: 1, width: '100%', maxWidth: 280, margin: 'auto' }}> {/* Compact size */}
+    <Box sx={{ p: 1, width: '100%', maxWidth: 280, margin: 'auto' }}>
+      {/* Calendar Header */}
       <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 1 }}>
         <Typography variant="body2" fontWeight="medium">
           {formattedMonthYear}
@@ -120,6 +131,7 @@ export default function MenuCalendar() {
         </Box>
       </Box>
 
+      {/* Days of Week */}
       <Box sx={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", textAlign: "center" }}>
         {daysOfWeekMenu.map(day => (
           <Typography key={day} variant="caption" sx={{ p: 0.5, color: 'text.secondary' }}>
@@ -128,6 +140,7 @@ export default function MenuCalendar() {
         ))}
       </Box>
 
+      {/* Calendar Grid */}
       {weeks.map((week, weekIndex) => (
         <Box key={`week-${weekIndex}`} sx={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", textAlign: "center" }}>
           {week.map((dayObj, dayIndex) => {
@@ -175,6 +188,81 @@ export default function MenuCalendar() {
           })}
         </Box>
       ))}
+
+      {/* Calendars Section */}
+      {googleCalendarConnected && (
+        <>
+          <Divider sx={{ my: 2 }} />
+          <Box>
+            <Typography variant="body2" fontWeight="medium" sx={{ mb: 1 }}>
+              {intl.formatMessage({ id: "calendar.calendars", defaultMessage: "日曆" })}
+            </Typography>
+
+            {/* Google Calendar Subsection */}
+            <Box sx={{ mb: 1 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 1 }}>
+                <GoogleIcon sx={{ fontSize: '1rem', color: 'text.secondary' }} />
+                <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 500 }}>
+                  Google
+                </Typography>
+              </Box>
+
+              {loading ? (
+                <Box sx={{ display: 'flex', justifyContent: 'center', p: 1, pl: 3 }}>
+                  <CircularProgress size={16} />
+                </Box>
+              ) : (
+                <Box sx={{ maxHeight: 200, overflow: 'auto', pl: 1 }}>
+                  {calendars.map((calendar) => (
+                    <FormControlLabel
+                      key={calendar.id}
+                      control={
+                        <Checkbox
+                          checked={calendar.selected}
+                          onChange={() => handleCalendarToggle(calendar.id)}
+                          size="small"
+                          sx={{
+                            color: calendar.color || 'primary.main',
+                            '&.Mui-checked': {
+                              color: calendar.color || 'primary.main',
+                            },
+                          }}
+                        />
+                      }
+                      label={
+                        <Typography variant="body2" sx={{ fontSize: '0.875rem' }}>
+                          {calendar.name}
+                          {calendar.primary && (
+                            <Typography component="span" variant="caption" sx={{ ml: 0.5, color: 'text.secondary' }}>
+                              ({intl.formatMessage({ id: "calendar.primary", defaultMessage: "主要" })})
+                            </Typography>
+                          )}
+                        </Typography>
+                      }
+                      sx={{
+                        width: '100%',
+                        m: 0,
+                        '& .MuiFormControlLabel-label': {
+                          width: '100%',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap'
+                        }
+                      }}
+                    />
+                  ))}
+
+                  {calendars.length === 0 && !loading && (
+                    <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', p: 1 }}>
+                      {intl.formatMessage({ id: "calendar.noCalendars", defaultMessage: "沒有可用的日曆" })}
+                    </Typography>
+                  )}
+                </Box>
+              )}
+            </Box>
+          </Box>
+        </>
+      )}
     </Box>
   );
 }

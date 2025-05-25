@@ -375,5 +375,9 @@
   "googleCalendar.connecting": "連接中...",
   "googleCalendar.connected": "Google 日曆已連接",
   "googleCalendar.disconnect": "斷開連接",
-  "googleCalendar.error": "錯誤：{error}"
+  "googleCalendar.error": "錯誤：{error}",
+  "calendar.calendars": "日曆",
+  "calendar.primary": "主要",
+  "calendar.noCalendars": "沒有可用的日曆",
+  "calendar.provider.google": "Google"
 }

@@ -11,6 +11,7 @@ interface IGoogleCalendarStore {
   // Actions
   fetchCalendars: () => Promise<void>;
   fetchEvents: (calendarId?: string, timeMin?: string, timeMax?: string) => Promise<void>;
+  toggleCalendar: (calendarId: string) => void;
   clearError: () => void;
 }
 
@@ -136,6 +137,16 @@ export const useGoogleCalendarStore = create<IGoogleCalendarStore>((set, get) =>
         loading: false
       });
     }
+  },
+
+  toggleCalendar: (calendarId: string) => {
+    const { calendars } = get();
+    const updatedCalendars = calendars.map(calendar =>
+      calendar.id === calendarId
+        ? { ...calendar, selected: !calendar.selected }
+        : calendar
+    );
+    set({ calendars: updatedCalendars });
   },
 
   clearError: () => set({ error: null }),
