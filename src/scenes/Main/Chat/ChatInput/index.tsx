@@ -35,8 +35,36 @@ function ChatInput({
   const { attachments, setAttachment, clearAttachments } = useCurrentTopicContext();
   const { modelName, provider, modelId } = useSelectedModelStore();
 
+  // Add state to track processing operationIds
+  const [processingOperationIds, setProcessingOperationIds] = useState<Record<string, string>>({});
+
   // Use socket store for file progress with logging
   const { fileProgress } = useSocketStore();
+
+  // Enhanced progress tracking with smooth transitions
+  useEffect(() => {
+    Object.entries(fileProgress).forEach(([operationId, progress]) => {
+      // If this is a staged operation (has stage property)
+      if (progress.stage) {
+        // Find which attachment might be associated with this
+        Object.entries(attachments).forEach(([type, attachment]) => {
+          if (attachment.operationId && !processingOperationIds[attachment.operationId]) {
+            // Link the upload operationId to the processing operationId
+            setProcessingOperationIds(prev => ({
+              ...prev,
+              [attachment.operationId]: operationId
+            }));
+
+            // Only switch if the processing has meaningful progress or upload is truly complete
+            if (progress.progress > 0 || progress.stage === 'complete') {
+              setAttachment(type, attachment.file, operationId, attachment.uploadedFile);
+              console.log(`🔄 Switching progress tracking from ${attachment.operationId} to ${operationId}`);
+            }
+          }
+        });
+      }
+    });
+  }, [fileProgress, attachments, setAttachment]);
 
   const handleAttachment = async (type: string, value: string | File) => {
     if (value instanceof File) {
@@ -82,34 +110,46 @@ function ChatInput({
           setAttachment(type, file, response.operationId);
           console.log('🔄 Starting upload with operationId:', response.operationId);
 
-          // Monitor upload completion
+          // Enhanced status monitoring
           const checkStatus = async () => {
             try {
               const status = await window.electron.fileSystem.getStatus(response.operationId);
 
               if (status?.status === 'completed' && status.result?.data) {
-                setTimeout(() => {
-                  const uploadedFile: IFile = {
-                    id: status.result.data.id,
-                    workspace_id: workspace.id,
-                    name: file.name,
-                    size: file.size,
-                    mime_type: file.type,
-                    path: status.result.data.path || metadata.targetPath,
-                    created_at: status.result.data.created_at || new Date().toISOString(),
-                    metadata,
-                    logicalPath: metadata.targetPath
-                  };
+                // Don't immediately switch - wait for backend processing to start with meaningful progress
+                const waitForProcessing = () => {
+                  const processingOpId = processingOperationIds[response.operationId];
+                  const processingProgress = processingOpId ? fileProgress[processingOpId] : null;
 
-                  // Update attachment with uploaded file data and clear operation ID
-                  setAttachment(type, file, undefined, uploadedFile);
-                  toast.success(`Upload completed: ${file.name}`);
-                }, 500);
+                  // Only complete when processing is truly done OR no processing stage exists
+                  if (!processingOpId || (processingProgress && processingProgress.progress === 100 && processingProgress.stage === 'complete')) {
+                    const uploadedFile: IFile = {
+                      id: status.result.data.id,
+                      workspace_id: workspace.id,
+                      name: file.name,
+                      size: file.size,
+                      mime_type: file.type,
+                      path: status.result.data.path || metadata.targetPath,
+                      created_at: status.result.data.created_at || new Date().toISOString(),
+                      metadata,
+                      logicalPath: metadata.targetPath
+                    };
 
-                return; // Stop the loop
+                    setAttachment(type, file, undefined, uploadedFile);
+                    toast.success(`Upload completed: ${file.name}`);
+                  } else if (processingOpId && processingProgress && processingProgress.progress < 100) {
+                    // Keep waiting for backend processing
+                    setTimeout(waitForProcessing, 500);
+                  } else {
+                    // No processing stage or initial wait
+                    setTimeout(waitForProcessing, 1000);
+                  }
+                };
+
+                waitForProcessing();
+                return;
               } else if (status?.status === 'failed') {
                 const errorMsg = status.error || 'Unknown error';
-
                 let userFriendlyError = errorMsg;
                 if (errorMsg.includes('413') || errorMsg.includes('Payload Too Large')) {
                   userFriendlyError = `File "${file.name}" is too large. Please try a smaller file.`;
