@@ -20,6 +20,8 @@ type FileSystemChannels =
   | 'file:status'
   | 'file:cancel'
   | 'file:progress-update'
+  | 'file:completed'
+  | 'file:error'
   | 'file:get-metadata'
   | 'file:get-multiple-metadata';
 
@@ -77,7 +79,10 @@ type SocketChannels =
   | 'socket:send-ping'
   | 'socket:pong'
   | 'socket:connection-details'
-  | 'socket:join-workspace';
+  | 'socket:join-workspace'
+  | 'socket:file-progress'
+  | 'socket:file-completed'
+  | 'socket:file-error';
 
 // Add these channels to the type definitions
 type GoogleServiceChannels = 'google-services:ready' | 'google-services:error';

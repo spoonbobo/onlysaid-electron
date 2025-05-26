@@ -155,7 +155,7 @@ function FileDrop({ children, onDrop, sx = {} }: FileDropProps) {
       const file = e.dataTransfer.files[0];
       const type = getFileType(file);
 
-      // Don't show upload toast here since ChatInput will handle it
+      console.log('📁 FileDrop - File dropped:', file.name, 'delegating to ChatInput for progress handling');
       onDrop(type, file, undefined);
     }
   };

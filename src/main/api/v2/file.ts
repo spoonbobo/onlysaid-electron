@@ -9,7 +9,7 @@ import os from 'os';
 
 // Queue for managing file operations
 class FileOperationQueue {
-  private queue: Array<{
+  protected queue: Array<{
     id: string;
     operation: () => Promise<any>;
     status: 'pending' | 'processing' | 'completed' | 'failed';
@@ -18,8 +18,8 @@ class FileOperationQueue {
     result?: any;
   }> = [];
   private processing = false;
-  private webSocketClient: any;
-  private progressListeners: Map<string, (progress: number) => void> = new Map();
+  protected webSocketClient: any;
+  protected progressListeners: Map<string, (progress: number) => void> = new Map();
 
   setWebSocketClient(client: any) {
     this.webSocketClient = client;
@@ -109,6 +109,7 @@ class FileOperationQueue {
 
 const fileQueue = new FileOperationQueue();
 
+// Initialize socket connection when setting up file handlers
 export function setupFileHandlers(): void {
   // Upload file to workspace
   ipcMain.handle('file:upload', async (event, args: {
@@ -307,7 +308,7 @@ export function setupFileHandlers(): void {
   });
 }
 
-// Extract the upload logic to a separate function
+// Enhanced upload function with multi-stage progress tracking
 async function uploadFileToWorkspace(event: any, args: any) {
   const { workspaceId, filePath, token, metadata = {} } = args;
 
@@ -316,6 +317,8 @@ async function uploadFileToWorkspace(event: any, args: any) {
       const stats = await fs.stat(filePath);
       const filename = path.basename(filePath);
       const actualFileSize = stats.size;
+
+      console.log(`📊 Starting upload for ${filename}, size: ${actualFileSize} bytes`);
 
       // Create form data
       const FormData = require('form-data');
@@ -326,17 +329,6 @@ async function uploadFileToWorkspace(event: any, args: any) {
       form.append('file', fileStream, { filename });
       form.append('metadata', JSON.stringify(metadata));
 
-      // Get the actual form data size for more accurate progress
-      const formDataLength = await new Promise<number>((resolve) => {
-        form.getLength((err: any, length: number) => {
-          if (err) resolve(actualFileSize * 1.1); // Fallback with 10% overhead
-          else resolve(length);
-        });
-      });
-
-      let lastProgressTime = Date.now();
-      let lastProgress = 0;
-
       const response = await onlysaidServiceInstance.post(
         `workspace/${workspaceId}/file`,
         form,
@@ -345,45 +337,57 @@ async function uploadFileToWorkspace(event: any, args: any) {
             Authorization: `Bearer ${token}`,
             'Content-Type': 'multipart/form-data'
           },
+          timeout: 5 * 60 * 1000,
           onUploadProgress: (progressEvent) => {
-            const now = Date.now();
+            const progress = Math.round((progressEvent.loaded * 100) / actualFileSize);
+            console.log(`📡 Real network progress: ${progress}%`);
 
-            // Use the actual form data size for more accurate progress
-            const totalSize = progressEvent.total || formDataLength;
-            const loaded = progressEvent.loaded;
-
-            // Calculate progress but cap it at 95% until server confirms completion
-            const rawProgress = Math.round((loaded * 100) / totalSize);
-            const cappedProgress = Math.min(rawProgress, 95);
-
-            // Throttle progress updates to avoid overwhelming the UI
-            if (now - lastProgressTime > 100 || cappedProgress > lastProgress + 5) {
-              fileQueue.updateProgress(opId, cappedProgress);
-              lastProgressTime = now;
-              lastProgress = cappedProgress;
-            }
+            // ✅ Only send to IPC - no fake socket progress
+            event.sender.send('file:progress-update', {
+              operationId: opId,
+              progress,
+              timestamp: Date.now()
+            });
           }
         }
       );
 
-      // Only set to 100% when we actually get the response
-      fileQueue.updateProgress(opId, 100);
+      console.log(`✅ Upload completed for ${filename}`);
       return response.data;
     } finally {
       // Clean up temp file
       try {
         await fs.unlink(filePath);
+        console.log(`🗑️ Cleaned up temp file: ${filePath}`);
       } catch (error) {
         console.error('Error cleaning up temp file:', error);
       }
     }
   });
 
-  // Set up progress listener
-  const progressListener = (progress: number) => {
-    event.sender.send('file:progress-update', { operationId: opId, progress });
-  };
-  fileQueue.onProgress(opId, progressListener);
-
   return { operationId: opId };
+}
+
+// Enhanced file queue with stage tracking
+class EnhancedFileOperationQueue extends FileOperationQueue {
+  updateProgressWithStage(id: string, progress: number, stage?: string, details?: any) {
+    const operation = this.queue.find(op => op.id === id);
+    if (operation) {
+      operation.progress = progress;
+      (operation as any).stage = stage;
+      (operation as any).details = details;
+
+      const listener = this.progressListeners.get(id);
+      if (listener) listener(progress);
+
+      if (this.webSocketClient) {
+        this.webSocketClient.emit('file:progress', {
+          id,
+          progress,
+          stage,
+          details
+        });
+      }
+    }
+  }
 }

@@ -23,6 +23,11 @@ interface SocketState {
   handleMessageDeleted: (data: { roomId: string, messageId: string }) => void;
   handlePong: (timestamp: number) => void;
   handleConnectionDetails: (details: { socketId: string }) => void;
+  fileProgress: Record<string, { progress: number, stage?: 'network' | 'server' | 'complete' }>;
+  handleFileProgress: (data: { operationId: string, progress: number, stage?: 'network' | 'server' | 'complete' }) => void;
+  handleFileCompleted: (data: { operationId: string, result?: any }) => void;
+  handleFileError: (data: { operationId: string, error: string }) => void;
+  setFileProgress: (progress: Record<string, { progress: number, stage?: 'network' | 'server' | 'complete' }>) => void;
 }
 
 let connectedListener: (() => void) | null = null;
@@ -34,6 +39,9 @@ let connectionDetailsListener: (() => void) | null = null;
 let pingIntervalId: NodeJS.Timeout | null = null;
 let pongTimeoutId: NodeJS.Timeout | null = null;
 let reconnectTimeoutId: NodeJS.Timeout | null = null;
+let fileProgressListener: (() => void) | null = null;
+let fileCompletedListener: (() => void) | null = null;
+let fileErrorListener: (() => void) | null = null;
 
 const PING_INTERVAL = 30000;
 const PONG_TIMEOUT_DURATION = PING_INTERVAL + 15000;
@@ -52,6 +60,7 @@ export const useSocketStore = create<SocketState>((set, get) => ({
   isConnecting: false,
   isReconnecting: false,
   reconnectAttempts: 0,
+  fileProgress: {},
 
   initialize: (user: IUser) => {
     if (get().isConnecting) {
@@ -139,6 +148,24 @@ export const useSocketStore = create<SocketState>((set, get) => ({
               get().handleConnectionDetails(args[0] as { socketId: string });
             });
           }
+
+          if (!fileProgressListener) {
+            fileProgressListener = window.electron.ipcRenderer.on('file:progress-update', (_event, ...args) => {
+              get().handleFileProgress(args[0] as { operationId: string, progress: number, stage?: 'network' | 'server' | 'complete' });
+            });
+          }
+
+          if (!fileCompletedListener) {
+            fileCompletedListener = window.electron.ipcRenderer.on('file:completed', (_event, ...args) => {
+              get().handleFileCompleted(args[0] as { operationId: string, result?: any });
+            });
+          }
+
+          if (!fileErrorListener) {
+            fileErrorListener = window.electron.ipcRenderer.on('file:error', (_event, ...args) => {
+              get().handleFileError(args[0] as { operationId: string, error: string });
+            });
+          }
           set({ listenersReady: true });
         }
       })
@@ -200,6 +227,9 @@ export const useSocketStore = create<SocketState>((set, get) => ({
     if (pingIntervalId) { clearInterval(pingIntervalId); pingIntervalId = null; }
     if (pongTimeoutId) { clearTimeout(pongTimeoutId); pongTimeoutId = null; }
     if (reconnectTimeoutId) { clearTimeout(reconnectTimeoutId); reconnectTimeoutId = null; }
+    if (fileProgressListener) { fileProgressListener(); fileProgressListener = null; }
+    if (fileCompletedListener) { fileCompletedListener(); fileCompletedListener = null; }
+    if (fileErrorListener) { fileErrorListener(); fileErrorListener = null; }
 
     set({
       isConnected: false,
@@ -210,6 +240,7 @@ export const useSocketStore = create<SocketState>((set, get) => ({
       isConnecting: false,
       isReconnecting: false,
       reconnectAttempts: 0,
+      fileProgress: {}
     });
   },
 
@@ -266,5 +297,50 @@ export const useSocketStore = create<SocketState>((set, get) => ({
         reconnectTimeoutId = null;
       }
     }
+  },
+
+  handleFileProgress: (data) => {
+    console.log('📊 SocketStore - Progress update:', data);
+    set(state => ({
+      fileProgress: {
+        ...state.fileProgress,
+        [data.operationId]: { progress: data.progress, stage: data.stage }
+      }
+    }));
+  },
+
+  handleFileCompleted: (data) => {
+    // Clean up progress tracking
+    set(state => {
+      const newProgress = { ...state.fileProgress };
+      delete newProgress[data.operationId];
+      return { fileProgress: newProgress };
+    });
+  },
+
+  handleFileError: (data) => {
+    // Clean up progress tracking on error
+    set(state => {
+      const newProgress = { ...state.fileProgress };
+      delete newProgress[data.operationId];
+      return { fileProgress: newProgress };
+    });
+  },
+
+  setFileProgress: (progress) => {
+    // Clear completed operations after 5 seconds
+    Object.keys(progress).forEach(opId => {
+      if (progress[opId].progress === 100) {
+        setTimeout(() => {
+          set(state => {
+            const newProgress = { ...state.fileProgress };
+            delete newProgress[opId];
+            return { fileProgress: newProgress };
+          });
+        }, 5000);
+      }
+    });
+
+    set({ fileProgress: progress });
   }
 }));

@@ -76,4 +76,38 @@ export const setupSocketHandlers = (mainWindow: BrowserWindow): void => {
     }
   });
 
+  // Add file progress event forwarding
+  socketClient.onFileProgress((data) => {
+    console.log(`📡 Received file progress: ${data.operationId} - ${data.progress}%`);
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('file:progress-update', {
+        operationId: data.operationId,
+        progress: data.progress,
+        stage: data.stage,
+        timestamp: Date.now()
+      });
+    }
+  });
+
+  socketClient.onFileCompleted((data) => {
+    console.log(`✅ Received file completed: ${data.operationId}`);
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('file:completed', {
+        operationId: data.operationId,
+        result: data.result,
+        timestamp: Date.now()
+      });
+    }
+  });
+
+  socketClient.onFileError((data) => {
+    console.log(`❌ Received file error: ${data.operationId}`);
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('file:error', {
+        operationId: data.operationId,
+        error: data.error,
+        timestamp: Date.now()
+      });
+    }
+  });
 };

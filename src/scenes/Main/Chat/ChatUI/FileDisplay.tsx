@@ -29,6 +29,7 @@ import { IFile } from '@/../../types/File/File';
 import { IChatMessage } from '@/../../types/Chat/Message';
 import { getUserTokenFromStore, getCurrentWorkspace } from '@/utils/user';
 import { toast } from '@/utils/toast';
+import { useSocketStore } from '@/stores/Socket/SocketStore';
 
 interface FileDisplayProps {
   message: IChatMessage;
@@ -41,33 +42,15 @@ const FileDisplay: React.FC<FileDisplayProps> = ({ message }) => {
   const [previewContent, setPreviewContent] = useState<string | null>(null);
   const [downloadProgress, setDownloadProgress] = useState<Record<string, number>>({});
   const [downloading, setDownloading] = useState<Record<string, boolean>>({});
+  const [downloadOperationIds, setDownloadOperationIds] = useState<Record<string, string>>({});
+
+  // ✅ Use SocketStore and add logging
+  const { fileProgress } = useSocketStore();
 
   // Don't render if no files
   if (!message.files || message.files.length === 0) {
     return null;
   }
-
-  // Listen for download progress events
-  useEffect(() => {
-    const handleProgress = (event: any, ...args: unknown[]) => {
-      const data = args[0] as { operationId: string; progress: number };
-
-      setDownloadProgress(prev => {
-        if (prev[data.operationId] !== undefined) {
-          return {
-            ...prev,
-            [data.operationId]: data.progress
-          };
-        }
-        return prev;
-      });
-    };
-
-    window.electron.ipcRenderer.on('file:progress-update', handleProgress);
-    return () => {
-      window.electron.ipcRenderer.removeListener('file:progress-update', handleProgress);
-    };
-  }, []);
 
   const formatFileSize = (bytes: number): string => {
     if (bytes === 0) return '0 B';
@@ -162,10 +145,9 @@ const FileDisplay: React.FC<FileDisplayProps> = ({ message }) => {
       }
 
       if (result.operationId) {
-        // Set up progress tracking
-        setDownloadProgress(prev => ({
+        setDownloadOperationIds(prev => ({
           ...prev,
-          [result.operationId]: 0
+          [file.id]: result.operationId
         }));
 
         console.log('🔄 Starting download with operationId:', result.operationId);
@@ -178,11 +160,6 @@ const FileDisplay: React.FC<FileDisplayProps> = ({ message }) => {
 
             if (status?.status === 'completed') {
               // Clean up progress and downloading state
-              setDownloadProgress(prev => {
-                const newProgress = { ...prev };
-                delete newProgress[result.operationId];
-                return newProgress;
-              });
               setDownloading(prev => ({ ...prev, [file.id]: false }));
 
               toast.success(`Downloaded to: ${destinationPath}`);
@@ -191,11 +168,6 @@ const FileDisplay: React.FC<FileDisplayProps> = ({ message }) => {
               const errorMsg = status.error || 'Unknown error';
 
               // Clean up progress and downloading state
-              setDownloadProgress(prev => {
-                const newProgress = { ...prev };
-                delete newProgress[result.operationId];
-                return newProgress;
-              });
               setDownloading(prev => ({ ...prev, [file.id]: false }));
 
               toast.error(`Download failed: ${errorMsg}`);
@@ -206,11 +178,6 @@ const FileDisplay: React.FC<FileDisplayProps> = ({ message }) => {
             } else {
               // For any other status, stop polling
               console.warn('Stopping polling for unknown status:', status);
-              setDownloadProgress(prev => {
-                const newProgress = { ...prev };
-                delete newProgress[result.operationId];
-                return newProgress;
-              });
               setDownloading(prev => ({ ...prev, [file.id]: false }));
               return;
             }
@@ -218,11 +185,6 @@ const FileDisplay: React.FC<FileDisplayProps> = ({ message }) => {
             console.error('Error checking download status:', error);
 
             // Clean up on error
-            setDownloadProgress(prev => {
-              const newProgress = { ...prev };
-              delete newProgress[result.operationId];
-              return newProgress;
-            });
             setDownloading(prev => ({ ...prev, [file.id]: false }));
 
             toast.error(`Download monitoring failed: ${error}`);
@@ -308,15 +270,11 @@ const FileDisplay: React.FC<FileDisplayProps> = ({ message }) => {
     return type.toUpperCase().substring(0, 4);
   };
 
-  // Get progress for a file by checking if any download operation is active
+  // Get progress from SocketStore with logging
   const getFileProgress = (file: IFile) => {
-    const progressEntries = Object.entries(downloadProgress);
-    // We can't directly map operationId to fileId, so we check if file is downloading
-    if (downloading[file.id]) {
-      // Find the most recent progress entry (this is a simplification)
-      const latestProgress = progressEntries.length > 0 ?
-        Math.max(...progressEntries.map(([_, progress]) => progress)) : 0;
-      return latestProgress;
+    const operationId = downloadOperationIds[file.id];
+    if (operationId && fileProgress[operationId]) {
+      return fileProgress[operationId].progress;
     }
     return null;
   };

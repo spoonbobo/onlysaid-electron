@@ -19,6 +19,9 @@ export class SocketClient {
   private disconnectCallback: (() => void) | null = null;
   private pongCallback: ((data: { timestamp: number }) => void) | null = null;
   private connectionDetailsCallback: ((details: { socketId: string }) => void) | null = null;
+  private fileProgressCallback: ((data: { operationId: string, progress: number, stage?: string }) => void) | null = null;
+  private fileCompletedCallback: ((data: { operationId: string, result?: any }) => void) | null = null;
+  private fileErrorCallback: ((data: { operationId: string, error: string }) => void) | null = null;
 
   constructor() { }
 
@@ -73,6 +76,7 @@ export class SocketClient {
       this.setupMessageDeletedListener();
       this.setupPongListener();
       this.setupConnectionEstablishedListener();
+      this.setupFileProgressListeners();
     }
   }
 
@@ -145,6 +149,18 @@ export class SocketClient {
     }
   }
 
+  onFileProgress(callback: (data: { operationId: string, progress: number, stage?: string }) => void): void {
+    this.fileProgressCallback = callback;
+  }
+
+  onFileCompleted(callback: (data: { operationId: string, result?: any }) => void): void {
+    this.fileCompletedCallback = callback;
+  }
+
+  onFileError(callback: (data: { operationId: string, error: string }) => void): void {
+    this.fileErrorCallback = callback;
+  }
+
   // Private helper methods
   private setupMessageListener(): void {
     if (!this.socketInstance) return;
@@ -186,6 +202,28 @@ export class SocketClient {
       this.currentSocketId = data.socketId;
       if (this.connectionDetailsCallback) {
         this.connectionDetailsCallback(data);
+      }
+    });
+  }
+
+  private setupFileProgressListeners(): void {
+    if (!this.socketInstance) return;
+
+    this.socketInstance.on('file:progress', (data: { operationId: string, progress: number, stage?: string }) => {
+      if (this.fileProgressCallback) {
+        this.fileProgressCallback(data);
+      }
+    });
+
+    this.socketInstance.on('file:completed', (data: { operationId: string, result?: any }) => {
+      if (this.fileCompletedCallback) {
+        this.fileCompletedCallback(data);
+      }
+    });
+
+    this.socketInstance.on('file:error', (data: { operationId: string, error: string }) => {
+      if (this.fileErrorCallback) {
+        this.fileErrorCallback(data);
       }
     });
   }
