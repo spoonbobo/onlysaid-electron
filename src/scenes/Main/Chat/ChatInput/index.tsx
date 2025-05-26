@@ -42,11 +42,15 @@ function ChatInput({
       console.log('📊 Upload progress:', data);
 
       setUploadProgress(prev => {
-        // Only update if we still have this operation ID
+        // Only update if we still have this operation ID and progress is meaningful
         if (prev[data.operationId] !== undefined) {
+          // Ensure progress only goes forward and is capped properly
+          const currentProgress = prev[data.operationId] || 0;
+          const newProgress = Math.max(currentProgress, Math.min(data.progress, 99)); // Cap at 99% until completion
+
           return {
             ...prev,
-            [data.operationId]: data.progress
+            [data.operationId]: newProgress
           };
         }
         return prev;
@@ -118,29 +122,39 @@ function ChatInput({
               console.log('📁 Upload status:', status);
 
               if (status?.status === 'completed' && status.result?.data) {
-                const uploadedFile: IFile = {
-                  id: status.result.data.id,
-                  workspace_id: workspace.id,
-                  name: file.name,
-                  size: file.size,
-                  mime_type: file.type,
-                  path: status.result.data.path || metadata.targetPath,
-                  created_at: status.result.data.created_at || new Date().toISOString(),
-                  metadata,
-                  logicalPath: metadata.targetPath
-                };
+                // Set progress to 100% only when truly completed
+                setUploadProgress(prev => ({
+                  ...prev,
+                  [response.operationId]: 100
+                }));
 
-                // Update attachment with uploaded file data and clear operation ID
-                setAttachment(type, file, undefined, uploadedFile);
+                // Small delay to show 100% before cleaning up
+                setTimeout(() => {
+                  const uploadedFile: IFile = {
+                    id: status.result.data.id,
+                    workspace_id: workspace.id,
+                    name: file.name,
+                    size: file.size,
+                    mime_type: file.type,
+                    path: status.result.data.path || metadata.targetPath,
+                    created_at: status.result.data.created_at || new Date().toISOString(),
+                    metadata,
+                    logicalPath: metadata.targetPath
+                  };
 
-                // Clean up progress immediately on completion
-                setUploadProgress(prev => {
-                  const newProgress = { ...prev };
-                  delete newProgress[response.operationId];
-                  return newProgress;
-                });
+                  // Update attachment with uploaded file data and clear operation ID
+                  setAttachment(type, file, undefined, uploadedFile);
 
-                toast.success(`Upload completed: ${file.name}`);
+                  // Clean up progress
+                  setUploadProgress(prev => {
+                    const newProgress = { ...prev };
+                    delete newProgress[response.operationId];
+                    return newProgress;
+                  });
+
+                  toast.success(`Upload completed: ${file.name}`);
+                }, 500); // 500ms delay to show 100%
+
                 return; // Stop the loop
               } else if (status?.status === 'failed') {
                 const errorMsg = status.error || 'Unknown error';

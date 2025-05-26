@@ -133,9 +133,6 @@ export function setupFileHandlers(): void {
       form.append('file', fileStream, { filename });
       form.append('metadata', JSON.stringify(metadata));
 
-      // Upload with progress tracking
-      let uploaded = 0;
-
       const response = await onlysaidServiceInstance.post(
         `workspace/${workspaceId}/file`,
         form,
@@ -221,12 +218,21 @@ export function setupFileHandlers(): void {
     try {
       // Convert base64 data to buffer
       const base64Data = fileData.split(';base64,').pop();
+      if (!base64Data) {
+        throw new Error('Invalid file data format');
+      }
+
       const buffer = Buffer.from(base64Data, 'base64');
 
       // Create temp file
       const tempDir = os.tmpdir();
       const tempFilePath = path.join(tempDir, fileName);
       await fs.writeFile(tempFilePath, buffer);
+
+      // Use the actual buffer size for more accurate progress tracking
+      const actualFileSize = buffer.length;
+
+      console.log(`📊 File size - Original: ${fileName}, Buffer: ${actualFileSize} bytes`);
 
       // Now use the existing file:upload handler
       const { operationId } = await uploadFileToWorkspace(
@@ -235,11 +241,13 @@ export function setupFileHandlers(): void {
           workspaceId,
           filePath: tempFilePath,
           token,
-          metadata
+          metadata: {
+            ...metadata,
+            originalSize: actualFileSize // Store actual size for reference
+          }
         }
       );
 
-      // Clean up is handled in a finally block after upload completes
       return { operationId };
     } catch (error) {
       console.error('Error processing file upload:', error);
@@ -307,7 +315,7 @@ async function uploadFileToWorkspace(event: any, args: any) {
     try {
       const stats = await fs.stat(filePath);
       const filename = path.basename(filePath);
-      const fileSize = stats.size;
+      const actualFileSize = stats.size;
 
       // Create form data
       const FormData = require('form-data');
@@ -318,6 +326,17 @@ async function uploadFileToWorkspace(event: any, args: any) {
       form.append('file', fileStream, { filename });
       form.append('metadata', JSON.stringify(metadata));
 
+      // Get the actual form data size for more accurate progress
+      const formDataLength = await new Promise<number>((resolve) => {
+        form.getLength((err: any, length: number) => {
+          if (err) resolve(actualFileSize * 1.1); // Fallback with 10% overhead
+          else resolve(length);
+        });
+      });
+
+      let lastProgressTime = Date.now();
+      let lastProgress = 0;
+
       const response = await onlysaidServiceInstance.post(
         `workspace/${workspaceId}/file`,
         form,
@@ -327,12 +346,28 @@ async function uploadFileToWorkspace(event: any, args: any) {
             'Content-Type': 'multipart/form-data'
           },
           onUploadProgress: (progressEvent) => {
-            const progress = Math.round((progressEvent.loaded * 100) / fileSize);
-            fileQueue.updateProgress(opId, progress);
+            const now = Date.now();
+
+            // Use the actual form data size for more accurate progress
+            const totalSize = progressEvent.total || formDataLength;
+            const loaded = progressEvent.loaded;
+
+            // Calculate progress but cap it at 95% until server confirms completion
+            const rawProgress = Math.round((loaded * 100) / totalSize);
+            const cappedProgress = Math.min(rawProgress, 95);
+
+            // Throttle progress updates to avoid overwhelming the UI
+            if (now - lastProgressTime > 100 || cappedProgress > lastProgress + 5) {
+              fileQueue.updateProgress(opId, cappedProgress);
+              lastProgressTime = now;
+              lastProgress = cappedProgress;
+            }
           }
         }
       );
 
+      // Only set to 100% when we actually get the response
+      fileQueue.updateProgress(opId, 100);
       return response.data;
     } finally {
       // Clean up temp file
