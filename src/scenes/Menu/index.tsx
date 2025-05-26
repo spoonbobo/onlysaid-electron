@@ -7,7 +7,7 @@ import HomeMenu from "./Home";
 import FileExplorer from "@/scenes/Menu/FileExplorer";
 import MenuHeader from "./Header";
 import React from "react";
-
+import CalendarMenu from "./Calendar";
 const MIN_CONTENT_HEIGHT = 50;
 
 function Menu() {
@@ -25,6 +25,7 @@ function Menu() {
       case "workspace": return WorkspaceMenu;
       case "settings": return UserSettings;
       case "home": return HomeMenu;
+      case "calendar": return CalendarMenu;
       default: return () => <Box p={2}>Select a menu item</Box>;
     }
   }, [selectedContextType]);

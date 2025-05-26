@@ -21,6 +21,7 @@ import { useKBStore } from '@/stores/KB/KBStore';
 import { toast } from "@/utils/toast";
 import DownloadIcon from "@mui/icons-material/Download";
 import { useToastStore } from "@/stores/Notification/ToastStore";
+import { useWorkspaceStore } from "@/stores/Workspace/WorkspaceStore";
 
 // Define props interface
 interface FileExplorerProps {
@@ -520,7 +521,11 @@ function FileNodeItem({ node, level = 0 }: { node: FileNode, level?: number }) {
             </ListItemIcon>
             <ListItemText
               primary={<FormattedMessage id="dialog.file.download" defaultMessage="Download" />}
-              primaryTypographyProps={{ fontSize: '0.75rem' }}
+              slotProps={{
+                primary: {
+                  sx: { fontSize: '0.75rem' }
+                }
+              }}
             />
           </MenuItem>
         )}
@@ -578,19 +583,77 @@ function FileExplorer({ minContentHeightAbove }: FileExplorerProps) {
   const isDragging = useRef(false);
   const startY = useRef(0);
   const fileExplorerRef = useRef<HTMLDivElement>(null);
+  const syncInProgressRef = useRef(false);
 
-  const { selectedContext } = useTopicStore();
+  const { contexts } = useTopicStore();
+  const { workspaces } = useWorkspaceStore();
   const token = getUserTokenFromStore();
 
   useEffect(() => {
-    if (selectedContext?.id && selectedContext?.name && token && selectedContext.type === 'workspace') {
-      const workspaceRootId = `remote:${selectedContext.id}:`;
-      const existingRootFolder = rootFolders.find(folder => folder.id === workspaceRootId);
-      if (!existingRootFolder) {
-        addRemoteWorkspaceRoot(selectedContext.id, selectedContext.name, token);
+    const syncWorkspaceRoots = async () => {
+      // Prevent concurrent syncs
+      if (syncInProgressRef.current || !token) return;
+
+      syncInProgressRef.current = true;
+
+      try {
+        const workspaceContexts = (contexts || []).filter(context => context.type === "workspace");
+        const validWorkspaceIds = workspaceContexts
+          .map(context => context.id)
+          .filter(workspaceId => workspaces.some(ws => ws.id === workspaceId));
+
+        console.log('[FileExplorer] Syncing workspace roots for:', validWorkspaceIds);
+
+        // Get current remote root workspace IDs
+        const currentRootFolders = useFilesStore.getState().rootFolders;
+        const currentRemoteWorkspaceIds = currentRootFolders
+          .filter(folder => folder.source === 'remote' && folder.path === '')
+          .map(folder => folder.workspaceId)
+          .filter(Boolean);
+
+        // Remove workspace roots that should no longer be shown
+        const workspaceIdsToRemove = currentRemoteWorkspaceIds.filter(
+          workspaceId => !validWorkspaceIds.includes(workspaceId!)
+        );
+
+        workspaceIdsToRemove.forEach(workspaceId => {
+          if (workspaceId) {
+            useFilesStore.getState().removeRemoteRootFolderByWorkspaceId(workspaceId);
+          }
+        });
+
+        // Add new workspace roots sequentially to avoid race conditions
+        for (const workspaceId of validWorkspaceIds) {
+          if (!workspaceId) continue; // Type guard
+
+          // Re-check current state before each addition to ensure no duplicates
+          const currentState = useFilesStore.getState().rootFolders;
+          const existingRoot = currentState.find(folder =>
+            folder.source === 'remote' &&
+            folder.path === '' &&
+            folder.workspaceId === workspaceId
+          );
+
+          if (!existingRoot) {
+            const workspace = workspaces.find(ws => ws.id === workspaceId);
+            if (workspace) {
+              await useFilesStore.getState().addRemoteWorkspaceRoot(
+                workspaceId,
+                workspace.name,
+                token
+              );
+            }
+          }
+        }
+      } catch (error) {
+        console.error('[FileExplorer] Error syncing workspace roots:', error);
+      } finally {
+        syncInProgressRef.current = false;
       }
-    }
-  }, [selectedContext, token, addRemoteWorkspaceRoot, rootFolders]);
+    };
+
+    syncWorkspaceRoots();
+  }, [contexts, workspaces, token]);
 
   const handleMouseDown = (e: React.MouseEvent) => {
     if (!isExpanded || !fileExplorerRef.current) return;
@@ -767,7 +830,11 @@ function FileExplorer({ minContentHeightAbove }: FileExplorerProps) {
                     </ListItemIcon>
                     <ListItemText
                       primary={<FormattedMessage id="menu.fileExplorer.addFolder" defaultMessage="Add Folder" />}
-                      primaryTypographyProps={{ fontSize: '0.8rem' }}
+                      slotProps={{
+                        primary: {
+                          sx: { fontSize: '0.8rem' }
+                        }
+                      }}
                     />
                   </ListItem>
                 </div>

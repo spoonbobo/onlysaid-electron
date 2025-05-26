@@ -8,6 +8,7 @@ import AddNewFriend from "@/components/Dialog/AddNewFriend";
 import HomeMenuItems, { renderCategoryActions } from "./MenuItems/HomeMenuItems";
 import WorkspaceMenuItems, { RenderWorkspaceActions } from "./MenuItems/WorkspaceMenuItems";
 import SettingsMenuItems, { renderSettingsActions } from "./MenuItems/SettingsMenuItems";
+import CalendarMenuItems, { RenderCalendarActions } from "./MenuItems/CalendarMenuItem";
 import DefaultMenuItems from "./MenuItems/DefaultMenuItems";
 import { useUserStore } from "@/stores/User/UserStore";
 
@@ -28,7 +29,9 @@ function MenuHeader() {
   const selectedSection = selectedContext?.type === 'workspace' ?
     selectedContext.section?.split(':')[1] || null :
     selectedContext?.type === 'settings' ?
-      selectedContext.section || null : null;
+      selectedContext.section || null :
+      selectedContext?.type === 'calendar' ?
+        selectedContext.section?.split(':')[1] || null : null;
 
   // For home context, use section directly as category
   const selectedCategory = selectedContext?.type === 'home' ?
@@ -83,6 +86,10 @@ function MenuHeader() {
     console.log('Workspace action:', action);
   };
 
+  const handleCalendarAction = (action: string) => {
+    console.log('Calendar action:', action);
+  };
+
   const handleContextMenu = (event: React.MouseEvent<HTMLElement>) => {
     event.preventDefault();
     setAnchorEl(null);
@@ -104,6 +111,10 @@ function MenuHeader() {
         return <WorkspaceMenuItems
           handleClose={handleClose}
         />;
+      case 'calendar':
+        return <CalendarMenuItems
+          handleClose={handleClose}
+        />;
       case 'settings':
         return <SettingsMenuItems
           handleClose={handleClose}
@@ -122,6 +133,15 @@ function MenuHeader() {
           {selectedContext.name || <FormattedMessage id="menu.workspace" />}
           {selectedSection && (
             <> / <FormattedMessage id={`menu.workspace.${selectedSection}`} /></>
+          )}
+        </>
+      );
+    } else if (selectedContext?.type === 'calendar') {
+      return (
+        <>
+          <FormattedMessage id="menu.calendar" />
+          {selectedSection && (
+            <> / <FormattedMessage id={`menu.calendar.${selectedSection}`} /></>
           )}
         </>
       );
@@ -181,7 +201,7 @@ function MenuHeader() {
           alignItems: "center",
           width: '100%',
           pb: ((selectedCategory && selectedContext?.type === 'home') ||
-            (selectedSection && (selectedContext?.type === 'workspace' || selectedContext?.type === 'settings'))) ? 0 : 1
+            (selectedSection && (selectedContext?.type === 'workspace' || selectedContext?.type === 'settings' || selectedContext?.type === 'calendar'))) ? 0 : 1
         }}>
           <Typography variant="subtitle1" sx={{ fontWeight: 500 }}>
             {renderHeaderTitle()}
@@ -227,6 +247,13 @@ function MenuHeader() {
             return <RenderWorkspaceActions
               selectedSection={selectedSection}
               handleAction={handleWorkspaceAction}
+            />;
+          }
+
+          if (selectedContext?.type === 'calendar' && selectedSection) {
+            return <RenderCalendarActions
+              selectedSection={selectedSection}
+              handleAction={handleCalendarAction}
             />;
           }
 

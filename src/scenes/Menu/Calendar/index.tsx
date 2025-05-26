@@ -4,9 +4,9 @@ import { useIntl } from "react-intl";
 import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
 import ChevronRightIcon from "@mui/icons-material/ChevronRight";
 import GoogleIcon from "@mui/icons-material/Google";
-import { useTopicStore, useSelectedCalendarDate } from "../../../../stores/Topic/TopicStore";
-import { useGoogleCalendarStore } from "../../../../stores/Google/GoogleCalendarStore";
-import { useUserTokenStore } from "../../../../stores/User/UserToken";
+import { useTopicStore, useSelectedCalendarDate } from "@/stores/Topic/TopicStore";
+import { useGoogleCalendarStore } from "@/stores/Google/GoogleCalendarStore";
+import { useUserTokenStore } from "@/stores/User/UserToken";
 import WorkIcon from "@mui/icons-material/Work";
 import EmailIcon from "@mui/icons-material/Email";
 

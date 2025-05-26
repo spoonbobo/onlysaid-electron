@@ -2,6 +2,7 @@ import { Box, Tooltip, IconButton, Menu, MenuItem, Avatar } from "@mui/material"
 import HomeIcon from "@mui/icons-material/Home";
 import AddIcon from "@mui/icons-material/Add";
 import GroupIcon from "@mui/icons-material/Group";
+import CalendarTodayIcon from "@mui/icons-material/CalendarToday";
 import { useState, useEffect, useRef } from "react";
 import { useTopicStore, TopicContext } from "@/stores/Topic/TopicStore";
 import { useWorkspaceStore } from "@/stores/Workspace/WorkspaceStore";
@@ -233,6 +234,14 @@ function SidebarTabs() {
     return () => setWorkspaceCreatedCallback(undefined);
   }, [setWorkspaceCreatedCallback, dialogCreation]);
 
+  const handleCalendarNavigate = () => {
+    setSelectedContext({
+      name: "calendar",
+      type: "calendar",
+      section: "calendar"
+    });
+  };
+
   return (
     <>
       <Box
@@ -316,6 +325,30 @@ function SidebarTabs() {
             </Tooltip>
           );
         })}
+
+        {user && (
+          <Tooltip title={intl.formatMessage({ id: "calendar.title", defaultMessage: "Calendar" })} placement="right">
+            <Box
+              sx={{
+                borderBottom: selectedContext?.name === "calendar" && selectedContext?.type === "calendar"
+                  ? "3px solid"
+                  : "3px solid transparent",
+                borderColor: selectedContext?.name === "calendar" && selectedContext?.type === "calendar"
+                  ? "primary.main"
+                  : "transparent",
+                borderRadius: 0,
+              }}
+            >
+              <IconButton
+                color="primary"
+                size="large"
+                onClick={handleCalendarNavigate}
+              >
+                <CalendarTodayIcon />
+              </IconButton>
+            </Box>
+          </Tooltip>
+        )}
 
         {user && (
           <Tooltip title={intl.formatMessage({ id: "workspace.create.title", defaultMessage: "Add Workspace" })} placement="right">

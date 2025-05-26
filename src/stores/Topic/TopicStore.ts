@@ -19,6 +19,7 @@ export interface TopicContext {
   "settings" |
   "file" |
   "playground" |
+  "calendar" |
   "workspace:calendar"
   section?: string;
 }

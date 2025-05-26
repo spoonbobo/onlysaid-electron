@@ -1,7 +1,6 @@
 import { MenuItem, ListSubheader, Divider, Tooltip, IconButton, Box } from "@mui/material";
 import { FormattedMessage } from "react-intl";
 import ExitToAppIcon from "@mui/icons-material/ExitToApp";
-import CalendarMonthIcon from "@mui/icons-material/CalendarMonth";
 import AddCommentIcon from "@mui/icons-material/AddComment";
 import PeopleIcon from "@mui/icons-material/People";
 import SchoolIcon from "@mui/icons-material/School";
@@ -54,19 +53,9 @@ function WorkspaceMenuItems({ handleClose }: WorkspaceMenuItemsProps) {
         <AddCommentIcon fontSize="small" sx={{ mr: 1.5, color: "text.secondary" }} />
         <FormattedMessage id="menu.workspace.chatroom" />
       </MenuItem>
-
-      <Divider sx={{ my: 1 }} />
-
-      <ListSubheader sx={{ fontSize: 13, fontWeight: 700, color: "text.secondary", bgcolor: "background.paper", lineHeight: 2, px: 2 }}>
-        <FormattedMessage id="menu.workspace.options" />
-      </ListSubheader>
       <MenuItem disabled onClick={() => handleMenuItemClick('plans')} sx={{ minHeight: 36, fontSize: 14 }}>
         <AssignmentIcon fontSize="small" sx={{ mr: 1.5, color: "text.secondary" }} />
         <FormattedMessage id="menu.workspace.plans" />
-      </MenuItem>
-      <MenuItem onClick={() => handleMenuItemClick('calendar')} sx={{ minHeight: 36, fontSize: 14 }}>
-        <CalendarMonthIcon fontSize="small" sx={{ mr: 1.5, color: "text.secondary" }} />
-        <FormattedMessage id="menu.workspace.calendar" />
       </MenuItem>
 
       <Divider sx={{ my: 1 }} />

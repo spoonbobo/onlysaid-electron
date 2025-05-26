@@ -19,8 +19,6 @@ function Main() {
     switch (section) {
       case "workspace:chatroom":
         return <Chat />;
-      case "workspace:calendar":
-        return <Calendar />;
       case "workspace:plans":
         return <Box>
           <Typography variant="h5" gutterBottom>Plans for {workspaceId}</Typography>
@@ -49,6 +47,8 @@ function Main() {
     } else {
       componentToRender = <Chat />;
     }
+  } else if (contextTypeToRender === "calendar") {
+    componentToRender = <Calendar />;
   } else {
     const menuComponents: Record<string, React.ReactNode> = {
       home: <Chat />,
