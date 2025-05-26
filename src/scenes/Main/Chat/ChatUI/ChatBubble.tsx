@@ -15,6 +15,7 @@ import MarkdownRenderer from "@/components/Chat/MarkdownRenderer";
 import { FormattedMessage } from "react-intl";
 import DeleteMessageDialog from "@/components/Dialog/DeleteMessage";
 import ToolDisplay from "@/scenes/Main/Chat/ChatUI/ToolDisplay";
+import FileDisplay from "./FileDisplay";
 
 interface ChatBubbleProps {
   message: IChatMessage;
@@ -304,6 +305,8 @@ const ChatBubble = memo(({
             )
           )
         }
+
+        <FileDisplay message={msg} />
 
         {msg.reactions && msg.reactions.length > 0 && (
           <Box sx={{

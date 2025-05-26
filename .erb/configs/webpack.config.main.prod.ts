@@ -69,6 +69,9 @@ const configuration: webpack.Configuration = {
       ONLYSAID_DOMAIN: process.env.ONLYSAID_DOMAIN,
       SOCKET_SERVER_URL: process.env.SOCKET_SERVER_URL,
       KB_BASE_URL: process.env.KB_BASE_URL,
+      GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID,
+      GOOGLE_CLIENT_SECRET: process.env.GOOGLE_CLIENT_SECRET,
+      MICROSOFT_CLIENT_ID: process.env.MICROSOFT_CLIENT_ID
     }),
 
     new webpack.DefinePlugin({
