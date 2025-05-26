@@ -17,6 +17,16 @@ interface IGoogleCalendarStore {
   clearError: () => void;
 }
 
+// Helper function to add timeout to any promise
+const withTimeout = <T>(promise: Promise<T>, timeoutMs: number = 15000): Promise<T> => {
+  return Promise.race([
+    promise,
+    new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error(`Operation timed out after ${timeoutMs}ms`)), timeoutMs)
+    )
+  ]);
+};
+
 export const useGoogleCalendarStore = create<IGoogleCalendarStore>((set, get) => ({
   events: [],
   calendars: [],
@@ -38,8 +48,24 @@ export const useGoogleCalendarStore = create<IGoogleCalendarStore>((set, get) =>
 
       const result = await window.electron.googleCalendar.fetchCalendars(token);
 
+      // Handle loading state (dependencies not ready)
+      if (result.loading) {
+        set({
+          loading: true,
+          error: 'Google Calendar services are starting up. Please wait...'
+        });
+
+        // Retry after a delay
+        setTimeout(() => {
+          if (get().loading) {
+            get().fetchCalendars();
+          }
+        }, 3000);
+        return;
+      }
+
       if (!result.success) {
-        throw new Error(result.error);
+        throw new Error(result.error || 'Unknown error occurred');
       }
 
       const calendars: ICalendar[] = (result.calendars || []).map((item: any) => ({
@@ -54,7 +80,7 @@ export const useGoogleCalendarStore = create<IGoogleCalendarStore>((set, get) =>
         selected: true,
       }));
 
-      set({ calendars, loading: false });
+      set({ calendars, loading: false, error: null });
       console.log('[Google Calendar Store] Fetched calendars:', calendars);
 
     } catch (error) {
@@ -79,16 +105,20 @@ export const useGoogleCalendarStore = create<IGoogleCalendarStore>((set, get) =>
     try {
       console.log('[Google Calendar Store] Fetching events via electron...', { calendarId, timeMin, timeMax });
 
-      const result = await window.electron.googleCalendar.fetchEvents({
-        token,
-        calendarId,
-        timeMin,
-        timeMax,
-        maxResults: 100
-      });
+      // Add timeout protection
+      const result = await withTimeout(
+        window.electron.googleCalendar.fetchEvents({
+          token,
+          calendarId,
+          timeMin,
+          timeMax,
+          maxResults: 100
+        }),
+        15000 // 15 second timeout
+      );
 
       if (!result.success) {
-        throw new Error(result.error);
+        throw new Error(result.error || 'Unknown error occurred');
       }
 
       const events: ICalendarEvent[] = (result.events || []).map((item: any) => ({
@@ -139,8 +169,18 @@ export const useGoogleCalendarStore = create<IGoogleCalendarStore>((set, get) =>
 
     } catch (error) {
       console.error('[Google Calendar Store] Error fetching events:', error);
+
+      let errorMessage = 'Failed to fetch events';
+      if (error instanceof Error) {
+        if (error.message.includes('timed out')) {
+          errorMessage = 'Request timed out. Google services may be loading. Please try again.';
+        } else {
+          errorMessage = error.message;
+        }
+      }
+
       set({
-        error: error instanceof Error ? error.message : 'Failed to fetch events',
+        error: errorMessage,
         loading: false
       });
     }
@@ -161,15 +201,29 @@ export const useGoogleCalendarStore = create<IGoogleCalendarStore>((set, get) =>
       // Clear existing events
       set({ events: [] });
 
-      // Fetch events for each selected calendar
-      for (const calendar of selectedCalendars) {
-        await get().fetchEvents(calendar.id, timeMin, timeMax);
-      }
+      // Fetch events for each selected calendar with timeout protection
+      const fetchPromises = selectedCalendars.map(calendar =>
+        withTimeout(
+          get().fetchEvents(calendar.id, timeMin, timeMax),
+          20000 // Longer timeout for multiple calendars
+        )
+      );
 
+      await Promise.allSettled(fetchPromises);
       set({ loading: false });
+
     } catch (error) {
       console.error('[Google Calendar Store] Error fetching events for selected calendars:', error);
-      set({ loading: false });
+
+      let errorMessage = 'Failed to fetch calendar events';
+      if (error instanceof Error && error.message.includes('timed out')) {
+        errorMessage = 'Request timed out. Google services may be loading. Please try again.';
+      }
+
+      set({
+        loading: false,
+        error: errorMessage
+      });
     }
   },
 

@@ -376,8 +376,18 @@
   "googleCalendar.connected": "Google 日曆已連接",
   "googleCalendar.disconnect": "斷開連接",
   "googleCalendar.error": "錯誤：{error}",
+
+  "microsoftCalendar.title": "Microsoft Outlook 日曆",
+  "microsoftCalendar.description": "連接你的 Microsoft Outlook 日曆以同步事件和會議。",
+  "microsoftCalendar.connect": "連接 Microsoft 日曆",
+  "microsoftCalendar.connecting": "連接中...",
+  "microsoftCalendar.connected": "Microsoft 日曆已連接",
+  "microsoftCalendar.disconnect": "斷開連接",
+  "microsoftCalendar.error": "錯誤：{error}",
+
   "calendar.calendars": "日曆",
   "calendar.primary": "主要",
   "calendar.noCalendars": "沒有可用的日曆",
-  "calendar.provider.google": "Google"
+  "calendar.provider.google": "Google",
+  "calendar.provider.microsoft": "Microsoft"
 }

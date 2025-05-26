@@ -4,7 +4,8 @@ import { FormattedMessage, useIntl } from "react-intl";
 // import ChevronRightIcon from "@mui/icons-material/ChevronRight"; // Removed
 import { useState, useEffect, useRef } from "react";
 import { useGoogleCalendarStore } from "../../../../stores/Google/GoogleCalendarStore";
-import type { ICalendarEvent } from "@/../../types/Calendar/Calendar";
+import { useMicrosoftCalendarStore } from "../../../../stores/MSFT/MSFTCalendarStore";
+import type { ICalendarEvent, ICalendar } from "@/../../types/Calendar/Calendar";
 import CalendarEventPopover from "../../../../components/Popover/CalendarEventPopover";
 
 const HOUR_HEIGHT = 60;
@@ -51,9 +52,20 @@ export default function WeekView({ currentDate, onDateChange }: WeekViewProps) {
   const dayHeadersRef = useRef<HTMLDivElement>(null); // Ref for day headers container
   const eventGridAreaRef = useRef<HTMLDivElement>(null); // Ref for event grid area
 
-  // Get events for this week
-  const { getVisibleEvents, calendars } = useGoogleCalendarStore();
-  const allEvents = getVisibleEvents();
+  // Get events and calendars from both providers
+  const googleCalendarStore = useGoogleCalendarStore();
+  const microsoftCalendarStore = useMicrosoftCalendarStore();
+
+  // Merge events from both providers
+  const googleEvents = googleCalendarStore.getVisibleEvents();
+  const microsoftEvents = microsoftCalendarStore.getVisibleEvents();
+  const allEvents = [...googleEvents, ...microsoftEvents];
+
+  // Merge calendars from both providers
+  const allCalendars: ICalendar[] = [
+    ...googleCalendarStore.calendars,
+    ...microsoftCalendarStore.calendars
+  ];
 
   useEffect(() => {
     setCurrentWeekStartDate(getWeekStartDate(currentDate));
@@ -141,8 +153,8 @@ export default function WeekView({ currentDate, onDateChange }: WeekViewProps) {
   });
 
   const getEventColor = (event: ICalendarEvent) => {
-    const calendar = calendars.find(cal => cal.id === event.calendarId);
-    return calendar?.color || '#1976d2';
+    const calendar = allCalendars.find(cal => cal.id === event.calendarId);
+    return calendar?.color || (event.provider === 'outlook' ? '#0078d4' : '#1976d2');
   };
 
   // Popover state

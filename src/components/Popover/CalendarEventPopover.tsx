@@ -94,6 +94,9 @@ const CalendarEventPopover: React.FC<CalendarEventPopoverProps> = ({
   const handleOpenInGoogle = () => {
     if (event.url) {
       window.electron.shell.openExternal(event.url);
+    } else if (event.provider === 'google' && event.id) {
+      // Fallback Google Calendar URL format
+      window.electron.shell.openExternal(`https://calendar.google.com/calendar/event?eid=${event.id}`);
     }
   };
 
@@ -103,6 +106,15 @@ const CalendarEventPopover: React.FC<CalendarEventPopoverProps> = ({
       case 'tentative': return 'warning';
       case 'cancelled': return 'error';
       default: return 'default';
+    }
+  };
+
+  const getProviderDisplayName = (provider: string) => {
+    switch (provider) {
+      case 'google': return 'Google Calendar';
+      case 'outlook': return 'Outlook';
+      case 'apple': return 'Apple Calendar';
+      default: return 'Calendar';
     }
   };
 
@@ -140,9 +152,36 @@ const CalendarEventPopover: React.FC<CalendarEventPopoverProps> = ({
           }}
         >
           <Box sx={{ flexGrow: 1, pr: 1 }}>
-            <Typography variant="h6" component="h2" sx={{ fontWeight: 600, mb: 0.5 }}>
-              {event.summary}
-            </Typography>
+            <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', mb: 0.5 }}>
+              <Typography variant="h6" component="h2" sx={{ fontWeight: 600, flexGrow: 1, pr: 1 }}>
+                {event.summary}
+              </Typography>
+
+              {/* Open in Provider Button */}
+              {(event.url || event.provider) && (
+                <Button
+                  variant="outlined"
+                  size="small"
+                  startIcon={<LaunchIcon />}
+                  onClick={handleOpenInGoogle}
+                  sx={{
+                    fontSize: '0.75rem',
+                    minWidth: 'auto',
+                    px: 1,
+                    py: 0.25,
+                    color: 'white',
+                    borderColor: 'rgba(255,255,255,0.5)',
+                    '&:hover': {
+                      borderColor: 'white',
+                      backgroundColor: 'rgba(255,255,255,0.1)',
+                    }
+                  }}
+                >
+                  {getProviderDisplayName(event.provider || 'google')}
+                </Button>
+              )}
+            </Box>
+
             {calendar && (
               <Typography variant="caption" sx={{ opacity: 0.9 }}>
                 {calendar.name}
@@ -291,23 +330,6 @@ const CalendarEventPopover: React.FC<CalendarEventPopoverProps> = ({
               </List>
             </Box>
           )}
-
-          <Divider sx={{ my: 2 }} />
-
-          {/* Actions */}
-          <Box sx={{ display: 'flex', gap: 1, justifyContent: 'flex-end' }}>
-            {event.url && (
-              <Button
-                variant="outlined"
-                size="small"
-                startIcon={<LaunchIcon />}
-                onClick={handleOpenInGoogle}
-                sx={{ fontSize: '0.875rem' }}
-              >
-                {intl.formatMessage({ id: 'calendar.event.openInGoogle', defaultMessage: '在 Google 中開啟' })}
-              </Button>
-            )}
-          </Box>
 
           {/* Metadata */}
           {(event.created || event.updated) && (

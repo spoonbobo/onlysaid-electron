@@ -40,7 +40,7 @@ export const featureMigrations = [
     reactions TEXT, -- Stored as JSON string for array of reactions
     reply_to TEXT,
     mentions TEXT, -- Stored as JSON string for array of mentions
-    files TEXT, -- Stored as JSON string for array of files
+    file_ids TEXT, -- Stored as JSON string for array of file IDs
     poll TEXT,
     contact TEXT,
     gif TEXT,
@@ -73,13 +73,18 @@ export const featureMigrations = [
     FOREIGN KEY (message_id) REFERENCES messages(id) ON DELETE CASCADE
   )`,
 
-  // Files table
+  // Files table - Updated to match IFile interface
   `CREATE TABLE IF NOT EXISTS files (
     id TEXT PRIMARY KEY,
+    workspace_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    size INTEGER NOT NULL,
+    mime_type TEXT NOT NULL,
+    path TEXT NOT NULL,
+    user_id TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    file_url TEXT NOT NULL,
-    file_type TEXT NOT NULL,
-    file_name TEXT NOT NULL
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    metadata TEXT -- Stored as JSON string for flexible metadata
   )`,
 
   // Notifications table
@@ -187,6 +192,16 @@ export const featureMigrations = [
     FOREIGN KEY (parent_id) REFERENCES documents(id)
   )`,
 
+  // File indexes for better performance
+  `CREATE INDEX IF NOT EXISTS idx_files_workspace_id ON files(workspace_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_files_user_id ON files(user_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_files_created_at ON files(created_at)`,
+
+  // Message indexes for better performance
+  `CREATE INDEX IF NOT EXISTS idx_messages_chat_id ON messages(chat_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_messages_sender ON messages(sender)`,
+  `CREATE INDEX IF NOT EXISTS idx_messages_created_at ON messages(created_at)`,
+
   // Document indexes
   `CREATE INDEX IF NOT EXISTS idx_documents_parent_id ON documents(parent_id)`,
   `CREATE INDEX IF NOT EXISTS idx_documents_document_type ON documents(document_type)`,
@@ -213,8 +228,11 @@ export const featureMigrations = [
   // Add index for the new reference columns in the logs table
   `CREATE INDEX IF NOT EXISTS idx_logs_reference ON logs(reference_id, reference_type)`,
 
-  // Add execution_time_seconds column to tool_calls table
-  `ALTER TABLE tool_calls ADD COLUMN execution_time_seconds INTEGER DEFAULT NULL`
+  // Migration to update existing data if needed
+  `UPDATE messages SET file_ids = files WHERE files IS NOT NULL AND file_ids IS NULL`,
+
+  // Note: In production, you might want to add a separate migration to drop the old files column
+  // after ensuring all data has been migrated properly
 ];
 
 // Combined migrations array for all schema updates

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import MainInterface from '../scenes/Interface/MainInterface';
 import { useTopicStore } from '../stores/Topic/TopicStore';
 import { useUserStore, setupDeeplinkAuthListener } from '../stores/User/UserStore';
+import { useUserTokenStore } from '../stores/User/UserToken';
 import { useMCPStore } from '../stores/MCP/MCPStore';
 import { useToastStore } from '../stores/Notification/ToastStore';
 import { useSocketStore } from '../stores/Socket/SocketStore';
@@ -12,8 +13,10 @@ function App() {
   const { getAllConfiguredServers, initializeClient } = useMCPStore();
   const [initProgress, setInitProgress] = useState(0);
   const [initToastId, setInitToastId] = useState<string | null>(null);
+  const [googleServicesReady, setGoogleServicesReady] = useState(false);
   const { user } = useUserStore();
   const { initialize: initializeSocket, close: closeSocket } = useSocketStore();
+  const { initializeGoogleCalendarListeners, initializeMicrosoftCalendarListeners } = useUserTokenStore();
 
   useEffect(() => {
     if (!selectedContext && contexts.length > 0) {
@@ -54,6 +57,47 @@ function App() {
       );
     }
   }, [isConnected]);
+
+  // Add Google services background loading listener
+  useEffect(() => {
+    const handleGoogleServicesReady = () => {
+      console.log('[App] Google services ready');
+      setGoogleServicesReady(true);
+      // Don't show toast since it's ready immediately now
+    };
+
+    const handleGoogleServicesError = (event: any, error: any) => {
+      console.warn('[App] Google services error:', error);
+      useToastStore.getState().addToast(
+        "Google Calendar services initialization failed",
+        "warning",
+        5000
+      );
+    };
+
+    // Listen for Google services ready event
+    const removeReadyListener = window.electron.ipcRenderer.on('google-services:ready', handleGoogleServicesReady);
+    const removeErrorListener = window.electron.ipcRenderer.on('google-services:error', handleGoogleServicesError);
+
+    return () => {
+      removeReadyListener();
+      removeErrorListener();
+    };
+  }, []);
+
+  // Add Microsoft Calendar listeners initialization
+  useEffect(() => {
+    console.log('[App] Initializing calendar listeners...');
+
+    // Initialize both Google and Microsoft Calendar listeners
+    const cleanupGoogle = initializeGoogleCalendarListeners();
+    const cleanupMicrosoft = initializeMicrosoftCalendarListeners();
+
+    return () => {
+      cleanupGoogle();
+      cleanupMicrosoft();
+    };
+  }, [initializeGoogleCalendarListeners, initializeMicrosoftCalendarListeners]);
 
   useEffect(() => {
     const initializeServices = async () => {

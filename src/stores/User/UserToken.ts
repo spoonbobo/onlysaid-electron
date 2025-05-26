@@ -6,6 +6,11 @@ interface GoogleCalendarUser {
   name?: string;
 }
 
+interface MicrosoftCalendarUser {
+  email: string;
+  name?: string;
+}
+
 interface UserTokenStore {
   token: string | null;
   cookieName: string | null;
@@ -18,6 +23,14 @@ interface UserTokenStore {
   googleCalendarUser: GoogleCalendarUser | null;
   googleCalendarConnecting: boolean;
   googleCalendarError: string | null;
+
+  // Microsoft Calendar state
+  microsoftCalendarToken: string | null;
+  microsoftCalendarRefreshToken: string | null;
+  microsoftCalendarConnected: boolean;
+  microsoftCalendarUser: MicrosoftCalendarUser | null;
+  microsoftCalendarConnecting: boolean;
+  microsoftCalendarError: string | null;
 
   // Original methods
   getToken: () => string | null;
@@ -33,6 +46,14 @@ interface UserTokenStore {
   setGoogleCalendarError: (error: string | null) => void;
   setGoogleCalendarConnected: (connected: boolean, user: GoogleCalendarUser | null, token: string | null) => void;
   initializeGoogleCalendarListeners: () => () => void;
+
+  // Microsoft Calendar methods
+  connectMicrosoftCalendar: () => Promise<void>;
+  disconnectMicrosoftCalendar: () => void;
+  setMicrosoftCalendarConnecting: (connecting: boolean) => void;
+  setMicrosoftCalendarError: (error: string | null) => void;
+  setMicrosoftCalendarConnected: (connected: boolean, user: MicrosoftCalendarUser | null, token: string | null, refreshToken?: string | null) => void;
+  initializeMicrosoftCalendarListeners: () => () => void;
 }
 
 export const useUserTokenStore = create<UserTokenStore>()(
@@ -49,6 +70,14 @@ export const useUserTokenStore = create<UserTokenStore>()(
       googleCalendarUser: null,
       googleCalendarConnecting: false,
       googleCalendarError: null,
+
+      // Microsoft Calendar state
+      microsoftCalendarToken: null,
+      microsoftCalendarRefreshToken: null,
+      microsoftCalendarConnected: false,
+      microsoftCalendarUser: null,
+      microsoftCalendarConnecting: false,
+      microsoftCalendarError: null,
 
       // Original methods
       getToken: () => get().token,
@@ -168,6 +197,126 @@ export const useUserTokenStore = create<UserTokenStore>()(
         // Listen for auth result from main process
         const cleanupResult = (window as any).electron.googleAuth.onResult(handleGoogleAuthResult);
         const cleanupDisconnected = (window as any).electron.googleAuth.onDisconnected(handleDisconnected);
+
+        // Return cleanup function
+        return () => {
+          cleanupResult?.();
+          cleanupDisconnected?.();
+        };
+      },
+
+      // Microsoft Calendar methods
+      connectMicrosoftCalendar: async () => {
+        console.log('[Microsoft Calendar] Starting connection...');
+        set({ microsoftCalendarConnecting: true, microsoftCalendarError: null });
+
+        try {
+          // Check if electron API is available
+          if (!(window as any).electron?.microsoftAuth?.requestCalendar) {
+            throw new Error('Microsoft Auth API not available');
+          }
+
+          // Request Microsoft Calendar OAuth from main process
+          console.log('[Microsoft Calendar] Calling requestCalendar...');
+          (window as any).electron.microsoftAuth.requestCalendar();
+
+          // Set a timeout to prevent infinite loading
+          setTimeout(() => {
+            const state = get();
+            if (state.microsoftCalendarConnecting) {
+              console.warn('[Microsoft Calendar] Connection timeout');
+              set({
+                microsoftCalendarConnecting: false,
+                microsoftCalendarError: 'Connection timeout. Please try again.'
+              });
+            }
+          }, 30000); // 30 seconds timeout
+
+        } catch (error) {
+          console.error('[Microsoft Calendar] Failed to initiate authentication:', error);
+          set({
+            microsoftCalendarError: error instanceof Error ? error.message : 'Failed to start authentication',
+            microsoftCalendarConnecting: false
+          });
+        }
+      },
+
+      disconnectMicrosoftCalendar: () => {
+        console.log('[Microsoft Calendar] Disconnecting...');
+        // Notify main process to clear tokens
+        (window as any).electron?.microsoftAuth?.disconnect();
+
+        // Clear local state
+        set({
+          microsoftCalendarConnected: false,
+          microsoftCalendarUser: null,
+          microsoftCalendarToken: null,
+          microsoftCalendarRefreshToken: null,
+          microsoftCalendarError: null
+        });
+      },
+
+      setMicrosoftCalendarConnecting: (connecting) => set({ microsoftCalendarConnecting: connecting }),
+      setMicrosoftCalendarError: (error) => set({ microsoftCalendarError: error }),
+      setMicrosoftCalendarConnected: (connected, user, token, refreshToken) => set({
+        microsoftCalendarConnected: connected,
+        microsoftCalendarUser: user,
+        microsoftCalendarToken: token,
+        microsoftCalendarRefreshToken: refreshToken
+      }),
+
+      initializeMicrosoftCalendarListeners: () => {
+        const handleMicrosoftAuthResult = (event: any, result: any) => {
+          console.log('[Microsoft Calendar] Received result:', result);
+          console.log('[Microsoft Calendar] Token Types:');
+          console.log('- Access Token length:', result.accessToken?.length);
+          console.log('- Access Token start:', result.accessToken?.substring(0, 20));
+          console.log('- Refresh Token length:', result.refreshToken?.length);
+          console.log('- Refresh Token start:', result.refreshToken?.substring(0, 20));
+          if (result.success) {
+            set({
+              microsoftCalendarConnected: true,
+              microsoftCalendarUser: {
+                email: result.userInfo.mail || result.userInfo.userPrincipalName,
+                name: result.userInfo.displayName
+              },
+              microsoftCalendarToken: result.accessToken,
+              microsoftCalendarRefreshToken: result.refreshToken,
+              microsoftCalendarConnecting: false,
+              microsoftCalendarError: null
+            });
+          } else {
+            console.error('[Microsoft Calendar] Authentication failed:', result.error);
+            set({
+              microsoftCalendarError: result.error || 'Authentication failed',
+              microsoftCalendarConnecting: false
+            });
+          }
+        };
+
+        const handleDisconnected = (event: any, result: any) => {
+          console.log('[Microsoft Calendar] Disconnected result:', result);
+          if (result.success) {
+            set({
+              microsoftCalendarConnected: false,
+              microsoftCalendarUser: null,
+              microsoftCalendarToken: null,
+              microsoftCalendarRefreshToken: null,
+              microsoftCalendarError: null
+            });
+          }
+        };
+
+        // Check if electron API is available
+        if (!(window as any).electron?.microsoftAuth) {
+          console.error('[Microsoft Calendar] Electron API not available');
+          set({ microsoftCalendarError: 'Microsoft Auth API not available' });
+          return () => { };
+        }
+
+        // Listen for auth result from main process
+        const cleanupResult = (window as any).electron.microsoftAuth.onResult(handleMicrosoftAuthResult);
+        const cleanupDisconnected = (window as any).electron.microsoftAuth.onDisconnected(handleDisconnected);
 
         // Return cleanup function
         return () => {

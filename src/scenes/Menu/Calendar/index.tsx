@@ -6,6 +6,7 @@ import ChevronRightIcon from "@mui/icons-material/ChevronRight";
 import GoogleIcon from "@mui/icons-material/Google";
 import { useTopicStore, useSelectedCalendarDate } from "@/stores/Topic/TopicStore";
 import { useGoogleCalendarStore } from "@/stores/Google/GoogleCalendarStore";
+import { useMicrosoftCalendarStore } from "@/stores/MSFT/MSFTCalendarStore";
 import { useUserTokenStore } from "@/stores/User/UserToken";
 import WorkIcon from "@mui/icons-material/Work";
 import EmailIcon from "@mui/icons-material/Email";
@@ -24,15 +25,25 @@ export default function MenuCalendar() {
   const selectedDate = useSelectedCalendarDate();
 
   // Google Calendar state
-  const { calendars, loading, fetchCalendars, toggleCalendar } = useGoogleCalendarStore();
+  const googleCalendarStore = useGoogleCalendarStore();
   const { googleCalendarConnected, googleCalendarToken } = useUserTokenStore();
+
+  // Microsoft Calendar state
+  const microsoftCalendarStore = useMicrosoftCalendarStore();
+  const { microsoftCalendarConnected, microsoftCalendarToken } = useUserTokenStore();
 
   // Fetch calendars when connected
   useEffect(() => {
-    if (googleCalendarConnected && googleCalendarToken && calendars.length === 0) {
-      fetchCalendars();
+    if (googleCalendarConnected && googleCalendarToken && googleCalendarStore.calendars.length === 0) {
+      googleCalendarStore.fetchCalendars();
     }
-  }, [googleCalendarConnected, googleCalendarToken, calendars.length, fetchCalendars]);
+  }, [googleCalendarConnected, googleCalendarToken, googleCalendarStore.calendars.length, googleCalendarStore.fetchCalendars]);
+
+  useEffect(() => {
+    if (microsoftCalendarConnected && microsoftCalendarToken && microsoftCalendarStore.calendars.length === 0) {
+      microsoftCalendarStore.fetchCalendars();
+    }
+  }, [microsoftCalendarConnected, microsoftCalendarToken, microsoftCalendarStore.calendars.length, microsoftCalendarStore.fetchCalendars]);
 
   const handleDayClick = (date: Date | null) => {
     if (date) {
@@ -58,8 +69,12 @@ export default function MenuCalendar() {
     });
   };
 
-  const handleCalendarToggle = (calendarId: string) => {
-    toggleCalendar(calendarId);
+  const handleGoogleCalendarToggle = (calendarId: string) => {
+    googleCalendarStore.toggleCalendar(calendarId);
+  };
+
+  const handleMicrosoftCalendarToggle = (calendarId: string) => {
+    microsoftCalendarStore.toggleCalendar(calendarId);
   };
 
   const currentMonth = currentDisplayDate.getMonth();
@@ -211,63 +226,140 @@ export default function MenuCalendar() {
         </Box>
 
         {/* Google Calendar Section */}
-        <Box sx={{ mb: 2 }}>
-          <Typography variant="subtitle2" sx={{ mb: 1, color: 'text.secondary', display: 'flex', alignItems: 'center', gap: 1 }}>
-            <GoogleIcon sx={{ fontSize: 16 }} />
-            Google
-          </Typography>
-          <Box sx={{ pl: 2 }}>
-            {calendars.map((calendar) => (
-              <FormControlLabel
-                key={calendar.id}
-                control={
-                  <Checkbox
-                    checked={calendar.selected}
-                    onChange={() => handleCalendarToggle(calendar.id)}
-                    size="small"
+        {googleCalendarConnected && (
+          <Box sx={{ mb: 2 }}>
+            <Typography variant="subtitle2" sx={{ mb: 1, color: 'text.secondary', display: 'flex', alignItems: 'center', gap: 1 }}>
+              <GoogleIcon sx={{ fontSize: 16 }} />
+              Google
+              {googleCalendarStore.loading && <CircularProgress size={12} />}
+            </Typography>
+            <Box sx={{ pl: 2 }}>
+              {googleCalendarStore.calendars.length === 0 && !googleCalendarStore.loading ? (
+                <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                  {intl.formatMessage({ id: "calendar.noCalendars", defaultMessage: "No calendars found" })}
+                </Typography>
+              ) : (
+                googleCalendarStore.calendars.map((calendar) => (
+                  <FormControlLabel
+                    key={calendar.id}
+                    control={
+                      <Checkbox
+                        checked={calendar.selected}
+                        onChange={() => handleGoogleCalendarToggle(calendar.id)}
+                        size="small"
+                        sx={{
+                          color: calendar.color || 'primary.main',
+                          '&.Mui-checked': {
+                            color: calendar.color || 'primary.main',
+                          },
+                        }}
+                      />
+                    }
+                    label={
+                      <Typography variant="body2" sx={{ fontSize: '0.875rem' }}>
+                        {calendar.name}
+                        {calendar.primary && (
+                          <Typography component="span" variant="caption" sx={{ ml: 0.5, color: 'text.secondary' }}>
+                            ({intl.formatMessage({ id: "calendar.primary", defaultMessage: "主要" })})
+                          </Typography>
+                        )}
+                      </Typography>
+                    }
                     sx={{
-                      color: calendar.color || 'primary.main',
-                      '&.Mui-checked': {
-                        color: calendar.color || 'primary.main',
-                      },
+                      width: '100%',
+                      m: 0,
+                      '& .MuiFormControlLabel-label': {
+                        width: '100%',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap'
+                      }
                     }}
                   />
-                }
-                label={
-                  <Typography variant="body2" sx={{ fontSize: '0.875rem' }}>
-                    {calendar.name}
-                    {calendar.primary && (
-                      <Typography component="span" variant="caption" sx={{ ml: 0.5, color: 'text.secondary' }}>
-                        ({intl.formatMessage({ id: "calendar.primary", defaultMessage: "主要" })})
-                      </Typography>
-                    )}
-                  </Typography>
-                }
-                sx={{
-                  width: '100%',
-                  m: 0,
-                  '& .MuiFormControlLabel-label': {
-                    width: '100%',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap'
-                  }
-                }}
-              />
-            ))}
+                ))
+              )}
+              {googleCalendarStore.error && (
+                <Typography variant="caption" sx={{ color: 'error.main', display: 'block', mt: 0.5 }}>
+                  {googleCalendarStore.error}
+                </Typography>
+              )}
+            </Box>
           </Box>
-        </Box>
+        )}
 
-        {/* Outlook Section */}
-        <Box sx={{ mb: 2 }}>
-          <Typography variant="subtitle2" sx={{ mb: 1, color: 'text.secondary', display: 'flex', alignItems: 'center', gap: 1 }}>
-            <EmailIcon sx={{ fontSize: 16 }} />
-            {intl.formatMessage({ id: "calendar.outlook", defaultMessage: "Outlook (Microsoft)" })}
-          </Typography>
-          <Box sx={{ pl: 2 }}>
-            {/* Empty for now */}
+        {/* Microsoft Outlook Section */}
+        {microsoftCalendarConnected && (
+          <Box sx={{ mb: 2 }}>
+            <Typography variant="subtitle2" sx={{ mb: 1, color: 'text.secondary', display: 'flex', alignItems: 'center', gap: 1 }}>
+              <EmailIcon sx={{ fontSize: 16 }} />
+              {intl.formatMessage({ id: "calendar.outlook", defaultMessage: "Outlook" })}
+              {microsoftCalendarStore.loading && <CircularProgress size={12} />}
+            </Typography>
+            <Box sx={{ pl: 2 }}>
+              {microsoftCalendarStore.calendars.length === 0 && !microsoftCalendarStore.loading ? (
+                <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                  {intl.formatMessage({ id: "calendar.noCalendars", defaultMessage: "No calendars found" })}
+                </Typography>
+              ) : (
+                microsoftCalendarStore.calendars.map((calendar) => (
+                  <FormControlLabel
+                    key={calendar.id}
+                    control={
+                      <Checkbox
+                        checked={calendar.selected}
+                        onChange={() => handleMicrosoftCalendarToggle(calendar.id)}
+                        size="small"
+                        sx={{
+                          color: calendar.color || '#0078d4',
+                          '&.Mui-checked': {
+                            color: calendar.color || '#0078d4',
+                          },
+                        }}
+                      />
+                    }
+                    label={
+                      <Typography variant="body2" sx={{ fontSize: '0.875rem' }}>
+                        {calendar.name}
+                        {calendar.primary && (
+                          <Typography component="span" variant="caption" sx={{ ml: 0.5, color: 'text.secondary' }}>
+                            ({intl.formatMessage({ id: "calendar.primary", defaultMessage: "主要" })})
+                          </Typography>
+                        )}
+                      </Typography>
+                    }
+                    sx={{
+                      width: '100%',
+                      m: 0,
+                      '& .MuiFormControlLabel-label': {
+                        width: '100%',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap'
+                      }
+                    }}
+                  />
+                ))
+              )}
+              {microsoftCalendarStore.error && (
+                <Typography variant="caption" sx={{ color: 'error.main', display: 'block', mt: 0.5 }}>
+                  {microsoftCalendarStore.error}
+                </Typography>
+              )}
+            </Box>
           </Box>
-        </Box>
+        )}
+
+        {/* Show message when no calendars are connected */}
+        {!googleCalendarConnected && !microsoftCalendarConnected && (
+          <Box sx={{ textAlign: 'center', py: 2 }}>
+            <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+              {intl.formatMessage({
+                id: "calendar.noConnectedCalendars",
+                defaultMessage: "Connect your calendars in Settings"
+              })}
+            </Typography>
+          </Box>
+        )}
       </Box>
     </Box>
   );

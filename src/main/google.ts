@@ -1,83 +1,138 @@
 import { ipcMain, shell } from 'electron';
+import { net } from 'electron';
 
 let callbackServer: any = null;
-let google: any = null;
 let express: any = null;
 let oauth2Client: any = null;
 
-// Lazy load Google dependencies
-async function loadGoogleDependencies() {
-  console.log('[Google Auth] loadGoogleDependencies called');
+// Google OAuth configuration
+const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '';
+const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || '';
+const REDIRECT_URI = 'http://localhost:8080/oauth/google/callback';
 
-  // Log all environment variables related to Google
-  console.log('[Google Auth] Environment variables check:');
-  console.log('[Google Auth] NODE_ENV:', process.env.NODE_ENV);
-  console.log('[Google Auth] GOOGLE_CLIENT_ID:', process.env.GOOGLE_CLIENT_ID ? `${process.env.GOOGLE_CLIENT_ID.substring(0, 10)}...` : 'NOT SET');
-  console.log('[Google Auth] GOOGLE_CLIENT_SECRET:', process.env.GOOGLE_CLIENT_SECRET ? `${process.env.GOOGLE_CLIENT_SECRET.substring(0, 10)}...` : 'NOT SET');
-  console.log('[Google Auth] All env keys containing GOOGLE:', Object.keys(process.env).filter(key => key.includes('GOOGLE')));
+// Simple OAuth2 client without googleapis
+class SimpleOAuth2Client {
+  private clientId: string;
+  private clientSecret: string;
+  private redirectUri: string;
+  private accessToken: string | null = null;
 
-  if (!google || !express) {
-    try {
-      console.log('[Google Auth] Loading dependencies...');
+  constructor(clientId: string, clientSecret: string, redirectUri: string) {
+    this.clientId = clientId;
+    this.clientSecret = clientSecret;
+    this.redirectUri = redirectUri;
+  }
 
-      // Check if packages are installed
-      console.log('[Google Auth] Importing googleapis...');
-      google = await import('googleapis').then(m => m.google);
-      console.log('[Google Auth] googleapis imported successfully');
+  generateAuthUrl(scopes: string[]): string {
+    const params = new URLSearchParams({
+      client_id: this.clientId,
+      redirect_uri: this.redirectUri,
+      response_type: 'code',
+      scope: scopes.join(' '),
+      access_type: 'offline',
+      prompt: 'consent',
+      include_granted_scopes: 'true'
+    });
 
-      console.log('[Google Auth] Importing express...');
-      express = (await import('express')).default;
-      console.log('[Google Auth] express imported successfully');
+    return `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
+  }
 
-      // Google OAuth configuration
-      const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '';
-      const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || '';
-      const REDIRECT_URI = 'http://localhost:8080/oauth/google/callback';
+  async getToken(code: string): Promise<any> {
+    const response = await fetch('https://oauth2.googleapis.com/token', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: new URLSearchParams({
+        client_id: this.clientId,
+        client_secret: this.clientSecret,
+        code,
+        grant_type: 'authorization_code',
+        redirect_uri: this.redirectUri,
+      }),
+    });
 
-      console.log('[Google Auth] Environment check:', {
-        hasClientId: !!GOOGLE_CLIENT_ID,
-        hasClientSecret: !!GOOGLE_CLIENT_SECRET,
-        clientIdLength: GOOGLE_CLIENT_ID.length,
-        clientSecretLength: GOOGLE_CLIENT_SECRET.length,
-        redirectUri: REDIRECT_URI
-      });
+    return response.json();
+  }
 
-      if (!GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET) {
-        console.error('[Google Auth] Missing credentials:', {
-          clientId: GOOGLE_CLIENT_ID ? 'SET' : 'MISSING',
-          clientSecret: GOOGLE_CLIENT_SECRET ? 'SET' : 'MISSING'
-        });
-        throw new Error('Google OAuth credentials not configured in environment variables');
-      }
+  setCredentials(credentials: { access_token?: string }) {
+    this.accessToken = credentials.access_token || null;
+  }
 
-      console.log('[Google Auth] Creating OAuth2 client...');
-      oauth2Client = new google.auth.OAuth2(
-        GOOGLE_CLIENT_ID,
-        GOOGLE_CLIENT_SECRET,
-        REDIRECT_URI
-      );
-      console.log('[Google Auth] OAuth2 client created successfully');
-
-      console.log('[Google Auth] Dependencies loaded successfully');
-    } catch (error) {
-      console.error('[Google Auth] Failed to load dependencies:', error);
-      console.error('[Google Auth] Error details:', {
-        name: error instanceof Error ? error.name : 'Unknown',
-        message: error instanceof Error ? error.message : String(error),
-        stack: error instanceof Error ? error.stack : 'No stack trace'
-      });
-      throw error;
-    }
-  } else {
-    console.log('[Google Auth] Dependencies already loaded');
+  getAccessToken(): string | null {
+    return this.accessToken;
   }
 }
 
+// Direct HTTP requests to Google Calendar API
+async function fetchCalendarList(accessToken: string) {
+  const response = await fetch('https://www.googleapis.com/calendar/v3/users/me/calendarList', {
+    headers: {
+      'Authorization': `Bearer ${accessToken}`,
+      'Accept': 'application/json',
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Calendar API error: ${response.status} ${response.statusText}`);
+  }
+
+  return response.json();
+}
+
+async function fetchCalendarEvents(accessToken: string, params: {
+  calendarId?: string;
+  timeMin?: string;
+  timeMax?: string;
+  maxResults?: number;
+}) {
+  const { calendarId = 'primary', timeMin, timeMax, maxResults = 50 } = params;
+
+  const searchParams = new URLSearchParams({
+    singleEvents: 'true',
+    orderBy: 'startTime',
+    maxResults: maxResults.toString(),
+  });
+
+  if (timeMin) searchParams.append('timeMin', timeMin);
+  if (timeMax) searchParams.append('timeMax', timeMax);
+
+  const url = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events?${searchParams.toString()}`;
+
+  const response = await fetch(url, {
+    headers: {
+      'Authorization': `Bearer ${accessToken}`,
+      'Accept': 'application/json',
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Calendar API error: ${response.status} ${response.statusText}`);
+  }
+
+  return response.json();
+}
+
+async function getUserInfo(accessToken: string) {
+  const response = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
+    headers: {
+      'Authorization': `Bearer ${accessToken}`,
+      'Accept': 'application/json',
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`UserInfo API error: ${response.status} ${response.statusText}`);
+  }
+
+  return response.json();
+}
+
+// Initialize OAuth client immediately (no heavy imports)
+oauth2Client = new SimpleOAuth2Client(GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, REDIRECT_URI);
+
 export function initGoogleAuth() {
   console.log('[Google Auth] ===== INIT GOOGLE AUTH CALLED =====');
-  console.log('[Google Auth] Current working directory:', process.cwd());
-  console.log('[Google Auth] Process env NODE_ENV:', process.env.NODE_ENV);
-
   try {
     setupGoogleAuthHandlers();
     console.log('[Google Auth] initGoogleAuth completed successfully');
@@ -95,11 +150,6 @@ function setupGoogleAuthHandlers() {
     console.log('[Google Auth] Received request-calendar event');
 
     try {
-      console.log('[Google Auth] Starting Google Calendar OAuth flow');
-
-      // Lazy load dependencies
-      await loadGoogleDependencies();
-
       await startGoogleOAuthFlow(event, [
         'https://www.googleapis.com/auth/calendar.readonly',
         'https://www.googleapis.com/auth/userinfo.email',
@@ -129,24 +179,17 @@ function setupGoogleAuthHandlers() {
     }
   });
 
-  // Handle fetch calendars
+  // Handle fetch calendars - NO BLOCKING
   ipcMain.handle('google-calendar:fetch-calendars', async (event, token: string) => {
     console.log('[Google Calendar] Fetching calendars...');
 
     try {
-      await loadGoogleDependencies();
-
-      // Set the token for this request
-      const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
-      oauth2Client.setCredentials({ access_token: token });
-
-      const response = await calendar.calendarList.list();
-
-      console.log('[Google Calendar] Calendars response:', response.data);
+      const response = await fetchCalendarList(token);
+      // console.log('[Google Calendar] Calendars response:', response);
 
       return {
         success: true,
-        calendars: response.data.items || []
+        calendars: response.items || []
       };
 
     } catch (error) {
@@ -158,7 +201,7 @@ function setupGoogleAuthHandlers() {
     }
   });
 
-  // Handle fetch events
+  // Handle fetch events - NO BLOCKING
   ipcMain.handle('google-calendar:fetch-events', async (event, params: {
     token: string;
     calendarId?: string;
@@ -166,36 +209,16 @@ function setupGoogleAuthHandlers() {
     timeMax?: string;
     maxResults?: number;
   }) => {
-    console.log('[Google Calendar] Fetching events...', params);
+    // console.log('[Google Calendar] Fetching events...', params);
 
     try {
-      await loadGoogleDependencies();
-
-      const { token, calendarId = 'primary', timeMin, timeMax, maxResults = 50 } = params;
-
-      // Set the token for this request
-      const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
-      oauth2Client.setCredentials({ access_token: token });
-
-      // Default time range: next 30 days
-      const now = new Date();
-      const defaultTimeMin = timeMin || now.toISOString();
-      const defaultTimeMax = timeMax || new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString();
-
-      const response = await calendar.events.list({
-        calendarId,
-        timeMin: defaultTimeMin,
-        timeMax: defaultTimeMax,
-        singleEvents: true,
-        orderBy: 'startTime',
-        maxResults
-      });
-
-      console.log('[Google Calendar] Events response:', response.data);
+      const { token, ...eventParams } = params;
+      const response = await fetchCalendarEvents(token, eventParams);
+      // console.log('[Google Calendar] Events response:', response);
 
       return {
         success: true,
-        events: response.data.items || []
+        events: response.items || []
       };
 
     } catch (error) {
@@ -216,20 +239,10 @@ async function startGoogleOAuthFlow(event: Electron.IpcMainEvent, scopes: string
   return new Promise(async (resolve, reject) => {
     try {
       // Generate OAuth URL
-      const authUrl = oauth2Client.generateAuthUrl({
-        access_type: 'offline',
-        scope: scopes,
-        include_granted_scopes: true,
-        prompt: 'consent'
-      });
-
+      const authUrl = oauth2Client.generateAuthUrl(scopes);
       console.log('[Google Auth] Generated auth URL:', authUrl);
-      console.log('[Google Auth] OAuth2 client config:', {
-        clientId: oauth2Client._clientId?.substring(0, 10) + '...',
-        redirectUri: oauth2Client.redirectUri
-      });
 
-      // Start local server to handle callback
+      // Start local server to handle callback (only load express when needed)
       await startCallbackServer(event, resolve, reject);
 
       // Open auth URL in default browser
@@ -250,6 +263,12 @@ async function startGoogleOAuthFlow(event: Electron.IpcMainEvent, scopes: string
 
 async function startCallbackServer(event: Electron.IpcMainEvent, resolve: (value: void) => void, reject: (reason?: any) => void): Promise<void> {
   console.log('[Google Auth] Starting callback server...');
+
+  // Only load express when we actually need it
+  if (!express) {
+    console.log('[Google Auth] Loading express for callback server...');
+    express = (await import('express')).default;
+  }
 
   // Stop any existing server
   if (callbackServer) {
@@ -292,18 +311,17 @@ async function startCallbackServer(event: Electron.IpcMainEvent, resolve: (value
         console.log('[Google Auth] Exchanging code for tokens...');
 
         // Exchange code for tokens
-        const { tokens } = await oauth2Client.getToken(code as string);
-        oauth2Client.setCredentials(tokens);
+        const tokens = await oauth2Client.getToken(code as string);
+        oauth2Client.setCredentials({ access_token: tokens.access_token });
 
         // Get user info
-        const oauth2 = google.oauth2({ version: 'v2', auth: oauth2Client });
-        const userInfo = await oauth2.userinfo.get();
+        const userInfo = await getUserInfo(tokens.access_token);
 
-        console.log('[Google Auth] Authentication successful for user:', userInfo.data.email);
+        console.log('[Google Auth] Authentication successful for user:', userInfo.email);
 
         res.send(`
           <h1>Authentication successful!</h1>
-          <p>Welcome, ${userInfo.data.name || userInfo.data.email}!</p>
+          <p>Welcome, ${userInfo.name || userInfo.email}!</p>
           <p>You can close this window and return to the app.</p>
           <script>setTimeout(() => window.close(), 3000);</script>
         `);
@@ -312,8 +330,8 @@ async function startCallbackServer(event: Electron.IpcMainEvent, resolve: (value
           success: true,
           accessToken: tokens.access_token,
           refreshToken: tokens.refresh_token,
-          expiryDate: tokens.expiry_date,
-          userInfo: userInfo.data
+          expiryDate: tokens.expires_in ? Date.now() + (tokens.expires_in * 1000) : undefined,
+          userInfo: userInfo
         });
 
         stopCallbackServer();
@@ -334,33 +352,11 @@ async function startCallbackServer(event: Electron.IpcMainEvent, resolve: (value
     callbackServer = app.listen(8080, (err?: Error) => {
       if (err) {
         console.error('[Google Auth] Failed to start callback server:', err);
-        if (err.message.includes('EADDRINUSE')) {
-          event.reply('google-auth:result', {
-            success: false,
-            error: 'Port 8080 is already in use. Please close other applications using this port and try again.'
-          });
-        } else {
-          event.reply('google-auth:result', {
-            success: false,
-            error: 'Failed to start callback server: ' + err.message
-          });
-        }
         rejectServer(err);
       } else {
         console.log('[Google Auth] OAuth callback server listening on port 8080');
         resolveServer();
       }
-    });
-
-    // Handle server errors
-    callbackServer.on('error', (err: Error) => {
-      console.error('[Google Auth] Callback server error:', err);
-      event.reply('google-auth:result', {
-        success: false,
-        error: 'Callback server error: ' + err.message
-      });
-      stopCallbackServer();
-      rejectServer(err);
     });
   });
 }

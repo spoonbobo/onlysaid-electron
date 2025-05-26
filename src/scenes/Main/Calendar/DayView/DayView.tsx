@@ -5,7 +5,8 @@ import ChevronRightIcon from "@mui/icons-material/ChevronRight";
 import { useState, useEffect, useRef } from "react";
 import { useTopicStore } from "../../../../stores/Topic/TopicStore";
 import { useGoogleCalendarStore } from "../../../../stores/Google/GoogleCalendarStore";
-import type { ICalendarEvent } from "@/../../types/Calendar/Calendar";
+import { useMicrosoftCalendarStore } from "../../../../stores/MSFT/MSFTCalendarStore";
+import type { ICalendarEvent, ICalendar } from "@/../../types/Calendar/Calendar";
 import CalendarEventPopover from "../../../../components/Popover/CalendarEventPopover";
 
 const HOUR_HEIGHT = 60;
@@ -38,9 +39,20 @@ export default function DayView({ date }: DayViewProps) {
   const [currentTimeLineTop, setCurrentTimeLineTop] = useState(0);
   const timelineScrollContainerRef = useRef<HTMLDivElement>(null);
 
-  // Get events for this day
-  const { getVisibleEvents, calendars } = useGoogleCalendarStore();
-  const allEvents = getVisibleEvents();
+  // Get events and calendars from both providers
+  const googleCalendarStore = useGoogleCalendarStore();
+  const microsoftCalendarStore = useMicrosoftCalendarStore();
+
+  // Merge events from both providers
+  const googleEvents = googleCalendarStore.getVisibleEvents();
+  const microsoftEvents = microsoftCalendarStore.getVisibleEvents();
+  const allEvents = [...googleEvents, ...microsoftEvents];
+
+  // Merge calendars from both providers
+  const allCalendars: ICalendar[] = [
+    ...googleCalendarStore.calendars,
+    ...microsoftCalendarStore.calendars
+  ];
 
   // Filter events for this specific day
   const dayStart = new Date(date.getFullYear(), date.getMonth(), date.getDate());
@@ -54,7 +66,6 @@ export default function DayView({ date }: DayViewProps) {
 
     if (!eventStart) return false;
 
-    // Check if event overlaps with this day
     return eventStart < dayEnd && (!eventEnd || eventEnd > dayStart);
   });
 
@@ -116,8 +127,8 @@ export default function DayView({ date }: DayViewProps) {
   });
 
   const getEventColor = (event: ICalendarEvent) => {
-    const calendar = calendars.find(cal => cal.id === event.calendarId);
-    return calendar?.color || '#1976d2';
+    const calendar = allCalendars.find(cal => cal.id === event.calendarId);
+    return calendar?.color || (event.provider === 'outlook' ? '#0078d4' : '#1976d2');
   };
 
   const handlePrevDay = () => {

@@ -327,6 +327,20 @@ function SidebarTabs() {
         })}
 
         {user && (
+          <Tooltip title={intl.formatMessage({ id: "workspace.create.title", defaultMessage: "Add Workspace" })} placement="right">
+            <Box>
+              <IconButton
+                color="primary"
+                size="large"
+                onClick={handleAddTeam}
+              >
+                <AddIcon />
+              </IconButton>
+            </Box>
+          </Tooltip>
+        )}
+
+        {user && (
           <Tooltip title={intl.formatMessage({ id: "calendar.title", defaultMessage: "Calendar" })} placement="right">
             <Box
               sx={{
@@ -345,20 +359,6 @@ function SidebarTabs() {
                 onClick={handleCalendarNavigate}
               >
                 <CalendarTodayIcon />
-              </IconButton>
-            </Box>
-          </Tooltip>
-        )}
-
-        {user && (
-          <Tooltip title={intl.formatMessage({ id: "workspace.create.title", defaultMessage: "Add Workspace" })} placement="right">
-            <Box>
-              <IconButton
-                color="primary"
-                size="large"
-                onClick={handleAddTeam}
-              >
-                <AddIcon />
               </IconButton>
             </Box>
           </Tooltip>

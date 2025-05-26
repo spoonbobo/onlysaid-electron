@@ -6,237 +6,12 @@ import { useState, useEffect } from "react";
 import { useTopicStore, useSelectedCalendarDate, CalendarViewMode } from "../../../stores/Topic/TopicStore";
 import DayView from "./DayView/DayView";
 import WeekView from "./WeekView/WeekView";
+import MonthView from "./MonthView/MonthView";
 import { useGoogleCalendarStore } from "../../../stores/Google/GoogleCalendarStore";
+import { useMicrosoftCalendarStore } from "../../../stores/MSFT/MSFTCalendarStore";
 import { useUserTokenStore } from "../../../stores/User/UserToken";
 import CalendarEventPopover from "../../../components/Popover/CalendarEventPopover";
 import type { ICalendarEvent } from "@/../../types/Calendar/Calendar";
-
-interface MonthViewInternalProps {
-  displayDate: Date;
-  onEventClick: (event: React.MouseEvent<HTMLElement>, calendarEvent: ICalendarEvent) => void;
-}
-
-function MonthViewInternal({ displayDate, onEventClick }: MonthViewInternalProps) {
-  const intl = useIntl();
-  const { setSelectedCalendarDate, setCalendarViewMode } = useTopicStore();
-
-  // Get events for month view
-  const { getVisibleEvents, calendars } = useGoogleCalendarStore();
-  const allEvents = getVisibleEvents();
-
-  const handleDayClick = (clickedDate: Date) => {
-    setSelectedCalendarDate(new Date(clickedDate));
-    setCalendarViewMode('day');
-  };
-
-  // Week starts on Monday, as per the image
-  const daysOfWeek = [
-    intl.formatMessage({ id: "calendar.day.mon", defaultMessage: "Mon" }),
-    intl.formatMessage({ id: "calendar.day.tue", defaultMessage: "Tue" }),
-    intl.formatMessage({ id: "calendar.day.wed", defaultMessage: "Wed" }),
-    intl.formatMessage({ id: "calendar.day.thu", defaultMessage: "Thu" }),
-    intl.formatMessage({ id: "calendar.day.fri", defaultMessage: "Fri" }),
-    intl.formatMessage({ id: "calendar.day.sat", defaultMessage: "Sat" }),
-    intl.formatMessage({ id: "calendar.day.sun", defaultMessage: "Sun" })
-  ];
-
-  const currentMonth = displayDate.getMonth();
-  const currentYear = displayDate.getFullYear();
-  const today = new Date();
-  today.setHours(0, 0, 0, 0); // Normalize today's date for accurate comparison
-
-  const firstDayOfCurrentMonth = new Date(currentYear, currentMonth, 1);
-  let dayOfWeekOfFirst = firstDayOfCurrentMonth.getDay(); // 0=Sun, 1=Mon, ...
-  // Adjust so Monday is 0, ..., Sunday is 6
-  dayOfWeekOfFirst = (dayOfWeekOfFirst === 0) ? 6 : dayOfWeekOfFirst - 1;
-
-  const firstCalendarDate = new Date(firstDayOfCurrentMonth);
-  firstCalendarDate.setDate(firstDayOfCurrentMonth.getDate() - dayOfWeekOfFirst);
-
-  const calendarCellsData: { day: number; isCurrentMonth: boolean; date: Date; isToday: boolean; lunar?: string; }[] = [];
-  const tempDate = new Date(firstCalendarDate);
-
-  for (let i = 0; i < 42; i++) { // Always render 6 weeks (42 days)
-    const cellDate = new Date(tempDate);
-    cellDate.setHours(0, 0, 0, 0); // Normalize for comparison
-
-    const isCurrentMonthFlag = cellDate.getMonth() === currentMonth && cellDate.getFullYear() === currentYear;
-    const isTodayFlag = cellDate.getTime() === today.getTime();
-
-    // Placeholder for lunar date - this would come from a library or service
-    // const lunarDateStr = getLunarDate(cellDate);
-
-    calendarCellsData.push({
-      day: cellDate.getDate(),
-      isCurrentMonth: isCurrentMonthFlag,
-      date: cellDate,
-      isToday: isTodayFlag,
-      // lunar: lunarDateStr // Example
-    });
-    tempDate.setDate(tempDate.getDate() + 1);
-  }
-
-  const weeksToRender: typeof calendarCellsData[] = [];
-  for (let i = 0; i < calendarCellsData.length; i += 7) {
-    weeksToRender.push(calendarCellsData.slice(i, i + 7));
-  }
-
-  const getEventColor = (event: any) => {
-    const calendar = calendars.find(cal => cal.id === event.calendarId);
-    return calendar?.color || '#1976d2';
-  };
-
-  return (
-    <Paper elevation={0} sx={{ m: 1, mt: 0, mb: 0, overflow: "hidden", flexGrow: 1, display: 'flex', flexDirection: 'column', border: '1px solid', borderColor: 'divider', borderTop: 0 }}>
-      <Box sx={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)" }}>
-        {daysOfWeek.map((dayName, index) => (
-          <Box key={`${dayName}-${index}`} sx={{ py: 0.5, px: 1, textAlign: "center", fontWeight: "normal", fontSize: '0.8rem', color: "text.secondary", borderBottom: 1, borderColor: 'divider' }}>
-            {dayName}
-          </Box>
-        ))}
-      </Box>
-      <Box sx={{ flexGrow: 1, display: 'grid', gridTemplateRows: `repeat(${weeksToRender.length}, 1fr)` }}>
-        {weeksToRender.map((weekData, weekIndex) => (
-          <Box key={`week-${weekIndex}`} sx={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", flexGrow: 1, borderBottom: weekIndex < weeksToRender.length - 1 ? 1 : 0, borderColor: 'divider' }}>
-            {weekData.map((cellData, dayIndex) => {
-              // Get events for this day
-              let dayEvents: any[] = [];
-              if (cellData.date && cellData.isCurrentMonth) {
-                const dayStart = new Date(cellData.date.getFullYear(), cellData.date.getMonth(), cellData.date.getDate());
-                const dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000);
-
-                dayEvents = allEvents.filter(event => {
-                  const eventStart = event.start.dateTime ? new Date(event.start.dateTime) :
-                    event.start.date ? new Date(event.start.date) : null;
-                  const eventEnd = event.end.dateTime ? new Date(event.end.dateTime) :
-                    event.end.date ? new Date(event.end.date) : null;
-
-                  if (!eventStart) return false;
-
-                  return eventStart < dayEnd && (!eventEnd || eventEnd > dayStart);
-                }).slice(0, 3); // Show max 3 events per day
-              }
-
-              return (
-                <Box
-                  key={cellData.date?.toISOString() || `empty-${weekIndex}-${dayIndex}`}
-                  onClick={cellData.isCurrentMonth ? () => handleDayClick(cellData.date!) : undefined}
-                  sx={{
-                    p: 0.5,
-                    borderRight: dayIndex < 6 ? 1 : 0,
-                    borderColor: 'divider',
-                    bgcolor: "background.paper",
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'flex-start',
-                    justifyContent: 'flex-start',
-                    minHeight: '100px',
-                    cursor: cellData.isCurrentMonth ? 'pointer' : 'default',
-                    '&:hover': {
-                      bgcolor: cellData.isCurrentMonth && !cellData.isToday ? 'action.hover' : undefined,
-                    }
-                  }}
-                >
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', width: '100%', p: 0.5 }}>
-                    <Typography
-                      variant="body2"
-                      component="span"
-                      sx={
-                        cellData.isToday ? {
-                          bgcolor: 'primary.main',
-                          color: 'common.white',
-                          width: 24,
-                          height: 24,
-                          borderRadius: '50%',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          fontWeight: 'medium',
-                          fontSize: '0.8rem'
-                        } : {
-                          fontSize: '0.8rem',
-                          fontWeight: cellData.isCurrentMonth ? 'medium' : 'normal',
-                          p: '3px',
-                          color: cellData.isCurrentMonth ? 'text.primary' : 'text.secondary',
-                        }
-                      }
-                    >
-                      {cellData.day}
-                    </Typography>
-                  </Box>
-
-                  {/* Events for this day */}
-                  {cellData.isCurrentMonth && (
-                    <Box sx={{ flexGrow: 1, mt: 0.5, width: '100%', overflowY: 'hidden', p: 0.5, display: 'flex', flexDirection: 'column', gap: 0.25 }}>
-                      {dayEvents.map((event, eventIndex) => (
-                        <Chip
-                          key={`${event.id}-${eventIndex}`}
-                          label={event.summary}
-                          size="small"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onEventClick(e, event);
-                          }}
-                          sx={{
-                            backgroundColor: getEventColor(event),
-                            color: 'white',
-                            fontSize: '0.65rem',
-                            height: 18,
-                            maxWidth: '100%',
-                            cursor: 'pointer',
-                            '&:hover': {
-                              opacity: 0.9,
-                            },
-                            '& .MuiChip-label': {
-                              px: 0.5,
-                              overflow: 'hidden',
-                              textOverflow: 'ellipsis',
-                              whiteSpace: 'nowrap'
-                            }
-                          }}
-                        />
-                      ))}
-                      {allEvents.filter(event => {
-                        if (!cellData.date) return false;
-                        const dayStart = new Date(cellData.date.getFullYear(), cellData.date.getMonth(), cellData.date.getDate());
-                        const dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000);
-
-                        const eventStart = event.start.dateTime ? new Date(event.start.dateTime) :
-                          event.start.date ? new Date(event.start.date) : null;
-                        const eventEnd = event.end.dateTime ? new Date(event.end.dateTime) :
-                          event.end.date ? new Date(event.end.date) : null;
-
-                        if (!eventStart) return false;
-
-                        return eventStart < dayEnd && (!eventEnd || eventEnd > dayStart);
-                      }).length > 3 && (
-                          <Typography variant="caption" sx={{ fontSize: '0.65rem', color: 'text.secondary', textAlign: 'center' }}>
-                            +{allEvents.filter(event => {
-                              const dayStart = new Date(cellData.date!.getFullYear(), cellData.date!.getMonth(), cellData.date!.getDate());
-                              const dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000);
-
-                              const eventStart = event.start.dateTime ? new Date(event.start.dateTime) :
-                                event.start.date ? new Date(event.start.date) : null;
-                              const eventEnd = event.end.dateTime ? new Date(event.end.dateTime) :
-                                event.end.date ? new Date(event.end.date) : null;
-
-                              if (!eventStart) return false;
-
-                              return eventStart < dayEnd && (!eventEnd || eventEnd > dayStart);
-                            }).length - 3} more
-                          </Typography>
-                        )}
-                    </Box>
-                  )}
-                </Box>
-              );
-            })}
-          </Box>
-        ))}
-      </Box>
-    </Paper>
-  );
-}
 
 export default function Calendar() {
   const intl = useIntl();
@@ -245,11 +20,16 @@ export default function Calendar() {
   const { setCalendarViewMode, setSelectedCalendarDate } = useTopicStore();
 
   // Google Calendar integration
-  const { fetchEventsForSelectedCalendars, calendars } = useGoogleCalendarStore();
+  const googleCalendarStore = useGoogleCalendarStore();
   const { googleCalendarConnected } = useUserTokenStore();
+
+  // Microsoft Calendar integration
+  const microsoftCalendarStore = useMicrosoftCalendarStore();
+  const { microsoftCalendarConnected } = useUserTokenStore();
 
   const [activeDateForView, setActiveDateForView] = useState<Date>(() => selectedDate || new Date());
   const [headerDisplayDate, setHeaderDisplayDate] = useState<Date>(() => activeDateForView);
+  const [eventSearchTerm, setEventSearchTerm] = useState('');
 
   // Popover state
   const [popoverAnchorEl, setPopoverAnchorEl] = useState<HTMLElement | null>(null);
@@ -268,9 +48,13 @@ export default function Calendar() {
 
   // Fetch events when view mode or date changes
   useEffect(() => {
-    if (!googleCalendarConnected || calendars.length === 0) return;
+    const hasConnectedCalendars =
+      (googleCalendarConnected && googleCalendarStore.calendars.length > 0) ||
+      (microsoftCalendarConnected && microsoftCalendarStore.calendars.length > 0);
 
-    const fetchEventsForCurrentView = () => {
+    if (!hasConnectedCalendars) return;
+
+    const fetchEventsForCurrentView = async () => {
       let timeMin: string, timeMax: string;
       const baseDate = new Date(activeDateForView);
 
@@ -296,11 +80,33 @@ export default function Calendar() {
           break;
       }
 
-      fetchEventsForSelectedCalendars(timeMin, timeMax);
+      // Fetch from both providers
+      const fetchPromises = [];
+
+      if (googleCalendarConnected && googleCalendarStore.calendars.length > 0) {
+        fetchPromises.push(googleCalendarStore.fetchEventsForSelectedCalendars(timeMin, timeMax));
+      }
+
+      if (microsoftCalendarConnected && microsoftCalendarStore.calendars.length > 0) {
+        fetchPromises.push(microsoftCalendarStore.fetchEventsForSelectedCalendars(timeMin, timeMax));
+      }
+
+      if (fetchPromises.length > 0) {
+        await Promise.allSettled(fetchPromises);
+      }
     };
 
     fetchEventsForCurrentView();
-  }, [calendarViewMode, activeDateForView, googleCalendarConnected, calendars, fetchEventsForSelectedCalendars]);
+  }, [
+    calendarViewMode,
+    activeDateForView,
+    googleCalendarConnected,
+    googleCalendarStore.calendars,
+    microsoftCalendarConnected,
+    microsoftCalendarStore.calendars,
+    googleCalendarStore.fetchEventsForSelectedCalendars,
+    microsoftCalendarStore.fetchEventsForSelectedCalendars
+  ]);
 
   useEffect(() => {
     setActiveDateForView(currentActiveDate => {
@@ -381,7 +187,6 @@ export default function Calendar() {
   const headerTextColor = 'text.primary';
   const headerSubTextColor = 'text.secondary';
 
-
   switch (calendarViewMode) {
     case 'day':
       const dayNumber = headerDisplayDate.getDate();
@@ -418,49 +223,68 @@ export default function Calendar() {
           {new Intl.DateTimeFormat(intl.locale, { month: 'long', year: 'numeric' }).format(headerDisplayDate)}
         </Typography>
       );
-      viewContent = <MonthViewInternal displayDate={headerDisplayDate} onEventClick={handleEventClick} />;
+      viewContent = <MonthView displayDate={headerDisplayDate} onEventClick={handleEventClick} />;
       break;
   }
 
+  const handleEventSearchChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    setEventSearchTerm(event.target.value);
+  };
+
   return (
     <Box sx={{ height: "100%", display: 'flex', flexDirection: 'column' }}>
-      <Typography
-        variant="h5"
-        component="h1"
-        gutterBottom
-        sx={{
-          fontWeight: 500,
-          px: 2,
-          pt: 1.5,
-          color: 'text.primary'
-        }}
-      >
-        <FormattedMessage id="calendar.pageTitle" defaultMessage="Calendar" />
-      </Typography>
-
-      <Box
-        sx={{
+      {/* Compact Header */}
+      <Box sx={{
+        px: 2,
+        py: 1,
+        borderBottom: 1,
+        borderColor: 'divider',
+        flexShrink: 0
+      }}>
+        <Box sx={{
           display: "flex",
           alignItems: "center",
-          justifyContent: 'space-between',
-          p: 1.5,
-          flexShrink: 0,
-        }}
-      >
-        <Box sx={{ display: "flex", alignItems: "center" }}>
-          <IconButton onClick={handlePrev} aria-label="Previous" sx={{ color: 'text.secondary' }}>
-            <ChevronLeftIcon />
-          </IconButton>
-          {viewHeaderDisplay}
-          <IconButton onClick={handleNext} aria-label="Next" sx={{ color: 'text.secondary' }}>
-            <ChevronRightIcon />
-          </IconButton>
-        </Box>
+          justifyContent: 'space-between'
+        }}>
+          {/* Left side: Title + Navigation */}
+          <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+            <Typography
+              variant="h6"
+              component="h1"
+              sx={{
+                fontWeight: 500,
+                color: 'text.primary',
+                mr: 1
+              }}
+            >
+              <FormattedMessage id="calendar.pageTitle" defaultMessage="Calendar" />
+            </Typography>
 
-        <Box sx={{ display: "flex", alignItems: "center" }}>
+            <Box sx={{ display: "flex", alignItems: "center" }}>
+              <IconButton
+                onClick={handlePrev}
+                aria-label="Previous"
+                size="small"
+                sx={{ color: 'text.secondary' }}
+              >
+                <ChevronLeftIcon />
+              </IconButton>
+              {viewHeaderDisplay}
+              <IconButton
+                onClick={handleNext}
+                aria-label="Next"
+                size="small"
+                sx={{ color: 'text.secondary' }}
+              >
+                <ChevronRightIcon />
+              </IconButton>
+            </Box>
+          </Box>
+
+          {/* Right side: View selector */}
           <FormControl size="small"
             sx={{
-              minWidth: 120,
+              minWidth: 100,
               '.MuiInputLabel-root': { color: 'text.secondary' },
               '.MuiSelect-select': { color: 'text.primary' },
               '.MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(0,0,0,0.23)' },

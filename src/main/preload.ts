@@ -79,9 +79,17 @@ type SocketChannels =
   | 'socket:connection-details'
   | 'socket:join-workspace';
 
+// Add these channels to the type definitions
+type GoogleServiceChannels = 'google-services:ready' | 'google-services:error';
+
+// Add to type definitions
+type MicrosoftAuthChannels = 'microsoft-auth:request-calendar' | 'microsoft-auth:result' | 'microsoft-auth:disconnect' | 'microsoft-auth:disconnected' | 'microsoft-calendar:fetch-calendars' | 'microsoft-calendar:fetch-events';
+
 export type Channels =
   | AuthChannels
   | GoogleAuthChannels
+  | MicrosoftAuthChannels
+  | GoogleServiceChannels
   | DbChannels
   | ApiChannels
   | MenuChannels
@@ -237,6 +245,31 @@ const electronHandler = {
   },
   shell: {
     openExternal: (url: string) => shell.openExternal(url),
+  },
+  microsoftAuth: {
+    requestCalendar: () => ipcRenderer.send('microsoft-auth:request-calendar'),
+    disconnect: () => ipcRenderer.send('microsoft-auth:disconnect'),
+    onResult: (callback: (event: IpcRendererEvent, result: any) => void) => {
+      ipcRenderer.on('microsoft-auth:result', callback);
+      return () => ipcRenderer.removeListener('microsoft-auth:result', callback);
+    },
+    onDisconnected: (callback: (event: IpcRendererEvent, result: any) => void) => {
+      ipcRenderer.on('microsoft-auth:disconnected', callback);
+      return () => ipcRenderer.removeListener('microsoft-auth:disconnected', callback);
+    },
+  },
+  microsoftCalendar: {
+    fetchCalendars: (token: string, refreshToken?: string) =>
+      ipcRenderer.invoke('microsoft-calendar:fetch-calendars', token, refreshToken),
+    fetchEvents: (params: {
+      token: string;
+      refreshToken?: string; // ADD THIS
+      calendarId?: string;
+      timeMin?: string;
+      timeMax?: string;
+      maxResults?: number
+    }) =>
+      ipcRenderer.invoke('microsoft-calendar:fetch-events', params),
   },
 };
 

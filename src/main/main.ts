@@ -33,6 +33,7 @@ import { initializeKnowledgeBaseHandlers } from './api/v2/onlysaid_kb';
 import { setupFileHandlers } from './api/v2/file';
 import { setupSocketHandlers } from './socket';
 import { setupStorageHandlers } from './api/v2/storage';
+import { initMicrosoftAuth } from './msft';
 
 // Load environment variables
 dotenv.config();
@@ -54,7 +55,7 @@ setupStorageHandlers();
 // Initialize authentication modules
 initAuth(process.env.ONLYSAID_API_URL || '', process.env.ONLYSAID_DOMAIN || '');
 
-// Initialize Google Auth in async function
+// Simplified Google Auth initialization (no preloading needed)
 async function initializeGoogleAuth() {
   console.log('[Main] ===== INITIALIZING GOOGLE AUTH =====');
   try {
@@ -67,8 +68,20 @@ async function initializeGoogleAuth() {
   }
 }
 
-// Call the initialization
+// Add Microsoft Auth initialization
+async function initializeMicrosoftAuth() {
+  console.log('[Main] ===== INITIALIZING MICROSOFT AUTH =====');
+  try {
+    initMicrosoftAuth();
+    console.log('[Main] Microsoft Auth initialized successfully');
+  } catch (error) {
+    console.warn('[Main] Microsoft Auth initialization failed:', error);
+  }
+}
+
+// Call both initializations
 initializeGoogleAuth();
+initializeMicrosoftAuth();
 
 // Initialize knowledge base handlers
 initializeKnowledgeBaseHandlers();
@@ -250,6 +263,14 @@ const createWindow = async () => {
     } else {
       mainWindow.show();
     }
+
+    // Since we're using direct HTTP requests, Google services are ready immediately
+    setTimeout(() => {
+      if (mainWindow && mainWindow.webContents) {
+        console.log('[Main] Google services ready (using direct HTTP requests)');
+        mainWindow.webContents.send('google-services:ready');
+      }
+    }, 1000); // Small delay to let UI settle
   });
 
   mainWindow.on('closed', () => {

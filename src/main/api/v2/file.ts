@@ -15,6 +15,7 @@ class FileOperationQueue {
     status: 'pending' | 'processing' | 'completed' | 'failed';
     progress: number;
     error?: Error;
+    result?: any;
   }> = [];
   private processing = false;
   private webSocketClient: any;
@@ -70,9 +71,10 @@ class FileOperationQueue {
     current.status = 'processing';
 
     try {
-      await current.operation();
+      const result = await current.operation();
       current.status = 'completed';
       current.progress = 100;
+      current.result = result;
 
       if (this.webSocketClient) {
         this.webSocketClient.emit('file:completed', { id: current.id });
@@ -99,7 +101,8 @@ class FileOperationQueue {
       id: operation.id,
       status: operation.status,
       progress: operation.progress,
-      error: operation.error?.message
+      error: operation.error?.message,
+      result: operation.result
     } : null;
   }
 }

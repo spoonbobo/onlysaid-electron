@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
-import { getUserTokenFromStore, getUserFromStore } from "@/utils/user";
+import { getUserTokenFromStore, getUserFromStore, getCurrentWorkspace } from "@/utils/user";
 import { v4 as uuidv4 } from 'uuid';
 import * as R from 'ramda';
 import { validate } from 'uuid';
@@ -11,6 +11,7 @@ import { useSocketStore } from "../Socket/SocketStore";
 import { useLLMStore } from '@/stores/LLM/LLMStore';
 import { IChatMessageToolCall } from '@/../../types/Chat/Message';
 import { DBTABLES } from '@/../../constants/db';
+import { IFile } from "../../../../types/File/File";
 
 const MESSAGE_FETCH_LIMIT = 35;
 
@@ -122,7 +123,7 @@ export const useChatStore = create<ChatState>()(
           const newChat = NewChat(userId, type, workspaceId);
           const chatId = uuidv4();
 
-          if (!workspaceId || workspaceId === 'undefined') {
+          if (!userId && (!workspaceId || workspaceId === 'undefined')) {
             await window.electron.db.query({
               query: `
                 insert into ${DBTABLES.CHATROOM}
@@ -175,7 +176,6 @@ export const useChatStore = create<ChatState>()(
       },
 
       deleteChat: async (chatId: string, local?: boolean) => {
-        set({ isLoading: true, error: null });
         try {
           if (local) {
             console.log('Deleting chat locally');
@@ -215,7 +215,7 @@ export const useChatStore = create<ChatState>()(
       getChat: async (userId: string, type: string, workspaceId?: string) => {
         set({ isLoading: true, error: null });
         try {
-          if (!workspaceId || workspaceId === 'undefined') {
+          if (!userId && (!workspaceId || workspaceId === 'undefined')) {
             let query = `
               select * from ${DBTABLES.CHATROOM}
               where type = @type
@@ -332,17 +332,18 @@ export const useChatStore = create<ChatState>()(
             text: messageData.text || "",
             created_at: messageData.created_at || new Date().toISOString(),
             reply_to: messageData.reply_to || undefined,
-            files: messageData.files || undefined,
+            file_ids: messageData.file_ids,
             sent_at: sent_at || new Date().toISOString(),
             status: status
           }
+          console.log('Sending message', message);
 
           await window.electron.db.query({
             query: `
             insert into messages
-            (id, chat_id, sender, text, created_at, reply_to, files, sent_at, status)
+            (id, chat_id, sender, text, created_at, reply_to, file_ids, sent_at, status)
             values
-            (@id, @chat_id, @sender, @text, @created_at, @reply_to, @files, @sent_at, @status)
+            (@id, @chat_id, @sender, @text, @created_at, @reply_to, @file_ids, @sent_at, @status)
             `,
             params: message
           });
@@ -501,10 +502,57 @@ export const useChatStore = create<ChatState>()(
               console.error("Error fetching user information:", error);
             }
 
+            // Collect all file IDs from messages that have them
+            const allFileIds: string[] = [];
+            const messageFileIdMap: Record<string, string[]> = {};
+
+            for (const msg of fetchedMessages) {
+              if (msg.file_ids) {
+                try {
+                  const fileIds = JSON.parse(msg.file_ids);
+                  if (Array.isArray(fileIds) && fileIds.length > 0) {
+                    messageFileIdMap[msg.id] = fileIds;
+                    allFileIds.push(...fileIds);
+                  }
+                } catch (error) {
+                  console.error(`Error parsing file_ids for message ${msg.id}:`, error);
+                }
+              }
+            }
+
+            // Fetch file metadata for all files at once
+            let filesMap: Record<string, IFile> = {};
+            if (allFileIds.length > 0) {
+              try {
+                const token = getUserTokenFromStore();
+                const workspace = getCurrentWorkspace();
+
+                if (token && workspace?.id) {
+                  const uniqueFileIds = [...new Set(allFileIds)]; // Remove duplicates
+                  const filesResponse = await window.electron.fileSystem.getFilesMetadata({
+                    workspaceId: workspace.id,
+                    fileIds: uniqueFileIds,
+                    token
+                  });
+                  console.log('filesResponse', filesResponse);
+
+                  if (filesResponse?.data) {
+                    filesMap = R.indexBy(R.prop('id'), filesResponse.data);
+                  }
+                }
+              } catch (error) {
+                console.error("Error fetching file metadata:", error);
+              }
+            }
+
             const messagesWithUsersAndReactions = R.map(msg => ({
               ...msg,
               sender_object: userMap[msg.sender] || null,
-              reactions: reactionsByMessageId[msg.id] || []
+              reactions: reactionsByMessageId[msg.id] || [],
+              // Populate files array from file_ids
+              files: messageFileIdMap[msg.id] ?
+                messageFileIdMap[msg.id].map(fileId => filesMap[fileId]).filter(Boolean) :
+                undefined
             }), fetchedMessages).filter(msg => !existingMessageIds.has(msg.id));
 
             if (!messagesByIdCache.has(chatId)) {

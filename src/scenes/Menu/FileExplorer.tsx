@@ -8,7 +8,6 @@ import CreateNewFolderIcon from "@mui/icons-material/CreateNewFolder";
 import FolderOpenIcon from "@mui/icons-material/FolderOpen";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import CloudDoneIcon from '@mui/icons-material/CloudDone';
-import MenuListItem from "@/components/Navigation/MenuListItem";
 import MenuSection from "@/components/Navigation/MenuSection";
 import { FormattedMessage } from "react-intl";
 import FileDropDialog from "@/components/Dialog/File";

@@ -6,6 +6,7 @@
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 import { useMemo } from 'react';
+import { IFile } from '@/../../types/File/File';
 
 // Define and export the key
 export const KNOWLEDGE_BASE_SELECTION_KEY = "knowledgeBaseMenu:selectedId";
@@ -48,7 +49,7 @@ interface TopicStore {
   setReplyingTo: (messageId: string | null) => void;
 
   attachments: Record<string, any>;
-  setAttachment: (type: string, file: any) => void;
+  setAttachment: (type: string, file: File, operationId?: string, uploadedFile?: IFile | null, status?: 'uploading' | 'completed' | 'failed') => void;
   clearAttachments: () => void;
 
   streamingState: StreamState;
@@ -174,13 +175,25 @@ export const useTopicStore = create<TopicStore>()(
 
       attachments: {},
 
-      setAttachment: (type, file) =>
-        set((state) => ({
-          attachments: {
-            ...state.attachments,
-            [type]: file,
-          },
-        })),
+      setAttachment: (type, file, operationId?, uploadedFile?, status?) =>
+        set((state) => {
+          const newAttachments = { ...state.attachments };
+
+          newAttachments[type] = {
+            type,
+            file,
+            operationId,
+            uploadedFile: uploadedFile || undefined,
+            isUploaded: status === 'completed' && !!uploadedFile,
+            isUploading: status === 'uploading' || (!status && !!operationId && !uploadedFile),
+            isFailed: status === 'failed',
+            fileName: file.name,
+            fileSize: file.size,
+            showProgress: status === 'uploading' || (!status && !!operationId && !uploadedFile)
+          };
+
+          return { attachments: newAttachments };
+        }),
 
       clearAttachments: () =>
         set({ attachments: {} }),
