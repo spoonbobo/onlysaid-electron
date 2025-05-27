@@ -7,6 +7,8 @@ interface IMicrosoftCalendarStore {
   calendars: ICalendar[];
   loading: boolean;
   error: string | null;
+  lastValidation: number | null;
+  autoRefreshEnabled: boolean;
 
   // Actions
   fetchCalendars: () => Promise<void>;
@@ -15,6 +17,9 @@ interface IMicrosoftCalendarStore {
   toggleCalendar: (calendarId: string) => void;
   getVisibleEvents: () => ICalendarEvent[];
   clearError: () => void;
+  validateConnection: () => Promise<boolean>;
+  enableAutoRefresh: () => void;
+  disableAutoRefresh: () => void;
 }
 
 // Helper function to add timeout to any promise
@@ -29,9 +34,19 @@ const withTimeout = <T>(promise: Promise<T>, timeoutMs: number = 15000): Promise
 
 // Helper function to handle authentication errors
 const handleAuthError = (error: any): boolean => {
-  if (error.message?.includes('401') || error.message?.includes('Unauthorized')) {
-    // Clear the invalid token
+  const errorMessage = error?.message || error?.toString() || '';
+
+  if (errorMessage.includes('401') ||
+    errorMessage.includes('Unauthorized') ||
+    errorMessage.includes('invalid_token') ||
+    errorMessage.includes('token_expired')) {
+
+    console.warn('[Microsoft Calendar Store] Authentication error detected, clearing connection');
+
+    // Clear the invalid token immediately
     useUserTokenStore.getState().setMicrosoftCalendarConnected(false, null, null, null);
+
+    // Remove the set() call - handle it in calling code
     return true;
   }
   return false;
@@ -42,6 +57,8 @@ export const useMicrosoftCalendarStore = create<IMicrosoftCalendarStore>((set, g
   calendars: [],
   loading: false,
   error: null,
+  lastValidation: null,
+  autoRefreshEnabled: true,
 
   fetchCalendars: async () => {
     const userTokenStore = useUserTokenStore.getState();
@@ -60,6 +77,12 @@ export const useMicrosoftCalendarStore = create<IMicrosoftCalendarStore>((set, g
     }
 
     set({ loading: true, error: null });
+
+    // Add connection validation before making API calls
+    if (get().autoRefreshEnabled) {
+      const isValid = await get().validateConnection();
+      if (!isValid) return;
+    }
 
     try {
       console.log('[Microsoft Calendar Store] Fetching calendars via electron...');
@@ -169,6 +192,12 @@ export const useMicrosoftCalendarStore = create<IMicrosoftCalendarStore>((set, g
     }
 
     set({ loading: true, error: null });
+
+    // Add connection validation before making API calls
+    if (get().autoRefreshEnabled) {
+      const isValid = await get().validateConnection();
+      if (!isValid) return;
+    }
 
     try {
       console.log('[Microsoft Calendar Store] Fetching events via electron...', { calendarId, timeMin, timeMax });
@@ -372,6 +401,56 @@ export const useMicrosoftCalendarStore = create<IMicrosoftCalendarStore>((set, g
   },
 
   clearError: () => set({ error: null }),
+
+  validateConnection: async () => {
+    const userTokenStore = useUserTokenStore.getState();
+    const token = userTokenStore.microsoftCalendarToken;
+
+    if (!token) {
+      set({ error: 'No Microsoft Calendar token available' });
+      return false;
+    }
+
+    try {
+      // Simple validation call
+      const response = await fetch('https://graph.microsoft.com/v1.0/me', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Accept': 'application/json',
+        },
+      });
+
+      const isValid = response.ok;
+
+      if (isValid) {
+        set({ lastValidation: Date.now(), error: null });
+      } else {
+        if (handleAuthError(new Error('Token validation failed'))) {
+          set({
+            calendars: [],
+            events: [],
+            error: 'Microsoft Calendar authentication expired. Please reconnect in Settings.',
+            loading: false
+          });
+        }
+      }
+      return isValid;
+    } catch (error) {
+      console.error('[Microsoft Calendar Store] Connection validation failed:', error);
+      if (handleAuthError(error)) {
+        set({
+          calendars: [],
+          events: [],
+          error: 'Microsoft Calendar authentication expired. Please reconnect in Settings.',
+          loading: false
+        });
+      }
+      return false;
+    }
+  },
+
+  enableAutoRefresh: () => set({ autoRefreshEnabled: true }),
+  disableAutoRefresh: () => set({ autoRefreshEnabled: false }),
 }));
 
 // Helper functions to map Microsoft Graph API responses to unified types

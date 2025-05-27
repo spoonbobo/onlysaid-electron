@@ -37,7 +37,6 @@ interface FileDisplayProps {
 }
 
 const FileDisplay: React.FC<FileDisplayProps> = ({ message }) => {
-  // ALL hooks must be declared first, before any conditional logic
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewFile, setPreviewFile] = useState<IFile | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
@@ -47,10 +46,10 @@ const FileDisplay: React.FC<FileDisplayProps> = ({ message }) => {
   const [downloadOperationIds, setDownloadOperationIds] = useState<Record<string, string>>({});
   const [loadingFiles, setLoadingFiles] = useState(false);
   const [resolvedFiles, setResolvedFiles] = useState<IFile[]>([]);
+  const [tooltipKeys, setTooltipKeys] = useState<Record<string, number>>({});
 
   const { fileProgress } = useSocketStore();
 
-  // ALL useCallback hooks MUST be here before any conditional logic
   const handleDownload = useCallback(async (file: IFile) => {
     try {
       const token = getUserTokenFromStore();
@@ -61,10 +60,8 @@ const FileDisplay: React.FC<FileDisplayProps> = ({ message }) => {
         return;
       }
 
-      // Mark file as downloading
       setDownloading(prev => ({ ...prev, [file.id]: true }));
 
-      // Try to open folder dialog first
       let selectedFolder: string | null = null;
 
       try {
@@ -80,23 +77,20 @@ const FileDisplay: React.FC<FileDisplayProps> = ({ message }) => {
         }
       } catch (dialogError) {
         console.warn('Folder dialog failed:', dialogError);
+        toast.error('Failed to open folder selection dialog');
+        setDownloading(prev => ({ ...prev, [file.id]: false }));
+        setTooltipKeys(prev => ({ ...prev, [file.id]: (prev[file.id] || 0) + 1 }));
+        return;
       }
 
-      // Fallback to Downloads folder or home directory
       if (!selectedFolder) {
-        try {
-          const homeDir = await window.electron.homedir();
-          selectedFolder = `${homeDir}/Downloads`;
-          toast.info(`Downloading to Downloads folder: ${file.name}`);
-        } catch (homeDirError) {
-          toast.error('Could not determine download location');
-          setDownloading(prev => ({ ...prev, [file.id]: false }));
-          return;
-        }
-      } else {
-        toast.info(`Downloading: ${file.name}`);
+        toast.info('Download cancelled - no location selected');
+        setDownloading(prev => ({ ...prev, [file.id]: false }));
+        setTooltipKeys(prev => ({ ...prev, [file.id]: (prev[file.id] || 0) + 1 }));
+        return;
       }
 
+      toast.info(`Downloading: ${file.name}`);
       const destinationPath = `${selectedFolder}/${file.name}`;
       console.log('Final download path:', destinationPath);
 
@@ -110,6 +104,7 @@ const FileDisplay: React.FC<FileDisplayProps> = ({ message }) => {
       if (result.error) {
         toast.error(`Download failed: ${result.error}`);
         setDownloading(prev => ({ ...prev, [file.id]: false }));
+        setTooltipKeys(prev => ({ ...prev, [file.id]: (prev[file.id] || 0) + 1 }));
         return;
       }
 
@@ -121,57 +116,45 @@ const FileDisplay: React.FC<FileDisplayProps> = ({ message }) => {
 
         console.log('🔄 Starting download with operationId:', result.operationId);
 
-        // Monitor download completion
         const checkStatus = async () => {
           try {
             const status = await window.electron.fileSystem.getStatus(result.operationId);
             console.log('📁 Download status:', status);
 
             if (status?.status === 'completed') {
-              // Clean up progress and downloading state
               setDownloading(prev => ({ ...prev, [file.id]: false }));
-
               toast.success(`Downloaded to: ${destinationPath}`);
-              return; // Stop the loop
+              return;
             } else if (status?.status === 'failed') {
               const errorMsg = status.error || 'Unknown error';
-
-              // Clean up progress and downloading state
               setDownloading(prev => ({ ...prev, [file.id]: false }));
-
               toast.error(`Download failed: ${errorMsg}`);
-              return; // Stop the loop
+              return;
             } else if (status?.status === 'processing' || status?.status === 'pending') {
-              // Continue checking for these statuses
               setTimeout(checkStatus, 1000);
             } else {
-              // For any other status, stop polling
               console.warn('Stopping polling for unknown status:', status);
               setDownloading(prev => ({ ...prev, [file.id]: false }));
               return;
             }
           } catch (error) {
             console.error('Error checking download status:', error);
-
-            // Clean up on error
             setDownloading(prev => ({ ...prev, [file.id]: false }));
-
             toast.error(`Download monitoring failed: ${error}`);
           }
         };
 
-        // Start checking after a short delay
         setTimeout(checkStatus, 500);
       }
     } catch (error) {
       console.error('Download error:', error);
       toast.error(`Download failed: ${error}`);
       setDownloading(prev => ({ ...prev, [file.id]: false }));
+      setTooltipKeys(prev => ({ ...prev, [file.id]: (prev[file.id] || 0) + 1 }));
     }
   }, []);
 
   const handlePreview = useCallback(async (file: IFile) => {
-    // Only preview certain file types
     const previewableMimeTypes = [
       'image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml',
       'text/plain', 'text/markdown', 'application/json',
@@ -197,7 +180,6 @@ const FileDisplay: React.FC<FileDisplayProps> = ({ message }) => {
         return;
       }
 
-      // Get file metadata which might include preview URL or content
       const metadataResponse = await window.electron.fileSystem.getFileMetadata({
         workspaceId: workspace.id,
         fileId: file.id,
@@ -205,7 +187,6 @@ const FileDisplay: React.FC<FileDisplayProps> = ({ message }) => {
       });
 
       if (metadataResponse?.data) {
-        // For text files, we might get content directly
         if (file.mime_type.startsWith('text/') || file.mime_type.includes('json')) {
           setPreviewContent(`File: ${file.name}\nSize: ${formatFileSize(file.size)}\nType: ${file.mime_type}`);
         } else if (file.mime_type.startsWith('image/')) {
@@ -226,7 +207,6 @@ const FileDisplay: React.FC<FileDisplayProps> = ({ message }) => {
     setPreviewContent(null);
   }, []);
 
-  // ALL useEffect hooks here
   useEffect(() => {
     const resolveFiles = async () => {
       if (message.files && message.files.length > 0) {
@@ -268,7 +248,6 @@ const FileDisplay: React.FC<FileDisplayProps> = ({ message }) => {
     resolveFiles();
   }, [message.files, message.file_ids]);
 
-  // NOW you can do conditional returns
   if ((!message.files || message.files.length === 0) && !message.file_ids) {
     return null;
   }
@@ -301,7 +280,6 @@ const FileDisplay: React.FC<FileDisplayProps> = ({ message }) => {
     return null;
   }
 
-  // Helper functions (not hooks) can be anywhere
   const formatFileSize = (bytes: number): string => {
     if (bytes === 0) return '0 B';
     const k = 1024;
@@ -356,7 +334,6 @@ const FileDisplay: React.FC<FileDisplayProps> = ({ message }) => {
   return (
     <>
       <Box sx={{ mt: 1, mb: 0.5 }}>
-        {/* Files Section Header */}
         <Box sx={{
           display: 'flex',
           alignItems: 'center',
@@ -396,7 +373,6 @@ const FileDisplay: React.FC<FileDisplayProps> = ({ message }) => {
           </Typography>
         </Box>
 
-        {/* Files List */}
         {resolvedFiles.map((file, index) => {
           const fileProgress = getFileProgress(file);
           const isDownloading = downloading[file.id];
@@ -422,7 +398,6 @@ const FileDisplay: React.FC<FileDisplayProps> = ({ message }) => {
                 gap: 1.5,
                 minHeight: 0
               }}>
-                {/* File Icon */}
                 <Box sx={{
                   display: 'flex',
                   alignItems: 'center',
@@ -431,7 +406,6 @@ const FileDisplay: React.FC<FileDisplayProps> = ({ message }) => {
                   {getFileIcon(file.mime_type, file.name)}
                 </Box>
 
-                {/* File Info */}
                 <Box sx={{ flex: 1, minWidth: 0 }}>
                   <Typography
                     variant="body2"
@@ -482,7 +456,6 @@ const FileDisplay: React.FC<FileDisplayProps> = ({ message }) => {
                   </Box>
                 </Box>
 
-                {/* Action Buttons */}
                 <Box sx={{
                   display: 'flex',
                   gap: 0.5,
@@ -500,7 +473,10 @@ const FileDisplay: React.FC<FileDisplayProps> = ({ message }) => {
                       </IconButton>
                     </Tooltip>
                   )}
-                  <Tooltip title={isDownloading ? "Downloading..." : "Download"}>
+                  <Tooltip
+                    key={tooltipKeys[file.id] || 0}
+                    title={isDownloading ? "Downloading..." : "Download"}
+                  >
                     <IconButton
                       size="small"
                       onClick={() => handleDownload(file)}
@@ -517,7 +493,6 @@ const FileDisplay: React.FC<FileDisplayProps> = ({ message }) => {
                 </Box>
               </Box>
 
-              {/* Progress Bar */}
               {isDownloading && fileProgress !== null && (
                 <Box sx={{ mt: 1 }}>
                   <LinearProgress
@@ -539,16 +514,17 @@ const FileDisplay: React.FC<FileDisplayProps> = ({ message }) => {
         })}
       </Box>
 
-      {/* Preview Dialog */}
       <Dialog
         open={previewOpen}
         onClose={handleClosePreview}
         maxWidth="md"
         fullWidth
-        PaperProps={{
-          sx: {
-            maxHeight: '80vh',
-            bgcolor: 'background.paper'
+        slotProps={{
+          paper: {
+            sx: {
+              maxHeight: '80vh',
+              bgcolor: 'background.paper'
+            }
           }
         }}
       >

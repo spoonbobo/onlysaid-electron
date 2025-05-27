@@ -140,6 +140,16 @@ const ChatBubble = memo(({
     setDeleteDialogOpen(false);
   }, []);
 
+  const handleMenuButtonClick = useCallback((event: React.MouseEvent<HTMLButtonElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+
+    const buttonRect = event.currentTarget.getBoundingClientRect();
+    setMenuPosition({
+      top: buttonRect.bottom + 4,
+      left: buttonRect.left,
+    });
+  }, []);
 
   return (
     <Box
@@ -369,7 +379,11 @@ const ChatBubble = memo(({
           <IconButton size="small" sx={{ p: 0.5, borderRadius: 1, m: 0.1 }} onClick={handleReplyClick}>
             <ReplyIcon fontSize="small" />
           </IconButton>
-          <IconButton size="small" sx={{ p: 0.5, borderRadius: 1, m: 0.1 }} onClick={handleContextMenu}>
+          <IconButton
+            size="small"
+            sx={{ p: 0.5, borderRadius: 1, m: 0.1 }}
+            onClick={handleMenuButtonClick}
+          >
             <MoreHorizIcon fontSize="small" />
           </IconButton>
         </Box>

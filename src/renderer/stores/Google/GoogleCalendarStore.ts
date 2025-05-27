@@ -15,6 +15,7 @@ interface IGoogleCalendarStore {
   toggleCalendar: (calendarId: string) => void;
   getVisibleEvents: () => ICalendarEvent[];
   clearError: () => void;
+  validateConnection: () => Promise<boolean>;
 }
 
 // Helper function to add timeout to any promise
@@ -25,6 +26,24 @@ const withTimeout = <T>(promise: Promise<T>, timeoutMs: number = 15000): Promise
       setTimeout(() => reject(new Error(`Operation timed out after ${timeoutMs}ms`)), timeoutMs)
     )
   ]);
+};
+
+// Add enhanced error handling that syncs with UserToken store
+const handleGoogleAuthError = (error: any): boolean => {
+  const errorMessage = error?.message || error?.toString() || '';
+
+  if (errorMessage.includes('401') ||
+    errorMessage.includes('Unauthorized') ||
+    errorMessage.includes('invalid_token')) {
+
+    console.warn('[Google Calendar Store] Authentication error detected, clearing connection');
+
+    // Clear the invalid token immediately
+    useUserTokenStore.getState().setGoogleCalendarConnected(false, null, null);
+
+    return true;
+  }
+  return false;
 };
 
 export const useGoogleCalendarStore = create<IGoogleCalendarStore>((set, get) => ({
@@ -244,4 +263,40 @@ export const useGoogleCalendarStore = create<IGoogleCalendarStore>((set, get) =>
   },
 
   clearError: () => set({ error: null }),
+
+  validateConnection: async () => {
+    const token = useUserTokenStore.getState().googleCalendarToken;
+
+    if (!token) {
+      set({ error: 'No Google Calendar token available' });
+      return false;
+    }
+
+    try {
+      const response = await fetch('https://www.googleapis.com/calendar/v3/users/me/calendarList?maxResults=1', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Accept': 'application/json',
+        },
+      });
+
+      const isValid = response.ok;
+
+      if (!isValid) {
+        handleGoogleAuthError(new Error('Token validation failed'));
+        set({
+          error: 'Google Calendar authentication expired. Please reconnect in Settings.',
+          calendars: [],
+          events: [],
+          loading: false
+        });
+      }
+
+      return isValid;
+    } catch (error) {
+      console.error('[Google Calendar Store] Connection validation failed:', error);
+      handleGoogleAuthError(error);
+      return false;
+    }
+  },
 }));

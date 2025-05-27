@@ -13,7 +13,7 @@ import { useSocketStore } from "../Socket/SocketStore";
 import { useLLMStore } from '@/renderer/stores/LLM/LLMStore';
 import { IChatMessageToolCall } from '@/../../types/Chat/Message';
 import { DBTABLES } from '@/../../constants/db';
-import { IFile } from "../../../../types/File/File";
+import { IFile } from "@/../../types/File/File";
 
 const MESSAGE_FETCH_LIMIT = 35;
 

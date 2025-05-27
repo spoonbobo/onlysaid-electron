@@ -3,7 +3,7 @@ import HomeIcon from "@mui/icons-material/Home";
 import AddIcon from "@mui/icons-material/Add";
 import GroupIcon from "@mui/icons-material/Group";
 import CalendarTodayIcon from "@mui/icons-material/CalendarToday";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { useTopicStore, TopicContext } from "@/renderer/stores/Topic/TopicStore";
 import { useWorkspaceStore } from "@/renderer/stores/Workspace/WorkspaceStore";
 import { useUserStore } from "@/renderer/stores/User/UserStore";
@@ -28,14 +28,29 @@ function SidebarTabs() {
   const [dialogCreation, setDialogCreation] = useState(false);
   const intl = useIntl();
   const previousUserRef = useRef(user);
-  const homeContext = contexts.find(context => context.name === "home" && context.type === "home") || contexts[0];
+  const [renderKey, setRenderKey] = useState(0);
+  const [tooltipKey, setTooltipKey] = useState(0);
+
+  const homeContext = useMemo(() => {
+    const foundContext = contexts.find(context => context.name === "home" && context.type === "home");
+    return foundContext || { name: "home", type: "home" };
+  }, [contexts]);
 
   useEffect(() => {
     const previousUser = previousUserRef.current;
     previousUserRef.current = user;
 
+    if (process.env.NODE_ENV === 'development') {
+      console.log('👤 [DEBUG] User state change:', {
+        previousUser: !!previousUser,
+        currentUser: !!user,
+        userChanged: previousUser !== user
+      });
+    }
+
     if (previousUser && !user) {
-      setSelectedContext(homeContext);
+      console.log('🚪 [DEBUG] User logged out, resetting to home');
+      setSelectedContext(homeContext as TopicContext);
 
       const workspaceContexts = [...contexts].filter(ctx => ctx.type === "workspace");
       workspaceContexts.forEach(ctx => removeContext(ctx));
@@ -46,7 +61,7 @@ function SidebarTabs() {
     if (!previousUser && user && user.id) {
       getWorkspace(user.id);
     }
-  }, [user, homeContext, setSelectedContext, removeContext, contexts, getWorkspace]);
+  }, [user, setSelectedContext, removeContext, contexts, getWorkspace]);
 
   useEffect(() => {
     const currentUser = getUserFromStore();
@@ -167,7 +182,7 @@ function SidebarTabs() {
       removeContext(workspaceToExit);
 
       if (selectedContext?.id === workspaceToExit.id) {
-        setSelectedContext(homeContext);
+        setSelectedContext(homeContext as TopicContext);
       }
 
       const currentUser = getUserFromStore();
@@ -242,6 +257,54 @@ function SidebarTabs() {
     });
   };
 
+  useEffect(() => {
+    console.log('SidebarTabs debug:', {
+      selectedContext,
+      homeContext,
+      user: !!user,
+      workspacesLength: workspaces.length,
+      contextsLength: contexts.length
+    });
+  }, [selectedContext, homeContext, user, workspaces.length, contexts.length]);
+
+  useEffect(() => {
+    if (process.env.NODE_ENV === 'development') {
+      console.log('📊 [DEBUG] SidebarTabs state:', {
+        selectedContextName: selectedContext?.name,
+        selectedContextType: selectedContext?.type,
+        selectedContextId: selectedContext?.id,
+        homeContextName: homeContext?.name,
+        homeContextType: homeContext?.type,
+        isHomeSelected: selectedContext?.name === "home" && selectedContext?.type === "home",
+        contextsLength: contexts.length
+      });
+    }
+  }, [selectedContext, homeContext, contexts.length]);
+
+  useEffect(() => {
+    if (process.env.NODE_ENV === 'development') {
+      const handleVisibilityChange = () => {
+        setTimeout(() => {
+          setShowAddTeamDialog(prev => prev);
+        }, 50);
+      };
+
+      document.addEventListener('visibilitychange', handleVisibilityChange);
+      return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (process.env.NODE_ENV === 'development') {
+      const handleResize = () => {
+        setTooltipKey(prev => prev + 1);
+      };
+
+      window.addEventListener('resize', handleResize);
+      return () => window.removeEventListener('resize', handleResize);
+    }
+  }, []);
+
   return (
     <>
       <Box
@@ -258,8 +321,13 @@ function SidebarTabs() {
           gap: 2
         }}
       >
-        <Tooltip title="Home" placement="right">
+        <Tooltip
+          key={`home-tooltip-${tooltipKey}`}
+          title="Home"
+          placement="right"
+        >
           <Box
+            key={`home-${renderKey}`}
             sx={{
               borderBottom: selectedContext?.name === "home" && selectedContext?.type === "home"
                 ? "3px solid"
@@ -273,7 +341,7 @@ function SidebarTabs() {
             <IconButton
               color="primary"
               size="large"
-              onClick={() => handleNavigate(homeContext)}
+              onClick={() => handleNavigate(homeContext as TopicContext)}
             >
               <HomeIcon />
             </IconButton>
@@ -287,7 +355,7 @@ function SidebarTabs() {
 
           return (
             <Tooltip
-              key={workspaceContext.id || `workspace-${workspaceContext.name}`}
+              key={`workspace-tooltip-${tooltipKey}-${workspaceContext.id || workspaceContext.name}`}
               title={`${intl.formatMessage({ id: "workspace.title", defaultMessage: "Workspace" })}: ${workspaceContext.name}${workspaceContext.id ? ` (${workspaceContext.id.slice(0, 8)})` : ''}`}
               placement="right"
             >
@@ -327,7 +395,11 @@ function SidebarTabs() {
         })}
 
         {user && (
-          <Tooltip title={intl.formatMessage({ id: "workspace.create.title", defaultMessage: "Add Workspace" })} placement="right">
+          <Tooltip
+            key={`add-workspace-tooltip-${tooltipKey}`}
+            title={intl.formatMessage({ id: "workspace.create.title", defaultMessage: "Add Workspace" })}
+            placement="right"
+          >
             <Box>
               <IconButton
                 color="primary"
@@ -341,7 +413,11 @@ function SidebarTabs() {
         )}
 
         {user && (
-          <Tooltip title={intl.formatMessage({ id: "calendar.title", defaultMessage: "Calendar" })} placement="right">
+          <Tooltip
+            key={`calendar-tooltip-${tooltipKey}`}
+            title={intl.formatMessage({ id: "calendar.title", defaultMessage: "Calendar" })}
+            placement="right"
+          >
             <Box
               sx={{
                 borderBottom: selectedContext?.name === "calendar" && selectedContext?.type === "calendar"

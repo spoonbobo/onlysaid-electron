@@ -7,7 +7,6 @@ import { useMCPStore } from '@/renderer/stores/MCP/MCPStore';
 import { useToastStore } from '@/renderer/stores/Notification/ToastStore';
 import { useSocketStore } from '@/renderer/stores/Socket/SocketStore';
 
-
 function App() {
   const { selectedContext, contexts, setSelectedContext } = useTopicStore();
   const { getAllConfiguredServers, initializeClient } = useMCPStore();
@@ -58,12 +57,10 @@ function App() {
     }
   }, [isConnected]);
 
-  // Add Google services background loading listener
   useEffect(() => {
     const handleGoogleServicesReady = () => {
       console.log('[App] Google services ready');
       setGoogleServicesReady(true);
-      // Don't show toast since it's ready immediately now
     };
 
     const handleGoogleServicesError = (event: any, error: any) => {
@@ -75,7 +72,6 @@ function App() {
       );
     };
 
-    // Listen for Google services ready event
     const removeReadyListener = window.electron.ipcRenderer.on('google-services:ready', handleGoogleServicesReady);
     const removeErrorListener = window.electron.ipcRenderer.on('google-services:error', handleGoogleServicesError);
 
@@ -85,11 +81,9 @@ function App() {
     };
   }, []);
 
-  // Add Microsoft Calendar listeners initialization
   useEffect(() => {
     console.log('[App] Initializing calendar listeners...');
 
-    // Initialize both Google and Microsoft Calendar listeners
     const cleanupGoogle = initializeGoogleCalendarListeners();
     const cleanupMicrosoft = initializeMicrosoftCalendarListeners();
 

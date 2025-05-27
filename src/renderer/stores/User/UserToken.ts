@@ -54,6 +54,18 @@ interface UserTokenStore {
   setMicrosoftCalendarError: (error: string | null) => void;
   setMicrosoftCalendarConnected: (connected: boolean, user: MicrosoftCalendarUser | null, token: string | null, refreshToken?: string | null) => void;
   initializeMicrosoftCalendarListeners: () => () => void;
+
+  // New health check properties
+  lastGoogleHealthCheck: number | null;
+  lastMicrosoftHealthCheck: number | null;
+  healthCheckInterval: number; // 5 minutes default
+
+  // New methods
+  validateGoogleToken: () => Promise<boolean>;
+  validateMicrosoftToken: () => Promise<boolean>;
+  performHealthCheck: () => Promise<void>;
+  startPeriodicHealthCheck: () => () => void;
+  refreshMicrosoftToken: () => Promise<boolean>;
 }
 
 export const useUserTokenStore = create<UserTokenStore>()(
@@ -78,6 +90,11 @@ export const useUserTokenStore = create<UserTokenStore>()(
       microsoftCalendarUser: null,
       microsoftCalendarConnecting: false,
       microsoftCalendarError: null,
+
+      // New health check state
+      lastGoogleHealthCheck: null,
+      lastMicrosoftHealthCheck: null,
+      healthCheckInterval: 5 * 60 * 1000, // 5 minutes
 
       // Original methods
       getToken: () => get().token,
@@ -324,9 +341,148 @@ export const useUserTokenStore = create<UserTokenStore>()(
           cleanupDisconnected?.();
         };
       },
+
+      // New health check methods
+      validateGoogleToken: async () => {
+        const token = get().googleCalendarToken;
+        if (!token) return false;
+
+        try {
+          // Simple API call to validate token
+          const response = await fetch('https://www.googleapis.com/calendar/v3/users/me/calendarList?maxResults=1', {
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Accept': 'application/json',
+            },
+          });
+
+          const isValid = response.ok;
+
+          if (!isValid) {
+            console.warn('[Google Token] Token validation failed, disconnecting');
+            get().disconnectGoogleCalendar();
+          } else {
+            set({ lastGoogleHealthCheck: Date.now() });
+          }
+
+          return isValid;
+        } catch (error) {
+          console.error('[Google Token] Validation error:', error);
+          get().disconnectGoogleCalendar();
+          return false;
+        }
+      },
+
+      validateMicrosoftToken: async () => {
+        const token = get().microsoftCalendarToken;
+        const refreshToken = get().microsoftCalendarRefreshToken;
+
+        if (!token) return false;
+
+        try {
+          // Simple API call to validate token
+          const response = await fetch('https://graph.microsoft.com/v1.0/me', {
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Accept': 'application/json',
+            },
+          });
+
+          if (response.ok) {
+            set({ lastMicrosoftHealthCheck: Date.now() });
+            return true;
+          }
+
+          // If token is invalid and we have refresh token, try to refresh
+          if (response.status === 401 && refreshToken) {
+            console.log('[Microsoft Token] Token expired, attempting refresh...');
+            const refreshed = await get().refreshMicrosoftToken();
+            if (refreshed) {
+              set({ lastMicrosoftHealthCheck: Date.now() });
+              return true;
+            }
+          }
+
+          console.warn('[Microsoft Token] Token validation failed, disconnecting');
+          get().disconnectMicrosoftCalendar();
+          return false;
+        } catch (error) {
+          console.error('[Microsoft Token] Validation error:', error);
+
+          // Try refresh if we have refresh token
+          if (refreshToken) {
+            const refreshed = await get().refreshMicrosoftToken();
+            if (refreshed) {
+              set({ lastMicrosoftHealthCheck: Date.now() });
+              return true;
+            }
+          }
+
+          get().disconnectMicrosoftCalendar();
+          return false;
+        }
+      },
+
+      refreshMicrosoftToken: async () => {
+        const refreshToken = get().microsoftCalendarRefreshToken;
+        if (!refreshToken) return false;
+
+        try {
+          const result = await (window as any).electron?.microsoftAuth?.refreshToken(refreshToken);
+
+          if (result?.success) {
+            console.log('[Microsoft Token] Token refreshed successfully');
+            set({
+              microsoftCalendarToken: result.accessToken,
+              microsoftCalendarRefreshToken: result.refreshToken || refreshToken,
+            });
+            return true;
+          } else {
+            console.error('[Microsoft Token] Refresh failed:', result?.error);
+            return false;
+          }
+        } catch (error) {
+          console.error('[Microsoft Token] Refresh error:', error);
+          return false;
+        }
+      },
+
+      performHealthCheck: async () => {
+        const state = get();
+        const now = Date.now();
+
+        // Check Google token if connected and not recently checked
+        if (state.googleCalendarConnected &&
+          (!state.lastGoogleHealthCheck ||
+            now - state.lastGoogleHealthCheck > state.healthCheckInterval)) {
+          await get().validateGoogleToken();
+        }
+
+        // Check Microsoft token if connected and not recently checked
+        if (state.microsoftCalendarConnected &&
+          (!state.lastMicrosoftHealthCheck ||
+            now - state.lastMicrosoftHealthCheck > state.healthCheckInterval)) {
+          await get().validateMicrosoftToken();
+        }
+      },
+
+      startPeriodicHealthCheck: () => {
+        const interval = setInterval(() => {
+          get().performHealthCheck();
+        }, get().healthCheckInterval);
+
+        // Return cleanup function
+        return () => clearInterval(interval);
+      },
     }),
     {
       name: "user-token-storage",
+      // Don't persist health check timestamps
+      partialize: (state) => ({
+        ...state,
+        lastGoogleHealthCheck: null,
+        lastMicrosoftHealthCheck: null,
+      }),
     }
   )
 );
