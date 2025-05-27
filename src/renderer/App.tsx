@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react';
-import MainInterface from '../scenes/Interface/MainInterface';
-import { useTopicStore } from '../stores/Topic/TopicStore';
-import { useUserStore, setupDeeplinkAuthListener } from '../stores/User/UserStore';
-import { useUserTokenStore } from '../stores/User/UserToken';
-import { useMCPStore } from '../stores/MCP/MCPStore';
-import { useToastStore } from '../stores/Notification/ToastStore';
-import { useSocketStore } from '../stores/Socket/SocketStore';
+import MainInterface from '@/renderer/scenes/Interface/MainInterface';
+import { useTopicStore } from '@/renderer/stores/Topic/TopicStore';
+import { useUserStore, setupDeeplinkAuthListener } from '@/renderer/stores/User/UserStore';
+import { useUserTokenStore } from '@/renderer/stores/User/UserToken';
+import { useMCPStore } from '@/renderer/stores/MCP/MCPStore';
+import { useToastStore } from '@/renderer/stores/Notification/ToastStore';
+import { useSocketStore } from '@/renderer/stores/Socket/SocketStore';
 
 
 function App() {

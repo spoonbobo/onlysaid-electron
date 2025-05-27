@@ -1,11 +1,11 @@
-import { useAgentStore } from "@/stores/Agent/AgentStore";
-import { useUserTokenStore } from "@/stores/User/UserToken";
-import { useChatStore } from "@/stores/Chat/ChatStore";
-import { useStreamStore } from "@/stores/SSE/StreamStore";
-import { useTopicStore } from "@/stores/Topic/TopicStore";
-import { useSelectedModelStore } from "@/stores/LLM/SelectedModelStore";
-import { useUserStore } from "@/stores/User/UserStore";
-import { useMCPClientStore } from '@/stores/MCP/MCPClient';
+import { useAgentStore } from "@/renderer/stores/Agent/AgentStore";
+import { useUserTokenStore } from "@/renderer/stores/User/UserToken";
+import { useChatStore } from "@/renderer/stores/Chat/ChatStore";
+import { useStreamStore } from "@/renderer/stores/SSE/StreamStore";
+import { useTopicStore } from "@/renderer/stores/Topic/TopicStore";
+import { useSelectedModelStore } from "@/renderer/stores/LLM/SelectedModelStore";
+import { useUserStore } from "@/renderer/stores/User/UserStore";
+import { useMCPClientStore } from '@/renderer/stores/MCP/MCPClient';
 
 // Get agent from store
 export const getAgentFromStore = () => {

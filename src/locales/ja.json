@@ -212,6 +212,7 @@
   "settings.mcp.filterByCategory": "カテゴリでフィルタリング",
   "settings.mcp.category.weather": "天気",
   "settings.mcp.category.accommodation": "宿泊",
+  "settings.mcp.category.productivity": "生産性",
   "settings.mcpConfiguration": "MCP設定",
   "settings.mcp.enableSmithery": "Smithery連携を有効化",
   "settings.mcp.smitheryKey": "Smithery APIキー",
@@ -454,6 +455,7 @@
   "toolDisplay.statusLabel": "ステータス:",
   "toolDisplay.statusPending": "保留中",
   "toolDisplay.reset": "リセット",
+  "calendar.title": "カレンダー",
 
   "dialog.toolLog.title": "{toolName}のログ",
   "dialog.toolLog.defaultTitle": "ツール呼び出しのログ",
@@ -483,5 +485,36 @@
 
   "dialog.file.download": "ダウンロード",
   "dialog.file.downloading": "ダウンロード中...",
-  "settings.mcp.category.productivity": "生産性"
+
+  "settings.apiKeys": "APIキー",
+  "settings.userAPIKeys": "ユーザーAPIキー",
+  "settings.kb.title": "ナレッジベース",
+
+  "googleCalendar.title": "Googleカレンダー",
+  "googleCalendar.description": "Googleカレンダーに接続してイベントを同期し、スケジュールを管理します。",
+  "googleCalendar.connect": "Googleカレンダーに接続",
+  "googleCalendar.connecting": "接続中...",
+  "googleCalendar.connected": "Googleカレンダーが接続されました",
+  "googleCalendar.disconnect": "接続を切断",
+  "googleCalendar.error": "エラー：{error}",
+
+  "microsoftCalendar.title": "Microsoft Outlookカレンダー",
+  "microsoftCalendar.description": "Microsoft Outlookカレンダーに接続してイベントと会議を同期します。",
+  "microsoftCalendar.connect": "Microsoftカレンダーに接続",
+  "microsoftCalendar.connecting": "接続中...",
+  "microsoftCalendar.connected": "Microsoftカレンダーが接続されました",
+  "microsoftCalendar.disconnect": "接続を切断",
+  "microsoftCalendar.error": "エラー：{error}",
+
+  "calendar.calendars": "カレンダー",
+  "calendar.primary": "メイン",
+  "calendar.noCalendars": "利用可能なカレンダーがありません",
+  "calendar.provider.google": "Google",
+  "calendar.provider.microsoft": "Microsoft",
+  "workspace.members.noPending": "保留中の招待はありません。",
+  "workspace.members.noPermission": "権限がありません。",
+  "workspace.members.noJoinRequests": "保留中の参加リクエストはありません",
+  "workspace.members.noPendingInvitations": "保留中の招待はありません",
+  "workspace.members.joinRequests": "参加リクエスト",
+  "workspace.members.pendingInvitations": "保留中の招待"
 }

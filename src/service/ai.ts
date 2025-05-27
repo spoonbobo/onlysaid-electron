@@ -1,4 +1,4 @@
-import { useLLMConfigurationStore } from "../stores/LLM/LLMConfiguration";
+import { useLLMConfigurationStore } from "@/renderer/stores/LLM/LLMConfiguration";
 import { DeepSeekAPIService } from "./deepseek";
 import { OllamaAPIService } from "./ollama";
 

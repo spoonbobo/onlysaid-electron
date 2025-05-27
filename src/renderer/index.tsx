@@ -4,10 +4,10 @@ import App from './App';
 import '@fontsource/inter/400.css';
 import './App.css';
 
-import { ThemeContextProvider } from "../providers/MaterialTheme";
-import { SSEProvider } from "../providers/SSEProvider";
-import { ToastProvider } from "../providers/ToastProvider";
-import { IntlProvider } from "../providers/IntlProvider";
+import { ThemeContextProvider } from "@/renderer/providers/MaterialTheme";
+import { SSEProvider } from "@/renderer/providers/SSEProvider";
+import { ToastProvider } from "@/renderer/providers/ToastProvider";
+import { IntlProvider } from "@/renderer/providers/IntlProvider";
 
 const container = document.getElementById('root') as HTMLElement;
 const root = ReactDOM.createRoot(container);

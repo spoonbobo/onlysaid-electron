@@ -335,24 +335,25 @@ async function uploadFileToWorkspace(event: any, args: any) {
         {
           headers: {
             Authorization: `Bearer ${token}`,
-            'Content-Type': 'multipart/form-data'
+            'Content-Type': 'multipart/form-data',
+            'x-operation-id': opId
           },
           timeout: 5 * 60 * 1000,
           onUploadProgress: (progressEvent) => {
-            const progress = Math.round((progressEvent.loaded * 100) / actualFileSize);
-            console.log(`📡 Real network progress: ${progress}%`);
+            const networkProgress = Math.round((progressEvent.loaded * 50) / actualFileSize);
+            console.log(`📡 Network progress: ${networkProgress}% (0-50% range)`);
 
-            // ✅ Only send to IPC - no fake socket progress
             event.sender.send('file:progress-update', {
               operationId: opId,
-              progress,
+              progress: networkProgress,
+              stage: 'network',
               timestamp: Date.now()
             });
           }
         }
       );
 
-      console.log(`✅ Upload completed for ${filename}`);
+      console.log(`✅ Network upload completed for ${filename}`);
       return response.data;
     } finally {
       // Clean up temp file

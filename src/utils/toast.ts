@@ -1,4 +1,4 @@
-import { useToastStore, ToastType } from "../stores/Notification/ToastStore";
+import { useToastStore, ToastType } from "@/renderer/stores/Notification/ToastStore";
 
 export const toast = {
   success: (message: string, duration?: number) => {

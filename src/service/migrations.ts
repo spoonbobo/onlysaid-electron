@@ -70,6 +70,7 @@ export const featureMigrations = [
     status TEXT DEFAULT 'pending',
     result TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    execution_time_seconds REAL,
     FOREIGN KEY (message_id) REFERENCES messages(id) ON DELETE CASCADE
   )`,
 
@@ -230,6 +231,9 @@ export const featureMigrations = [
 
   // Migration to update existing data if needed
   `UPDATE messages SET file_ids = files WHERE files IS NOT NULL AND file_ids IS NULL`,
+
+  // Add missing execution_time_seconds column to tool_calls table
+  `ALTER TABLE tool_calls ADD COLUMN execution_time_seconds REAL`,
 
   // Note: In production, you might want to add a separate migration to drop the old files column
   // after ensuring all data has been migrated properly

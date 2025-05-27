@@ -55,7 +55,17 @@ type ApiWorkspaceChannels =
   | 'workspace:delete'
   | 'workspace:add_users'
   | 'workspace:remove_user'
-  | 'workspace:get_users';
+  | 'workspace:get_users'
+  | 'workspace:send_invitation'
+  | 'workspace:get_invitations'
+  | 'workspace:update_invitation'
+  | 'workspace:cancel_invitation'
+  | 'workspace:join_request'
+  | 'workspace:get_join_requests'
+  | 'workspace:update_join_request'
+  | 'workspace:leave'
+  | 'workspace:get_by_id'
+  | 'workspace:update_user_role';
 
 // Add new storage channels
 type ApiStorageChannels = 'storage:list-contents';
@@ -162,6 +172,16 @@ const electronHandler = {
     add_users: (...args: unknown[]) => ipcRenderer.invoke('workspace:add_users', ...args),
     get_users: (...args: unknown[]) => ipcRenderer.invoke('workspace:get_users', ...args),
     remove_user: (...args: unknown[]) => ipcRenderer.invoke('workspace:remove_user', ...args),
+    send_invitation: (...args: unknown[]) => ipcRenderer.invoke('workspace:send_invitation', ...args),
+    get_invitations: (...args: unknown[]) => ipcRenderer.invoke('workspace:get_invitations', ...args),
+    update_invitation: (...args: unknown[]) => ipcRenderer.invoke('workspace:update_invitation', ...args),
+    cancel_invitation: (...args: unknown[]) => ipcRenderer.invoke('workspace:cancel_invitation', ...args),
+    join_request: (...args: unknown[]) => ipcRenderer.invoke('workspace:join_request', ...args),
+    get_join_requests: (...args: unknown[]) => ipcRenderer.invoke('workspace:get_join_requests', ...args),
+    update_join_request: (...args: unknown[]) => ipcRenderer.invoke('workspace:update_join_request', ...args),
+    get_by_id: (...args: unknown[]) => ipcRenderer.invoke('workspace:get_by_id', ...args),
+    update_user_role: (...args: unknown[]) => ipcRenderer.invoke('workspace:update_user_role', ...args),
+    leave: (...args: unknown[]) => ipcRenderer.invoke('workspace:leave', ...args),
   },
   chat: {
     get: (...args: unknown[]) => ipcRenderer.invoke('chat:get', ...args),
@@ -268,7 +288,7 @@ const electronHandler = {
       ipcRenderer.invoke('microsoft-calendar:fetch-calendars', token, refreshToken),
     fetchEvents: (params: {
       token: string;
-      refreshToken?: string; // ADD THIS
+      refreshToken?: string;
       calendarId?: string;
       timeMin?: string;
       timeMax?: string;

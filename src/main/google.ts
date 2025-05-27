@@ -1,5 +1,4 @@
 import { ipcMain, shell } from 'electron';
-import { net } from 'electron';
 
 let callbackServer: any = null;
 let express: any = null;
