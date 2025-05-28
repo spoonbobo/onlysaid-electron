@@ -1,22 +1,31 @@
-import { Box, Tooltip, IconButton, Menu, MenuItem, Avatar } from "@mui/material";
+import { Box, Tooltip, IconButton, Menu, MenuItem, Avatar, Badge } from "@mui/material";
 import HomeIcon from "@mui/icons-material/Home";
 import AddIcon from "@mui/icons-material/Add";
 import GroupIcon from "@mui/icons-material/Group";
 import CalendarTodayIcon from "@mui/icons-material/CalendarToday";
 import { useState, useEffect, useRef, useMemo } from "react";
-import { useTopicStore, TopicContext } from "@/renderer/stores/Topic/TopicStore";
-import { useWorkspaceStore } from "@/renderer/stores/Workspace/WorkspaceStore";
-import { useUserStore } from "@/renderer/stores/User/UserStore";
 import AddTeamDialog from "@/renderer/components/Dialog/Workspace/AddWorkspace";
 import ExitWorkspaceDialog from "@/renderer/components/Dialog/Workspace/ExitWorkspace";
 import { getUserFromStore } from "@/utils/user";
 import { IWorkspace } from "@/../../types/Workspace/Workspace";
 import { useChatStore } from "@/renderer/stores/Chat/ChatStore";
+import { useTopicStore, TopicContext } from "@/renderer/stores/Topic/TopicStore";
+import { useWorkspaceStore } from "@/renderer/stores/Workspace/WorkspaceStore";
+import { useUserStore } from "@/renderer/stores/User/UserStore";
+import { useNotificationStore } from "@/renderer/stores/Notification/NotificationStore";
 import { useIntl } from "react-intl";
 
 function SidebarTabs() {
   const { selectedContext, contexts, setSelectedContext, removeContext, addContext } = useTopicStore();
   const { workspaces, getWorkspace, exitWorkspace, isLoading, setWorkspaceCreatedCallback } = useWorkspaceStore();
+  const {
+    hasHomeNotifications,
+    hasWorkspaceNotifications,
+    addDummyHomeNotification,
+    addDummyWorkspaceNotification,
+    resetAllNotifications,
+    enableMockNotifications
+  } = useNotificationStore();
   const user = useUserStore(state => state.user);
   const [showAddTeamDialog, setShowAddTeamDialog] = useState(false);
   const [showExitDialog, setShowExitDialog] = useState(false);
@@ -35,6 +44,33 @@ function SidebarTabs() {
     const foundContext = contexts.find(context => context.name === "home" && context.type === "home");
     return foundContext || { name: "home", type: "home" };
   }, [contexts]);
+
+  // Get notification counts
+
+  // Development helper functions (can be removed in production)
+  useEffect(() => {
+    if (process.env.NODE_ENV === 'development' && enableMockNotifications) {
+      // Add some dummy notifications for testing
+      const addTestNotifications = () => {
+        // Add some dummy home notifications randomly
+        if (Math.random() > 0.7) {
+          addDummyHomeNotification();
+        }
+
+        // Add some dummy workspace notifications with sections
+        workspaces.forEach(workspace => {
+          if (Math.random() > 0.8) {
+            addDummyWorkspaceNotification(workspace.id);
+          }
+        });
+      };
+
+      // Add test notifications periodically in development
+      const interval = setInterval(addTestNotifications, 30000); // Every 30 seconds
+
+      return () => clearInterval(interval);
+    }
+  }, [workspaces, addDummyHomeNotification, addDummyWorkspaceNotification, enableMockNotifications]);
 
   useEffect(() => {
     const previousUser = previousUserRef.current;
@@ -139,7 +175,7 @@ function SidebarTabs() {
 
       setSelectedContext({
         ...context,
-        section: lastHomeSection || 'agents'
+        section: lastHomeSection || 'homepage'
       });
 
       const currentUser = getUserFromStore();
@@ -208,7 +244,7 @@ function SidebarTabs() {
         id: workspace.id,
         name: workspace.name?.toLowerCase() || 'unnamed workspace',
         type: "workspace",
-        section: "workspace:chat"
+        section: "workspace:chatroom"
       };
 
       setSelectedContext(workspaceContext);
@@ -231,7 +267,7 @@ function SidebarTabs() {
           id: workspaceToSelect.id,
           name: (workspaceToSelect.name || 'Unnamed Workspace').toLowerCase(),
           type: "workspace",
-          section: "workspace:chat"
+          section: "workspace:chatroom"
         };
         setSelectedContext(workspaceContext);
         setPendingWorkspaceSelection(null);
@@ -338,13 +374,26 @@ function SidebarTabs() {
               borderRadius: 0,
             }}
           >
-            <IconButton
-              color="primary"
-              size="large"
-              onClick={() => handleNavigate(homeContext as TopicContext)}
+            <Badge
+              variant="dot"
+              color="error"
+              invisible={!hasHomeNotifications()}
+              sx={{
+                '& .MuiBadge-badge': {
+                  width: 8,
+                  height: 8,
+                  minWidth: 8
+                }
+              }}
             >
-              <HomeIcon />
-            </IconButton>
+              <IconButton
+                color="primary"
+                size="large"
+                onClick={() => handleNavigate(homeContext as TopicContext)}
+              >
+                <HomeIcon />
+              </IconButton>
+            </Badge>
           </Box>
         </Tooltip>
 
@@ -352,6 +401,7 @@ function SidebarTabs() {
           const workspace = workspaces.find(w => w.id === workspaceContext.id);
           const imageUrl = workspace?.image;
           const workspaceNameInitial = workspaceContext.name[0]?.toUpperCase();
+          const hasNotifications = hasWorkspaceNotifications(workspaceContext.id || '');
 
           return (
             <Tooltip
@@ -372,23 +422,36 @@ function SidebarTabs() {
                 }}
                 onContextMenu={(e) => handleContextMenu(e, workspaceContext)}
               >
-                <IconButton
-                  color="primary"
-                  size="large"
-                  onClick={() => handleNavigate(workspaceContext)}
+                <Badge
+                  variant="dot"
+                  color="error"
+                  invisible={!hasNotifications}
+                  sx={{
+                    '& .MuiBadge-badge': {
+                      width: 8,
+                      height: 8,
+                      minWidth: 8
+                    }
+                  }}
                 >
-                  {imageUrl ? (
-                    <Avatar src={imageUrl} sx={{ width: 24, height: 24 }}>
-                      {workspaceNameInitial || <GroupIcon fontSize="small" />}
-                    </Avatar>
-                  ) : workspaceNameInitial ? (
-                    <Avatar sx={{ width: 24, height: 24, fontSize: '0.875rem' }}>
-                      {workspaceNameInitial}
-                    </Avatar>
-                  ) : (
-                    <GroupIcon />
-                  )}
-                </IconButton>
+                  <IconButton
+                    color="primary"
+                    size="large"
+                    onClick={() => handleNavigate(workspaceContext)}
+                  >
+                    {imageUrl ? (
+                      <Avatar src={imageUrl} sx={{ width: 24, height: 24 }}>
+                        {workspaceNameInitial || <GroupIcon fontSize="small" />}
+                      </Avatar>
+                    ) : workspaceNameInitial ? (
+                      <Avatar sx={{ width: 24, height: 24, fontSize: '0.875rem' }}>
+                        {workspaceNameInitial}
+                      </Avatar>
+                    ) : (
+                      <GroupIcon />
+                    )}
+                  </IconButton>
+                </Badge>
               </Box>
             </Tooltip>
           );

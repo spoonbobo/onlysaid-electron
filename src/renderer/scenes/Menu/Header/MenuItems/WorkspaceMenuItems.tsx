@@ -1,4 +1,4 @@
-import { MenuItem, ListSubheader, Divider, Tooltip, IconButton, Box } from "@mui/material";
+import { MenuItem, ListSubheader, Divider, Tooltip, IconButton, Box, Badge } from "@mui/material";
 import { FormattedMessage } from "react-intl";
 import ExitToAppIcon from "@mui/icons-material/ExitToApp";
 import AddCommentIcon from "@mui/icons-material/AddComment";
@@ -12,6 +12,7 @@ import PersonAddIcon from "@mui/icons-material/PersonAdd";
 import LibraryAddIcon from "@mui/icons-material/LibraryAdd";
 import { useTopicStore } from "@/renderer/stores/Topic/TopicStore";
 import { useChatStore } from "@/renderer/stores/Chat/ChatStore";
+import { useNotificationStore } from "@/renderer/stores/Notification/NotificationStore";
 import { getUserFromStore } from "@/utils/user";
 import { useState } from "react";
 import { useWorkspaceStore } from "@/renderer/stores/Workspace/WorkspaceStore";
@@ -26,6 +27,7 @@ type WorkspaceMenuItemsProps = {
 
 function WorkspaceMenuItems({ handleClose }: WorkspaceMenuItemsProps) {
   const { setSelectedContext, selectedContext } = useTopicStore();
+  const { getWorkspaceSectionNotificationCount } = useNotificationStore();
 
   const handleMenuItemClick = (section: string) => {
     const sectionId = `workspace:${section}`;
@@ -40,6 +42,14 @@ function WorkspaceMenuItems({ handleClose }: WorkspaceMenuItemsProps) {
     handleClose();
   };
 
+  // Get current workspace ID for notifications
+  const currentWorkspaceId = selectedContext?.id || selectedContext?.name || '';
+
+  // Get notification counts for each workspace section
+  const chatroomCount = getWorkspaceSectionNotificationCount(currentWorkspaceId, 'chatroom');
+  const membersCount = getWorkspaceSectionNotificationCount(currentWorkspaceId, 'members');
+  const knowledgeBaseCount = getWorkspaceSectionNotificationCount(currentWorkspaceId, 'knowledgeBase');
+
   return (
     <>
       <ListSubheader sx={{ fontSize: 13, fontWeight: 700, color: "text.secondary", bgcolor: "background.paper", lineHeight: 2, px: 2 }}>
@@ -51,7 +61,25 @@ function WorkspaceMenuItems({ handleClose }: WorkspaceMenuItemsProps) {
       </MenuItem>
       <MenuItem onClick={() => handleMenuItemClick('chatroom')} sx={{ minHeight: 36, fontSize: 14 }}>
         <AddCommentIcon fontSize="small" sx={{ mr: 1.5, color: "text.secondary" }} />
-        <FormattedMessage id="menu.workspace.chatroom" />
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+          <FormattedMessage id="menu.workspace.chatroom" />
+          {chatroomCount > 0 && (
+            <Badge
+              badgeContent={chatroomCount}
+              color="error"
+              max={99}
+              sx={{
+                '& .MuiBadge-badge': {
+                  fontSize: '0.6rem',
+                  height: 16,
+                  minWidth: 16
+                }
+              }}
+            >
+              <Box sx={{ width: 8 }} />
+            </Badge>
+          )}
+        </Box>
       </MenuItem>
       <MenuItem disabled onClick={() => handleMenuItemClick('plans')} sx={{ minHeight: 36, fontSize: 14 }}>
         <AssignmentIcon fontSize="small" sx={{ mr: 1.5, color: "text.secondary" }} />
@@ -75,11 +103,47 @@ function WorkspaceMenuItems({ handleClose }: WorkspaceMenuItemsProps) {
       </ListSubheader>
       <MenuItem onClick={() => handleMenuItemClick('members')} sx={{ minHeight: 36, fontSize: 14 }}>
         <PeopleIcon fontSize="small" sx={{ mr: 1.5, color: "text.secondary" }} />
-        <FormattedMessage id="menu.workspace.members" />
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+          <FormattedMessage id="menu.workspace.members" />
+          {membersCount > 0 && (
+            <Badge
+              badgeContent={membersCount}
+              color="error"
+              max={99}
+              sx={{
+                '& .MuiBadge-badge': {
+                  fontSize: '0.6rem',
+                  height: 16,
+                  minWidth: 16
+                }
+              }}
+            >
+              <Box sx={{ width: 8 }} />
+            </Badge>
+          )}
+        </Box>
       </MenuItem>
       <MenuItem onClick={() => handleMenuItemClick('knowledgeBase')} sx={{ minHeight: 36, fontSize: 14 }}>
         <SchoolIcon fontSize="small" sx={{ mr: 1.5, color: "text.secondary" }} />
-        <FormattedMessage id="menu.workspace.knowledgeBase" />
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+          <FormattedMessage id="menu.workspace.knowledgeBase" />
+          {knowledgeBaseCount > 0 && (
+            <Badge
+              badgeContent={knowledgeBaseCount}
+              color="error"
+              max={99}
+              sx={{
+                '& .MuiBadge-badge': {
+                  fontSize: '0.6rem',
+                  height: 16,
+                  minWidth: 16
+                }
+              }}
+            >
+              <Box sx={{ width: 8 }} />
+            </Badge>
+          )}
+        </Box>
       </MenuItem>
       <MenuItem disabled onClick={() => handleMenuItemClick('mcp')} sx={{ minHeight: 36, fontSize: 14 }}>
         <SettingsSuggestIcon fontSize="small" sx={{ mr: 1.5, color: "text.secondary" }} />

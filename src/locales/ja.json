@@ -516,5 +516,38 @@
   "workspace.members.noJoinRequests": "保留中の参加リクエストはありません",
   "workspace.members.noPendingInvitations": "保留中の招待はありません",
   "workspace.members.joinRequests": "参加リクエスト",
-  "workspace.members.pendingInvitations": "保留中の招待"
+  "workspace.members.pendingInvitations": "保留中の招待",
+
+  "home.messaging": "メッセージ",
+  "menu.home.homepage": "ホームページ",
+  "menu.home.general": "一般",
+  "menu.workspace.general": "一般",
+
+  "notifications.title": "通知",
+  "notifications.empty": "通知がありません",
+  "notifications.home": "ホーム",
+  "notifications.markAllRead": "すべて既読にする",
+  "notifications.markSectionRead": "既読にする",
+  "notifications.clearAll": "すべてクリア",
+  "notifications.markAsRead": "既読にする",
+
+  "default.stillImplementing": "開発中",
+  "default.sectionUnderDevelopment": "「{section}」機能は開発中です。",
+  "default.featureUnderDevelopment": "この機能は開発中です。",
+  "default.checkBackLater": "後ほど更新をご確認ください。",
+
+  "homepage.title": "個人スペース",
+  "homepage.invitations.title": "ワークスペースへの招待",
+  "homepage.invitations.refresh": "更新",
+  "homepage.invitations.loading": "招待を読み込み中...",
+  "homepage.invitations.loading.subtitle": "ワークスペースの招待を取得しています。しばらくお待ちください。",
+  "homepage.invitations.invitedBy": "{inviter}から招待されました",
+  "homepage.invitations.receivedAt": "{date}に受信",
+  "homepage.invitations.decline": "拒否",
+  "homepage.invitations.accept": "承認",
+  "homepage.invitations.empty.title": "保留中の招待はありません",
+  "homepage.invitations.empty.subtitle": "すべての招待を処理済みです！返信を待っているワークスペースの招待はありません。",
+  "homepage.invitations.checkAgain": "再確認",
+
+  "dashboard.loading": "読み込み中..."
 }

@@ -43,7 +43,7 @@
   "language.chinese": "中文（香港）",
   "language.japanese": "日文",
 
-  "context.home": "首頁",
+  "context.home": "個人空間",
   "context.team": "團隊",
   "context.settings": "設定",
 
@@ -114,7 +114,7 @@
   "menu.fileExplorer": "檔案瀏覽器",
   "menu.codeEditor": "程式碼編輯器",
   "menu.exit": "退出",
-  "menu.home": "首頁",
+  "menu.home": "個人空間",
   "menu.workspace": "工作空間",
   "menu.settings": "設定",
   "menu.options": "選項",
@@ -147,7 +147,7 @@
   "menu.workspace.mcp": "MCP 伺服器",
   "menu.workspace.chatroom": "聊天室",
   "menu.workspace.newChatroom": "新增聊天室",
-  "menu.workspace.home": "首頁",
+  "menu.workspace.home": "個人空間",
   "menu.workspace.insights": "洞察",
   "menu.workspace.trend": "趨勢",
   "menu.workspace.inviteUser": "邀請用戶",
@@ -435,5 +435,39 @@
   "workspace.members.noJoinRequests": "沒有待處理的加入請求",
   "workspace.members.noPendingInvitations": "沒有待處理的邀請",
   "workspace.members.joinRequests": "加入請求",
-  "workspace.members.pendingInvitations": "待處理的邀請"
+  "workspace.members.pendingInvitations": "待處理的邀請",
+
+  "home.messaging": "訊息",
+  "menu.home.homepage": "主頁",
+  "menu.home.general": "一般",
+  "menu.workspace.general": "一般",
+
+  "notifications.title": "通知",
+  "notifications.empty": "暫無通知",
+  "notifications.home": "主頁",
+  "notifications.markAllRead": "全部標記為已讀",
+  "notifications.markSectionRead": "標記為已讀",
+  "notifications.clearAll": "清除全部",
+  "notifications.markAsRead": "標記為已讀",
+
+  "default.stillImplementing": "開發中",
+  "default.sectionUnderDevelopment": "「{section}」功能正在開發中。",
+  "default.featureUnderDevelopment": "此功能正在開發中。",
+  "default.checkBackLater": "請稍後再次查看更新。",
+
+  "homepage.title": "個人空間",
+  "homepage.invitations.title": "工作空間邀請",
+  "homepage.invitations.refresh": "刷新",
+  "homepage.invitations.loading": "載入邀請中...",
+  "homepage.invitations.loading.subtitle": "請稍候，我們正在獲取您的工作空間邀請。",
+  "homepage.invitations.invitedBy": "由 {inviter} 邀請",
+  "homepage.invitations.receivedAt": "收到於 {date}",
+  "homepage.invitations.decline": "拒絕",
+  "homepage.invitations.accept": "接受",
+  "homepage.invitations.empty.title": "沒有待處理的邀請",
+  "homepage.invitations.empty.subtitle": "您已經處理完所有邀請！沒有工作空間邀請等待您的回覆。",
+  "homepage.invitations.checkAgain": "重新檢查",
+
+  "dashboard.loading": "載入中..."
+
 }

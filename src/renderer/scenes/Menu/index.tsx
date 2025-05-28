@@ -8,16 +8,21 @@ import FileExplorer from "@/renderer/scenes/Menu/FileExplorer";
 import MenuHeader from "./Header";
 import React from "react";
 import CalendarMenu from "./Calendar";
+import { useNotificationStore } from "@/renderer/stores/Notification/NotificationStore";
+
 const MIN_CONTENT_HEIGHT = 50;
 
 function Menu() {
-  const { selectedContext } = useCurrentTopicContext();
+  const { selectedContext, selectedTopics } = useCurrentTopicContext();
   const selectedContextType = selectedContext?.type || "";
   const { isExpanded } = useFileExplorerStore();
 
+  // Get the active context (like chatId) for the current section
+  const activeContextId = selectedContext?.section ? selectedTopics[selectedContext.section] || null : null;
+
   const menuKey = React.useMemo(() =>
-    `${selectedContextType}-${selectedContext?.name || "unknown"}`,
-    [selectedContextType, selectedContext?.name]
+    `${selectedContextType}-${selectedContext?.name || "unknown"}-${activeContextId || "none"}`,
+    [selectedContextType, selectedContext?.name, activeContextId]
   );
 
   const MenuComponent = React.useMemo(() => {

@@ -1,5 +1,7 @@
 import Chat from "./Chat";
 import Settings from "./Settings";
+import Default from "./default";
+import HomePage from "./HomePage";
 import { useTopicStore } from "@/renderer/stores/Topic/TopicStore";
 import { Box, Typography } from "@mui/material";
 import Playground from "@/renderer/components/Debug/Playground";
@@ -19,21 +21,28 @@ function Main() {
       case "workspace:chatroom":
         return <Chat />;
       case "workspace:plans":
-        return <Box>
-          <Typography variant="h5" gutterBottom>Plans for {workspaceId}</Typography>
-          <Typography>This feature is coming soon</Typography>
-        </Box >;
+        return <Default section="Plans" />;
       case "workspace:exit":
-        return <Box>
-          <Typography variant="h5" gutterBottom>Exit {workspaceId}</Typography>
-          <Typography>This feature is coming soon</Typography>
-        </Box >;
+        return <Default section="Exit Workspace" />;
       case "workspace:members":
         return <Members workspaceId={workspaceId || ""} />;
       case "workspace:knowledgeBase":
         return <KnowledgeBase />;
       default:
+        return <Default section={section} />;
+    }
+  };
+
+  const getHomeComponent = (section?: string) => {
+    switch (section) {
+      case "homepage":
+        return <HomePage />;
+      case "friends":
+        return <Default section="Friends" />;
+      case "agents":
         return <Chat />;
+      default:
+        return <Default section={section} />;
     }
   };
 
@@ -41,20 +50,17 @@ function Main() {
   let componentToRender: React.ReactNode;
 
   if (contextTypeToRender === "workspace") {
-    if (contextSection) {
-      componentToRender = getWorkspaceComponent(contextSection);
-    } else {
-      componentToRender = <Chat />;
-    }
+    componentToRender = getWorkspaceComponent(contextSection || "");
   } else if (contextTypeToRender === "calendar") {
     componentToRender = <Calendar />;
+  } else if (contextTypeToRender === "home") {
+    componentToRender = getHomeComponent(contextSection);
   } else {
     const menuComponents: Record<string, React.ReactNode> = {
-      home: <Chat />,
       settings: <Settings />,
       playground: <Playground />,
     };
-    componentToRender = menuComponents[contextTypeToRender] || menuComponents.home;
+    componentToRender = menuComponents[contextTypeToRender] || <Default section={contextTypeToRender} />;
   }
 
   return (

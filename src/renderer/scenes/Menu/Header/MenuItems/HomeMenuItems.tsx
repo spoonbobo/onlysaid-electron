@@ -1,9 +1,11 @@
-import { MenuItem, ListSubheader, Divider, Tooltip, IconButton } from "@mui/material";
+import { MenuItem, ListSubheader, Divider, Tooltip, IconButton, Badge, Box } from "@mui/material";
 import { FormattedMessage } from "react-intl";
 import PersonAddIcon from "@mui/icons-material/PersonAdd";
 import SmartToyIcon from "@mui/icons-material/SmartToy";
 import PeopleIcon from "@mui/icons-material/People";
+import HomeIcon from "@mui/icons-material/Home";
 import { useTopicStore } from "@/renderer/stores/Topic/TopicStore";
+import { useNotificationStore } from "@/renderer/stores/Notification/NotificationStore";
 
 type HomeMenuItemsProps = {
   handleClose: () => void;
@@ -18,6 +20,7 @@ function HomeMenuItems({
   setSelectedCategory,
 }: HomeMenuItemsProps) {
   const setSelectedContext = useTopicStore((state) => state.setSelectedContext);
+  const { getHomeSectionNotificationCount } = useNotificationStore();
 
   const handleCategoryClick = (category: string) => {
     try {
@@ -33,24 +36,37 @@ function HomeMenuItems({
     }
   };
 
+  // Get notification counts for each section
+  const homepageCount = getHomeSectionNotificationCount('homepage');
+  const friendsCount = getHomeSectionNotificationCount('friends');
+  const agentsCount = getHomeSectionNotificationCount('agents');
+
   return (
     <>
-      <ListSubheader sx={{
-        fontSize: 13,
-        fontWeight: 700,
-        color: "text.secondary",
-        bgcolor: "background.paper",
-        lineHeight: 2,
-        px: 2
-      }}>
-        <FormattedMessage id="home.friends" />
-      </ListSubheader>
       <MenuItem
-        onClick={() => handleCategoryClick('friends')}
+        onClick={() => handleCategoryClick('homepage')}
         sx={{ minHeight: 36, fontSize: 14 }}
       >
-        <PeopleIcon fontSize="small" sx={{ mr: 1.5, color: "text.secondary" }} />
-        <FormattedMessage id="menu.home.friends" />
+        <HomeIcon fontSize="small" sx={{ mr: 1.5, color: "text.secondary" }} />
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+          <FormattedMessage id="menu.home.homepage" />
+          {homepageCount > 0 && (
+            <Badge
+              badgeContent={homepageCount}
+              color="error"
+              max={99}
+              sx={{
+                '& .MuiBadge-badge': {
+                  fontSize: '0.6rem',
+                  height: 16,
+                  minWidth: 16
+                }
+              }}
+            >
+              <Box sx={{ width: 8 }} />
+            </Badge>
+          )}
+        </Box>
       </MenuItem>
 
       <Divider sx={{ my: 1 }} />
@@ -63,14 +79,57 @@ function HomeMenuItems({
         lineHeight: 2,
         px: 2
       }}>
-        <FormattedMessage id="home.agents" />
+        <FormattedMessage id="home.messaging" />
       </ListSubheader>
+      <MenuItem
+        onClick={() => handleCategoryClick('friends')}
+        sx={{ minHeight: 36, fontSize: 14 }}
+      >
+        <PeopleIcon fontSize="small" sx={{ mr: 1.5, color: "text.secondary" }} />
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+          <FormattedMessage id="menu.home.friends" />
+          {friendsCount > 0 && (
+            <Badge
+              badgeContent={friendsCount}
+              color="error"
+              max={99}
+              sx={{
+                '& .MuiBadge-badge': {
+                  fontSize: '0.6rem',
+                  height: 16,
+                  minWidth: 16
+                }
+              }}
+            >
+              <Box sx={{ width: 8 }} />
+            </Badge>
+          )}
+        </Box>
+      </MenuItem>
       <MenuItem
         onClick={() => handleCategoryClick('agents')}
         sx={{ minHeight: 36, fontSize: 14 }}
       >
         <SmartToyIcon fontSize="small" sx={{ mr: 1.5, color: "text.secondary" }} />
-        <FormattedMessage id="menu.home.agents" />
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+          <FormattedMessage id="menu.home.agents" />
+          {agentsCount > 0 && (
+            <Badge
+              badgeContent={agentsCount}
+              color="error"
+              max={99}
+              sx={{
+                '& .MuiBadge-badge': {
+                  fontSize: '0.6rem',
+                  height: 16,
+                  minWidth: 16
+                }
+              }}
+            >
+              <Box sx={{ width: 8 }} />
+            </Badge>
+          )}
+        </Box>
       </MenuItem>
     </>
   );

@@ -83,7 +83,7 @@ export const useTopicStore = create<TopicStore>()(
         { name: "file", type: "file" },
         { name: "playground", type: "playground" }
       ],
-      selectedContext: { name: "home", type: "home" },
+      selectedContext: { name: "home", type: "home", section: "homepage" },
       lastSections: {},
 
       addContext: (context) =>

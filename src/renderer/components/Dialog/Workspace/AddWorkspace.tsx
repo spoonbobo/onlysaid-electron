@@ -19,8 +19,7 @@ import { useWorkspaceStore } from "@/renderer/stores/Workspace/WorkspaceStore";
 import { FormattedMessage } from "react-intl";
 import { getUserFromStore } from "@/utils/user";
 import { useIntl } from "react-intl";
-import { IWorkspace } from "../../../../../types/Workspace/Workspace";
-import { v4 as uuidv4 } from 'uuid';
+import { IWorkspace } from "@/../../types/Workspace/Workspace";
 
 interface AddWorkspaceDialogProps {
   open: boolean;

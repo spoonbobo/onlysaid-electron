@@ -58,6 +58,7 @@ type ApiWorkspaceChannels =
   | 'workspace:get_users'
   | 'workspace:send_invitation'
   | 'workspace:get_invitations'
+  | 'workspace:get_user_invitations'
   | 'workspace:update_invitation'
   | 'workspace:cancel_invitation'
   | 'workspace:join_request'
@@ -174,6 +175,7 @@ const electronHandler = {
     remove_user: (...args: unknown[]) => ipcRenderer.invoke('workspace:remove_user', ...args),
     send_invitation: (...args: unknown[]) => ipcRenderer.invoke('workspace:send_invitation', ...args),
     get_invitations: (...args: unknown[]) => ipcRenderer.invoke('workspace:get_invitations', ...args),
+    get_user_invitations: (...args: unknown[]) => ipcRenderer.invoke('workspace:get_user_invitations', ...args),
     update_invitation: (...args: unknown[]) => ipcRenderer.invoke('workspace:update_invitation', ...args),
     cancel_invitation: (...args: unknown[]) => ipcRenderer.invoke('workspace:cancel_invitation', ...args),
     join_request: (...args: unknown[]) => ipcRenderer.invoke('workspace:join_request', ...args),

@@ -28,6 +28,11 @@ interface IUpdateUserRoleArgs {
   role: 'super_admin' | 'admin' | 'member';
 }
 
+interface IGetUserInvitationsArgs {
+  token: string;
+  status?: string;
+}
+
 export const setupWorkspaceHandlers = () => {
   ipcMain.handle('workspace:create', async (event, args: ICreateWorkspaceArgs) => {
     try {
@@ -394,6 +399,27 @@ export const setupWorkspaceHandlers = () => {
       console.error(`Error in main process API call (workspace:update_user_role) for user ${args.userId} in workspace ${args.workspaceId}:`, error.response?.data || error.message);
       return {
         error: error.response?.data?.message || error.message || "Unknown error updating user role",
+        status: error.response?.status
+      };
+    }
+  });
+
+  ipcMain.handle('workspace:get_user_invitations', async (event, args: IGetUserInvitationsArgs) => {
+    try {
+      const params = args.status ? `?status=${args.status}` : '';
+      const response = await onlysaidServiceInstance.get<IWorkspaceInvitation[]>(
+        `/user/invitations${params}`,
+        {
+          headers: {
+            Authorization: `Bearer ${args.token}`
+          }
+        }
+      );
+      return { data: response.data };
+    } catch (error: any) {
+      console.error('Error in main process API call (get_user_invitations):', error.message);
+      return {
+        error: error.message,
         status: error.response?.status
       };
     }
