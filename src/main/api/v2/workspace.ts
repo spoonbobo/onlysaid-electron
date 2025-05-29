@@ -192,6 +192,7 @@ export const setupWorkspaceHandlers = () => {
 
   ipcMain.handle('workspace:send_invitation', async (event, args: ISendInvitationArgs) => {
     try {
+      console.log('Sending invitation to:', args.invitee_email);
       const response = await onlysaidServiceInstance.post<IWorkspaceInvitation>(
         `/workspace/${args.workspaceId}/invitations`,
         { invitee_email: args.invitee_email },
@@ -201,6 +202,7 @@ export const setupWorkspaceHandlers = () => {
           }
         }
       );
+      console.log('Invitation sent:', response.data);
       return { data: response.data };
     } catch (error: any) {
       console.error('Error in main process API call (send_invitation):', error.message);

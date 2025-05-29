@@ -4,7 +4,7 @@ import Main from "../Main";
 import SidebarTabs from "../SidebarTabs";
 import { useLayoutResize } from "@/renderer/stores/Layout/LayoutResize";
 import { useTopicStore } from "@/renderer/stores/Topic/TopicStore";
-import { useRef, useEffect } from "react";
+import { useRef, useEffect, useCallback } from "react";
 import UserInfoBar from "./UserInfoBar";
 import LevelUp from "./LevelUp";
 import OverlaysContainer from "./Overlays/OverlaysContainer";
@@ -17,17 +17,14 @@ function MainInterface() {
 
   mainInterfaceRenderCountRef.current += 1;
 
-  // Reset functionality without window/tab dependency
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.ctrlKey && e.shiftKey && e.key === 'r') {
         e.preventDefault();
         console.log("Resetting application state via keyboard shortcut");
 
-        // Clear localStorage or reset specific stores as needed
         try {
           localStorage.removeItem("topic-store");
-          // Add other stores that need resetting
         } catch (error) {
           console.error("Failed to clear localStorage", error);
         }
@@ -51,11 +48,30 @@ function MainInterface() {
     document.body.style.userSelect = "none";
   };
 
+  const setMenuWidthRef = useRef(setMenuWidth);
   useEffect(() => {
+    setMenuWidthRef.current = setMenuWidth;
+  }, [setMenuWidth]);
+
+  const throttledSetMenuWidth = useCallback((width: number) => {
+    if (setMenuWidthRef.current) {
+      setMenuWidthRef.current(width);
+    }
+  }, []);
+
+  useEffect(() => {
+    let animationFrameId: number;
+
     const handleMouseMove = (e: MouseEvent) => {
       if (isDraggingMenu.current) {
-        const newWidth = Math.max(120, Math.min(e.clientX - 72, 400));
-        setMenuWidth(newWidth);
+        if (animationFrameId) {
+          cancelAnimationFrame(animationFrameId);
+        }
+
+        animationFrameId = requestAnimationFrame(() => {
+          const newWidth = Math.max(120, Math.min(e.clientX - 72, 400));
+          throttledSetMenuWidth(newWidth);
+        });
       }
     };
 
@@ -64,6 +80,10 @@ function MainInterface() {
         isDraggingMenu.current = false;
         document.body.style.cursor = "";
         document.body.style.removeProperty('user-select');
+
+        if (animationFrameId) {
+          cancelAnimationFrame(animationFrameId);
+        }
       }
     };
 
@@ -75,8 +95,12 @@ function MainInterface() {
       window.removeEventListener("mouseup", handleMouseUp);
       document.body.style.cursor = "";
       document.body.style.removeProperty('user-select');
+
+      if (animationFrameId) {
+        cancelAnimationFrame(animationFrameId);
+      }
     };
-  }, [setMenuWidth]);
+  }, []);
 
   return (
     <Box
@@ -90,7 +114,6 @@ function MainInterface() {
         overflow: "hidden",
       }}
     >
-      {/* <TopBar /> */}
       <Box
         sx={{
           display: "flex",
@@ -161,7 +184,6 @@ function MainInterface() {
           <Box sx={{ flex: 1, overflow: "hidden", p: 3 }}>
             <Main />
           </Box>
-          {/* Absolute position to ensure visibility */}
           <Box sx={{ position: "absolute", bottom: 0, left: 0, right: 0, zIndex: 9999 }}>
             <LevelUp />
           </Box>

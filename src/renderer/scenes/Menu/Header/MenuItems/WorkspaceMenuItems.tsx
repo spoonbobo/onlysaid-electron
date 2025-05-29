@@ -17,7 +17,7 @@ import { getUserFromStore } from "@/utils/user";
 import { useState } from "react";
 import { useWorkspaceStore } from "@/renderer/stores/Workspace/WorkspaceStore";
 import { useKBStore } from "@/renderer/stores/KB/KBStore";
-import InviteUserDialog from "@/renderer/components/Dialog/Workspace/InviteUser";
+import InviteUserDialog from "@/renderer/components/Dialog/Workspace/InviteUserToWorkspace";
 import { IWorkspace } from "@/../../types/Workspace/Workspace";
 
 
