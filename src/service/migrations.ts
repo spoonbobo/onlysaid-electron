@@ -1,12 +1,3 @@
-/**
- * Database schema migrations for the application
- *
- * This file defines all the database tables and schema migrations.
- * Each migration should be a SQL statement that creates or alters a database table.
- * Migrations are run in order, so newer migrations should be added to the end of the array.
- */
-
-// Core application tables
 export const coreMigrations = [
   `CREATE TABLE IF NOT EXISTS settings (
     key TEXT PRIMARY KEY,
@@ -14,21 +5,18 @@ export const coreMigrations = [
   )`
 ];
 
-// Feature-specific tables
 export const featureMigrations = [
-  // Chat rooms table
   `CREATE TABLE IF NOT EXISTS chat (
     id TEXT PRIMARY KEY,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    type TEXT DEFAULT 'chat', -- agent, friend, workspace
+    type TEXT DEFAULT 'chat',
     name TEXT DEFAULT 'New Chat',
     unread INTEGER DEFAULT 0,
     workspace_id TEXT,
     user_id TEXT
   )`,
 
-  // Messages table
   `CREATE TABLE IF NOT EXISTS messages (
     id TEXT PRIMARY KEY,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -36,18 +24,17 @@ export const featureMigrations = [
     sent_at TIMESTAMP,
     chat_id TEXT,
     sender TEXT,
-    status TEXT, -- pending, sent, error
-    reactions TEXT, -- Stored as JSON string for array of reactions
+    status TEXT,
+    reactions TEXT,
     reply_to TEXT,
-    mentions TEXT, -- Stored as JSON string for array of mentions
-    file_ids TEXT, -- Stored as JSON string for array of file IDs
+    mentions TEXT,
+    file_ids TEXT,
     poll TEXT,
     contact TEXT,
     gif TEXT,
     text TEXT
   )`,
 
-  // reactions table
   `CREATE TABLE IF NOT EXISTS reactions (
     id TEXT PRIMARY KEY,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -57,7 +44,6 @@ export const featureMigrations = [
     FOREIGN KEY (message_id) REFERENCES messages(id)
   )`,
 
-  // Tool Calls table
   `CREATE TABLE IF NOT EXISTS tool_calls (
     id TEXT PRIMARY KEY,
     message_id TEXT NOT NULL,
@@ -74,7 +60,6 @@ export const featureMigrations = [
     FOREIGN KEY (message_id) REFERENCES messages(id) ON DELETE CASCADE
   )`,
 
-  // Files table - Updated to match IFile interface
   `CREATE TABLE IF NOT EXISTS files (
     id TEXT PRIMARY KEY,
     workspace_id TEXT NOT NULL,
@@ -85,19 +70,17 @@ export const featureMigrations = [
     user_id TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    metadata TEXT -- Stored as JSON string for flexible metadata
+    metadata TEXT
   )`,
 
-  // Notifications table
   `CREATE TABLE IF NOT EXISTS notifications (
     id TEXT PRIMARY KEY,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     message TEXT NOT NULL,
     sender TEXT,
-    receivers TEXT -- Stored as JSON string
+    receivers TEXT
   )`,
 
-  // Plan table
   `CREATE TABLE IF NOT EXISTS plans (
     id TEXT PRIMARY KEY,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -111,11 +94,10 @@ export const featureMigrations = [
     status TEXT,
     room_id TEXT,
     progress INTEGER,
-    logs TEXT, -- Stored as JSON string
-    context TEXT -- Stored as JSON string
+    logs TEXT,
+    context TEXT
   )`,
 
-  // Task table
   `CREATE TABLE IF NOT EXISTS tasks (
     id TEXT PRIMARY KEY,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -127,14 +109,13 @@ export const featureMigrations = [
     task_explanation TEXT NOT NULL,
     expected_result TEXT,
     mcp_server TEXT,
-    skills TEXT, -- Stored as JSON string
+    skills TEXT,
     status TEXT,
     result TEXT,
-    logs TEXT, -- Stored as JSON string
+    logs TEXT,
     FOREIGN KEY (plan_id) REFERENCES plans(id)
   )`,
 
-  // Plan log table
   `CREATE TABLE IF NOT EXISTS logs (
     id TEXT PRIMARY KEY,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -143,7 +124,6 @@ export const featureMigrations = [
     reference_type TEXT
   )`,
 
-  // Skill table
   `CREATE TABLE IF NOT EXISTS skills (
     id TEXT PRIMARY KEY,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -152,10 +132,9 @@ export const featureMigrations = [
     mcp_server TEXT,
     description TEXT,
     type TEXT,
-    args TEXT -- Stored as JSON string
+    args TEXT
   )`,
 
-  // Documents table
   `CREATE TABLE IF NOT EXISTS documents (
     id TEXT PRIMARY KEY,
     content TEXT,
@@ -189,27 +168,23 @@ export const featureMigrations = [
     recency_score REAL,
     view_count INTEGER DEFAULT 0,
     feedback_score REAL,
-    additional_metadata TEXT, -- Stored as JSON string
+    additional_metadata TEXT,
     FOREIGN KEY (parent_id) REFERENCES documents(id)
   )`,
 
-  // File indexes for better performance
   `CREATE INDEX IF NOT EXISTS idx_files_workspace_id ON files(workspace_id)`,
   `CREATE INDEX IF NOT EXISTS idx_files_user_id ON files(user_id)`,
   `CREATE INDEX IF NOT EXISTS idx_files_created_at ON files(created_at)`,
 
-  // Message indexes for better performance
   `CREATE INDEX IF NOT EXISTS idx_messages_chat_id ON messages(chat_id)`,
   `CREATE INDEX IF NOT EXISTS idx_messages_sender ON messages(sender)`,
   `CREATE INDEX IF NOT EXISTS idx_messages_created_at ON messages(created_at)`,
 
-  // Document indexes
   `CREATE INDEX IF NOT EXISTS idx_documents_parent_id ON documents(parent_id)`,
   `CREATE INDEX IF NOT EXISTS idx_documents_document_type ON documents(document_type)`,
   `CREATE INDEX IF NOT EXISTS idx_documents_language ON documents(language)`,
   `CREATE INDEX IF NOT EXISTS idx_documents_ingested_at ON documents(ingested_at)`,
 
-  // Document view
   `CREATE VIEW IF NOT EXISTS document_view AS
    SELECT
       id,
@@ -226,20 +201,15 @@ export const featureMigrations = [
    ORDER BY
       ingested_at DESC`,
 
-  // Add index for the new reference columns in the logs table
   `CREATE INDEX IF NOT EXISTS idx_logs_reference ON logs(reference_id, reference_type)`,
 
-  // Migration to update existing data if needed
   `UPDATE messages SET file_ids = files WHERE files IS NOT NULL AND file_ids IS NULL`,
 
-  // Add missing execution_time_seconds column to tool_calls table
   `ALTER TABLE tool_calls ADD COLUMN execution_time_seconds REAL`,
 
-  // Note: In production, you might want to add a separate migration to drop the old files column
-  // after ensuring all data has been migrated properly
+  `ALTER TABLE messages ADD COLUMN chat_id TEXT`
 ];
 
-// Combined migrations array for all schema updates
 export const allMigrations = [
   ...coreMigrations,
   ...featureMigrations

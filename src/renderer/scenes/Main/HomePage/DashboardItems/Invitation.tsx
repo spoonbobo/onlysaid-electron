@@ -5,13 +5,14 @@ import { Mail, Business, Check, Close, Refresh } from '@mui/icons-material';
 import { useWorkspaceStore } from '@/renderer/stores/Workspace/WorkspaceStore';
 import { IWorkspaceInvitation } from '@/../../types/Workspace/Workspace';
 import { useIntl } from 'react-intl';
+import { getUserFromStore } from '@/utils/user';
 
 const Invitation = () => {
   const intl = useIntl();
   const [invitations, setInvitations] = useState<IWorkspaceInvitation[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
-  const { getUserInvitations, updateInvitation } = useWorkspaceStore();
+  const { getUserInvitations, updateInvitation, getWorkspace } = useWorkspaceStore();
 
   const fetchInvitations = async () => {
     setIsLoading(true);
@@ -29,6 +30,14 @@ const Invitation = () => {
     try {
       await updateInvitation(invitation.workspace_id, invitation.id, status);
       setInvitations(prev => prev.filter(inv => inv.id !== invitation.id));
+
+      // If invitation was accepted, refetch user's workspaces to include the new workspace
+      if (status === 'accepted') {
+        const currentUser = getUserFromStore();
+        if (currentUser?.id) {
+          await getWorkspace(currentUser.id);
+        }
+      }
     } catch (error) {
       console.error('Error responding to invitation:', error);
     }

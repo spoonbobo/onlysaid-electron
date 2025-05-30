@@ -468,6 +468,13 @@
   "homepage.invitations.empty.subtitle": "您已經處理完所有邀請！沒有工作空間邀請等待您的回覆。",
   "homepage.invitations.checkAgain": "重新檢查",
 
-  "dashboard.loading": "載入中..."
+  "dashboard.loading": "載入中...",
 
+  "common.remove": "移除",
+
+  "menu.workspace.selectUsers": "請選擇至少一位用戶進行邀請",
+  "menu.workspace.searchUsers": "搜尋用戶",
+  "menu.workspace.searchUsersPlaceholder": "輸入電郵地址以搜尋用戶...",
+  "menu.workspace.selectedUsers": "已選用戶 ({count})",
+  "menu.workspace.inviteUsers": "邀請 {count} 位用戶"
 }

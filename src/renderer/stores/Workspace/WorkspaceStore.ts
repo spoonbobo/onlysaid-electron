@@ -256,8 +256,23 @@ export const useWorkspaceStore = create<WorkspaceState>()((set, get) => ({
         throw new Error("Workspace not found");
       }
 
-      await get().removeUserFromWorkspace(workspaceId, userId);
+      // Try to remove user from workspace on server
+      try {
+        await get().removeUserFromWorkspace(workspaceId, userId);
+      } catch (serverError: any) {
+        // If workspace doesn't exist on server, log the error but continue with local cleanup
+        if (serverError.message?.includes("not found") ||
+          serverError.message?.includes("404") ||
+          serverError.message?.includes("Workspace not found")) {
+          console.warn(`Workspace ${workspaceId} not found on server, proceeding with local cleanup:`, serverError);
+          toast.info(`Workspace no longer exists on server, removing from local state`);
+        } else {
+          // Re-throw other errors (permissions, network issues, etc.)
+          throw serverError;
+        }
+      }
 
+      // Always perform local cleanup regardless of server response
       set(state => ({
         workspaces: state.workspaces.filter(w => w.id !== workspaceId),
         isLoading: false

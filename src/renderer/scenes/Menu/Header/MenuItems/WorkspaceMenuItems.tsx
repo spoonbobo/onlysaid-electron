@@ -19,6 +19,7 @@ import { useWorkspaceStore } from "@/renderer/stores/Workspace/WorkspaceStore";
 import { useKBStore } from "@/renderer/stores/KB/KBStore";
 import InviteUserDialog from "@/renderer/components/Dialog/Workspace/InviteUserToWorkspace";
 import { IWorkspace } from "@/../../types/Workspace/Workspace";
+import { IUser } from "@/../../types/User/User";
 
 
 type WorkspaceMenuItemsProps = {
@@ -173,14 +174,20 @@ export const RenderWorkspaceActions = ({
   const { openCreateKBDialog } = useKBStore();
   const [isInviteDialogOpen, setIsInviteDialogOpen] = useState(false);
 
-  const handleInviteUser = async (email: string, role: string) => {
-    if (selectedContext?.id && email) {
+  const handleInviteUsers = async (invitations: Array<{ email: string; role: string; user: IUser }>) => {
+    if (selectedContext?.id) {
       try {
-        await useWorkspaceStore.getState().sendInvitation(selectedContext.id, email);
+        // Send invitations for each user
+        for (const invitation of invitations) {
+          await useWorkspaceStore.getState().sendInvitation(
+            selectedContext.id,
+            invitation.user.email
+          );
+        }
 
-        handleAction?.('userInvited');
+        handleAction?.('usersInvited');
       } catch (error) {
-        console.error("Error inviting user:", error);
+        console.error("Error inviting users:", error);
       }
     }
   };
@@ -247,7 +254,7 @@ export const RenderWorkspaceActions = ({
           <InviteUserDialog
             open={isInviteDialogOpen}
             onClose={() => setIsInviteDialogOpen(false)}
-            onInvite={handleInviteUser}
+            onInvite={handleInviteUsers}
             workspace={selectedContext as unknown as IWorkspace}
           />
         </>
