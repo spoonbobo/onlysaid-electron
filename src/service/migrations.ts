@@ -1,214 +1,475 @@
-export const coreMigrations = [
-  `CREATE TABLE IF NOT EXISTS settings (
-    key TEXT PRIMARY KEY,
-    value TEXT NOT NULL
-  )`
+// Migration version tracking and management
+export interface IMigration {
+  id: string;
+  version: string;
+  name: string;
+  description: string;
+  up: string;
+  down?: string;
+  dependencies?: string[];
+  category: 'core' | 'feature' | 'index' | 'data';
+  createdAt: string;
+}
+
+export interface IMigrationState {
+  version: string;
+  appliedMigrations: string[];
+  lastApplied: string;
+  environment: 'development' | 'production' | 'test';
+}
+
+// Core system migrations - essential for app functionality
+export const coreMigrations: IMigration[] = [
+  {
+    id: 'core_001',
+    version: '1.0.0',
+    name: 'create_settings_table',
+    description: 'Create settings table for application configuration',
+    category: 'core',
+    createdAt: '2024-01-01T00:00:00Z',
+    up: `CREATE TABLE IF NOT EXISTS settings (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL
+    )`,
+    down: `DROP TABLE IF EXISTS settings`
+  },
+  {
+    id: 'core_002',
+    version: '1.0.0',
+    name: 'create_migration_state',
+    description: 'Create migration state tracking table',
+    category: 'core',
+    createdAt: '2024-01-01T00:01:00Z',
+    up: `CREATE TABLE IF NOT EXISTS migration_state (
+      id INTEGER PRIMARY KEY,
+      migration_id TEXT NOT NULL,
+      version TEXT NOT NULL,
+      applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      environment TEXT NOT NULL,
+      checksum TEXT,
+      UNIQUE(migration_id)
+    )`,
+    down: `DROP TABLE IF EXISTS migration_state`
+  }
 ];
 
-export const featureMigrations = [
-  `CREATE TABLE IF NOT EXISTS chat (
-    id TEXT PRIMARY KEY,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    type TEXT DEFAULT 'chat',
-    name TEXT DEFAULT 'New Chat',
-    unread INTEGER DEFAULT 0,
-    workspace_id TEXT,
-    user_id TEXT
-  )`,
-
-  `CREATE TABLE IF NOT EXISTS messages (
-    id TEXT PRIMARY KEY,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    sent_at TIMESTAMP,
-    chat_id TEXT,
-    sender TEXT,
-    status TEXT,
-    reactions TEXT,
-    reply_to TEXT,
-    mentions TEXT,
-    file_ids TEXT,
-    poll TEXT,
-    contact TEXT,
-    gif TEXT,
-    text TEXT
-  )`,
-
-  `CREATE TABLE IF NOT EXISTS reactions (
-    id TEXT PRIMARY KEY,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    reaction TEXT NOT NULL,
-    message_id TEXT NOT NULL,
-    user_id TEXT NOT NULL,
-    FOREIGN KEY (message_id) REFERENCES messages(id)
-  )`,
-
-  `CREATE TABLE IF NOT EXISTS tool_calls (
-    id TEXT PRIMARY KEY,
-    message_id TEXT NOT NULL,
-    call_index INTEGER NOT NULL,
-    type TEXT,
-    function_name TEXT,
-    function_arguments TEXT,
-    tool_description TEXT,
-    mcp_server TEXT,
-    status TEXT DEFAULT 'pending',
-    result TEXT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    execution_time_seconds REAL,
-    FOREIGN KEY (message_id) REFERENCES messages(id) ON DELETE CASCADE
-  )`,
-
-  `CREATE TABLE IF NOT EXISTS files (
-    id TEXT PRIMARY KEY,
-    workspace_id TEXT NOT NULL,
-    name TEXT NOT NULL,
-    size INTEGER NOT NULL,
-    mime_type TEXT NOT NULL,
-    path TEXT NOT NULL,
-    user_id TEXT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    metadata TEXT
-  )`,
-
-  `CREATE TABLE IF NOT EXISTS notifications (
-    id TEXT PRIMARY KEY,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    message TEXT NOT NULL,
-    sender TEXT,
-    receivers TEXT
-  )`,
-
-  `CREATE TABLE IF NOT EXISTS plans (
-    id TEXT PRIMARY KEY,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    completed_at TIMESTAMP,
-    plan_name TEXT,
-    plan_overview TEXT,
-    assigner TEXT NOT NULL,
-    assignee TEXT NOT NULL,
-    reviewer TEXT,
-    status TEXT,
-    room_id TEXT,
-    progress INTEGER,
-    logs TEXT,
-    context TEXT
-  )`,
-
-  `CREATE TABLE IF NOT EXISTS tasks (
-    id TEXT PRIMARY KEY,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    start_time TIMESTAMP,
-    completed_at TIMESTAMP,
-    plan_id TEXT NOT NULL,
-    step_number INTEGER NOT NULL,
-    task_name TEXT NOT NULL,
-    task_explanation TEXT NOT NULL,
-    expected_result TEXT,
-    mcp_server TEXT,
-    skills TEXT,
-    status TEXT,
-    result TEXT,
-    logs TEXT,
-    FOREIGN KEY (plan_id) REFERENCES plans(id)
-  )`,
-
-  `CREATE TABLE IF NOT EXISTS logs (
-    id TEXT PRIMARY KEY,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    content TEXT,
-    reference_id TEXT,
-    reference_type TEXT
-  )`,
-
-  `CREATE TABLE IF NOT EXISTS skills (
-    id TEXT PRIMARY KEY,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    name TEXT,
-    mcp_server TEXT,
-    description TEXT,
-    type TEXT,
-    args TEXT
-  )`,
-
-  `CREATE TABLE IF NOT EXISTS documents (
-    id TEXT PRIMARY KEY,
-    content TEXT,
-    content_path TEXT,
-    parent_id TEXT,
-    source_type TEXT NOT NULL,
-    source_name TEXT NOT NULL,
-    source_url TEXT,
-    source_file_type TEXT,
-    title TEXT NOT NULL,
-    author_list TEXT,
-    created_at TIMESTAMP,
-    last_modified TIMESTAMP,
-    ingested_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
-    language TEXT NOT NULL,
-    document_type TEXT NOT NULL,
-    tags TEXT,
-    topics TEXT,
-    categories TEXT,
-    chunk_index INTEGER,
-    total_chunks INTEGER,
-    chunk_strategy TEXT,
-    chunk_size INTEGER,
-    chunk_overlap INTEGER,
-    chunk_section TEXT,
-    embedding_model TEXT,
-    embedding_version TEXT,
-    embedding_dimensions INTEGER,
-    embedding_created_at TIMESTAMP,
-    importance_score REAL,
-    recency_score REAL,
-    view_count INTEGER DEFAULT 0,
-    feedback_score REAL,
-    additional_metadata TEXT,
-    FOREIGN KEY (parent_id) REFERENCES documents(id)
-  )`,
-
-  `CREATE INDEX IF NOT EXISTS idx_files_workspace_id ON files(workspace_id)`,
-  `CREATE INDEX IF NOT EXISTS idx_files_user_id ON files(user_id)`,
-  `CREATE INDEX IF NOT EXISTS idx_files_created_at ON files(created_at)`,
-
-  `CREATE INDEX IF NOT EXISTS idx_messages_chat_id ON messages(chat_id)`,
-  `CREATE INDEX IF NOT EXISTS idx_messages_sender ON messages(sender)`,
-  `CREATE INDEX IF NOT EXISTS idx_messages_created_at ON messages(created_at)`,
-
-  `CREATE INDEX IF NOT EXISTS idx_documents_parent_id ON documents(parent_id)`,
-  `CREATE INDEX IF NOT EXISTS idx_documents_document_type ON documents(document_type)`,
-  `CREATE INDEX IF NOT EXISTS idx_documents_language ON documents(language)`,
-  `CREATE INDEX IF NOT EXISTS idx_documents_ingested_at ON documents(ingested_at)`,
-
-  `CREATE VIEW IF NOT EXISTS document_view AS
-   SELECT
-      id,
-      title,
-      content,
-      document_type,
-      language,
-      source_name,
-      ingested_at,
-      CASE WHEN parent_id IS NULL THEN 'Parent' ELSE 'Chunk' END as doc_type,
-      view_count
-   FROM
-      documents
-   ORDER BY
-      ingested_at DESC`,
-
-  `CREATE INDEX IF NOT EXISTS idx_logs_reference ON logs(reference_id, reference_type)`,
-  `UPDATE messages SET file_ids = files WHERE files IS NOT NULL AND file_ids IS NULL`,
-  `ALTER TABLE tool_calls ADD COLUMN execution_time_seconds REAL`,
-  `ALTER TABLE messages ADD COLUMN chat_id TEXT`,
-  `ALTER TABLE messages ADD COLUMN file_ids TEXT`
+// Feature migrations - application features
+export const featureMigrations: IMigration[] = [
+  {
+    id: 'feature_001',
+    version: '1.1.0',
+    name: 'create_chat_table',
+    description: 'Create chat table for messaging functionality',
+    category: 'feature',
+    dependencies: ['core_001'],
+    createdAt: '2024-01-02T00:00:00Z',
+    up: `CREATE TABLE IF NOT EXISTS chat (
+      id TEXT PRIMARY KEY,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      type TEXT DEFAULT 'chat',
+      name TEXT DEFAULT 'New Chat',
+      unread INTEGER DEFAULT 0,
+      workspace_id TEXT,
+      user_id TEXT
+    )`,
+    down: `DROP TABLE IF EXISTS chat`
+  },
+  {
+    id: 'feature_002',
+    version: '1.1.0',
+    name: 'create_messages_table',
+    description: 'Create messages table for chat messages',
+    category: 'feature',
+    dependencies: ['feature_001'],
+    createdAt: '2024-01-02T00:01:00Z',
+    up: `CREATE TABLE IF NOT EXISTS messages (
+      id TEXT PRIMARY KEY,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      sent_at TIMESTAMP,
+      chat_id TEXT,
+      sender TEXT,
+      status TEXT,
+      reactions TEXT,
+      reply_to TEXT,
+      mentions TEXT,
+      file_ids TEXT,
+      poll TEXT,
+      contact TEXT,
+      gif TEXT,
+      text TEXT
+    )`,
+    down: `DROP TABLE IF EXISTS messages`
+  },
+  {
+    id: 'feature_003',
+    version: '1.2.0',
+    name: 'create_reactions_table',
+    description: 'Create reactions table for message reactions',
+    category: 'feature',
+    dependencies: ['feature_002'],
+    createdAt: '2024-01-03T00:00:00Z',
+    up: `CREATE TABLE IF NOT EXISTS reactions (
+      id TEXT PRIMARY KEY,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      reaction TEXT NOT NULL,
+      message_id TEXT NOT NULL,
+      user_id TEXT NOT NULL,
+      FOREIGN KEY (message_id) REFERENCES messages(id)
+    )`,
+    down: `DROP TABLE IF EXISTS reactions`
+  },
+  {
+    id: 'feature_004',
+    version: '1.3.0',
+    name: 'create_tool_calls_table',
+    description: 'Create tool calls table for MCP tool execution',
+    category: 'feature',
+    dependencies: ['feature_002'],
+    createdAt: '2024-01-04T00:00:00Z',
+    up: `CREATE TABLE IF NOT EXISTS tool_calls (
+      id TEXT PRIMARY KEY,
+      message_id TEXT NOT NULL,
+      call_index INTEGER NOT NULL,
+      type TEXT,
+      function_name TEXT,
+      function_arguments TEXT,
+      tool_description TEXT,
+      mcp_server TEXT,
+      status TEXT DEFAULT 'pending',
+      result TEXT,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      execution_time_seconds REAL,
+      FOREIGN KEY (message_id) REFERENCES messages(id) ON DELETE CASCADE
+    )`,
+    down: `DROP TABLE IF EXISTS tool_calls`
+  },
+  {
+    id: 'feature_005',
+    version: '1.4.0',
+    name: 'create_files_table',
+    description: 'Create files table for file management',
+    category: 'feature',
+    createdAt: '2024-01-05T00:00:00Z',
+    up: `CREATE TABLE IF NOT EXISTS files (
+      id TEXT PRIMARY KEY,
+      workspace_id TEXT NOT NULL,
+      name TEXT NOT NULL,
+      size INTEGER NOT NULL,
+      mime_type TEXT NOT NULL,
+      path TEXT NOT NULL,
+      user_id TEXT,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      metadata TEXT
+    )`,
+    down: `DROP TABLE IF EXISTS files`
+  },
+  {
+    id: 'feature_006',
+    version: '1.5.0',
+    name: 'create_notifications_table',
+    description: 'Create notifications table for user notifications',
+    category: 'feature',
+    createdAt: '2024-01-06T00:00:00Z',
+    up: `CREATE TABLE IF NOT EXISTS notifications (
+      id TEXT PRIMARY KEY,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      message TEXT NOT NULL,
+      sender TEXT,
+      receivers TEXT
+    )`,
+    down: `DROP TABLE IF EXISTS notifications`
+  },
+  {
+    id: 'feature_007',
+    version: '1.6.0',
+    name: 'create_plans_table',
+    description: 'Create plans table for task planning',
+    category: 'feature',
+    createdAt: '2024-01-07T00:00:00Z',
+    up: `CREATE TABLE IF NOT EXISTS plans (
+      id TEXT PRIMARY KEY,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      completed_at TIMESTAMP,
+      plan_name TEXT,
+      plan_overview TEXT,
+      assigner TEXT NOT NULL,
+      assignee TEXT NOT NULL,
+      reviewer TEXT,
+      status TEXT,
+      room_id TEXT,
+      progress INTEGER,
+      logs TEXT,
+      context TEXT
+    )`,
+    down: `DROP TABLE IF EXISTS plans`
+  },
+  {
+    id: 'feature_008',
+    version: '1.6.0',
+    name: 'create_tasks_table',
+    description: 'Create tasks table for plan execution',
+    category: 'feature',
+    dependencies: ['feature_007'],
+    createdAt: '2024-01-07T00:01:00Z',
+    up: `CREATE TABLE IF NOT EXISTS tasks (
+      id TEXT PRIMARY KEY,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      start_time TIMESTAMP,
+      completed_at TIMESTAMP,
+      plan_id TEXT NOT NULL,
+      step_number INTEGER NOT NULL,
+      task_name TEXT NOT NULL,
+      task_explanation TEXT NOT NULL,
+      expected_result TEXT,
+      mcp_server TEXT,
+      skills TEXT,
+      status TEXT,
+      result TEXT,
+      logs TEXT,
+      FOREIGN KEY (plan_id) REFERENCES plans(id)
+    )`,
+    down: `DROP TABLE IF EXISTS tasks`
+  },
+  {
+    id: 'feature_009',
+    version: '1.7.0',
+    name: 'create_logs_table',
+    description: 'Create logs table for system logging',
+    category: 'feature',
+    createdAt: '2024-01-08T00:00:00Z',
+    up: `CREATE TABLE IF NOT EXISTS logs (
+      id TEXT PRIMARY KEY,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      content TEXT,
+      reference_id TEXT,
+      reference_type TEXT
+    )`,
+    down: `DROP TABLE IF EXISTS logs`
+  },
+  {
+    id: 'feature_010',
+    version: '1.8.0',
+    name: 'create_skills_table',
+    description: 'Create skills table for MCP skill management',
+    category: 'feature',
+    createdAt: '2024-01-09T00:00:00Z',
+    up: `CREATE TABLE IF NOT EXISTS skills (
+      id TEXT PRIMARY KEY,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      name TEXT,
+      mcp_server TEXT,
+      description TEXT,
+      type TEXT,
+      args TEXT
+    )`,
+    down: `DROP TABLE IF EXISTS skills`
+  },
+  {
+    id: 'feature_011',
+    version: '1.9.0',
+    name: 'create_documents_table',
+    description: 'Create documents table for knowledge base',
+    category: 'feature',
+    createdAt: '2024-01-10T00:00:00Z',
+    up: `CREATE TABLE IF NOT EXISTS documents (
+      id TEXT PRIMARY KEY,
+      content TEXT,
+      content_path TEXT,
+      parent_id TEXT,
+      source_type TEXT NOT NULL,
+      source_name TEXT NOT NULL,
+      source_url TEXT,
+      source_file_type TEXT,
+      title TEXT NOT NULL,
+      author_list TEXT,
+      created_at TIMESTAMP,
+      last_modified TIMESTAMP,
+      ingested_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+      language TEXT NOT NULL,
+      document_type TEXT NOT NULL,
+      tags TEXT,
+      topics TEXT,
+      categories TEXT,
+      chunk_index INTEGER,
+      total_chunks INTEGER,
+      chunk_strategy TEXT,
+      chunk_size INTEGER,
+      chunk_overlap INTEGER,
+      chunk_section TEXT,
+      embedding_model TEXT,
+      embedding_version TEXT,
+      embedding_dimensions INTEGER,
+      embedding_created_at TIMESTAMP,
+      importance_score REAL,
+      recency_score REAL,
+      view_count INTEGER DEFAULT 0,
+      feedback_score REAL,
+      additional_metadata TEXT,
+      FOREIGN KEY (parent_id) REFERENCES documents(id)
+    )`,
+    down: `DROP TABLE IF EXISTS documents`
+  }
 ];
 
-export const allMigrations = [
+// Index migrations - performance optimizations
+export const indexMigrations: IMigration[] = [
+  {
+    id: 'index_001',
+    version: '1.4.1',
+    name: 'create_files_indexes',
+    description: 'Create indexes for files table performance',
+    category: 'index',
+    dependencies: ['feature_005'],
+    createdAt: '2024-01-05T01:00:00Z',
+    up: `
+      CREATE INDEX IF NOT EXISTS idx_files_workspace_id ON files(workspace_id);
+      CREATE INDEX IF NOT EXISTS idx_files_user_id ON files(user_id);
+      CREATE INDEX IF NOT EXISTS idx_files_created_at ON files(created_at);
+    `,
+    down: `
+      DROP INDEX IF EXISTS idx_files_workspace_id;
+      DROP INDEX IF EXISTS idx_files_user_id;
+      DROP INDEX IF EXISTS idx_files_created_at;
+    `
+  },
+  {
+    id: 'index_002',
+    version: '1.1.1',
+    name: 'create_messages_indexes',
+    description: 'Create indexes for messages table performance',
+    category: 'index',
+    dependencies: ['feature_002'],
+    createdAt: '2024-01-02T01:00:00Z',
+    up: `
+      CREATE INDEX IF NOT EXISTS idx_messages_chat_id ON messages(chat_id);
+      CREATE INDEX IF NOT EXISTS idx_messages_sender ON messages(sender);
+      CREATE INDEX IF NOT EXISTS idx_messages_created_at ON messages(created_at);
+    `,
+    down: `
+      DROP INDEX IF EXISTS idx_messages_chat_id;
+      DROP INDEX IF EXISTS idx_messages_sender;
+      DROP INDEX IF EXISTS idx_messages_created_at;
+    `
+  },
+  {
+    id: 'index_003',
+    version: '1.9.1',
+    name: 'create_documents_indexes',
+    description: 'Create indexes for documents table performance',
+    category: 'index',
+    dependencies: ['feature_011'],
+    createdAt: '2024-01-10T01:00:00Z',
+    up: `
+      CREATE INDEX IF NOT EXISTS idx_documents_parent_id ON documents(parent_id);
+      CREATE INDEX IF NOT EXISTS idx_documents_document_type ON documents(document_type);
+      CREATE INDEX IF NOT EXISTS idx_documents_language ON documents(language);
+      CREATE INDEX IF NOT EXISTS idx_documents_ingested_at ON documents(ingested_at);
+    `,
+    down: `
+      DROP INDEX IF EXISTS idx_documents_parent_id;
+      DROP INDEX IF EXISTS idx_documents_document_type;
+      DROP INDEX IF EXISTS idx_documents_language;
+      DROP INDEX IF EXISTS idx_documents_ingested_at;
+    `
+  },
+  {
+    id: 'index_004',
+    version: '1.7.1',
+    name: 'create_logs_indexes',
+    description: 'Create indexes for logs table performance',
+    category: 'index',
+    dependencies: ['feature_009'],
+    createdAt: '2024-01-08T01:00:00Z',
+    up: `CREATE INDEX IF NOT EXISTS idx_logs_reference ON logs(reference_id, reference_type)`,
+    down: `DROP INDEX IF EXISTS idx_logs_reference`
+  }
+];
+
+// Data migrations - schema updates and data transformations
+export const dataMigrations: IMigration[] = [
+  {
+    id: 'data_001',
+    version: '1.9.2',
+    name: 'create_document_view',
+    description: 'Create document view for easier querying',
+    category: 'data',
+    dependencies: ['feature_011', 'index_003'],
+    createdAt: '2024-01-10T02:00:00Z',
+    up: `CREATE VIEW IF NOT EXISTS document_view AS
+     SELECT
+        id,
+        title,
+        content,
+        document_type,
+        language,
+        source_name,
+        ingested_at,
+        CASE WHEN parent_id IS NULL THEN 'Parent' ELSE 'Chunk' END as doc_type,
+        view_count
+     FROM
+        documents
+     ORDER BY
+        ingested_at DESC`,
+    down: `DROP VIEW IF EXISTS document_view`
+  },
+];
+
+// Combine all migrations in dependency order
+export const allMigrations: IMigration[] = [
   ...coreMigrations,
-  ...featureMigrations
+  ...featureMigrations,
+  ...indexMigrations,
+  ...dataMigrations
 ];
+
+// Legacy migration strings for backward compatibility
+export const legacyMigrations = allMigrations.map(m => m.up);
+
+// Migration utilities
+export const getMigrationsByVersion = (version: string): IMigration[] => {
+  return allMigrations.filter(m => m.version === version);
+};
+
+export const getMigrationsByCategory = (category: IMigration['category']): IMigration[] => {
+  return allMigrations.filter(m => m.category === category);
+};
+
+export const getMigrationById = (id: string): IMigration | undefined => {
+  return allMigrations.find(m => m.id === id);
+};
+
+export const validateMigrationDependencies = (migration: IMigration, appliedMigrations: string[]): boolean => {
+  if (!migration.dependencies) return true;
+  return migration.dependencies.every(dep => appliedMigrations.includes(dep));
+};
+
+export const sortMigrationsByDependencies = (migrations: IMigration[]): IMigration[] => {
+  const sorted: IMigration[] = [];
+  const remaining = [...migrations];
+
+  while (remaining.length > 0) {
+    const canApply = remaining.filter(m =>
+      validateMigrationDependencies(m, sorted.map(s => s.id))
+    );
+
+    if (canApply.length === 0) {
+      throw new Error('Circular dependency detected in migrations');
+    }
+
+    // Sort by creation date within the same dependency level
+    canApply.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+
+    sorted.push(...canApply);
+    canApply.forEach(m => {
+      const index = remaining.findIndex(r => r.id === m.id);
+      remaining.splice(index, 1);
+    });
+  }
+
+  return sorted;
+};

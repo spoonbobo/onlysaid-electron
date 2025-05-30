@@ -2,6 +2,8 @@ import Database from 'better-sqlite3';
 import path from 'path';
 import fs from 'fs';
 import { app } from 'electron';
+import { migrationManager } from './migrationManager';
+import { legacyMigrations } from './migrations';
 
 let dbPath: string;
 
@@ -122,7 +124,7 @@ export const executeTransaction = <T>(
   return transaction(currentDbInstance);
 };
 
-export const runMigrations = (migrations: string[]): void => {
+export const runMigrations = async (migrations?: string[]): Promise<void> => {
   if (!dbInstance) {
     initializeDatabase();
     if (!dbInstance) {
@@ -130,15 +132,26 @@ export const runMigrations = (migrations: string[]): void => {
     }
   }
 
-  executeTransaction((db) => {
-    migrations.forEach(migration => {
-      try {
-        db.exec(migration);
-      } catch (error) {
-        console.error(`Error executing migration: ${migration}`, error);
-      }
-    });
-  });
+  // If legacy migrations array is provided, use old system for backward compatibility
+  if (migrations && migrations.length > 0) {
+    console.log('Legacy migration system detected. Switching to new migration manager...');
+    // Don't run legacy migrations, use the new system instead
+  }
 
-  console.log('Database migrations completed.');
+  // Use new migration manager
+  try {
+    await migrationManager.runMigrations();
+  } catch (error) {
+    console.error('Migration failed:', error);
+    throw error;
+  }
 };
+
+// Export migration utilities
+export { migrationManager };
+export {
+  getMigrationsByVersion,
+  getMigrationsByCategory,
+  getMigrationById,
+  allMigrations
+} from './migrations';

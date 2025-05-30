@@ -113,7 +113,7 @@ ipcMain.on('ipc-example', async (event, arg) => {
 ipcMain.handle('db:initialize', async () => {
   try {
     initializeDatabase();
-    runMigrations(allMigrations);
+    await runMigrations();
     console.log('Database initialized');
     return true;
   } catch (error) {
@@ -210,7 +210,7 @@ const createWindow = async () => {
   try {
     console.log('[Main] Initializing database during app startup...');
     const db = initializeDatabase();
-    runMigrations(allMigrations);
+    await runMigrations();
     console.log('[Main] Database initialized and migrations applied successfully');
   } catch (error) {
     console.error('[Main] Failed to initialize database during startup:', error);
