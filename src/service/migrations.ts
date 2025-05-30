@@ -417,6 +417,78 @@ export const dataMigrations: IMigration[] = [
         ingested_at DESC`,
     down: `DROP VIEW IF EXISTS document_view`
   },
+  {
+    id: 'data_002',
+    version: '1.9.3',
+    name: 'update_messages_table_schema',
+    description: 'Update messages table schema to ensure all required columns exist',
+    category: 'data',
+    dependencies: ['feature_002'],
+    createdAt: '2024-01-11T00:00:00Z',
+    up: `
+      -- Create a new messages table with the correct schema
+      CREATE TABLE IF NOT EXISTS messages_new (
+        id TEXT PRIMARY KEY,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        sent_at TIMESTAMP,
+        chat_id TEXT,
+        sender TEXT,
+        status TEXT,
+        reactions TEXT,
+        reply_to TEXT,
+        mentions TEXT,
+        file_ids TEXT,
+        poll TEXT,
+        contact TEXT,
+        gif TEXT,
+        text TEXT
+      );
+
+      -- Copy data from old table to new table (handling missing columns)
+      INSERT INTO messages_new (
+        id, created_at, updated_at, sent_at, chat_id, sender, status, reactions, reply_to, text
+      )
+      SELECT
+        id,
+        created_at,
+        updated_at,
+        sent_at,
+        chat_id,
+        sender,
+        status,
+        reactions,
+        reply_to,
+        text
+      FROM messages;
+
+      -- Drop old table and rename new table
+      DROP TABLE messages;
+      ALTER TABLE messages_new RENAME TO messages;
+    `,
+    down: `
+      -- This rollback would lose the new columns data
+      CREATE TABLE IF NOT EXISTS messages_old (
+        id TEXT PRIMARY KEY,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        sent_at TIMESTAMP,
+        chat_id TEXT,
+        sender TEXT,
+        status TEXT,
+        reactions TEXT,
+        reply_to TEXT,
+        text TEXT
+      );
+
+      INSERT INTO messages_old SELECT
+        id, created_at, updated_at, sent_at, chat_id, sender, status, reactions, reply_to, text
+      FROM messages;
+
+      DROP TABLE messages;
+      ALTER TABLE messages_old RENAME TO messages;
+    `
+  }
 ];
 
 // Combine all migrations in dependency order
