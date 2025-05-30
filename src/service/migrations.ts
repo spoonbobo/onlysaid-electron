@@ -420,14 +420,23 @@ export const dataMigrations: IMigration[] = [
   {
     id: 'data_002',
     version: '1.9.3',
-    name: 'update_messages_table_schema',
-    description: 'Update messages table schema to ensure all required columns exist',
+    name: 'fix_messages_table_schema',
+    description: 'Fix messages table schema by recreating with all required columns',
     category: 'data',
     dependencies: ['feature_002'],
     createdAt: '2024-01-11T00:00:00Z',
     up: `
-      -- Create a new messages table with the correct schema
-      CREATE TABLE IF NOT EXISTS messages_new (
+      -- Check if messages table exists and recreate it with proper schema
+      DROP TABLE IF EXISTS messages_backup;
+
+      -- Create backup of existing data
+      CREATE TABLE messages_backup AS SELECT * FROM messages;
+
+      -- Drop the old table
+      DROP TABLE messages;
+
+      -- Recreate messages table with correct schema
+      CREATE TABLE messages (
         id TEXT PRIMARY KEY,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -445,11 +454,8 @@ export const dataMigrations: IMigration[] = [
         text TEXT
       );
 
-      -- Copy data from old table to new table (handling missing columns)
-      INSERT INTO messages_new (
-        id, created_at, updated_at, sent_at, chat_id, sender, status, reactions, reply_to, text
-      )
-      SELECT
+      -- Restore data from backup, handling missing columns gracefully
+      INSERT INTO messages (
         id,
         created_at,
         updated_at,
@@ -459,16 +465,41 @@ export const dataMigrations: IMigration[] = [
         status,
         reactions,
         reply_to,
-        text
-      FROM messages;
+        text,
+        mentions,
+        file_ids,
+        poll,
+        contact,
+        gif
+      )
+      SELECT
+        id,
+        created_at,
+        updated_at,
+        sent_at,
+        chat_id,
+        sender,
+        status,
+        COALESCE(reactions, NULL) as reactions,
+        COALESCE(reply_to, NULL) as reply_to,
+        text,
+        NULL as mentions,
+        NULL as file_ids,
+        NULL as poll,
+        NULL as contact,
+        NULL as gif
+      FROM messages_backup;
 
-      -- Drop old table and rename new table
-      DROP TABLE messages;
-      ALTER TABLE messages_new RENAME TO messages;
+      -- Clean up backup table
+      DROP TABLE messages_backup;
     `,
     down: `
-      -- This rollback would lose the new columns data
-      CREATE TABLE IF NOT EXISTS messages_old (
+      -- This rollback recreates the old schema (without new columns)
+      DROP TABLE IF EXISTS messages_backup;
+      CREATE TABLE messages_backup AS SELECT * FROM messages;
+      DROP TABLE messages;
+
+      CREATE TABLE messages (
         id TEXT PRIMARY KEY,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -481,12 +512,14 @@ export const dataMigrations: IMigration[] = [
         text TEXT
       );
 
-      INSERT INTO messages_old SELECT
+      INSERT INTO messages (
         id, created_at, updated_at, sent_at, chat_id, sender, status, reactions, reply_to, text
-      FROM messages;
+      )
+      SELECT
+        id, created_at, updated_at, sent_at, chat_id, sender, status, reactions, reply_to, text
+      FROM messages_backup;
 
-      DROP TABLE messages;
-      ALTER TABLE messages_old RENAME TO messages;
+      DROP TABLE messages_backup;
     `
   }
 ];

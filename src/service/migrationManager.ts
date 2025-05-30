@@ -301,6 +301,46 @@ export class MigrationManager {
 
     console.log(`Imported migration state for ${this.environment} environment.`);
   }
+
+  /**
+   * Force check and apply specific migration (for debugging/fixing issues)
+   */
+  async forceApplyMigration(migrationId: string): Promise<void> {
+    const migration = allMigrations.find(m => m.id === migrationId);
+    if (!migration) {
+      throw new Error(`Migration ${migrationId} not found`);
+    }
+
+    console.log(`Force applying migration: ${migration.id} - ${migration.name}`);
+
+    await executeTransaction(async (db) => {
+      try {
+        // Execute migration
+        db.exec(migration.up);
+
+        // Record successful application
+        await this.recordMigration(migration);
+
+        console.log(`✓ Force applied migration: ${migration.id}`);
+      } catch (error) {
+        console.error(`✗ Failed to force apply migration ${migration.id}:`, error);
+        throw error;
+      }
+    });
+  }
+
+  /**
+   * Check table schema and suggest fixes
+   */
+  async checkTableSchema(tableName: string): Promise<any> {
+    try {
+      const result = await executeQuery(`PRAGMA table_info(${tableName})`);
+      return result;
+    } catch (error) {
+      console.error(`Error checking schema for table ${tableName}:`, error);
+      return null;
+    }
+  }
 }
 
 // Export singleton instance
