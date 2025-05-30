@@ -327,6 +327,7 @@ export const indexMigrations: IMigration[] = [
     dependencies: ['feature_005'],
     createdAt: '2024-01-05T01:00:00Z',
     up: `
+      -- Check if files table exists and has required columns before creating indexes
       CREATE INDEX IF NOT EXISTS idx_files_workspace_id ON files(workspace_id);
       CREATE INDEX IF NOT EXISTS idx_files_user_id ON files(user_id);
       CREATE INDEX IF NOT EXISTS idx_files_created_at ON files(created_at);

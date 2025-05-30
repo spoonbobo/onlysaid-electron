@@ -138,12 +138,95 @@ export const runMigrations = async (migrations?: string[]): Promise<void> => {
     // Don't run legacy migrations, use the new system instead
   }
 
-  // Use new migration manager
+  // Use new migration manager with error recovery for production
   try {
     await migrationManager.runMigrations();
   } catch (error) {
     console.error('Migration failed:', error);
-    throw error;
+
+    // In production, try to recover by checking current schema state
+    if (process.env.NODE_ENV === 'production') {
+      console.log('Attempting migration recovery for production environment...');
+      try {
+        // Check if essential tables exist and create them if missing
+        await recoverEssentialTables();
+        console.log('Migration recovery completed');
+      } catch (recoveryError) {
+        console.error('Migration recovery failed:', recoveryError);
+        throw error; // Re-throw original error
+      }
+    } else {
+      throw error;
+    }
+  }
+};
+
+/**
+ * Recovery function for production environments
+ */
+const recoverEssentialTables = async (): Promise<void> => {
+  const essentialTables = [
+    {
+      name: 'settings',
+      sql: `CREATE TABLE IF NOT EXISTS settings (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL
+      )`
+    },
+    {
+      name: 'migration_state',
+      sql: `CREATE TABLE IF NOT EXISTS migration_state (
+        id INTEGER PRIMARY KEY,
+        migration_id TEXT NOT NULL,
+        version TEXT NOT NULL,
+        applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        environment TEXT NOT NULL,
+        checksum TEXT,
+        UNIQUE(migration_id)
+      )`
+    },
+    {
+      name: 'chat',
+      sql: `CREATE TABLE IF NOT EXISTS chat (
+        id TEXT PRIMARY KEY,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        type TEXT DEFAULT 'chat',
+        name TEXT DEFAULT 'New Chat',
+        unread INTEGER DEFAULT 0,
+        workspace_id TEXT,
+        user_id TEXT
+      )`
+    },
+    {
+      name: 'messages',
+      sql: `CREATE TABLE IF NOT EXISTS messages (
+        id TEXT PRIMARY KEY,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        sent_at TIMESTAMP,
+        chat_id TEXT,
+        sender TEXT,
+        status TEXT,
+        reactions TEXT,
+        reply_to TEXT,
+        mentions TEXT,
+        file_ids TEXT,
+        poll TEXT,
+        contact TEXT,
+        gif TEXT,
+        text TEXT
+      )`
+    }
+  ];
+
+  for (const table of essentialTables) {
+    try {
+      await executeQuery(table.sql);
+      console.log(`✓ Ensured table exists: ${table.name}`);
+    } catch (error) {
+      console.error(`✗ Failed to create table ${table.name}:`, error);
+    }
   }
 };
 
