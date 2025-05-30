@@ -15,7 +15,7 @@ import log from 'electron-log';
 import MenuBuilder from './menu';
 import { resolveHtmlPath } from './util';
 import { initializeDatabase, executeQuery, executeTransaction, closeDatabase, runMigrations } from '../service/db';
-import { allMigrations } from '../service/migrations';
+import { allMigrations } from '../service/migration/migrations';
 import { initAuth } from './auth';
 import dotenv from 'dotenv';
 import { setupChatroomHandlers } from './api/v2/chat';

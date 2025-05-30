@@ -2,8 +2,8 @@ import Database from 'better-sqlite3';
 import path from 'path';
 import fs from 'fs';
 import { app } from 'electron';
-import { migrationManager } from './migrationManager';
-import { legacyMigrations } from './migrations';
+import { migrationManager } from './migration/migrationManager';
+import { legacyMigrations } from './migration/migrations';
 
 let dbPath: string;
 
@@ -132,28 +132,24 @@ export const runMigrations = async (migrations?: string[]): Promise<void> => {
     }
   }
 
-  // If legacy migrations array is provided, use old system for backward compatibility
   if (migrations && migrations.length > 0) {
     console.log('Legacy migration system detected. Switching to new migration manager...');
-    // Don't run legacy migrations, use the new system instead
   }
 
-  // Use new migration manager with error recovery for production
   try {
     await migrationManager.runMigrations();
   } catch (error) {
     console.error('Migration failed:', error);
 
-    // In production, try to recover by checking current schema state
+    // Production recovery mechanism
     if (process.env.NODE_ENV === 'production') {
       console.log('Attempting migration recovery for production environment...');
       try {
-        // Check if essential tables exist and create them if missing
         await recoverEssentialTables();
         console.log('Migration recovery completed');
       } catch (recoveryError) {
         console.error('Migration recovery failed:', recoveryError);
-        throw error; // Re-throw original error
+        throw error;
       }
     } else {
       throw error;
@@ -161,9 +157,6 @@ export const runMigrations = async (migrations?: string[]): Promise<void> => {
   }
 };
 
-/**
- * Recovery function for production environments
- */
 const recoverEssentialTables = async (): Promise<void> => {
   const essentialTables = [
     {
@@ -230,11 +223,10 @@ const recoverEssentialTables = async (): Promise<void> => {
   }
 };
 
-// Export migration utilities
 export { migrationManager };
 export {
   getMigrationsByVersion,
   getMigrationsByCategory,
   getMigrationById,
   allMigrations
-} from './migrations';
+} from './migration/migrations';

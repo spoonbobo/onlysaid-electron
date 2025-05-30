@@ -170,9 +170,20 @@ export const RenderWorkspaceActions = ({
 }) => {
   const { createChat, setActiveChat } = useChatStore();
   const { selectedContext, setSelectedTopic } = useTopicStore();
+  const { getWorkspaceById } = useWorkspaceStore();
   const currentUser = getUserFromStore();
   const { openCreateKBDialog } = useKBStore();
   const [isInviteDialogOpen, setIsInviteDialogOpen] = useState(false);
+
+  // Debug logging
+  console.log('🔍 RenderWorkspaceActions Debug:');
+  console.log('selectedContext:', selectedContext);
+  console.log('selectedContext.id:', selectedContext?.id);
+
+  // Get the full workspace object from workspace store
+  const currentWorkspace = selectedContext?.id ? getWorkspaceById(selectedContext.id) : undefined;
+  console.log('currentWorkspace from store:', currentWorkspace);
+  console.log('currentWorkspace.invite_code:', currentWorkspace?.invite_code);
 
   const handleInviteUsers = async (invitations: Array<{ email: string; role: string; user: IUser }>) => {
     if (selectedContext?.id) {
@@ -238,12 +249,14 @@ export const RenderWorkspaceActions = ({
       );
       break;
     case 'members':
+      console.log('🎯 Members case - workspace being passed to dialog:', currentWorkspace);
       actualContent = (
         <>
           <Tooltip title={<FormattedMessage id="menu.workspace.inviteUser" />}>
             <IconButton
               size="small"
               onClick={() => {
+                console.log('📝 Opening invite dialog with workspace:', currentWorkspace);
                 setIsInviteDialogOpen(true);
                 handleAction?.('openInviteDialog');
               }}
@@ -255,7 +268,7 @@ export const RenderWorkspaceActions = ({
             open={isInviteDialogOpen}
             onClose={() => setIsInviteDialogOpen(false)}
             onInvite={handleInviteUsers}
-            workspace={selectedContext as unknown as IWorkspace}
+            workspace={currentWorkspace}
           />
         </>
       );

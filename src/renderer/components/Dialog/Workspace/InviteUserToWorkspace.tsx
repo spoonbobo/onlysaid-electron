@@ -22,6 +22,8 @@ import { useState, useMemo, useCallback, useEffect } from "react";
 import { FormattedMessage, useIntl } from "react-intl";
 import DeleteIcon from '@mui/icons-material/Delete';
 import PersonAddIcon from '@mui/icons-material/PersonAdd';
+import ContentCopyIcon from '@mui/icons-material/ContentCopy';
+import CheckIcon from '@mui/icons-material/Check';
 
 import { IWorkspace } from "@/../../types/Workspace/Workspace";
 import { IUser } from "@/../../types/User/User";
@@ -45,6 +47,7 @@ function InviteUserDialog({ open, onClose, onInvite, workspace }: InviteUserDial
   const [selectedUsers, setSelectedUsers] = useState<SelectedUser[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [copied, setCopied] = useState(false);
   const intl = useIntl();
 
   // Reset form when dialog opens/closes
@@ -158,11 +161,24 @@ function InviteUserDialog({ open, onClose, onInvite, workspace }: InviteUserDial
     onClose();
   };
 
+  const handleCopyInviteCode = async () => {
+    if (workspace?.invite_code) {
+      try {
+        await navigator.clipboard.writeText(workspace.invite_code);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      } catch (err) {
+        console.error('Failed to copy invite code:', err);
+      }
+    }
+  };
+
   const resetForm = () => {
     setSearchQuery("");
     setSearchResults([]);
     setSelectedUsers([]);
     setError("");
+    setCopied(false);
   };
 
   return (
@@ -344,6 +360,31 @@ function InviteUserDialog({ open, onClose, onInvite, workspace }: InviteUserDial
       </DialogContent>
 
       <DialogActions>
+        {/* Simplified Invite Code Display */}
+        {workspace?.invite_code && (
+          <Box sx={{ flex: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Typography variant="caption" color="text.secondary">
+              <FormattedMessage
+                id="menu.workspace.inviteCode"
+                defaultMessage="Invite Code:"
+              />
+            </Typography>
+            <Typography
+              variant="body2"
+              sx={{ fontFamily: 'monospace', fontWeight: 600, color: 'primary.main' }}
+            >
+              {workspace.invite_code}
+            </Typography>
+            <IconButton
+              size="small"
+              onClick={handleCopyInviteCode}
+              sx={{ color: copied ? 'success.main' : 'text.secondary' }}
+            >
+              {copied ? <CheckIcon fontSize="small" /> : <ContentCopyIcon fontSize="small" />}
+            </IconButton>
+          </Box>
+        )}
+
         <Button onClick={handleCancel}>
           <FormattedMessage id="common.cancel" defaultMessage="Cancel" />
         </Button>

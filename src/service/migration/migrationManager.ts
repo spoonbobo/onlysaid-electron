@@ -1,5 +1,5 @@
 import { IMigration, IMigrationState, allMigrations, sortMigrationsByDependencies, validateMigrationDependencies } from './migrations';
-import { executeQuery, executeTransaction } from './db';
+import { executeQuery, executeTransaction } from '../db';
 import crypto from 'crypto';
 
 export class MigrationManager {
@@ -9,16 +9,10 @@ export class MigrationManager {
     this.environment = environment;
   }
 
-  /**
-   * Generate checksum for migration content to detect changes
-   */
   private generateChecksum(migration: IMigration): string {
     return crypto.createHash('sha256').update(migration.up).digest('hex');
   }
 
-  /**
-   * Get current migration state from database
-   */
   private async getMigrationState(): Promise<string[]> {
     try {
       const result = await executeQuery(
@@ -27,18 +21,13 @@ export class MigrationManager {
       );
       return result.map((row: any) => row.migration_id);
     } catch (error) {
-      // Migration state table doesn't exist yet
       return [];
     }
   }
 
-  /**
-   * Record migration as applied
-   */
   private async recordMigration(migration: IMigration): Promise<void> {
     const checksum = this.generateChecksum(migration);
 
-    // Check if migration_state table exists, if not, skip recording for core migrations
     try {
       await executeQuery(
         `INSERT OR REPLACE INTO migration_state
@@ -47,15 +36,10 @@ export class MigrationManager {
         [migration.id, migration.version, this.environment, checksum]
       );
     } catch (error: any) {
-      // If migration_state table doesn't exist and this is the core_002 migration that creates it,
-      // we need to handle this specially
       if (error.code === 'SQLITE_ERROR' && error.message.includes('no such table: migration_state')) {
         if (migration.id === 'core_002') {
-          // For core_002, we'll record it after the table is created
-          // Execute the migration first, then record it
           return;
         } else {
-          // For other migrations before core_002, we can't record them yet
           console.warn(`Cannot record migration ${migration.id} - migration_state table not yet created`);
           return;
         }
@@ -64,9 +48,6 @@ export class MigrationManager {
     }
   }
 
-  /**
-   * Remove migration record (for rollback)
-   */
   private async removeMigrationRecord(migrationId: string): Promise<void> {
     await executeQuery(
       'DELETE FROM migration_state WHERE migration_id = ? AND environment = ?',
@@ -74,9 +55,6 @@ export class MigrationManager {
     );
   }
 
-  /**
-   * Validate migration integrity
-   */
   private async validateMigrationIntegrity(migration: IMigration): Promise<boolean> {
     try {
       const result = await executeQuery(
@@ -84,63 +62,53 @@ export class MigrationManager {
         [migration.id, this.environment]
       );
 
-      if (result.length === 0) return true; // Not applied yet
+      if (result.length === 0) return true;
 
       const storedChecksum = result[0].checksum;
       const currentChecksum = this.generateChecksum(migration);
 
       return storedChecksum === currentChecksum;
     } catch (error) {
-      return true; // Assume valid if we can't check
+      return true;
     }
   }
 
-  /**
-   * Check if table and column exist before applying migration
-   */
   private async validateTableSchema(tableName: string, columnName?: string): Promise<boolean> {
     try {
       const tableInfo = await executeQuery(`PRAGMA table_info(${tableName})`);
       if (tableInfo.length === 0) {
-        return false; // Table doesn't exist
+        return false;
       }
 
       if (columnName) {
         return tableInfo.some((col: any) => col.name === columnName);
       }
 
-      return true; // Table exists
+      return true;
     } catch (error) {
       return false;
     }
   }
 
-  /**
-   * Safe execution of migration with schema validation
-   */
   private async executeMigrationSafely(migration: IMigration, db: any): Promise<void> {
-    // Special handling for index migrations
+    // Special handling for index migrations to prevent column errors
     if (migration.category === 'index') {
-      // Parse the migration to extract table and column names
       const indexStatements = migration.up.split(';').filter(stmt => stmt.trim());
 
       for (const statement of indexStatements) {
         const trimmed = statement.trim();
         if (!trimmed || trimmed.startsWith('--')) continue;
 
-        // Extract table and column from CREATE INDEX statement
         const indexMatch = trimmed.match(/CREATE INDEX.*ON\s+(\w+)\s*\(([^)]+)\)/i);
         if (indexMatch) {
           const tableName = indexMatch[1];
           const columns = indexMatch[2].split(',').map(col => col.trim());
 
-          // Validate table exists
           if (!(await this.validateTableSchema(tableName))) {
             console.warn(`Skipping index creation: table ${tableName} does not exist`);
             continue;
           }
 
-          // Validate all columns exist
           let allColumnsExist = true;
           for (const column of columns) {
             if (!(await this.validateTableSchema(tableName, column))) {
@@ -162,19 +130,14 @@ export class MigrationManager {
             }
           }
         } else {
-          // Execute non-index statements normally
           db.exec(trimmed);
         }
       }
     } else {
-      // Execute regular migrations normally
       db.exec(migration.up);
     }
   }
 
-  /**
-   * Run all pending migrations
-   */
   async runMigrations(): Promise<void> {
     console.log(`Running migrations for ${this.environment} environment...`);
 
@@ -193,13 +156,11 @@ export class MigrationManager {
       const migrationsToRecord: IMigration[] = [];
 
       for (const migration of pendingMigrations) {
-        // Validate dependencies
         if (!validateMigrationDependencies(migration, appliedMigrations)) {
           console.warn(`Migration ${migration.id} has unmet dependencies, skipping for now`);
           continue;
         }
 
-        // Validate integrity for already applied migrations
         if (appliedMigrations.includes(migration.id)) {
           const isValid = await this.validateMigrationIntegrity(migration);
           if (!isValid) {
@@ -211,25 +172,20 @@ export class MigrationManager {
         try {
           console.log(`Applying migration: ${migration.id} - ${migration.name}`);
 
-          // Execute migration with safety checks
           await this.executeMigrationSafely(migration, db);
 
           // Special handling for core_002 (migration_state table creation)
           if (migration.id === 'core_002') {
-            // Now that migration_state table exists, record this migration and any previous ones
             await this.recordMigration(migration);
 
-            // Record any previous migrations that couldn't be recorded
             for (const prevMigration of migrationsToRecord) {
               await this.recordMigration(prevMigration);
             }
           } else {
-            // Try to record the migration
             try {
               await this.recordMigration(migration);
             } catch (recordError: any) {
               if (recordError.code === 'SQLITE_ERROR' && recordError.message.includes('no such table: migration_state')) {
-                // Store for later recording after core_002
                 migrationsToRecord.push(migration);
               } else {
                 throw recordError;
@@ -240,7 +196,7 @@ export class MigrationManager {
           appliedMigrations.push(migration.id);
           console.log(`✓ Applied migration: ${migration.id}`);
         } catch (error: any) {
-          // For production environment, log error but continue with other migrations
+          // Production: log error but continue with other migrations
           if (this.environment === 'production' && error.code === 'SQLITE_ERROR') {
             console.error(`⚠ Failed to apply migration ${migration.id} (continuing): ${error.message}`);
             continue;
@@ -255,9 +211,6 @@ export class MigrationManager {
     console.log('All migrations completed successfully.');
   }
 
-  /**
-   * Rollback specific migration
-   */
   async rollbackMigration(migrationId: string): Promise<void> {
     const migration = allMigrations.find(m => m.id === migrationId);
     if (!migration) {
@@ -273,28 +226,21 @@ export class MigrationManager {
       throw new Error(`Migration ${migrationId} is not applied`);
     }
 
-    // Check for dependent migrations
     const dependentMigrations = allMigrations.filter(m =>
       m.dependencies?.includes(migrationId) && appliedMigrations.includes(m.id)
     );
 
     if (dependentMigrations.length > 0) {
       throw new Error(
-        `Cannot rollback ${migrationId}. Dependent migrations must be rolled back first: ${dependentMigrations.map(m => m.id).join(', ')
-        }`
+        `Cannot rollback ${migrationId}. Dependent migrations must be rolled back first: ${dependentMigrations.map(m => m.id).join(', ')}`
       );
     }
 
     await executeTransaction(async (db) => {
       try {
         console.log(`Rolling back migration: ${migration.id} - ${migration.name}`);
-
-        // Execute rollback
         db.exec(migration.down!);
-
-        // Remove migration record
         await this.removeMigrationRecord(migration.id);
-
         console.log(`✓ Rolled back migration: ${migration.id}`);
       } catch (error) {
         console.error(`✗ Failed to rollback migration ${migration.id}:`, error);
@@ -303,9 +249,6 @@ export class MigrationManager {
     });
   }
 
-  /**
-   * Get migration status
-   */
   async getMigrationStatus(): Promise<{
     applied: string[];
     pending: string[];
@@ -324,9 +267,6 @@ export class MigrationManager {
     };
   }
 
-  /**
-   * Reset all migrations (dangerous - for development only)
-   */
   async resetMigrations(): Promise<void> {
     if (this.environment === 'production') {
       throw new Error('Cannot reset migrations in production environment');
@@ -340,14 +280,9 @@ export class MigrationManager {
     console.log(`Reset all migrations for ${this.environment} environment.`);
   }
 
-  /**
-   * Export migration state for backup/restore
-   */
   async exportMigrationState(): Promise<IMigrationState> {
     const appliedMigrations = await this.getMigrationState();
     const lastApplied = appliedMigrations[appliedMigrations.length - 1] || '';
-
-    // Get version from last applied migration
     const lastMigration = allMigrations.find(m => m.id === lastApplied);
     const version = lastMigration?.version || '0.0.0';
 
@@ -359,22 +294,17 @@ export class MigrationManager {
     };
   }
 
-  /**
-   * Import migration state (for restoring from backup)
-   */
   async importMigrationState(state: IMigrationState): Promise<void> {
     if (state.environment !== this.environment) {
       console.warn(`Importing state from ${state.environment} to ${this.environment}`);
     }
 
     await executeTransaction(async () => {
-      // Clear existing state
       await executeQuery(
         'DELETE FROM migration_state WHERE environment = ?',
         [this.environment]
       );
 
-      // Import state
       for (const migrationId of state.appliedMigrations) {
         const migration = allMigrations.find(m => m.id === migrationId);
         if (migration) {
@@ -386,9 +316,6 @@ export class MigrationManager {
     console.log(`Imported migration state for ${this.environment} environment.`);
   }
 
-  /**
-   * Force check and apply specific migration (for debugging/fixing issues)
-   */
   async forceApplyMigration(migrationId: string): Promise<void> {
     const migration = allMigrations.find(m => m.id === migrationId);
     if (!migration) {
@@ -399,12 +326,8 @@ export class MigrationManager {
 
     await executeTransaction(async (db) => {
       try {
-        // Execute migration
         db.exec(migration.up);
-
-        // Record successful application
         await this.recordMigration(migration);
-
         console.log(`✓ Force applied migration: ${migration.id}`);
       } catch (error) {
         console.error(`✗ Failed to force apply migration ${migration.id}:`, error);
@@ -413,9 +336,6 @@ export class MigrationManager {
     });
   }
 
-  /**
-   * Check table schema and suggest fixes
-   */
   async checkTableSchema(tableName: string): Promise<any> {
     try {
       const result = await executeQuery(`PRAGMA table_info(${tableName})`);
@@ -427,7 +347,6 @@ export class MigrationManager {
   }
 }
 
-// Export singleton instance
 export const migrationManager = new MigrationManager(
   process.env.NODE_ENV === 'production' ? 'production' : 'development'
 );
