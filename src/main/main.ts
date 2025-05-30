@@ -9,7 +9,7 @@
  * `./src/main.js` using webpack. This gives us some performance wins.
  */
 import path from 'path';
-import { app, BrowserWindow, shell, ipcMain, dialog, session, net } from 'electron';
+import { app, BrowserWindow, shell, ipcMain, dialog, session, net, Menu } from 'electron';
 import { autoUpdater } from 'electron-updater';
 import log from 'electron-log';
 import MenuBuilder from './menu';
@@ -35,6 +35,7 @@ import { setupSocketHandlers } from './socket';
 import { setupStorageHandlers } from './api/v2/storage';
 import { initMicrosoftAuth } from './msft';
 import { setupOneasiaHandlers } from './oneasia';
+import { setupMenuBarHandlers, unregisterMenuAccelerators } from './menubar';
 
 // Load environment variables
 dotenv.config();
@@ -233,6 +234,8 @@ const createWindow = async () => {
     width: 1024,
     height: 728,
     icon: getAssetPath('icon.png'),
+    frame: false,
+    titleBarStyle: 'hidden',
     webPreferences: {
       preload: app.isPackaged
         ? path.join(__dirname, 'preload.js')
@@ -245,11 +248,19 @@ const createWindow = async () => {
   });
   console.log('[Main] BrowserWindow created');
 
+  // Disable the native application menu completely
+  Menu.setApplicationMenu(null);
+
   // Call setupSocketHandlers immediately after BrowserWindow creation
   // and before loading the URL
   console.log('[Main] Setting up socket handlers...');
   setupSocketHandlers(mainWindow);
   console.log('[Main] Socket handlers set up');
+
+  // Add menubar handlers setup
+  console.log('[Main] Setting up menubar handlers...');
+  setupMenuBarHandlers(mainWindow);
+  console.log('[Main] Menubar handlers set up');
 
   console.log('[Main] Loading URL...');
   mainWindow.loadURL(resolveHtmlPath('index.html'));
@@ -281,9 +292,9 @@ const createWindow = async () => {
   });
 
   console.log('[Main] Building menu...');
-  const menuBuilder = new MenuBuilder(mainWindow);
-  menuBuilder.buildMenu();
-  console.log('[Main] Menu built');
+  // const menuBuilder = new MenuBuilder(mainWindow);
+  // menuBuilder.buildMenu();
+  console.log('[Main] Menu not built');
 
   // Open urls in the user's browser
   mainWindow.webContents.setWindowOpenHandler((edata) => {
@@ -309,6 +320,9 @@ const createWindow = async () => {
  */
 
 app.on('window-all-closed', () => {
+  // Unregister shortcuts when all windows are closed
+  unregisterMenuAccelerators();
+
   // Respect the OSX convention of having the application in memory even
   // after all windows have been closed
   if (process.platform !== 'darwin') {
@@ -328,13 +342,19 @@ app
   })
   .catch(console.log);
 
-// Make sure to close the database when the app is quitting
+// Update the app quit handler
 app.on('will-quit', (event) => {
   try {
-    console.log('App is quitting, ensuring database is properly closed...');
+    console.log('App is quitting, cleaning up...');
+
+    // Unregister global shortcuts
+    unregisterMenuAccelerators();
+    console.log('Global shortcuts unregistered');
+
+    // Close database
     closeDatabase();
     console.log('Database closed successfully on app exit');
   } catch (error) {
-    console.error('Error during database close on app exit:', error);
+    console.error('Error during app cleanup:', error);
   }
 });

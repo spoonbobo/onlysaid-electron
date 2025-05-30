@@ -104,6 +104,9 @@ type MicrosoftAuthChannels = 'microsoft-auth:request-calendar' | 'microsoft-auth
 
 type OneasiaChannels = 'oneasia:authenticate' | 'oneasia:get-models';
 
+// Add these new channel types
+type MenuBarChannels = 'menu-action' | 'window-action';
+
 export type Channels =
   | AuthChannels
   | GoogleAuthChannels
@@ -112,6 +115,7 @@ export type Channels =
   | DbChannels
   | ApiChannels
   | MenuChannels
+  | MenuBarChannels
   | MiscChannels
   | SystemChannels
   | SSEChannels
@@ -310,6 +314,12 @@ const electronHandler = {
   oneasia: {
     authenticate: (apiKey: string) => ipcRenderer.invoke('oneasia:authenticate', apiKey),
     getModels: (apiKey: string) => ipcRenderer.invoke('oneasia:get-models', apiKey),
+  },
+  menuBar: {
+    action: (action: string) => ipcRenderer.invoke('menu-action', action),
+  },
+  window: {
+    action: (action: string) => ipcRenderer.invoke('window-action', action),
   },
 };
 

@@ -8,6 +8,7 @@ import { useRef, useEffect, useCallback } from "react";
 import UserInfoBar from "./UserInfoBar";
 import LevelUp from "./LevelUp";
 import OverlaysContainer from "./Overlays/OverlaysContainer";
+import TitleBar from "./TitleBar";
 
 function MainInterface() {
   const { menuWidth, setMenuWidth } = useLayoutResize();
@@ -114,6 +115,7 @@ function MainInterface() {
         overflow: "hidden",
       }}
     >
+      <TitleBar />
       <Box
         sx={{
           display: "flex",
