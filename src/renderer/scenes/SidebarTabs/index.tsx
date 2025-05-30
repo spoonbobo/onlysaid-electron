@@ -76,16 +76,7 @@ function SidebarTabs() {
     const previousUser = previousUserRef.current;
     previousUserRef.current = user;
 
-    if (process.env.NODE_ENV === 'development') {
-      console.log('👤 [DEBUG] User state change:', {
-        previousUser: !!previousUser,
-        currentUser: !!user,
-        userChanged: previousUser !== user
-      });
-    }
-
     if (previousUser && !user) {
-      console.log('🚪 [DEBUG] User logged out, resetting to home');
       setSelectedContext(homeContext as TopicContext);
 
       const workspaceContexts = [...contexts].filter(ctx => ctx.type === "workspace");
@@ -293,29 +284,29 @@ function SidebarTabs() {
     });
   };
 
-  useEffect(() => {
-    console.log('SidebarTabs debug:', {
-      selectedContext,
-      homeContext,
-      user: !!user,
-      workspacesLength: workspaces.length,
-      contextsLength: contexts.length
-    });
-  }, [selectedContext, homeContext, user, workspaces.length, contexts.length]);
+  // useEffect(() => {
+  //   console.log('SidebarTabs debug:', {
+  //     selectedContext,
+  //     homeContext,
+  //     user: !!user,
+  //     workspacesLength: workspaces.length,
+  //     contextsLength: contexts.length
+  //   });
+  // }, [selectedContext, homeContext, user, workspaces.length, contexts.length]);
 
-  useEffect(() => {
-    if (process.env.NODE_ENV === 'development') {
-      console.log('📊 [DEBUG] SidebarTabs state:', {
-        selectedContextName: selectedContext?.name,
-        selectedContextType: selectedContext?.type,
-        selectedContextId: selectedContext?.id,
-        homeContextName: homeContext?.name,
-        homeContextType: homeContext?.type,
-        isHomeSelected: selectedContext?.name === "home" && selectedContext?.type === "home",
-        contextsLength: contexts.length
-      });
-    }
-  }, [selectedContext, homeContext, contexts.length]);
+  // useEffect(() => {
+  //   if (process.env.NODE_ENV === 'development') {
+  //     console.log('📊 [DEBUG] SidebarTabs state:', {
+  //       selectedContextName: selectedContext?.name,
+  //       selectedContextType: selectedContext?.type,
+  //       selectedContextId: selectedContext?.id,
+  //       homeContextName: homeContext?.name,
+  //       homeContextType: homeContext?.type,
+  //       isHomeSelected: selectedContext?.name === "home" && selectedContext?.type === "home",
+  //       contextsLength: contexts.length
+  //     });
+  //   }
+  // }, [selectedContext, homeContext, contexts.length]);
 
   useEffect(() => {
     if (process.env.NODE_ENV === 'development') {

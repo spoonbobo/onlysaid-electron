@@ -253,7 +253,7 @@ function ChatUI({ messages, onReply, streamingMessageId, streamContentForBubble,
           created_at: streamMessageTime.toISOString(),
           sent_at: streamMessageTime.toISOString(),
           status: "pending",
-          reactions: [], // Ensure reactions array is initialized
+          reactions: [],
         };
 
         if (lastUserMessageIndex >= 0) {
@@ -264,13 +264,54 @@ function ChatUI({ messages, onReply, streamingMessageId, streamContentForBubble,
       }
     }
 
+    // Always sort by creation time to ensure proper chronological order
     messagesToProcess.sort((a, b) => {
       return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
     });
 
+    // Helper function to check if a message should be a continuation based on time
+    const shouldBeContinuation = (currentMessage: IChatMessage, currentIndex: number): boolean => {
+      if (currentIndex === 0) return false;
+
+      const currentTime = new Date(currentMessage.created_at).getTime();
+      const currentSender = currentMessage.sender;
+
+      // Find the most recent message from the same sender before this one (by time)
+      let lastSameSenderMessage: IChatMessage | null = null;
+      let lastSameSenderTime = 0;
+
+      for (let i = 0; i < currentIndex; i++) {
+        const msg = messagesToProcess[i];
+        const msgTime = new Date(msg.created_at).getTime();
+
+        if (msg.sender === currentSender && msgTime < currentTime && msgTime > lastSameSenderTime) {
+          lastSameSenderMessage = msg;
+          lastSameSenderTime = msgTime;
+        }
+      }
+
+      // If no previous message from same sender, not a continuation
+      if (!lastSameSenderMessage) return false;
+
+      // Check if there are any messages from other senders between the last same-sender message and current message (by time)
+      const hasInterruption = messagesToProcess.some(msg => {
+        const msgTime = new Date(msg.created_at).getTime();
+        return msg.sender !== currentSender &&
+          msgTime > lastSameSenderTime &&
+          msgTime < currentTime;
+      });
+
+      // If there's an interruption by another user, this is not a continuation
+      if (hasInterruption) return false;
+
+      // Check if the immediately previous message (by index) is from the same sender
+      // This ensures visual continuity in the sorted list
+      const previousMessage = messagesToProcess[currentIndex - 1];
+      return previousMessage?.sender === currentSender;
+    };
+
     return messagesToProcess.map((msg, index) => {
       const isCurrentUser = msg.sender === userId;
-      const previousMessage = index > 0 ? messagesToProcess[index - 1] : undefined;
       const nextMessage = index < messagesToProcess.length - 1 ? messagesToProcess[index + 1] : undefined;
       const isLastInSequence = nextMessage?.sender !== msg.sender;
 
@@ -278,8 +319,11 @@ function ChatUI({ messages, onReply, streamingMessageId, streamContentForBubble,
         ? messagesToProcess.find(m => m.id === msg.reply_to) || null
         : null;
 
-      const isContinuation = !replyToMessage &&
-        previousMessage?.sender === msg.sender;
+      // A message is a continuation if:
+      // 1. It's not a reply to another message
+      // 2. The sender has consecutive messages without time-based interruption from other users
+      // 3. The immediately previous message (in sorted order) is from the same sender
+      const isContinuation = !replyToMessage && shouldBeContinuation(msg, index);
 
       return {
         msg,

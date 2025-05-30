@@ -427,41 +427,58 @@ const ChatBubble = memo(({
     </Box>
   );
 }, (prevProps, nextProps) => {
+  // Only prevent re-render if we're absolutely sure nothing important has changed
+
+  // Always re-render if any of these core props change
   if (prevProps.isStreaming !== nextProps.isStreaming ||
     prevProps.isConnecting !== nextProps.isConnecting ||
-    prevProps.isHovered !== nextProps.isHovered) {
+    prevProps.isHovered !== nextProps.isHovered ||
+    prevProps.isContinuation !== nextProps.isContinuation ||
+    prevProps.isLastInSequence !== nextProps.isLastInSequence) {
     return false;
   }
 
-  if (nextProps.isStreaming && prevProps.streamContent !== nextProps.streamContent) {
-    return false;
-  }
-
-  if (!nextProps.isStreaming && prevProps.message.text !== nextProps.message.text) {
-    return false;
-  }
-
-  if (JSON.stringify(prevProps.message.tool_calls) !== JSON.stringify(nextProps.message.tool_calls)) {
-    return false;
-  }
-
+  // Always re-render if message ID changes (different message entirely)
   if (prevProps.message.id !== nextProps.message.id) {
     return false;
   }
 
-  if (!prevProps.message.reactions || !nextProps.message.reactions) {
-    if (prevProps.message.reactions !== nextProps.message.reactions) {
-      return false;
-    }
-  } else if (prevProps.message.reactions.length !== nextProps.message.reactions.length) {
+  // Always re-render if streaming content changes
+  if (nextProps.isStreaming && prevProps.streamContent !== nextProps.streamContent) {
     return false;
-  } else {
-    if (prevProps.message.reactions !== nextProps.message.reactions &&
-      JSON.stringify(prevProps.message.reactions) !== JSON.stringify(nextProps.message.reactions)) {
-      return false;
-    }
   }
 
+  // Always re-render if message text changes
+  if (prevProps.message.text !== nextProps.message.text) {
+    return false;
+  }
+
+  // Always re-render if sender_object changes (this fixes the async loading issue)
+  if (prevProps.message.sender_object !== nextProps.message.sender_object) {
+    return false;
+  }
+
+  // Always re-render if reactions array reference changes
+  if (prevProps.message.reactions !== nextProps.message.reactions) {
+    return false;
+  }
+
+  // Always re-render if files array reference changes
+  if (prevProps.message.files !== nextProps.message.files) {
+    return false;
+  }
+
+  // Always re-render if tool_calls reference changes
+  if (prevProps.message.tool_calls !== nextProps.message.tool_calls) {
+    return false;
+  }
+
+  // Always re-render if reply message changes
+  if (prevProps.replyToMessage !== nextProps.replyToMessage) {
+    return false;
+  }
+
+  // If we get here, we can safely skip the re-render
   return true;
 });
 

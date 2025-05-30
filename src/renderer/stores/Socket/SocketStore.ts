@@ -19,7 +19,7 @@ interface SocketState {
   sendPing: () => void;
   joinWorkspace: (workspaceId: string) => void;
   attemptReconnect: () => void;
-  handleNewMessage: (message: IChatMessage) => void;
+  handleNewMessage: (data: { message: IChatMessage, workspaceId: string }) => Promise<void>;
   handleMessageDeleted: (data: { roomId: string, messageId: string }) => void;
   handlePong: (timestamp: number) => void;
   handleConnectionDetails: (details: { socketId: string }) => void;
@@ -126,7 +126,7 @@ export const useSocketStore = create<SocketState>((set, get) => ({
 
           if (!messageListener) {
             messageListener = window.electron.ipcRenderer.on('socket:new-message', (_event, ...args) => {
-              get().handleNewMessage(args[0] as IChatMessage);
+              get().handleNewMessage(args[0] as { message: IChatMessage, workspaceId: string });
             });
           }
 
@@ -268,8 +268,11 @@ export const useSocketStore = create<SocketState>((set, get) => ({
     }
   },
 
-  handleNewMessage: (message: IChatMessage) => {
-    useChatStore.getState().appendMessage(message.chat_id, message);
+  handleNewMessage: async (data: { message: IChatMessage, workspaceId: string }) => {
+    console.log("message received", data);
+
+    // The appendMessage method in ChatStore will now handle populating sender_object asynchronously
+    useChatStore.getState().appendMessage(data.message.chat_id, data.message);
   },
 
   handleMessageDeleted: (data: { roomId: string, messageId: string }) => {

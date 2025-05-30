@@ -175,15 +175,8 @@ export const RenderWorkspaceActions = ({
   const { openCreateKBDialog } = useKBStore();
   const [isInviteDialogOpen, setIsInviteDialogOpen] = useState(false);
 
-  // Debug logging
-  console.log('🔍 RenderWorkspaceActions Debug:');
-  console.log('selectedContext:', selectedContext);
-  console.log('selectedContext.id:', selectedContext?.id);
-
   // Get the full workspace object from workspace store
   const currentWorkspace = selectedContext?.id ? getWorkspaceById(selectedContext.id) : undefined;
-  console.log('currentWorkspace from store:', currentWorkspace);
-  console.log('currentWorkspace.invite_code:', currentWorkspace?.invite_code);
 
   const handleInviteUsers = async (invitations: Array<{ email: string; role: string; user: IUser }>) => {
     if (selectedContext?.id) {

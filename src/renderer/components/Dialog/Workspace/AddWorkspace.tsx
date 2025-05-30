@@ -132,23 +132,14 @@ function AddWorkspaceDialog({ open, onClose, onWorkspaceAdded }: AddWorkspaceDia
     }
 
     try {
-      const joinedWorkspace = await joinWorkspaceByInviteCode(joinInviteCode.trim());
+      await joinWorkspaceByInviteCode(joinInviteCode.trim());
 
-      const workspaceContext: TopicContext = {
-        name: (joinedWorkspace.name || 'Unnamed Workspace').toLowerCase(),
-        type: "workspace" as const,
-        id: joinedWorkspace.id
-      };
-
-      addContext(workspaceContext);
-      setSelectedContext(workspaceContext);
+      resetForm();
+      onClose();
 
       if (onWorkspaceAdded) {
         onWorkspaceAdded();
       }
-
-      resetForm();
-      onClose();
     } catch (error: any) {
       setError(error.message || "Failed to join workspace");
     }

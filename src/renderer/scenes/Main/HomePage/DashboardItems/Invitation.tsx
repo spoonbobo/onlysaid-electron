@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Box, Typography, Card, CardContent, CardActions, Button, Avatar, Chip, Divider, CircularProgress } from '@mui/material';
+import { Box, Typography, Card, Button, Avatar, Chip, CircularProgress, Stack } from '@mui/material';
 import { Mail, Business, Check, Close, Refresh } from '@mui/icons-material';
 
 import { useWorkspaceStore } from '@/renderer/stores/Workspace/WorkspaceStore';
@@ -31,7 +31,6 @@ const Invitation = () => {
       await updateInvitation(invitation.workspace_id, invitation.id, status);
       setInvitations(prev => prev.filter(inv => inv.id !== invitation.id));
 
-      // If invitation was accepted, refetch user's workspaces to include the new workspace
       if (status === 'accepted') {
         const currentUser = getUserFromStore();
         if (currentUser?.id) {
@@ -50,33 +49,26 @@ const Invitation = () => {
   // Loading state
   if (isLoading) {
     return (
-      <Box sx={{ mt: 2 }}>
+      <Box>
+        <Stack direction="row" alignItems="center" spacing={2} sx={{ mb: 3 }}>
+          <Typography variant="h6" color="text.primary">
+            {intl.formatMessage({ id: 'homepage.invitations.title', defaultMessage: 'Workspace Invitations' })}
+          </Typography>
+        </Stack>
         <Card
           variant="outlined"
           sx={{
-            p: 4,
-            maxWidth: 600,
-            width: 'fit-content',
-            minHeight: 200
+            p: 3,
+            bgcolor: 'background.paper',
+            borderColor: 'divider'
           }}
         >
-          <CardContent sx={{
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'flex-start',
-            justifyContent: 'center',
-            minHeight: 120
-          }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
-              <CircularProgress size={24} />
-              <Typography variant="body1" color="text.secondary">
-                {intl.formatMessage({ id: 'homepage.invitations.loading', defaultMessage: 'Loading invitations...' })}
-              </Typography>
-            </Box>
+          <Stack direction="row" alignItems="center" spacing={2}>
+            <CircularProgress size={20} />
             <Typography variant="body2" color="text.secondary">
-              {intl.formatMessage({ id: 'homepage.invitations.loading.subtitle', defaultMessage: 'Please wait while we fetch your workspace invitations.' })}
+              {intl.formatMessage({ id: 'homepage.invitations.loading', defaultMessage: 'Loading invitations...' })}
             </Typography>
-          </CardContent>
+          </Stack>
         </Card>
       </Box>
     );
@@ -85,33 +77,36 @@ const Invitation = () => {
   // Empty state
   if (invitations.length === 0) {
     return (
-      <Box sx={{ mt: 2 }}>
+      <Box>
+        <Stack direction="row" alignItems="center" spacing={2} sx={{ mb: 3 }}>
+          <Typography variant="h6" color="text.primary">
+            {intl.formatMessage({ id: 'homepage.invitations.title', defaultMessage: 'Workspace Invitations' })}
+          </Typography>
+          <Button
+            variant="text"
+            size="small"
+            startIcon={<Refresh />}
+            onClick={fetchInvitations}
+            disabled={isLoading}
+            sx={{ color: 'text.secondary' }}
+          >
+            {intl.formatMessage({ id: 'homepage.invitations.refresh', defaultMessage: 'Refresh' })}
+          </Button>
+        </Stack>
         <Card
           variant="outlined"
           sx={{
             p: 4,
-            maxWidth: 600,
-            width: 'fit-content'
+            bgcolor: 'background.paper',
+            borderColor: 'divider'
           }}
         >
-          <CardContent sx={{ textAlign: 'left' }}>
-            <Mail sx={{ fontSize: 60, color: 'text.secondary', mb: 2 }} />
-            <Typography variant="h6" color="text.secondary" gutterBottom>
-              {intl.formatMessage({ id: 'homepage.invitations.empty.title', defaultMessage: 'No Pending Invitations' })}
+          <Stack alignItems="center" spacing={2} sx={{ py: 2 }}>
+            <Mail sx={{ fontSize: 40, color: 'text.disabled' }} />
+            <Typography variant="body2" color="text.secondary" align="center">
+              {intl.formatMessage({ id: 'homepage.invitations.empty.subtitle', defaultMessage: 'No workspace invitations waiting for your response.' })}
             </Typography>
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-              {intl.formatMessage({ id: 'homepage.invitations.empty.subtitle', defaultMessage: 'You\'re all caught up! No workspace invitations waiting for your response.' })}
-            </Typography>
-            <Button
-              variant="outlined"
-              startIcon={<Refresh />}
-              onClick={fetchInvitations}
-              disabled={isLoading}
-              size="small"
-            >
-              {intl.formatMessage({ id: 'homepage.invitations.checkAgain', defaultMessage: 'Check Again' })}
-            </Button>
-          </CardContent>
+          </Stack>
         </Card>
       </Box>
     );
@@ -120,94 +115,112 @@ const Invitation = () => {
   // Invitations list
   return (
     <Box>
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 3 }}>
-        <Typography variant="h5">
+      <Stack direction="row" alignItems="center" spacing={2} sx={{ mb: 3 }}>
+        <Typography variant="h6" color="text.primary">
           {intl.formatMessage({ id: 'homepage.invitations.title', defaultMessage: 'Workspace Invitations' })}
         </Typography>
         <Chip
           label={invitations.length}
-          color="primary"
           size="small"
+          color="primary"
+          sx={{
+            bgcolor: 'primary.main',
+            color: 'primary.contrastText'
+          }}
         />
         <Button
-          variant="outlined"
+          variant="text"
           size="small"
           startIcon={<Refresh />}
           onClick={fetchInvitations}
           disabled={isLoading}
+          sx={{ color: 'text.secondary' }}
         >
           {intl.formatMessage({ id: 'homepage.invitations.refresh', defaultMessage: 'Refresh' })}
         </Button>
-      </Box>
+      </Stack>
 
-      <Box
-        sx={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))',
-          gap: 2,
-          maxHeight: '70vh',
-          overflowY: 'auto'
-        }}
-      >
+      <Stack spacing={2}>
         {invitations.map((invitation) => (
           <Card
             key={invitation.id}
             variant="outlined"
+            sx={{
+              p: 2.5,
+              bgcolor: 'background.paper',
+              borderColor: 'divider',
+              '&:hover': {
+                borderColor: 'primary.main',
+                bgcolor: 'action.hover'
+              }
+            }}
           >
-            <CardContent sx={{ p: 3 }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 3, mb: 2 }}>
-                <Avatar
-                  src={invitation.workspace_image || '/workspace-icon.png'}
-                  sx={{ width: 56, height: 56 }}
-                >
-                  <Business />
-                </Avatar>
-                <Box sx={{ flex: 1, minWidth: 0 }}>
-                  <Typography variant="h6" gutterBottom>
-                    {invitation.workspace_name || 'Unknown Workspace'}
-                  </Typography>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-                    <Mail fontSize="small" color="action" />
-                    <Typography variant="body2" color="text.secondary">
-                      {intl.formatMessage(
-                        { id: 'homepage.invitations.invitedBy', defaultMessage: 'Invited by {inviter}' },
-                        { inviter: invitation.inviter_username || 'Unknown User' }
-                      )}
-                    </Typography>
-                  </Box>
-                  <Typography variant="caption" color="text.secondary">
-                    {intl.formatMessage(
-                      { id: 'homepage.invitations.receivedAt', defaultMessage: 'Received {date}' },
-                      { date: new Date(invitation.created_at).toLocaleDateString() }
-                    )}
-                  </Typography>
-                </Box>
+            <Stack direction="row" alignItems="center" spacing={2}>
+              <Avatar
+                src={invitation.workspace_image || '/workspace-icon.png'}
+                sx={{
+                  width: 44,
+                  height: 44,
+                  bgcolor: 'background.default'
+                }}
+              >
+                <Business sx={{ color: 'text.secondary' }} />
+              </Avatar>
+
+              <Box sx={{ flex: 1, minWidth: 0 }}>
+                <Typography variant="subtitle1" sx={{ fontWeight: 500, color: 'text.primary' }}>
+                  {invitation.workspace_name || 'Unknown Workspace'}
+                </Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
+                  {intl.formatMessage(
+                    { id: 'homepage.invitations.invitedBy', defaultMessage: 'Invited by {inviter}' },
+                    { inviter: invitation.inviter_username || 'Unknown User' }
+                  )}
+                </Typography>
+                <Typography variant="caption" color="text.disabled">
+                  {new Date(invitation.created_at).toLocaleDateString()}
+                </Typography>
               </Box>
-            </CardContent>
 
-            <Divider />
-
-            <CardActions sx={{ p: 2, justifyContent: 'flex-end', gap: 1 }}>
-              <Button
-                variant="outlined"
-                color="error"
-                startIcon={<Close />}
-                onClick={() => handleInvitationResponse(invitation, 'declined')}
-              >
-                {intl.formatMessage({ id: 'homepage.invitations.decline', defaultMessage: 'Decline' })}
-              </Button>
-              <Button
-                variant="contained"
-                color="primary"
-                startIcon={<Check />}
-                onClick={() => handleInvitationResponse(invitation, 'accepted')}
-              >
-                {intl.formatMessage({ id: 'homepage.invitations.accept', defaultMessage: 'Accept' })}
-              </Button>
-            </CardActions>
+              <Stack direction="row" spacing={1}>
+                <Button
+                  variant="outlined"
+                  size="small"
+                  startIcon={<Close />}
+                  onClick={() => handleInvitationResponse(invitation, 'declined')}
+                  sx={{
+                    minWidth: 'auto',
+                    borderColor: 'error.main',
+                    color: 'error.main',
+                    '&:hover': {
+                      borderColor: 'error.dark',
+                      bgcolor: 'error.main',
+                      color: 'error.contrastText'
+                    }
+                  }}
+                >
+                  {intl.formatMessage({ id: 'homepage.invitations.decline', defaultMessage: 'Decline' })}
+                </Button>
+                <Button
+                  variant="contained"
+                  size="small"
+                  startIcon={<Check />}
+                  onClick={() => handleInvitationResponse(invitation, 'accepted')}
+                  sx={{
+                    minWidth: 'auto',
+                    bgcolor: 'primary.main',
+                    '&:hover': {
+                      bgcolor: 'primary.dark'
+                    }
+                  }}
+                >
+                  {intl.formatMessage({ id: 'homepage.invitations.accept', defaultMessage: 'Accept' })}
+                </Button>
+              </Stack>
+            </Stack>
           </Card>
         ))}
-      </Box>
+      </Stack>
     </Box>
   );
 };

@@ -1,4 +1,3 @@
-
 import { persist, createJSONStorage } from "zustand/middleware";
 import { create } from "zustand";
 import { getUserTokenFromStore, getUserFromStore } from "@/utils/user";
@@ -17,6 +16,59 @@ import { IFile } from "@/../../types/File/File";
 
 const MESSAGE_FETCH_LIMIT = 35;
 
+// Add user cache at the top level
+const userCache = new Map<string, IUser>();
+const userCacheTimestamps = new Map<string, number>();
+const USER_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+// Helper function to get users with caching
+const getUsersWithCache = async (userIds: string[]): Promise<Record<string, IUser>> => {
+  const now = Date.now();
+  const validUUIDs = userIds.filter(id => validate(id));
+  const uncachedUserIds: string[] = [];
+  const result: Record<string, IUser> = {};
+
+  // Check cache first
+  for (const userId of validUUIDs) {
+    const cachedUser = userCache.get(userId);
+    const cacheTime = userCacheTimestamps.get(userId);
+
+    if (cachedUser && cacheTime && (now - cacheTime) < USER_CACHE_TTL) {
+      result[userId] = cachedUser;
+    } else {
+      uncachedUserIds.push(userId);
+    }
+  }
+
+  // Fetch uncached users
+  if (uncachedUserIds.length > 0) {
+    try {
+      const userInfos = await window.electron.user.get({
+        token: getUserTokenFromStore(),
+        args: {
+          ids: uncachedUserIds
+        }
+      });
+
+      if (userInfos?.data?.data) {
+        const fetchedUsers = userInfos.data.data as IUser[];
+
+        // Update cache and result
+        for (const user of fetchedUsers) {
+          if (user.id) {
+            userCache.set(user.id, user);
+            userCacheTimestamps.set(user.id, now);
+            result[user.id] = user;
+          }
+        }
+      }
+    } catch (error) {
+      console.error("Error fetching user information:", error);
+    }
+  }
+
+  return result;
+};
 
 interface ChatState {
   activeChatByContext: Record<string, string | null>;
@@ -56,6 +108,8 @@ interface ChatState {
   setChatOverlayMinimized: (minimized: boolean) => void;
 
   updateMessageFiles: (chatId: string, messageId: string, files: IFile[]) => void;
+
+  populateMessageSenderObjects: (messages: IChatMessage[]) => Promise<IChatMessage[]>;
 }
 
 const NewChat = (userId: string, type: string, workspaceId?: string) => {
@@ -520,27 +574,9 @@ export const useChatStore = create<ChatState>()(
             const reactionData = Array.isArray(reactions) ? reactions : (reactions?.data?.data || []);
             const reactionsByMessageId = R.groupBy(R.prop('message_id'), reactionData as IReaction[]);
 
+            // Use the new caching function
             const uniqueSenderIds = R.uniq(R.pluck('sender', fetchedMessages));
-            const validUUIDs = uniqueSenderIds.filter(id => validate(id));
-            let userMap: Record<string, IUser> = {};
-
-            try {
-              const userInfos = await window.electron.user.get({
-                token: getUserTokenFromStore(),
-                args: {
-                  ids: validUUIDs
-                }
-              });
-
-              if (userInfos && userInfos.data && userInfos.data.data) {
-                userMap = R.indexBy(
-                  R.prop('id') as (user: IUser) => string,
-                  userInfos.data.data as IUser[]
-                );
-              }
-            } catch (error) {
-              console.error("Error fetching user information:", error);
-            }
+            const userMap = await getUsersWithCache(uniqueSenderIds);
 
             // Collect all file IDs from messages that have them
             const allFileIds: string[] = [];
@@ -560,7 +596,6 @@ export const useChatStore = create<ChatState>()(
               }
             }
 
-            // Fetch file metadata for all files at once
             let filesMap: Record<string, IFile> = {};
             if (allFileIds.length > 0) {
               try {
@@ -568,13 +603,12 @@ export const useChatStore = create<ChatState>()(
                 const workspace = getCurrentWorkspace();
 
                 if (token && workspace?.id) {
-                  const uniqueFileIds = [...new Set(allFileIds)]; // Remove duplicates
+                  const uniqueFileIds = [...new Set(allFileIds)];
                   const filesResponse = await window.electron.fileSystem.getFilesMetadata({
                     workspaceId: workspace.id,
                     fileIds: uniqueFileIds,
                     token
                   });
-                  console.log('filesResponse', filesResponse);
 
                   if (filesResponse?.data) {
                     filesMap = R.indexBy(R.prop('id'), filesResponse.data);
@@ -589,7 +623,6 @@ export const useChatStore = create<ChatState>()(
               ...msg,
               sender_object: userMap[msg.sender] || null,
               reactions: reactionsByMessageId[msg.id] || [],
-              // Populate files array from file_ids
               files: messageFileIdMap[msg.id] ?
                 messageFileIdMap[msg.id].map(fileId => filesMap[fileId]).filter(Boolean) :
                 undefined
@@ -748,22 +781,26 @@ export const useChatStore = create<ChatState>()(
         set(state => {
           const currentMessages = state.messages[chatId] || [];
 
-          // Check if message already exists
           const existingMessageIndex = currentMessages.findIndex(msg => msg.id === message.id);
 
           if (existingMessageIndex !== -1) {
-            // Message exists, update it while preserving reactions and other fields
             const existingMessage = currentMessages[existingMessageIndex];
             const updatedMessage = {
               ...existingMessage,
               ...message,
               reactions: message.reactions || existingMessage.reactions || [],
-              // Preserve or update files
               files: message.files || existingMessage.files
             };
 
             const updatedMessages = [...currentMessages];
             updatedMessages[existingMessageIndex] = updatedMessage;
+
+            // Re-sort messages by timestamp after update
+            updatedMessages.sort((a, b) => {
+              const timeA = new Date(a.created_at).getTime();
+              const timeB = new Date(b.created_at).getTime();
+              return timeA - timeB;
+            });
 
             return {
               messages: {
@@ -773,19 +810,62 @@ export const useChatStore = create<ChatState>()(
             };
           }
 
-          // New message, ensure it has reactions initialized
           const messageWithReactions = {
             ...message,
             reactions: message.reactions || [],
           };
 
+          // Save message to database if it doesn't exist (important for socket messages)
+          (async () => {
+            try {
+              const checkQuery = `
+                select count(*) as count from messages
+                where id = @messageId and chat_id = @chatId
+              `;
+
+              const result = await window.electron.db.query({
+                query: checkQuery,
+                params: { messageId: message.id, chatId }
+              });
+
+              const messageExists = result && result[0] && result[0].count > 0;
+
+              if (!messageExists) {
+                // Insert message into database
+                await window.electron.db.query({
+                  query: `
+                    insert into messages
+                    (id, chat_id, sender, text, created_at, reply_to, file_ids, sent_at, status, reactions, mentions, poll, contact, gif)
+                    values
+                    (@id, @chat_id, @sender, @text, @created_at, @reply_to, @file_ids, @sent_at, @status, @reactions, @mentions, @poll, @contact, @gif)
+                  `,
+                  params: {
+                    id: message.id,
+                    chat_id: chatId,
+                    sender: message.sender,
+                    text: message.text || '',
+                    created_at: message.created_at,
+                    reply_to: message.reply_to || null,
+                    file_ids: message.file_ids || null,
+                    sent_at: message.sent_at || message.created_at,
+                    status: message.status || 'sent',
+                    reactions: message.reactions ? JSON.stringify(message.reactions) : null,
+                    mentions: message.mentions ? JSON.stringify(message.mentions) : null,
+                    poll: message.poll || null,
+                    contact: message.contact || null,
+                    gif: message.gif || null
+                  }
+                });
+              }
+            } catch (error) {
+              console.error('Error saving message to database in appendMessage:', error);
+            }
+          })();
+
           // If message has file_ids but no files array, try to populate it
           if (messageWithReactions.file_ids && !messageWithReactions.files) {
-            // We'll handle this asynchronously in the background
-            // For now, just set files to an empty array to prevent null issues
             messageWithReactions.files = [];
 
-            // Asynchronously fetch file metadata
             (async () => {
               try {
                 if (messageWithReactions.file_ids) {
@@ -802,7 +882,6 @@ export const useChatStore = create<ChatState>()(
                       });
 
                       if (filesResponse?.data) {
-                        // Update the message with the fetched files
                         get().updateMessageFiles(chatId, message.id, filesResponse.data);
                       }
                     }
@@ -814,7 +893,49 @@ export const useChatStore = create<ChatState>()(
             })();
           }
 
-          const updatedMessages = [...currentMessages, messageWithReactions];
+          // If sender_object is missing, fetch it asynchronously
+          if (!messageWithReactions.sender_object && messageWithReactions.sender) {
+            (async () => {
+              try {
+                const userMap = await getUsersWithCache([messageWithReactions.sender]);
+                if (userMap[messageWithReactions.sender]) {
+                  set(state => ({
+                    messages: {
+                      ...state.messages,
+                      [chatId]: (state.messages[chatId] || []).map(msg =>
+                        msg.id === message.id
+                          ? { ...msg, sender_object: userMap[messageWithReactions.sender] }
+                          : msg
+                      )
+                    }
+                  }));
+                }
+              } catch (error) {
+                console.error('Error fetching sender object in appendMessage:', error);
+              }
+            })();
+          }
+
+          // Insert message in correct chronological position based on created_at timestamp
+          const newMessageTime = new Date(messageWithReactions.created_at).getTime();
+          const insertIndex = currentMessages.findIndex(msg => {
+            const msgTime = new Date(msg.created_at).getTime();
+            return newMessageTime < msgTime;
+          });
+
+          let updatedMessages;
+          if (insertIndex === -1) {
+            // Message is newest, append to end
+            updatedMessages = [...currentMessages, messageWithReactions];
+          } else {
+            // Insert message at correct position
+            updatedMessages = [
+              ...currentMessages.slice(0, insertIndex),
+              messageWithReactions,
+              ...currentMessages.slice(insertIndex)
+            ];
+          }
+
           const limitedMessages = updatedMessages.slice(-MESSAGE_FETCH_LIMIT);
 
           return {
@@ -1040,6 +1161,25 @@ export const useChatStore = create<ChatState>()(
               msg.id === messageId ? { ...msg, files } : msg
             )
           }
+        }));
+      },
+
+      populateMessageSenderObjects: async (messages: IChatMessage[]): Promise<IChatMessage[]> => {
+        const uniqueSenderIds = R.uniq(
+          messages
+            .map(msg => msg.sender)
+            .filter(senderId => senderId && !messages.find(m => m.id === senderId)?.sender_object)
+        );
+
+        if (uniqueSenderIds.length === 0) {
+          return messages;
+        }
+
+        const userMap = await getUsersWithCache(uniqueSenderIds);
+
+        return messages.map(msg => ({
+          ...msg,
+          sender_object: msg.sender_object || userMap[msg.sender] || null
         }));
       },
     }),

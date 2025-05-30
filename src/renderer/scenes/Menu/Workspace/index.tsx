@@ -22,12 +22,12 @@ export default function WorkspaceMenu() {
   // Get the active context (like chatId) for the current section
   const activeContextId = selectedContext?.section ? selectedTopics[selectedContext.section] || null : null;
 
-  useEffect(() => {
-    if (workspaceId && user?.id && isConnected) {
-      console.log(`WorkspaceMenu: Joining workspace ${workspaceId}`);
-      joinWorkspace(workspaceId);
-    }
-  }, [workspaceId, user?.id, isConnected, joinWorkspace]);
+  // useEffect(() => {
+  //   if (workspaceId && user?.id && isConnected) {
+  //     console.log(`WorkspaceMenu: Joining workspace ${workspaceId}`);
+  //     joinWorkspace(workspaceId);
+  //   }
+  // }, [workspaceId, user?.id, isConnected, joinWorkspace]);
 
   // Mock notifications for current active context (development only)
   useEffect(() => {
