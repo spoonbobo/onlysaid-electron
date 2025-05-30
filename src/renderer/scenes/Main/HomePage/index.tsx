@@ -1,11 +1,10 @@
 import { useEffect, useState } from 'react';
-import { Box, Typography, Card, CardContent, CardActions, Button, Avatar, Chip, Divider, CircularProgress } from '@mui/material';
-import { Mail, Business, Check, Close, Refresh } from '@mui/icons-material';
+import { Box, Typography } from '@mui/material';
 
-import { useWorkspaceStore } from '@/renderer/stores/Workspace/WorkspaceStore';
-import { IWorkspaceInvitation } from '@/../../types/Workspace/Workspace';
 import { useIntl } from 'react-intl';
 import Invitation from './DashboardItems/Invitation';
+import Join from './DashboardItems/Join';
+
 const HomePage = () => {
   const intl = useIntl();
 
@@ -17,6 +16,9 @@ const HomePage = () => {
 
       {/* Workspace Invitations Dashboard */}
       <Invitation />
+
+      {/* Join Requests Dashboard */}
+      <Join />
     </Box>
   );
 };

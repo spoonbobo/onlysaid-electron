@@ -549,5 +549,24 @@
   "homepage.invitations.empty.subtitle": "すべての招待を処理済みです！返信を待っているワークスペースの招待はありません。",
   "homepage.invitations.checkAgain": "再確認",
 
+  "homepage.joinRequests.loading": "参加リクエストを読み込み中...",
+  "homepage.joinRequests.loading.subtitle": "ワークスペースの参加リクエストを取得しています。しばらくお待ちください。",
+  "homepage.joinRequests.empty.title": "保留中の参加リクエストはありません",
+  "homepage.joinRequests.empty.subtitle": "まだワークスペースへの参加をリクエストしていません。",
+  "homepage.joinRequests.checkAgain": "再確認",
+  "homepage.joinRequests.title": "参加リクエスト",
+  "homepage.joinRequests.refresh": "更新",
+  "homepage.joinRequests.status.pending": "保留中",
+  "homepage.joinRequests.status.approved": "承認済み",
+  "homepage.joinRequests.status.rejected": "拒否済み",
+  "homepage.joinRequests.requestSent": "参加リクエストを送信済み",
+  "homepage.joinRequests.requestedAt": "{date}にリクエスト",
+  "homepage.joinRequests.pendingNote": "リクエストは管理者の承認を待っています。",
+  "homepage.joinRequests.approvedNote": "リクエストが承認されました！このワークスペースにアクセスできます。",
+  "homepage.joinRequests.rejectedNote": "リクエストはワークスペース管理者によって拒否されました。",
+  "homepage.joinRequests.waitingApproval": "承認待ち...",
+  "homepage.joinRequests.accessWorkspace": "ワークスペースにアクセス",
+  "homepage.joinRequests.tryAgain": "再試行",
+
   "dashboard.loading": "読み込み中..."
 }

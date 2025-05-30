@@ -33,6 +33,11 @@ interface IGetUserInvitationsArgs {
   status?: string;
 }
 
+interface IGetUserJoinRequestsArgs {
+  token: string;
+  status?: string;
+}
+
 export const setupWorkspaceHandlers = () => {
   ipcMain.handle('workspace:create', async (event, args: ICreateWorkspaceArgs) => {
     try {
@@ -420,6 +425,27 @@ export const setupWorkspaceHandlers = () => {
       return { data: response.data };
     } catch (error: any) {
       console.error('Error in main process API call (get_user_invitations):', error.message);
+      return {
+        error: error.message,
+        status: error.response?.status
+      };
+    }
+  });
+
+  ipcMain.handle('workspace:get_user_join_requests', async (event, args: IGetUserJoinRequestsArgs) => {
+    try {
+      const params = args.status ? `?status=${args.status}` : '';
+      const response = await onlysaidServiceInstance.get<IWorkspaceJoin[]>(
+        `/user/join${params}`,
+        {
+          headers: {
+            Authorization: `Bearer ${args.token}`
+          }
+        }
+      );
+      return { data: response.data };
+    } catch (error: any) {
+      console.error('Error in main process API call (get_user_join_requests):', error.message);
       return {
         error: error.message,
         status: error.response?.status

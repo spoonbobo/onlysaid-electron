@@ -56,6 +56,7 @@ interface WorkspaceState {
   updateUserRole: (workspaceId: string, userId: string, role: string) => Promise<void>;
 
   getUserInvitations: (status?: string) => Promise<IWorkspaceInvitation[]>;
+  getUserJoinRequests: (status?: string) => Promise<IWorkspaceJoin[]>;
 }
 
 // Helper function for permission checking
@@ -738,6 +739,27 @@ export const useWorkspaceStore = create<WorkspaceState>()((set, get) => ({
     } catch (error: any) {
       set({ error: error.message, isLoading: false });
       console.error("Error fetching user invitations:", error);
+      throw error;
+    }
+  },
+
+  getUserJoinRequests: async (status?: string) => {
+    set({ isLoading: true, error: null });
+    try {
+      const response = await window.electron.workspace.get_user_join_requests({
+        token: getUserTokenFromStore() || '',
+        status
+      });
+
+      if (response.error) {
+        throw new Error(response.error);
+      }
+
+      set({ isLoading: false });
+      return response.data?.data || [];
+    } catch (error: any) {
+      set({ error: error.message, isLoading: false });
+      console.error("Error fetching user join requests:", error);
       throw error;
     }
   },

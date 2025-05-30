@@ -144,36 +144,15 @@ const Invitation = () => {
         sx={{
           display: 'grid',
           gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))',
-          gap: 3,
+          gap: 2,
           maxHeight: '70vh',
-          overflowY: 'auto',
-          '&::-webkit-scrollbar': {
-            width: 8,
-          },
-          '&::-webkit-scrollbar-track': {
-            backgroundColor: 'rgba(0,0,0,0.05)',
-            borderRadius: 4,
-          },
-          '&::-webkit-scrollbar-thumb': {
-            backgroundColor: 'rgba(0,0,0,0.2)',
-            borderRadius: 4,
-            '&:hover': {
-              backgroundColor: 'rgba(0,0,0,0.3)',
-            },
-          },
+          overflowY: 'auto'
         }}
       >
         {invitations.map((invitation) => (
           <Card
             key={invitation.id}
             variant="outlined"
-            sx={{
-              transition: 'all 0.2s ease-in-out',
-              '&:hover': {
-                transform: 'translateY(-2px)',
-                boxShadow: 3
-              }
-            }}
           >
             <CardContent sx={{ p: 3 }}>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 3, mb: 2 }}>

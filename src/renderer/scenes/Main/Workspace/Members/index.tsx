@@ -32,11 +32,9 @@ const Members = ({ workspaceId }: MembersProps) => {
   } = useWorkspaceStore();
   const { fetchAgent } = useAgentStore();
 
-  // Use selective subscriptions for better performance - but NOT the global error
   const isLoading = useWorkspaceStore(state => state.isLoading);
   const getUsersByWorkspace = useWorkspaceStore(state => state.getUsersByWorkspace);
 
-  // Local error state instead of global error subscription
   const [localError, setLocalError] = useState<string | null>(null);
   const [currentUserRole, setCurrentUserRole] = useState<string>('member');
   const [currentUserId, setCurrentUserId] = useState<string>('');
@@ -50,11 +48,9 @@ const Members = ({ workspaceId }: MembersProps) => {
 
   const [isComponentLoading, setIsComponentLoading] = useState(true);
 
-  // Remove dialog state
   const [removeDialogOpen, setRemoveDialogOpen] = useState(false);
   const [userToRemove, setUserToRemove] = useState<UserWithAgent | null>(null);
 
-  // Change permission dialog state
   const [permissionDialogOpen, setPermissionDialogOpen] = useState(false);
   const [userToChangePermission, setUserToChangePermission] = useState<UserWithAgent | null>(null);
 
@@ -78,7 +74,6 @@ const Members = ({ workspaceId }: MembersProps) => {
     try {
       setLocalError(null);
       await updateUserRole(workspaceId, userToChangePermission.user_id, newRole);
-      // Optimistically update UI or trigger refresh
       setUsers(prevUsers =>
         prevUsers.map(user =>
           user.user_id === userToChangePermission.user_id
@@ -86,8 +81,6 @@ const Members = ({ workspaceId }: MembersProps) => {
             : user
         )
       );
-      // Alternatively, to ensure data is fresh from the store:
-      // setRefreshTrigger(prev => prev + 1);
     } catch (err: any) {
       console.error("Error changing permission:", err);
       setLocalError(err?.message || "Failed to change user permission");
@@ -111,7 +104,7 @@ const Members = ({ workspaceId }: MembersProps) => {
     try {
       setLocalError(null);
       await removeUserFromWorkspace(workspaceId, userToRemove.user_id);
-      setRefreshTrigger(prev => prev + 1); // Refresh data after removal
+      setRefreshTrigger(prev => prev + 1);
     } catch (err: any) {
       console.error("Error removing user:", err);
       setLocalError(err?.message || "Failed to remove user");
@@ -128,25 +121,22 @@ const Members = ({ workspaceId }: MembersProps) => {
       }
       try {
         setLocalError(null);
-        // Try to get from store first (synchronous)
         let ws = getWorkspaceById(workspaceId);
         if (!ws) {
-          // If not in store, fetch it using the store action
           const fetchedWs = await fetchWorkspaceById(workspaceId);
-          ws = fetchedWs || undefined; // Assign fetched workspace, or undefined if null/error
+          ws = fetchedWs || undefined;
         }
 
         if (ws) {
           setWorkspaceName(ws.name || workspaceId);
         } else {
-          // Fallback if workspace is still not found after attempting to fetch
           console.warn(`Workspace with ID ${workspaceId} not found in store or via fetch.`);
           setWorkspaceName(workspaceId);
         }
       } catch (fetchError: any) {
         console.error("Error fetching workspace name:", fetchError);
         setLocalError(fetchError?.message || "Failed to fetch workspace details");
-        setWorkspaceName(workspaceId); // Fallback on error
+        setWorkspaceName(workspaceId);
       }
     };
     fetchWorkspaceDetails();
@@ -164,7 +154,6 @@ const Members = ({ workspaceId }: MembersProps) => {
       }
 
       try {
-        // Fetch current user's role and ID
         const currentUser = getUserFromStore();
         if (currentUser?.id) {
           setCurrentUserId(currentUser.id);
@@ -175,27 +164,38 @@ const Members = ({ workspaceId }: MembersProps) => {
           setCurrentUserRole('member');
         }
 
-        // Fetch workspace users
         const workspaceUsers = await getUsersByWorkspace(workspaceId);
 
-        // Fetch agent details for these users
-        // Note: This sequential fetching and use of a single 'agent' from AgentStore
-        // might not correctly display multiple different agents if that's the intent.
-        // It assumes fetchAgent updates a central store that's then read.
-        for (const user of workspaceUsers) {
-          if (user.agent_id && typeof user.agent_id === 'string') {
-            await fetchAgent(user.agent_id, token);
-          }
-        }
+        const agentsMap = new Map<string, IUser>();
 
-        // Map users with their agent data
-        const { agent: latestAgentDataFromStore } = useAgentStore.getState();
+        const agentPromises = workspaceUsers
+          .filter(user => user.agent_id && typeof user.agent_id === 'string')
+          .map(async (user) => {
+            try {
+              const response = await window.electron.user.get({
+                token,
+                args: { ids: [user.agent_id!] }
+              });
+
+              if (!response.error && response.data?.data) {
+                const agentData = Array.isArray(response.data.data)
+                  ? response.data.data[0] as IUser
+                  : response.data.data as IUser;
+
+                if (agentData) {
+                  agentsMap.set(user.agent_id!, agentData);
+                }
+              }
+            } catch (error) {
+              console.error(`Error fetching agent ${user.agent_id}:`, error);
+            }
+          });
+
+        await Promise.all(agentPromises);
+
         const usersWithAgents = workspaceUsers.map(wsUser => ({
           ...wsUser,
-          // This logic might need adjustment based on how AgentStore stores multiple agents
-          agent: wsUser.agent_id && latestAgentDataFromStore && wsUser.agent_id === latestAgentDataFromStore.id
-            ? latestAgentDataFromStore
-            : null
+          agent: wsUser.agent_id ? agentsMap.get(wsUser.agent_id) || null : null
         }));
 
         setUsers(usersWithAgents);
@@ -210,7 +210,7 @@ const Members = ({ workspaceId }: MembersProps) => {
     };
 
     loadMemberData();
-  }, [workspaceId, refreshTrigger, token, getUsersByWorkspace, getUserInWorkspace, fetchAgent]);
+  }, [workspaceId, refreshTrigger, token, getUsersByWorkspace, getUserInWorkspace]);
 
   const roleOptions = [
     { value: 'all', label: intl.formatMessage({ id: 'workspace.roles.all', defaultMessage: 'All Roles' }) },
@@ -249,18 +249,14 @@ const Members = ({ workspaceId }: MembersProps) => {
       (user.email && user.email.toLowerCase().includes(searchTerm.toLowerCase())))
   );
 
-  // Sort users by current user first, then by role and level
   const sortedUsers = [...filteredUsers].sort((a, b) => {
-    // Always show current user first
     if (a.user_id === currentUserId) return -1;
     if (b.user_id === currentUserId) return 1;
 
-    // Then sort by role hierarchy
     if (roleHierarchy[a.role] !== roleHierarchy[b.role]) {
       return roleHierarchy[b.role] - roleHierarchy[a.role];
     }
 
-    // Then sort by agent level (prefer agent level if available)
     const aLevel = a.agent?.level ?? a.level ?? 0;
     const bLevel = b.agent?.level ?? b.level ?? 0;
     return bLevel - aLevel;
@@ -292,7 +288,6 @@ const Members = ({ workspaceId }: MembersProps) => {
     return dateString ? new Date(dateString).toLocaleDateString() : 'N/A';
   };
 
-  // Calculate experience progress for agent XP bar
   const calculateXpProgress = (user: UserWithAgent) => {
     if (!user.agent || typeof user.agent.level !== 'number' || typeof user.agent.xp !== 'number') {
       return 0;
@@ -300,9 +295,8 @@ const Members = ({ workspaceId }: MembersProps) => {
 
     const currentLevel = user.agent.level;
     const currentXp = user.agent.xp;
-    const nextLevelXp = 50 * (currentLevel + 1); // Based on calculation from AgentStore
+    const nextLevelXp = 50 * (currentLevel + 1);
 
-    // Avoid division by zero
     if (nextLevelXp === 0) return 0;
 
     return (currentXp / nextLevelXp) * 100;
