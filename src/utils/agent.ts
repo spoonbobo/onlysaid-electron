@@ -1,9 +1,9 @@
 import { useAgentStore } from "@/renderer/stores/Agent/AgentStore";
 import { useUserTokenStore } from "@/renderer/stores/User/UserToken";
 import { useChatStore } from "@/renderer/stores/Chat/ChatStore";
-import { useStreamStore } from "@/renderer/stores/SSE/StreamStore";
+import { useStreamStore } from "@/renderer/stores/Stream/StreamStore";
 import { useTopicStore } from "@/renderer/stores/Topic/TopicStore";
-import { useSelectedModelStore } from "@/renderer/stores/LLM/SelectedModelStore";
+import { useLLMConfigurationStore } from "@/renderer/stores/LLM/LLMConfiguration";
 import { useUserStore } from "@/renderer/stores/User/UserStore";
 import { useMCPClientStore } from '@/renderer/stores/MCP/MCPClient';
 
@@ -59,7 +59,7 @@ export const processAgentResponse = async (
   const { appendMessage, updateMessage } = useChatStore.getState();
   const { streamChatCompletion } = useStreamStore.getState();
   const { setStreamingState, markStreamAsCompleted } = useTopicStore.getState();
-  const { modelId, provider } = useSelectedModelStore.getState();
+  const { modelId, provider } = useLLMConfigurationStore.getState();
   const { user: currentUser } = useUserStore.getState();
 
   if (!modelId) {
@@ -131,7 +131,7 @@ export const summarizeToolResults = async (
   const { appendMessage, updateMessage } = useChatStore.getState();
   const { streamChatCompletion } = useStreamStore.getState();
   const { setStreamingState, markStreamAsCompleted } = useTopicStore.getState();
-  const { modelId, provider } = useSelectedModelStore.getState();
+  const { modelId, provider } = useLLMConfigurationStore.getState();
   const { user: currentUser } = useUserStore.getState();
   const agent = getAgentFromStore();
 

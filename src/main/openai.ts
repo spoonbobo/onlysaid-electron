@@ -182,7 +182,7 @@ export function setupSSEHandlers() {
         let openai;
         let completionStream;
 
-        const selectedProvider = provider || (model.startsWith('gpt-') ? 'openai' : model.startsWith('deepseek-') ? 'deepseek' : 'ollama');
+        const selectedProvider = provider || (model.startsWith('gpt-') ? 'openai' : model.startsWith('deepseek-') ? 'deepseek' : model.startsWith('oneasia-') ? 'oneasia' : 'ollama');
         console.log(`Using provider: ${selectedProvider} for model: ${model}`);
 
         switch (selectedProvider) {
@@ -212,6 +212,85 @@ export function setupSSEHandlers() {
               stream: true,
             }, { signal: controller.signal });
             break;
+          case 'oneasia':
+            if (!options.apiKeys.oneasia) {
+              throw new Error("Oneasia vLLM API key is missing.");
+            }
+
+            // Map model ID to actual model path
+            let actualModel = model;
+            if (model === 'oneasia-llama') {
+              actualModel = '/pfss/cm/shared/llm_models/Llama-3.3-70B-Instruct';
+            }
+
+            // Use custom fetch for Oneasia vLLM since it uses different auth
+            const oneasiaResponse = await fetch("https://vllm.oasishpc.hk/v1/chat/completions", {
+              method: 'POST',
+              headers: {
+                'apiKey': options.apiKeys.oneasia,
+                'accept': 'application/json',
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                model: actualModel, // Use the mapped model path
+                messages: messages,
+                temperature,
+                max_tokens: maxTokens,
+                stream: true,
+              }),
+              signal: controller.signal,
+            });
+
+            if (!oneasiaResponse.ok) {
+              throw new Error(`Oneasia vLLM API error: ${oneasiaResponse.status} ${oneasiaResponse.statusText}`);
+            }
+
+            const reader = oneasiaResponse.body?.getReader();
+            if (!reader) {
+              throw new Error("Failed to get response reader from Oneasia vLLM");
+            }
+
+            const decoder = new TextDecoder();
+            let buffer = '';
+
+            try {
+              while (true) {
+                if (controller.signal.aborted) break;
+
+                const { done, value } = await reader.read();
+                if (done) break;
+
+                buffer += decoder.decode(value, { stream: true });
+                const lines = buffer.split('\n');
+                buffer = lines.pop() || '';
+
+                for (const line of lines) {
+                  const trimmedLine = line.trim();
+                  if (trimmedLine.startsWith('data: ')) {
+                    const data = trimmedLine.slice(6);
+                    if (data === '[DONE]') {
+                      sendChunkToRenderer("", true);
+                      return { success: true, fullResponse: accumulatedResponse };
+                    }
+
+                    try {
+                      const parsed = JSON.parse(data);
+                      const content = parsed.choices?.[0]?.delta?.content || '';
+                      if (content) {
+                        sendChunkToRenderer(content);
+                      }
+                    } catch (e) {
+                      console.warn('Failed to parse Oneasia vLLM SSE data:', data);
+                    }
+                  }
+                }
+              }
+            } finally {
+              reader.releaseLock();
+            }
+
+            sendChunkToRenderer("", true);
+            return { success: true, fullResponse: accumulatedResponse };
           case 'ollama':
           default:
             if (!options.ollamaConfig || !options.ollamaConfig.baseUrl) {
@@ -301,6 +380,16 @@ export function setupSSEHandlers() {
           openai = new OpenAI({
             baseURL: "https://api.deepseek.com",
             apiKey: apiKeys.deepSeek,
+          });
+          break;
+        case 'oneasia':
+          if (!apiKeys?.oneasia) throw new Error("Oneasia vLLM API key is missing.");
+          openai = new OpenAI({
+            baseURL: "https://vllm.oasishpc.hk/v1",
+            apiKey: "dummy", // Oneasia uses apiKey header instead
+            defaultHeaders: {
+              'apiKey': apiKeys.oneasia,
+            },
           });
           break;
         case 'ollama':

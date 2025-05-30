@@ -1,11 +1,12 @@
 import { useLLMConfigurationStore } from "@/renderer/stores/LLM/LLMConfiguration";
 import { DeepSeekAPIService } from "./deepseek";
 import { OllamaAPIService } from "./ollama";
+import { OneasiaVLLMAPIService } from "./oneasia_vllm";
 
 export interface LLMModel {
   id: string;
   name: string;
-  provider: "openai" | "deepseek" | "ollama";
+  provider: "openai" | "deepseek" | "ollama" | "oneasia";
   enabled: boolean;
 }
 
@@ -13,11 +14,14 @@ export interface LLMConfiguration {
   temperature: number;
   openAIKey: string;
   deepSeekKey: string;
+  oneasiaKey: string;
   openAIEnabled: boolean;
   deepSeekEnabled: boolean;
+  oneasiaEnabled: boolean;
   ollamaBaseURL: string;
   ollamaModel: string;
   ollamaEnabled: boolean;
+  ollamaVerified: boolean;
 }
 
 export interface LLMInstance {
@@ -29,10 +33,12 @@ export interface LLMInstance {
 
 export class LLMService {
   private readonly deepSeekService: DeepSeekAPIService;
+  private readonly oneasiaService: OneasiaVLLMAPIService;
   private readonly ollamaService: OllamaAPIService;
 
   constructor() {
     this.deepSeekService = new DeepSeekAPIService("https://api.deepseek.com");
+    this.oneasiaService = new OneasiaVLLMAPIService("https://vllm.oasishpc.hk");
     this.ollamaService = new OllamaAPIService("http://localhost:11434");
   }
 
@@ -67,6 +73,15 @@ export class LLMService {
         id: "deepseek-r1",
         name: "DeepSeek R1",
         provider: "deepseek",
+        enabled: true
+      });
+    }
+
+    if (config.oneasiaEnabled && config.oneasiaKey) {
+      enabledModels.push({
+        id: "oneasia-llama",
+        name: "Oneasia Llama 3.3 70B",
+        provider: "oneasia",
         enabled: true
       });
     }
@@ -151,12 +166,20 @@ export class LLMService {
       store.setDeepSeekKey(config.deepSeekKey);
     }
 
+    if (config.oneasiaKey !== undefined) {
+      store.setOneasiaKey(config.oneasiaKey);
+    }
+
     if (config.openAIEnabled !== undefined) {
       store.setOpenAIEnabled(config.openAIEnabled);
     }
 
     if (config.deepSeekEnabled !== undefined) {
       store.setDeepSeekEnabled(config.deepSeekEnabled);
+    }
+
+    if (config.oneasiaEnabled !== undefined) {
+      store.setOneasiaEnabled(config.oneasiaEnabled);
     }
 
     if (config.ollamaBaseURL !== undefined) {
@@ -170,9 +193,13 @@ export class LLMService {
     if (config.ollamaEnabled !== undefined) {
       store.setOllamaEnabled(config.ollamaEnabled);
     }
+
+    if (config.ollamaVerified !== undefined) {
+      store.setOllamaVerified(config.ollamaVerified);
+    }
   }
 
-  async VerifyLLM(provider: "openai" | "deepseek" | "ollama", apiKey: string = ""): Promise<boolean> {
+  async VerifyLLM(provider: "openai" | "deepseek" | "ollama" | "oneasia", apiKey: string = ""): Promise<boolean> {
     try {
       const store = useLLMConfigurationStore.getState();
       let isVerified = false;
@@ -185,6 +212,10 @@ export class LLMService {
         case "deepseek":
           isVerified = await this.deepSeekService.Authenticate(apiKey);
           store.setDeepSeekVerified(isVerified);
+          break;
+        case "oneasia":
+          isVerified = await this.oneasiaService.Authenticate(apiKey);
+          store.setOneasiaVerified(isVerified);
           break;
         case "ollama":
           const { success, models } = await this.TestOllamaConnection();
@@ -206,6 +237,7 @@ export class LLMService {
       const store = useLLMConfigurationStore.getState();
       if (provider === "openai") store.setOpenAIVerified(false);
       if (provider === "deepseek") store.setDeepSeekVerified(false);
+      if (provider === "oneasia") store.setOneasiaVerified(false);
       if (provider === "ollama") store.setOllamaVerified(false);
 
       return false;

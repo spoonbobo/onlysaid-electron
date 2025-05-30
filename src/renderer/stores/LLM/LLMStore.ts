@@ -1,7 +1,6 @@
 import { create } from "zustand";
-import { useSelectedModelStore } from "./SelectedModelStore";
 import { useLLMConfigurationStore } from "./LLMConfiguration";
-import { OpenAIMessage } from "../SSE/StreamStore"; // Reusing this type for messages
+import { OpenAIMessage } from "../Stream/StreamStore"; // Reusing this type for messages
 import type OpenAI from 'openai';
 import { IChatMessageToolCall } from "@/../../types/Chat/Message"; // Added import
 import { v4 as uuidv4 } from 'uuid'; // For generating log IDs
@@ -12,7 +11,7 @@ interface OpenAICompletionOptions {
   temperature?: number;
   maxTokens?: number;
   // apiKeys and ollamaConfig will be sourced from LLMConfigurationStore internally
-  // model and provider will be sourced from SelectedModelStore internally
+  // model and provider will be sourced from LLMConfigurationStore internally
 }
 
 const DBTABLES = { // Added for tool_calls table
@@ -49,8 +48,9 @@ export const useLLMStore = create<LLMStoreState>((set, get) => ({
   getOpenAICompletion: async (messages, tools, toolChoice) => {
     set({ isLoadingCompletion: true, error: null });
 
-    const { provider, modelId } = useSelectedModelStore.getState();
     const {
+      provider,
+      modelId,
       openAIKey,
       deepSeekKey,
       ollamaBaseURL,
@@ -87,7 +87,6 @@ export const useLLMStore = create<LLMStoreState>((set, get) => ({
       ipcOptions.ollamaConfig = ollamaConfig;
     }
 
-
     // Validate required configurations
     if (provider === 'openai' && !apiKeys.openAI) {
       const errMsg = "OpenAI provider selected, but API key is missing.";
@@ -107,7 +106,6 @@ export const useLLMStore = create<LLMStoreState>((set, get) => ({
       set({ isLoadingCompletion: false, error: errMsg });
       return null;
     }
-
 
     try {
       console.log("[LLMStore] Calling IPC ai:get_completion with messages:", messages, "options:", ipcOptions);

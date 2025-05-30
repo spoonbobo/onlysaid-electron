@@ -485,22 +485,29 @@ export const useChatStore = create<ChatState>()(
             const message = get().messages[chatId]?.find(msg => msg.id === messageId);
             const sender = data.sender || message?.sender || "";
 
+            const updateFields = ['text = @text', 'sender = @sender'];
+            const updateParams: any = {
+              messageId,
+              chatId,
+              text: data.text,
+              sender
+            };
+
+            if (data.created_at !== undefined && data.created_at !== null) {
+              updateFields.push('created_at = @createdAt');
+              updateParams.createdAt = data.created_at;
+            }
+
             const updateQuery = `
               update messages
-              set text = @text, created_at = @createdAt, sender = @sender
+              set ${updateFields.join(', ')}
               where id = @messageId
               and chat_id = @chatId
             `;
 
             await window.electron.db.query({
               query: updateQuery,
-              params: {
-                messageId,
-                chatId,
-                text: data.text,
-                sender,
-                createdAt: data.created_at
-              }
+              params: updateParams
             });
           } else {
             const insertQuery = `

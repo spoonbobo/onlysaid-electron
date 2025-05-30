@@ -1,7 +1,7 @@
 import { v4 as uuidv4 } from 'uuid';
 import { IChatMessage, IChatMessageToolCall } from '@/../../types/Chat/Message';
 import { IUser } from '@/../../types/User/User';
-import { OpenAIMessage } from '@/renderer/stores/SSE/StreamStore';
+import { OpenAIMessage } from '@/renderer/stores/Stream/StreamStore';
 import { useMCPClientStore } from '@/renderer/stores/MCP/MCPClient';
 import { useMCPSettingsStore } from '@/renderer/stores/MCP/MCPSettingsStore';
 import { useLLMStore } from '@/renderer/stores/LLM/LLMStore';

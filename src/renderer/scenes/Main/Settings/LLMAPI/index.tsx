@@ -12,8 +12,10 @@ export interface LLMConfiguration {
   temperature: number;
   openAIKey: string;
   deepSeekKey: string;
+  oneasiaKey: string;
   openAIEnabled: boolean;
   deepSeekEnabled: boolean;
+  oneasiaEnabled: boolean;
   ollamaBaseURL: string;
   ollamaModel: string;
   ollamaEnabled: boolean;
@@ -28,12 +30,16 @@ function LLMConfiguration() {
     // Public LLM settings
     openAIKey,
     deepSeekKey,
+    oneasiaKey,
     openAIEnabled,
     deepSeekEnabled,
+    oneasiaEnabled,
     setOpenAIKey,
     setDeepSeekKey,
+    setOneasiaKey,
     setOpenAIEnabled,
     setDeepSeekEnabled,
+    setOneasiaEnabled,
     // Private LLM settings
     ollamaBaseURL,
     ollamaModel,
@@ -47,8 +53,10 @@ function LLMConfiguration() {
   // State variables for verification
   const [verifyingDeepSeek, setVerifyingDeepSeek] = useState(false);
   const [verifyingOpenAI, setVerifyingOpenAI] = useState(false);
+  const [verifyingOneasia, setVerifyingOneasia] = useState(false);
   const [deepSeekVerified, setDeepSeekVerified] = useState(!!deepSeekKey && deepSeekEnabled);
   const [openAIVerified, setOpenAIVerified] = useState(!!openAIKey && openAIEnabled);
+  const [oneasiaVerified, setOneasiaVerified] = useState(!!oneasiaKey && oneasiaEnabled);
   const [availableOllamaModels, setAvailableOllamaModels] = useState([]);
   const [loadingOllamaModels, setLoadingOllamaModels] = useState(false);
 
@@ -86,12 +94,17 @@ function LLMConfiguration() {
       setOpenAIEnabled(false);
     }
 
+    if (!oneasiaKey || !oneasiaVerified) {
+      setOneasiaEnabled(false);
+    }
+
     if (!ollamaBaseURL || !ollamaVerified || !ollamaModel) {
       setOllamaEnabled(false);
     }
   }, [
     deepSeekKey, deepSeekVerified, setDeepSeekEnabled,
     openAIKey, openAIVerified, setOpenAIEnabled,
+    oneasiaKey, oneasiaVerified, setOneasiaEnabled,
     ollamaBaseURL, ollamaVerified, ollamaModel, setOllamaEnabled
   ]);
 
@@ -99,8 +112,10 @@ function LLMConfiguration() {
     await llmService.UpdateConfiguration({
       openAIKey,
       deepSeekKey,
+      oneasiaKey,
       openAIEnabled: openAIEnabled && !!openAIKey && (openAIVerified || !openAIKey),
       deepSeekEnabled: deepSeekEnabled && !!deepSeekKey && (deepSeekVerified || !deepSeekKey),
+      oneasiaEnabled: oneasiaEnabled && !!oneasiaKey && (oneasiaVerified || !oneasiaKey),
       ollamaModel,
       ollamaEnabled: ollamaEnabled && !!ollamaBaseURL && !!ollamaModel && ollamaVerified
     });
@@ -130,6 +145,19 @@ function LLMConfiguration() {
       setOpenAIVerified(false);
     } finally {
       setVerifyingOpenAI(false);
+    }
+  };
+
+  const handleVerifyOneasia = async () => {
+    try {
+      setVerifyingOneasia(true);
+      const isVerified = await llmService.VerifyLLM("oneasia", oneasiaKey);
+      setOneasiaVerified(isVerified);
+    } catch (error) {
+      console.error("Error verifying Oneasia vLLM API key:", error);
+      setOneasiaVerified(false);
+    } finally {
+      setVerifyingOneasia(false);
     }
   };
 
@@ -164,6 +192,11 @@ function LLMConfiguration() {
     setDeepSeekVerified(false);
   };
 
+  const handleOneasiaKeyChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setOneasiaKey(e.target.value);
+    setOneasiaVerified(false);
+  };
+
   const handleOllamaModelChange = (e: SelectChangeEvent<string>) => {
     setOllamaModel(e.target.value);
   };
@@ -179,6 +212,12 @@ function LLMConfiguration() {
     setOpenAIKey("");
     setOpenAIVerified(false);
     setOpenAIEnabled(false);
+  };
+
+  const handleClearOneasia = () => {
+    setOneasiaKey("");
+    setOneasiaVerified(false);
+    setOneasiaEnabled(false);
   };
 
   const handleClearOllamaModel = () => {
@@ -284,55 +323,53 @@ function LLMConfiguration() {
         />
       </SettingsSection>
 
-      {/* <SettingsSection title={intl.formatMessage({ id: "settings.llmModels.private.ollamaConfiguration" })} sx={{ mb: 3 }}> */}
-      {/* {!ollamaBaseURL && (
-                    <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                        {intl.formatMessage({ id: "settings.llmModels.private.configureOllamaFirst" })}
-                    </Typography>
-                )} */}
-
-      {/* {ollamaBaseURL && !ollamaVerified && (
-                    <Typography variant="body2" color="error" sx={{ mb: 2 }}>
-                        {intl.formatMessage({ id: "settings.llmModels.private.ollamaNotVerified" })}
-                    </Typography>
-                )}
-
-                {ollamaBaseURL && ollamaVerified && (
-                    <SettingsFormField label={intl.formatMessage({ id: "settings.llmModels.private.ollamaModel" })}>
-                        <Select
-                            fullWidth
-                            size="small"
-                            value={ollamaModel}
-                            onChange={(e: SelectChangeEvent<string>) => handleOllamaModelChange(e)}
-                            disabled={loadingOllamaModels || !ollamaVerified}
-                            displayEmpty
-                        >
-                            <MenuItem value="" disabled>
-                                {loadingOllamaModels
-                                    ? intl.formatMessage({ id: "settings.llmModels.private.loadingModels" })
-                                    : intl.formatMessage({ id: "settings.llmModels.private.selectModel" })}
-                            </MenuItem>
-                            {availableOllamaModels.map((model: { name: string }) => (
-                                <MenuItem key={model.name} value={model.name}>
-                                    {model.name}
-                                </MenuItem>
-                            ))}
-                        </Select>
-
-                        <FormControlLabel
-                            control={
-                                <Switch
-                                    checked={ollamaEnabled}
-                                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setOllamaEnabled(e.target.checked)}
-                                    disabled={!ollamaModel || !ollamaVerified}
-                                />
-                            }
-                            label={intl.formatMessage({ id: "settings.llmModels.private.ollamaEnabled" })}
-                            sx={{ mt: 1 }}
-                        />
-                    </SettingsFormField>
-                )} */}
-      {/* </SettingsSection> */}
+      <SettingsSection title={intl.formatMessage({ id: "settings.llmModels.public.oneasiaConfiguration" })} sx={{ mb: 3 }}>
+        <SettingsFormField label={intl.formatMessage({ id: "settings.llmModels.public.oneasiaKey" })}>
+          <Box sx={{ display: 'flex', gap: 1 }}>
+            <TextFieldWithOptions
+              fullWidth
+              size="small"
+              value={oneasiaKey}
+              onChange={handleOneasiaKeyChange}
+              onClear={handleClearOneasia}
+              placeholder={intl.formatMessage({ id: "settings.llmModels.public.oneasiaKeyPlaceholder" })}
+              isPassword
+              error={oneasiaEnabled && !oneasiaVerified && !!oneasiaKey}
+              helperText={oneasiaEnabled && !oneasiaVerified && !!oneasiaKey ? intl.formatMessage({ id: "settings.llmModels.public.oneasiaKeyError" }) : ""}
+            />
+            <Button
+              variant="outlined"
+              size="small"
+              onClick={handleVerifyOneasia}
+              disabled={!oneasiaKey || verifyingOneasia}
+              color={oneasiaVerified ? "success" : "primary"}
+              sx={{ whiteSpace: 'nowrap', width: '90px' }}
+            >
+              {verifyingOneasia ? intl.formatMessage({ id: "settings.llmModels.public.verifying" }) : oneasiaVerified ? intl.formatMessage({ id: "settings.llmModels.public.verified" }) : intl.formatMessage({ id: "settings.llmModels.public.verify" })}
+            </Button>
+          </Box>
+        </SettingsFormField>
+        <FormControlLabel
+          control={
+            <Switch
+              checked={oneasiaEnabled}
+              onChange={(e) => setOneasiaEnabled(e.target.checked)}
+              disabled={!oneasiaKey || (!!oneasiaKey && !oneasiaVerified)}
+            />
+          }
+          label={
+            <Box component="span" sx={{ display: 'flex', alignItems: 'center' }}>
+              {intl.formatMessage({ id: "settings.llmModels.public.enableOneasiaModels" })}
+              {!oneasiaVerified && oneasiaKey && (
+                <Typography variant="caption" color="error" sx={{ ml: 1 }}>
+                  {intl.formatMessage({ id: "settings.llmModels.public.requiresVerification" })}
+                </Typography>
+              )}
+            </Box>
+          }
+          sx={{ mt: 1 }}
+        />
+      </SettingsSection>
 
       <SettingsActionBar>
         <Button variant="contained" onClick={handleSave}>{intl.formatMessage({ id: "settings.savePreferences" })}</Button>

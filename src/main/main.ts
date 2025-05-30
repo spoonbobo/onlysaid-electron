@@ -34,6 +34,7 @@ import { setupFileHandlers } from './api/v2/file';
 import { setupSocketHandlers } from './socket';
 import { setupStorageHandlers } from './api/v2/storage';
 import { initMicrosoftAuth } from './msft';
+import { setupOneasiaHandlers } from './oneasia';
 
 // Load environment variables
 dotenv.config();
@@ -48,6 +49,7 @@ setupMCPHandlers();
 setupContentHandlers();
 setupRedisHandlers();
 setupWorkspaceHandlers();
+setupOneasiaHandlers();
 initializeDeeplinkHandling();
 setupFileHandlers();
 setupStorageHandlers();

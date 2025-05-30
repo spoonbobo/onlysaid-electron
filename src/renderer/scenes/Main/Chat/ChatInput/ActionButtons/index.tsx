@@ -3,12 +3,11 @@ import { Box, IconButton, alpha } from "@mui/material";
 import SendIcon from "@mui/icons-material/Send";
 import MicIcon from "@mui/icons-material/Mic";
 import AttachFileIcon from "@mui/icons-material/AttachFile";
-import { useSelectedModelStore } from "@/renderer/stores/LLM/SelectedModelStore";
+import { useLLMConfigurationStore } from "@/renderer/stores/LLM/LLMConfiguration";
 import ModelSelector from "./ModelSelector";
 import AIMode from "./AIMode";
 import KBSelector from "./KBSelector";
 import MCPSelector from "./MCPSelector";
-import { useLLMConfigurationStore } from "@/renderer/stores/LLM/LLMConfiguration";
 
 interface ActionButtonsProps {
   input: string;
@@ -27,8 +26,7 @@ export default function ActionButtons({
   isSending = false,
   hasAttachments = false
 }: ActionButtonsProps) {
-  const { modelId, provider } = useSelectedModelStore();
-  const { aiMode } = useLLMConfigurationStore();
+  const { modelId, provider, aiMode } = useLLMConfigurationStore();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {

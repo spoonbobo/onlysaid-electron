@@ -10,13 +10,13 @@ import { v4 as uuidv4 } from 'uuid';
 import { Typography } from "@mui/material";
 import { useChatStore } from "@/renderer/stores/Chat/ChatStore";
 import { useCurrentTopicContext, useTopicStore } from "@/renderer/stores/Topic/TopicStore";
-import { useSelectedModelStore } from "@/renderer/stores/LLM/SelectedModelStore";
-import { useStreamStore, OpenAIMessage, OpenAIStreamOptions } from "@/renderer/stores/SSE/StreamStore";
+import { useStreamStore, OpenAIMessage, OpenAIStreamOptions } from "@/renderer/stores/Stream/StreamStore";
 import { useUserStore } from "@/renderer/stores/User/UserStore";
 import { useAgentStore } from "@/renderer/stores/Agent/AgentStore";
 import { useWorkspaceStore } from "@/renderer/stores/Workspace/WorkspaceStore";
 import { useLLMConfigurationStore } from "@/renderer/stores/LLM/LLMConfiguration";
 import { toast } from "@/utils/toast";
+import { IChatRoom } from "@/../../types/Chat/Chatroom";
 
 function Chat() {
   const {
@@ -41,8 +41,7 @@ function Chat() {
     updateMessage
   } = useChatStore();
 
-
-  const { modelId, provider, modelName } = useSelectedModelStore();
+  const { modelId, provider, modelName, aiMode } = useLLMConfigurationStore();
   const {
     messages: streamDataForId,
     isConnecting: storeIsConnecting,
@@ -58,7 +57,6 @@ function Chat() {
     isProcessingResponse,
     processAgentResponse
   } = useAgentStore();
-  const { aiMode } = useLLMConfigurationStore();
   const isLocal = currentUser?.id ? false : true;
   let workspaceId = '';
   if (!isLocal) {
@@ -82,9 +80,8 @@ function Chat() {
     }
   }, [workspaceId, getUsersByWorkspace]);
 
-
   const messages = storeMessages[activeChatId || ''] || [];
-  const replyingToMessage = replyingToId ? messages.find(m => m.id === replyingToId) || null : null;
+  const replyingToMessage = replyingToId ? messages.find((m: IChatMessage) => m.id === replyingToId) || null : null;
 
   const [currentStreamContent, setCurrentStreamContent] = useState("");
   const [prevContentLength, setPrevContentLength] = useState(0);
@@ -106,7 +103,7 @@ function Chat() {
       clearTimeout(fetchMessagesTimeoutRef.current);
     }
 
-    if (activeChatId && useChatStore.getState().chats.some(chat => chat.id === activeChatId)) {
+    if (activeChatId && useChatStore.getState().chats.some((chat: IChatRoom) => chat.id === activeChatId)) {
       const topicStoreState = useTopicStore.getState();
       const completedStreamData = topicStoreState.completedStreams[activeChatId];
       let isRecentCompletion = false;
@@ -335,7 +332,7 @@ function Chat() {
       return acc;
     }, {});
 
-    return messages.map(message => ({
+    return messages.map((message: IChatMessage) => ({
       ...message,
       sender_role: userRoleMap[message.sender] || 'user'
     }));

@@ -495,5 +495,10 @@
   "menu.workspace.searchUsers": "搜尋用戶",
   "menu.workspace.searchUsersPlaceholder": "輸入電郵地址以搜尋用戶...",
   "menu.workspace.selectedUsers": "已選用戶 ({count})",
-  "menu.workspace.inviteUsers": "邀請 {count} 位用戶"
+  "menu.workspace.inviteUsers": "邀請 {count} 位用戶",
+  "settings.llmModels.public.oneasiaConfiguration": "Oneasia vLLM 設定",
+  "settings.llmModels.public.oneasiaKey": "Oneasia vLLM API 密鑰",
+  "settings.llmModels.public.oneasiaKeyPlaceholder": "請輸入您的 Oneasia vLLM API 密鑰",
+  "settings.llmModels.public.oneasiaKeyError": "API 密鑰需要驗證",
+  "settings.llmModels.public.enableOneasiaModels": "啟用 Oneasia vLLM 模型"
 }

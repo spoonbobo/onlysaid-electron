@@ -1,7 +1,7 @@
 import { v4 as uuidv4 } from 'uuid';
 import { IChatMessage } from '@/../../types/Chat/Message';
 import { IUser } from '@/../../types/User/User';
-import { OpenAIMessage } from '@/renderer/stores/SSE/StreamStore';
+import { OpenAIMessage } from '@/renderer/stores/Stream/StreamStore';
 import { getAgentFromStore } from '@/utils/agent';
 
 export const askModeSystemPrompt = (user: IUser, agent: IUser) => {

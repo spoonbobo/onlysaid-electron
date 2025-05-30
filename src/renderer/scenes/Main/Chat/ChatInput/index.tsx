@@ -9,7 +9,7 @@ import { IChatMessage } from "@/../../types/Chat/Message";
 import CloseIcon from '@mui/icons-material/Close';
 import { IFile } from "@/../../types/File/File";
 import { useCurrentTopicContext } from "@/renderer/stores/Topic/TopicStore";
-import { useSelectedModelStore } from "@/renderer/stores/LLM/SelectedModelStore";
+import { useLLMConfigurationStore } from "@/renderer/stores/LLM/LLMConfiguration";
 import { getUserTokenFromStore } from "@/utils/user";
 import { getCurrentWorkspace } from "@/utils/workspace";
 import { toast } from "@/utils/toast";
@@ -34,7 +34,7 @@ function ChatInput({
 }: ChatInputProps) {
   const [isSending, setIsSending] = useState(false);
   const { attachments, setAttachment, clearAttachments } = useCurrentTopicContext();
-  const { modelName, provider, modelId } = useSelectedModelStore();
+  const { modelName, provider, modelId } = useLLMConfigurationStore();
 
   // Add state to track processing operationIds
   const [processingOperationIds, setProcessingOperationIds] = useState<Record<string, string>>({});

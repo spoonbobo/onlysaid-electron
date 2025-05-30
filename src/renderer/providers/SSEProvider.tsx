@@ -1,5 +1,5 @@
 import { createContext, ReactNode, useEffect } from 'react';
-import { useStreamStore } from '@/renderer/stores/SSE/StreamStore';
+import { useStreamStore } from '@/renderer/stores/Stream/StreamStore';
 
 // Create a context for component-based access (optional)
 const SSEContext = createContext<null>(null);
@@ -24,4 +24,4 @@ export function SSEProvider({ children }: SSEProviderProps) {
 }
 
 // Re-export the store for convenience
-export { useStreamStore as useSSEStore } from '@/renderer/stores/SSE/StreamStore';
+export { useStreamStore as useSSEStore } from '@/renderer/stores/Stream/StreamStore';

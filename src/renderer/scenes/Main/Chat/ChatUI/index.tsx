@@ -266,14 +266,55 @@ function ChatUI({ messages, onReply, streamingMessageId, streamContentForBubble,
 
     // Always sort by creation time to ensure proper chronological order
     messagesToProcess.sort((a, b) => {
-      return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+      // Handle null/undefined created_at by falling back to sent_at or updated_at
+      const getValidTimestamp = (msg: IChatMessage): number => {
+        if (msg.created_at) {
+          const createdTime = new Date(msg.created_at).getTime();
+          if (!isNaN(createdTime)) return createdTime;
+        }
+
+        if (msg.sent_at) {
+          const sentTime = new Date(msg.sent_at).getTime();
+          if (!isNaN(sentTime)) return sentTime;
+        }
+
+        if (msg.updated_at) {
+          const updatedTime = new Date(msg.updated_at).getTime();
+          if (!isNaN(updatedTime)) return updatedTime;
+        }
+
+        // Fallback to current time if no valid timestamp found
+        return Date.now();
+      };
+
+      return getValidTimestamp(a) - getValidTimestamp(b);
     });
 
     // Helper function to check if a message should be a continuation based on time
     const shouldBeContinuation = (currentMessage: IChatMessage, currentIndex: number): boolean => {
       if (currentIndex === 0) return false;
 
-      const currentTime = new Date(currentMessage.created_at).getTime();
+      // Use the same timestamp logic as sorting
+      const getValidTimestamp = (msg: IChatMessage): number => {
+        if (msg.created_at) {
+          const createdTime = new Date(msg.created_at).getTime();
+          if (!isNaN(createdTime)) return createdTime;
+        }
+
+        if (msg.sent_at) {
+          const sentTime = new Date(msg.sent_at).getTime();
+          if (!isNaN(sentTime)) return sentTime;
+        }
+
+        if (msg.updated_at) {
+          const updatedTime = new Date(msg.updated_at).getTime();
+          if (!isNaN(updatedTime)) return updatedTime;
+        }
+
+        return Date.now();
+      };
+
+      const currentTime = getValidTimestamp(currentMessage);
       const currentSender = currentMessage.sender;
 
       // Find the most recent message from the same sender before this one (by time)
@@ -282,7 +323,7 @@ function ChatUI({ messages, onReply, streamingMessageId, streamContentForBubble,
 
       for (let i = 0; i < currentIndex; i++) {
         const msg = messagesToProcess[i];
-        const msgTime = new Date(msg.created_at).getTime();
+        const msgTime = getValidTimestamp(msg);
 
         if (msg.sender === currentSender && msgTime < currentTime && msgTime > lastSameSenderTime) {
           lastSameSenderMessage = msg;
@@ -295,7 +336,7 @@ function ChatUI({ messages, onReply, streamingMessageId, streamContentForBubble,
 
       // Check if there are any messages from other senders between the last same-sender message and current message (by time)
       const hasInterruption = messagesToProcess.some(msg => {
-        const msgTime = new Date(msg.created_at).getTime();
+        const msgTime = getValidTimestamp(msg);
         return msg.sender !== currentSender &&
           msgTime > lastSameSenderTime &&
           msgTime < currentTime;

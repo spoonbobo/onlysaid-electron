@@ -242,14 +242,12 @@ export const RenderWorkspaceActions = ({
       );
       break;
     case 'members':
-      console.log('🎯 Members case - workspace being passed to dialog:', currentWorkspace);
       actualContent = (
         <>
           <Tooltip title={<FormattedMessage id="menu.workspace.inviteUser" />}>
             <IconButton
               size="small"
               onClick={() => {
-                console.log('📝 Opening invite dialog with workspace:', currentWorkspace);
                 setIsInviteDialogOpen(true);
                 handleAction?.('openInviteDialog');
               }}

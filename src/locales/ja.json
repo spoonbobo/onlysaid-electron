@@ -572,5 +572,11 @@
 
   "calendar.workspaces": "ワークスペース",
   "calendar.outlook": "Outlook",
-  "calendar.pageTitle": "カレンダー"
+  "calendar.pageTitle": "カレンダー",
+
+  "settings.llmModels.public.oneasiaConfiguration": "Oneasia vLLM設定",
+  "settings.llmModels.public.oneasiaKey": "Oneasia vLLM APIキー",
+  "settings.llmModels.public.oneasiaKeyPlaceholder": "Oneasia vLLM APIキーを入力してください",
+  "settings.llmModels.public.oneasiaKeyError": "APIキーの検証が必要です",
+  "settings.llmModels.public.enableOneasiaModels": "Oneasia vLLMモデルを有効化"
 }

@@ -102,6 +102,8 @@ type GoogleServiceChannels = 'google-services:ready' | 'google-services:error';
 // Add to type definitions
 type MicrosoftAuthChannels = 'microsoft-auth:request-calendar' | 'microsoft-auth:result' | 'microsoft-auth:disconnect' | 'microsoft-auth:disconnected' | 'microsoft-calendar:fetch-calendars' | 'microsoft-calendar:fetch-events';
 
+type OneasiaChannels = 'oneasia:authenticate' | 'oneasia:get-models';
+
 export type Channels =
   | AuthChannels
   | GoogleAuthChannels
@@ -119,7 +121,8 @@ export type Channels =
   | RedisChannels
   | SocketChannels
   | KnowledgeBaseChannels
-  | AIChannels;
+  | AIChannels
+  | OneasiaChannels;
 
 const electronHandler = {
   ipcRenderer: {
@@ -303,6 +306,10 @@ const electronHandler = {
       maxResults?: number
     }) =>
       ipcRenderer.invoke('microsoft-calendar:fetch-events', params),
+  },
+  oneasia: {
+    authenticate: (apiKey: string) => ipcRenderer.invoke('oneasia:authenticate', apiKey),
+    getModels: (apiKey: string) => ipcRenderer.invoke('oneasia:get-models', apiKey),
   },
 };
 

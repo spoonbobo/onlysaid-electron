@@ -2,7 +2,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { IChatMessage } from '@/../../types/Chat/Message';
 import { IUser } from '@/../../types/User/User';
 import { useKBSettingsStore } from '@/renderer/stores/KB/KBSettingStore';
-import { OpenAIMessage, OpenAIStreamOptions } from '@/renderer/stores/SSE/StreamStore';
+import { OpenAIMessage, OpenAIStreamOptions } from '@/renderer/stores/Stream/StreamStore';
 import { getAgentFromStore } from '@/utils/agent';
 
 // System prompt for Query Mode

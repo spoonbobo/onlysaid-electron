@@ -75,8 +75,13 @@ const ChatBubble = memo(({
   }, [isStreaming, msg.text, streamContent]);
 
   const getTimeString = () => {
-    if (!msg.created_at) return "";
-    const date = new Date(msg.created_at);
+    // Try created_at first, then fall back to sent_at
+    const timestamp = msg.created_at || msg.sent_at;
+    if (!timestamp) return "";
+
+    const date = new Date(timestamp);
+    if (isNaN(date.getTime())) return "";
+
     return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
   };
 
@@ -227,10 +232,18 @@ const ChatBubble = memo(({
           }}>
             {msg.sender_object?.username}
             <Typography component="span" sx={{ color: "text.secondary", fontWeight: 400, fontSize: "0.8rem", ml: 1 }}>
-              {msg.created_at ? (() => {
-                const date = new Date(msg.created_at);
+              {msg.created_at || msg.sent_at ? (() => {
+                const timestamp = msg.created_at || msg.sent_at;
+                const date = new Date(timestamp);
+
+                if (isNaN(date.getTime())) {
+                  return msg.sender_object?.is_human !== false ? (
+                    <FormattedMessage id="chat.sending" defaultMessage="Sending..." />
+                  ) : null;
+                }
+
                 const year = date.getFullYear();
-                const month = String(date.getMonth() + 1).padStart(2, '0'); // Months are 0-indexed
+                const month = String(date.getMonth() + 1).padStart(2, '0');
                 const day = String(date.getDate()).padStart(2, '0');
                 const hour = date.getHours();
                 const minute = String(date.getMinutes()).padStart(2, '0');
@@ -254,7 +267,11 @@ const ChatBubble = memo(({
                     {formattedTime}
                   </>
                 );
-              })() : <FormattedMessage id="chat.sending" defaultMessage="Sending..." />}
+              })() : (
+                msg.sender_object?.is_human !== false ? (
+                  <FormattedMessage id="chat.sending" defaultMessage="Sending..." />
+                ) : null
+              )}
             </Typography>
           </Typography>
         )}

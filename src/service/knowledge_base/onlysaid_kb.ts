@@ -1,6 +1,6 @@
 import axios, { AxiosInstance, AxiosResponse } from "axios";
 import { IKnowledgeBase } from "../../../../types/KnowledgeBase/KnowledgeBase";
-import { OpenAIMessage } from "@/renderer/stores/SSE/StreamStore"; // To type conversation history
+import { OpenAIMessage } from "@/renderer/stores/Stream/StreamStore"; // To type conversation history
 
 // Interface for the payload to be sent to the /api/query endpoint
 // This should mirror QueryRequest from your Python backend

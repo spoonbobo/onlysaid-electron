@@ -9,9 +9,9 @@ import { processQueryModeAIResponse } from "@/renderer/stores/Agent/modes/Query"
 import { processAgentModeAIResponse } from "@/renderer/stores/Agent/modes/Agent";
 import { useMCPClientStore } from '@/renderer/stores/MCP/MCPClient';
 import { useChatStore } from "@/renderer/stores/Chat/ChatStore";
-import { useStreamStore } from "@/renderer/stores/SSE/StreamStore";
+import { useStreamStore } from "@/renderer/stores/Stream/StreamStore";
 import { useTopicStore } from "@/renderer/stores/Topic/TopicStore";
-import { useSelectedModelStore } from "@/renderer/stores/LLM/SelectedModelStore";
+import { useLLMConfigurationStore } from "@/renderer/stores/LLM/LLMConfiguration";
 import { useUserStore } from "@/renderer/stores/User/UserStore";
 import { calculateExperienceForLevel } from "@/utils/agent";
 import { summarizeToolCallResults } from "@/renderer/stores/Agent/modes/Ask";
@@ -355,7 +355,7 @@ export const useAgentStore = create<AgentState>()(
           const { appendMessage, updateMessage, fetchMessages } = useChatStore.getState();
           const { streamChatCompletion } = useStreamStore.getState();
           const { setStreamingState, markStreamAsCompleted } = useTopicStore.getState();
-          const { modelId, provider } = useSelectedModelStore.getState();
+          const { modelId, provider } = useLLMConfigurationStore.getState();
           const { user: currentUser } = useUserStore.getState();
 
           if (!modelId) {
@@ -401,7 +401,7 @@ export const useAgentStore = create<AgentState>()(
         try {
           // This could be used for getting responses without saving to chat
           // You'd implement a simpler version that just returns the text
-          const { modelId, provider } = useSelectedModelStore.getState();
+          const { modelId, provider } = useLLMConfigurationStore.getState();
           const { user: currentUser } = useUserStore.getState();
 
           if (!modelId) {

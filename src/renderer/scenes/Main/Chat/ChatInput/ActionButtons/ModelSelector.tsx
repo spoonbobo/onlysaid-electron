@@ -2,7 +2,6 @@ import { useState, useEffect } from "react";
 import { Chip, Menu, MenuItem, Typography, alpha } from "@mui/material";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import { LLMService } from "@/service/ai";
-import { useSelectedModelStore } from "@/renderer/stores/LLM/SelectedModelStore";
 import { useLLMConfigurationStore } from "@/renderer/stores/LLM/LLMConfiguration";
 import { useIntl } from "react-intl";
 
@@ -14,8 +13,7 @@ interface ModelSelectorProps {
 
 export default function ModelSelector({ disabled = false }: ModelSelectorProps) {
   const [availableModels, setAvailableModels] = useState<any[]>([]);
-  const { modelName, provider, modelId, setSelectedModel } = useSelectedModelStore();
-  const { aiMode } = useLLMConfigurationStore();
+  const { modelName, provider, modelId, setSelectedModel, aiMode } = useLLMConfigurationStore();
   const [menuAnchor, setMenuAnchor] = useState<null | HTMLElement>(null);
   const menuOpen = Boolean(menuAnchor);
   const intl = useIntl();

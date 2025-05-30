@@ -58,6 +58,10 @@ const getProviderConfig = () => {
       key: config.deepSeekKey,
       enabled: config.deepSeekEnabled && config.deepSeekVerified,
     },
+    oneasia: {
+      key: config.oneasiaKey,
+      enabled: config.oneasiaEnabled && config.oneasiaVerified,
+    },
     ollama: {
       baseUrl: config.ollamaBaseURL,
       model: config.ollamaModel,
@@ -273,7 +277,8 @@ export const useStreamStore = create<StreamState>((set, get) => {
           ...restOptions,
           apiKeys: {
             openAI: config.openAIKey,
-            deepSeek: config.deepSeekKey
+            deepSeek: config.deepSeekKey,
+            oneasia: config.oneasiaKey
           },
           ollamaConfig: {
             baseUrl: config.ollamaBaseURL,
@@ -282,6 +287,7 @@ export const useStreamStore = create<StreamState>((set, get) => {
           providerStatus: {
             openAIEnabled: config.openAIEnabled && config.openAIVerified,
             deepSeekEnabled: config.deepSeekEnabled && config.deepSeekVerified,
+            oneasiaEnabled: config.oneasiaEnabled && config.oneasiaVerified,
             ollamaEnabled: config.ollamaEnabled && config.ollamaVerified
           }
         };
