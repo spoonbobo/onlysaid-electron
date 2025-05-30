@@ -202,12 +202,10 @@ export const featureMigrations = [
       ingested_at DESC`,
 
   `CREATE INDEX IF NOT EXISTS idx_logs_reference ON logs(reference_id, reference_type)`,
-
   `UPDATE messages SET file_ids = files WHERE files IS NOT NULL AND file_ids IS NULL`,
-
   `ALTER TABLE tool_calls ADD COLUMN execution_time_seconds REAL`,
-
-  `ALTER TABLE messages ADD COLUMN chat_id TEXT`
+  `ALTER TABLE messages ADD COLUMN chat_id TEXT`,
+  `ALTER TABLE messages ADD COLUMN file_ids TEXT`
 ];
 
 export const allMigrations = [

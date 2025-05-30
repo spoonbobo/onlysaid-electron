@@ -568,5 +568,9 @@
   "homepage.joinRequests.accessWorkspace": "ワークスペースにアクセス",
   "homepage.joinRequests.tryAgain": "再試行",
 
-  "dashboard.loading": "読み込み中..."
+  "dashboard.loading": "読み込み中...",
+
+  "calendar.workspaces": "ワークスペース",
+  "calendar.outlook": "Outlook",
+  "calendar.pageTitle": "カレンダー"
 }
