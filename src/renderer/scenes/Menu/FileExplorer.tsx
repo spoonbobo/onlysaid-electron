@@ -57,7 +57,7 @@ const getPathBasename = (filePath: string, ext?: string): string => {
 };
 
 function FileNodeItem({ node, level = 0 }: { node: FileNode, level?: number }) {
-  const { loadFolder, toggleFolder, selectItem, removeRootFolder, selectedId, refreshFolder } = useFilesStore();
+  const { loadFolder, toggleFolder, removeRootFolder, refreshFolder } = useFilesStore();
   const isLoading = useFilesStore(selectors.selectIsNodeLoading(node.id));
   const [isDragging, setIsDragging] = useState(false);
   const [menuAnchorEl, setMenuAnchorEl] = useState<null | HTMLElement>(null);
@@ -71,13 +71,12 @@ function FileNodeItem({ node, level = 0 }: { node: FileNode, level?: number }) {
   const isRootNode = level === 0;
   const isRemoteRoot = isRootNode && node.source === 'remote';
 
-  const isSelected = selectedId === node.id;
   const isLeafFile = level > 0 && node.type === 'file';
 
   const isDraggable = node.type === 'file';
 
-  const iconColor = isSelected ? "primary" : (isRemoteRoot ? "info" : "primary");
-  const fileIconColor = isSelected ? "primary" : "inherit";
+  const iconColor = isRemoteRoot ? "info" : "primary";
+  const fileIconColor = "inherit";
 
   const { processedKbDocuments } = useKBStore();
   const [isSynced, setIsSynced] = useState(false);
@@ -118,7 +117,6 @@ function FileNodeItem({ node, level = 0 }: { node: FileNode, level?: number }) {
         }
       }
     } else {
-      selectItem(node.id);
       if (isLeafFile) {
         setShowFileClickDialog(true);
       }
@@ -372,8 +370,6 @@ function FileNodeItem({ node, level = 0 }: { node: FileNode, level?: number }) {
         noWrap
         sx={{
           lineHeight: 1,
-          color: isSelected ? 'primary.main' : 'inherit',
-          fontWeight: isSelected ? 500 : 'inherit',
           fontSize: '0.8rem',
           flexGrow: 1,
           overflow: 'hidden',
@@ -418,8 +414,7 @@ function FileNodeItem({ node, level = 0 }: { node: FileNode, level?: number }) {
           py: 0.25,
           cursor: isLoading ? 'default' : (isDraggable ? 'grab' : (node.type === 'directory' ? 'pointer' : 'pointer')),
           opacity: isLoading ? 0.7 : (isDragging ? 0.4 : 1),
-          bgcolor: isSelected ? 'action.selected' : 'transparent',
-          '&:hover': { bgcolor: isLoading ? 'transparent' : (isSelected ? 'action.selected' : 'action.hover') },
+          '&:hover': { bgcolor: isLoading ? 'transparent' : 'action.hover' },
           height: 30,
           minHeight: 30,
           boxSizing: 'border-box',

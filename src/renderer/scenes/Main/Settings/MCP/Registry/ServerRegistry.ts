@@ -42,3 +42,6 @@ import "./modules/LocationServerModule";
 import "./modules/MS365ServerModule";
 import "./modules/MSTeamsServerModule";
 import "./modules/GoogleCalendarServerModule";
+import "./modules/LaraServerModule";
+import "./modules/ChessMCPServerModule";
+import "./modules/OTRSServerModule";

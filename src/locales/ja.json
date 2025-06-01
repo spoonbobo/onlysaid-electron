@@ -578,5 +578,66 @@
   "settings.llmModels.public.oneasiaKey": "Oneasia vLLM APIキー",
   "settings.llmModels.public.oneasiaKeyPlaceholder": "Oneasia vLLM APIキーを入力してください",
   "settings.llmModels.public.oneasiaKeyError": "APIキーの検証が必要です",
-  "settings.llmModels.public.enableOneasiaModels": "Oneasia vLLMモデルを有効化"
+  "settings.llmModels.public.enableOneasiaModels": "Oneasia vLLMモデルを有効化",
+
+  "menu.workspace.selectUsers": "招待するユーザーを少なくとも1人選択してください",
+  "menu.workspace.searchUsers": "ユーザーを検索",
+  "menu.workspace.searchUsersPlaceholder": "メールアドレスを入力してユーザーを検索...",
+  "menu.workspace.selectedUsers": "選択されたユーザー ({count})",
+  "menu.workspace.inviteUsers": "{count}人のユーザーを招待",
+
+  "titleBar.appName": "Onlysaid",
+  "titleBar.notifications": "通知",
+  "titleBar.minimize": "最小化",
+  "titleBar.maximize": "最大化",
+  "titleBar.close": "閉じる",
+
+  "titleBar.topic.home": "ホーム",
+  "titleBar.topic.workspace": "ワークスペース",
+  "titleBar.topic.settings": "設定",
+  "titleBar.topic.file": "ファイル",
+  "titleBar.topic.playground": "プレイグラウンド",
+  "titleBar.topic.calendar": "カレンダー",
+
+  "titleBar.menu.file": "ファイル",
+  "titleBar.menu.edit": "編集",
+  "titleBar.menu.view": "表示",
+  "titleBar.menu.help": "ヘルプ",
+
+  "titleBar.file.open": "開く",
+  "titleBar.file.close": "閉じる",
+
+  "titleBar.edit.undo": "元に戻す",
+  "titleBar.edit.redo": "やり直し",
+  "titleBar.edit.cut": "切り取り",
+  "titleBar.edit.copy": "コピー",
+  "titleBar.edit.paste": "貼り付け",
+  "titleBar.edit.selectAll": "すべて選択",
+
+  "titleBar.view.reload": "再読み込み",
+  "titleBar.view.toggleFullscreen": "フルスクリーン切り替え",
+  "titleBar.view.zoomIn": "拡大",
+  "titleBar.view.zoomOut": "縮小",
+  "titleBar.view.resetZoom": "ズームリセット",
+  "titleBar.view.toggleDevTools": "開発者ツール切り替え",
+
+  "titleBar.help.learnMore": "詳細を見る",
+  "titleBar.help.documentation": "ドキュメント",
+  "titleBar.help.community": "コミュニティ",
+  "titleBar.help.reportIssues": "問題を報告",
+
+  "titleBar.shortcut.ctrlO": "Ctrl+O",
+  "titleBar.shortcut.ctrlQ": "Ctrl+Q",
+  "titleBar.shortcut.ctrlZ": "Ctrl+Z",
+  "titleBar.shortcut.ctrlY": "Ctrl+Y",
+  "titleBar.shortcut.ctrlX": "Ctrl+X",
+  "titleBar.shortcut.ctrlC": "Ctrl+C",
+  "titleBar.shortcut.ctrlV": "Ctrl+V",
+  "titleBar.shortcut.ctrlA": "Ctrl+A",
+  "titleBar.shortcut.ctrlR": "Ctrl+R",
+  "titleBar.shortcut.f11": "F11",
+  "titleBar.shortcut.ctrlPlus": "Ctrl++",
+  "titleBar.shortcut.ctrlMinus": "Ctrl+-",
+  "titleBar.shortcut.ctrl0": "Ctrl+0",
+  "titleBar.shortcut.f12": "F12"
 }

@@ -45,7 +45,12 @@ function MCPSettings() {
     const legacyCategories = ["delivery", "development", "accommodation", "communication"];
     legacyCategories.forEach(cat => categories.add(cat));
 
-    return Array.from(categories).sort();
+    // Sort categories with "other" always last
+    return Array.from(categories).sort((a, b) => {
+      if (a === "other") return 1;
+      if (b === "other") return -1;
+      return a.localeCompare(b);
+    });
   }, [registeredServers]);
 
   const serviceCategories = [

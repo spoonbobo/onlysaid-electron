@@ -15,6 +15,8 @@ import { createLinkedInServer } from "./Servers/LinkedInServer";
 import { createMS365Server } from "./Servers/MS365Server";
 import { createMSTeamsServer } from "./Servers/MSTeamsServer";
 import { createGoogleCalendarServer } from "./Servers/GoogleCalendarServer";
+import { createLaraServer } from "./Servers/LaraServer";
+import { createChessServer } from "./Servers/ChessMCPServer";
 import type { IMCPTool } from "@/../../types/MCP/tool";
 import type {
   ITavilyState,
@@ -32,8 +34,10 @@ import type {
   IMS365State,
   IMSTeamsState,
   IGoogleCalendarState,
+  ILaraState,
   IServerModule
 } from "@/../../types/MCP/server";
+import type { IChessState } from "./Servers/ChessMCPServer";
 
 // Server registry - no method names needed anymore
 const SERVER_REGISTRY = {
@@ -52,6 +56,8 @@ const SERVER_REGISTRY = {
   ms365: createMS365Server,
   msTeams: createMSTeamsServer,
   googleCalendar: createGoogleCalendarServer,
+  lara: createLaraServer,
+  chess: createChessServer,
 };
 
 const SERVICE_TYPE_MAPPING: Record<string, string> = {
@@ -70,6 +76,8 @@ const SERVICE_TYPE_MAPPING: Record<string, string> = {
   'ms365': 'ms365',
   'ms-teams': 'msTeams',
   'google-calendar': 'googleCalendar',
+  'lara-translate': 'lara',
+  'chess': 'chess',
 };
 
 interface MCPState extends
@@ -87,7 +95,9 @@ interface MCPState extends
   ILinkedInState,
   IMS365State,
   IMSTeamsState,
-  IGoogleCalendarState {
+  IGoogleCalendarState,
+  ILaraState,
+  IChessState {
 
   serviceTools: Record<string, IMCPTool[]>;
   servers: Record<string, IServerModule>;

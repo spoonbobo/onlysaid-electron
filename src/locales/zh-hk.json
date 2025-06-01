@@ -554,5 +554,7 @@
   "titleBar.shortcut.ctrlPlus": "Ctrl++",
   "titleBar.shortcut.ctrlMinus": "Ctrl+-",
   "titleBar.shortcut.ctrl0": "Ctrl+0",
-  "titleBar.shortcut.f12": "F12"
+  "titleBar.shortcut.f12": "F12",
+
+  "settings.mcp.category.other": "其他"
 }
