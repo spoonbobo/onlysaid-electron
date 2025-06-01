@@ -29,6 +29,7 @@ export function setupMCPHandlers() {
         env: config.env || {}
       });
 
+
       await client.connect(transport);
 
       let tools: IMCPTool[] = [];
@@ -44,6 +45,8 @@ export function setupMCPHandlers() {
       } catch (error) {
         console.warn(`Could not get tools from ${serverName} server:`, error);
       }
+
+      console.log("tools", tools);
 
       activeClients[serverName] = client;
 

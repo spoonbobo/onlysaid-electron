@@ -7,7 +7,7 @@ export const GoogleCalendarServerModule: IEnhancedServerModule<IGoogleCalendarCo
     id: "google-calendar", // Matches SERVICE_TYPE_MAPPING in MCPStore
     title: "Google Calendar MCP Server",
     description: "MCP server for Google Calendar integration. Requires a custom server build.",
-    version: "1.1.0", // Placeholder
+    version: "1.2.0", // Placeholder
     icon: "CalendarToday", // Example Material UI icon name, adjust as needed
     sourceUrl: "https://github.com/nspady/google-calendar-mcp?tab=readme-ov-file",
     platforms: ["windows", "macos", "linux"], // Assuming it's cross-platform via Node.js
@@ -28,7 +28,7 @@ export const GoogleCalendarServerModule: IEnhancedServerModule<IGoogleCalendarCo
     args: [config.indexPath],
     // No 'env' as per previous discussion
     clientName: "google-calendar-client",
-    clientVersion: "1.2.0"
+    clientVersion: "1..0"
   }),
 
   getDialogFields: (): Field[] => [

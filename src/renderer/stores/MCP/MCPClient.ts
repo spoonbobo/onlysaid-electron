@@ -1,5 +1,6 @@
 // src/stores/MCP/MCPClientStore.ts
 import { create } from "zustand";
+import { SERVICE_TYPE_MAPPING } from "@/utils/mcp";
 
 interface MCPClientState {
   // Actions only
@@ -16,8 +17,9 @@ export const useMCPClientStore = create<MCPClientState>()((set, get) => ({
 
   ListMCPTool: async (serverName: string) => {
     try {
-      // Pass an empty object instead of nothing
-      const result = await window.electron.mcp.list_tools({ serverName });
+      // Map server key to service type for client lookup
+      const serviceType = SERVICE_TYPE_MAPPING[serverName] || serverName;
+      const result = await window.electron.mcp.list_tools({ serverName: serviceType });
       console.log("ListMCPTool returned:", result);
       return result;
     } catch (error) {
@@ -28,10 +30,18 @@ export const useMCPClientStore = create<MCPClientState>()((set, get) => ({
 
   executeTool: async (serverName: string, toolName: string, args: Record<string, any>) => {
     try {
-      console.log("executeTool action called with:", { serverName, toolName, args });
+      // Map server key to service type for client lookup
+      const serviceType = SERVICE_TYPE_MAPPING[serverName] || serverName;
+
+      console.log("executeTool action called with:", {
+        originalServerName: serverName,
+        mappedServiceType: serviceType,
+        toolName,
+        args
+      });
 
       const result = await window.electron.mcp.execute_tool({
-        serverName,
+        serverName: serviceType, // Use the mapped service type
         toolName,
         arguments: args
       });

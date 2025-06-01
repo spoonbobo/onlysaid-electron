@@ -25,7 +25,7 @@ export const createGoogleCalendarServer = (
     ],
     // No 'env' needed as per your specification
     clientName: "google-calendar-client",
-    clientVersion: "1.0.0" // Placeholder version
+    clientVersion: "1.2.0" // Placeholder version
   });
 
   const setEnabled = async (enabled: boolean) => {

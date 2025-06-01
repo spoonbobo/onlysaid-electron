@@ -4,8 +4,10 @@ import { IUser } from '@/../../types/User/User';
 import { OpenAIMessage } from '@/renderer/stores/Stream/StreamStore';
 import { useMCPClientStore } from '@/renderer/stores/MCP/MCPClient';
 import { useMCPSettingsStore } from '@/renderer/stores/MCP/MCPSettingsStore';
+import { useMCPStore } from '@/renderer/stores/MCP/MCPStore';
 import { useLLMStore } from '@/renderer/stores/LLM/LLMStore';
 import { getAgentFromStore } from '@/utils/agent';
+import { getServiceTools, formatMCPName } from '@/utils/mcp';
 import type OpenAI from 'openai';
 
 export const agentModeSystemPrompt = (user: IUser, agent: IUser) => {
@@ -52,7 +54,7 @@ export async function processAgentModeAIResponse({
   }
 
   const { selectedMcpServerIds } = useMCPSettingsStore.getState();
-  const { ListMCPTool } = useMCPClientStore.getState();
+  const mcpStore = useMCPStore.getState();
   const getOpenAICompletion = useLLMStore.getState().getOpenAICompletion;
   let allSelectedToolsFromMCPs: OpenAI.Chat.Completions.ChatCompletionTool[] = [];
 
@@ -60,50 +62,60 @@ export async function processAgentModeAIResponse({
   const toolToServerMap = new Map<string, string>();
   const serverNameMap = new Map<string, string>();
 
+  // Service type mapping (same as Playground and MCPSelector)
+  const serviceTypeMapping: Record<string, string> = {
+    tavily: 'tavily',
+    weather: 'weather',
+    location: 'location',
+    weatherForecast: 'weather-forecast',
+    nearbySearch: 'nearby-search',
+    web3Research: 'web3-research',
+    doorDash: 'doordash',
+    whatsApp: 'whatsapp',
+    github: 'github',
+    ipLocation: 'ip-location',
+    airbnb: 'airbnb',
+    linkedIn: 'linkedin',
+    googleCalendar: 'google-calendar',
+    ms365: 'ms365',
+    msTeams: 'ms-teams',
+    lara: 'lara-translate',
+    chess: 'chess'
+  };
+
   if (selectedMcpServerIds && selectedMcpServerIds.length > 0) {
     try {
-      // Get server names using formatMCPName function
-      const formatMCPName = (key: string): string => {
-        return key
-          .replace(/([A-Z])/g, ' $1')
-          .replace(/^./, (str) => str.toUpperCase())
-          .trim()
-          .replace(/Category$/, '')
-          .trim();
-      };
-
-      // Build server name mapping
+      // Build server name mapping using shared utility
       selectedMcpServerIds.forEach(serverId => {
         serverNameMap.set(serverId, formatMCPName(serverId));
       });
 
-      const toolPromises = selectedMcpServerIds.map(serverId => ListMCPTool(serverId) as Promise<{ success: boolean, data?: { tools?: any[] }, error?: string }>);
-      const results = await Promise.allSettled(toolPromises);
+      // Use stored tools from shared utility
+      selectedMcpServerIds.forEach(serverId => {
+        const storedTools = getServiceTools(serverId);
 
-      results.forEach((result, index) => {
-        const serverId = selectedMcpServerIds[index];
-        if (result.status === 'fulfilled' && result.value) {
-          const wrapper = result.value;
-          if (wrapper.success && wrapper.data && Array.isArray(wrapper.data.tools)) {
-            const toolsFromServer = (wrapper.data.tools as any[])
-              .filter(tool => tool && typeof tool.name === 'string' && tool.inputSchema)
-              .map(tool => {
-                // Map tool name to server ID
-                toolToServerMap.set(tool.name, serverId);
-                return {
-                  type: "function" as const,
-                  function: {
-                    name: tool.name,
-                    description: typeof tool.description === 'string' ? tool.description : "No description available.",
-                    parameters: tool.inputSchema,
-                  }
-                };
-              });
-            allSelectedToolsFromMCPs.push(...toolsFromServer);
-          }
+        console.log(`[AgentMode] Loading tools for server ${serverId}, tools:`, storedTools);
+
+        if (storedTools && storedTools.length > 0) {
+          const toolsFromServer = storedTools
+            .filter(tool => tool && typeof tool.name === 'string' && tool.inputSchema)
+            .map(tool => {
+              // Map tool name to server ID
+              toolToServerMap.set(tool.name, serverId);
+              return {
+                type: "function" as const,
+                function: {
+                  name: tool.name,
+                  description: tool.description || "No description available.",
+                  parameters: tool.inputSchema,
+                }
+              };
+            });
+          allSelectedToolsFromMCPs.push(...toolsFromServer);
         }
       });
 
+      // Remove duplicates
       const uniqueToolsMap = new Map<string, OpenAI.Chat.Completions.ChatCompletionTool>();
       allSelectedToolsFromMCPs.forEach(tool => {
         if (tool.function && tool.function.name && !uniqueToolsMap.has(tool.function.name)) {
@@ -111,8 +123,10 @@ export async function processAgentModeAIResponse({
         }
       });
       allSelectedToolsFromMCPs = Array.from(uniqueToolsMap.values());
+
+      console.log(`[AgentMode] Total unique tools available: ${allSelectedToolsFromMCPs.length}`);
     } catch (error) {
-      console.error("[AgentMode] Error processing tool fetching promises:", error);
+      console.error("[AgentMode] Error processing tools from MCPStore:", error);
     }
   }
 

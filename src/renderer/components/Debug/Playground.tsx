@@ -14,6 +14,7 @@ import {
   ListItemButton,
 } from "@mui/material";
 import { useMCPStore } from "@/renderer/stores/MCP/MCPStore";
+import { SERVICE_TYPE_MAPPING, getServiceTools } from "@/utils/mcp";
 
 const Playground = () => {
   const mcpStore = useMCPStore();
@@ -23,31 +24,22 @@ const Playground = () => {
 
   useEffect(() => {
     const allServers = mcpStore.getAllConfiguredServers();
+    console.log("All servers:", allServers);
+
     const enabledServices: { [key: string]: any } = {};
 
     Object.entries(allServers).forEach(([key, value]) => {
       if (value.enabled) {
-        const serviceTypeMapping: Record<string, string> = {
-          tavily: 'tavily',
-          weather: 'weather',
-          location: 'location',
-          weatherForecast: 'weather-forecast',
-          nearbySearch: 'nearby-search',
-          web3Research: 'web3-research',
-          doorDash: 'doordash',
-          whatsApp: 'whatsapp',
-          github: 'github',
-          ipLocation: 'ip-location',
-          airbnb: 'airbnb',
-          linkedIn: 'linkedin'
-        };
+        const serviceKey = SERVICE_TYPE_MAPPING[key] || key;
+        const tools = getServiceTools(key);
 
-        const serviceKey = serviceTypeMapping[key] || key;
+        console.log(`Server: ${key}, ServiceKey: ${serviceKey}, Tools:`, tools);
+
         const displayName = mcpStore.formatServerName(key);
 
         enabledServices[serviceKey] = {
           name: displayName,
-          tools: mcpStore.getServiceTools(serviceKey) || []
+          tools: tools || []
         };
       }
     });

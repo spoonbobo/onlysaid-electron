@@ -6,19 +6,11 @@ import { useMCPSettingsStore } from "@/renderer/stores/MCP/MCPSettingsStore";
 import SelectMCPDialog, { IMCPServiceDisplay, IMCPToolDisplay } from "@/renderer/components/Dialog/MCP/SelectMCPDialog";
 import { useLLMConfigurationStore } from "@/renderer/stores/LLM/LLMConfiguration";
 import { useMCPClientStore } from "@/renderer/stores/MCP/MCPClient";
+import { getServiceTools, formatMCPName } from "@/utils/mcp";
 
 interface MCPSelectorProps {
   disabled?: boolean;
 }
-
-const formatMCPName = (key: string): string => {
-  return key
-    .replace(/([A-Z])/g, ' $1')
-    .replace(/^./, (str) => str.toUpperCase())
-    .trim()
-    .replace(/Category$/, '') // Remove "Category" suffix if present
-    .trim();
-};
 
 export default function MCPSelector({ disabled = false }: MCPSelectorProps) {
   const [availableMcps, setAvailableMcps] = useState<IMCPServiceDisplay[]>([]);
@@ -61,6 +53,7 @@ export default function MCPSelector({ disabled = false }: MCPSelectorProps) {
   const loadMcps = async () => {
     console.log("MCPSelector: loadMcps called");
     const allServers = getAllConfiguredServers();
+
     const enabledAndConfiguredMcpsBase: Omit<IMCPServiceDisplay, 'tools' | 'toolsError'>[] = Object.entries(allServers)
       .filter(([_, serviceDetails]) => serviceDetails.enabled && serviceDetails.configured)
       .map(([key, _]) => ({
@@ -68,39 +61,25 @@ export default function MCPSelector({ disabled = false }: MCPSelectorProps) {
         name: formatMCPName(key),
       }));
 
-    const mcpDataWithTools = await Promise.all(
-      enabledAndConfiguredMcpsBase.map(async (mcpBase) => {
-        console.log(`MCPSelector: Loading tools for MCP ${mcpBase.id}`);
-        try {
-          const toolsResultWrapper = await ListMCPTool(mcpBase.id) as { success: boolean, data?: { tools?: any[] }, error?: string }; // More specific type
-          let validTools: IMCPToolDisplay[] = [];
-          let encounteredError = false;
+    const mcpDataWithTools = enabledAndConfiguredMcpsBase.map((mcpBase) => {
+      console.log(`MCPSelector: Loading tools for MCP ${mcpBase.id}`);
 
-          // Check if the call was successful and data.tools exists and is an array
-          if (toolsResultWrapper && toolsResultWrapper.success && toolsResultWrapper.data && Array.isArray(toolsResultWrapper.data.tools)) {
-            validTools = (toolsResultWrapper.data.tools as any[])
-              .filter(tool => tool && typeof tool.name === 'string')
-              .map(tool => ({
-                name: tool.name,
-                description: typeof tool.description === 'string' ? tool.description : ""
-              }));
-            console.log(`MCPSelector: Successfully processed tools for ${mcpBase.id}:`, validTools.length);
-          } else {
-            // Handle cases where tools are not in the expected format or call wasn't successful
-            console.warn(`MCPSelector: Tools for MCP ${mcpBase.id} not in expected format or call failed. Wrapper:`, toolsResultWrapper);
-            encounteredError = true;
-            // If there's an error message in the wrapper, log it
-            if (toolsResultWrapper && toolsResultWrapper.error) {
-              console.error(`MCPSelector: Error from ListMCPTool for ${mcpBase.id}: ${toolsResultWrapper.error}`);
-            }
-          }
-          return { ...mcpBase, tools: validTools, toolsError: encounteredError };
-        } catch (error) {
-          console.error(`MCPSelector: Exception caught while loading tools for MCP ${mcpBase.id}:`, error);
-          return { ...mcpBase, tools: [], toolsError: true };
-        }
-      })
-    );
+      const storedTools = getServiceTools(mcpBase.id);
+
+      const validTools: IMCPToolDisplay[] = storedTools.map(tool => ({
+        name: tool.name,
+        description: tool.description || ""
+      }));
+
+      console.log(`MCPSelector: Successfully processed tools for ${mcpBase.id}:`, validTools.length);
+
+      return {
+        ...mcpBase,
+        tools: validTools,
+        toolsError: false
+      };
+    });
+
     console.log("MCPSelector: Final mcpDataWithTools:", mcpDataWithTools);
     setAvailableMcps(mcpDataWithTools);
 
