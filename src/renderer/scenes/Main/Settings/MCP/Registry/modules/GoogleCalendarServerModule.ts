@@ -28,7 +28,7 @@ export const GoogleCalendarServerModule: IEnhancedServerModule<IGoogleCalendarCo
     args: [config.indexPath],
     // No 'env' as per previous discussion
     clientName: "google-calendar-client",
-    clientVersion: "1.0.0"
+    clientVersion: "1.2.0"
   }),
 
   getDialogFields: (): Field[] => [
