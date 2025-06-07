@@ -4,9 +4,11 @@ import { FormattedMessage, useIntl as useReactIntl } from "react-intl";
 import SettingsSection from "@/renderer/components/Settings/SettingsSection";
 import SettingsFormField from "@/renderer/components/Settings/SettingsFormField";
 import { useUserStore } from "@/renderer/stores/User/UserStore";
+import { useUserTokenStore } from "@/renderer/stores/User/UserToken";
 import { useIntl } from "@/renderer/providers/IntlProvider";
 import { useThemeStore } from "@/renderer/providers/MaterialTheme";
 import { toast } from "@/utils/toast";
+import { AccountBox } from "@mui/icons-material";
 
 function UserPreferences() {
   const { locale, setLocale } = useIntl();
@@ -15,8 +17,14 @@ function UserPreferences() {
   const isLoading = useUserStore(state => state.isLoading);
   const error = useUserStore(state => state.error);
   const signIn = useUserStore(state => state.signIn);
+  const cancelSignIn = useUserStore(state => state.cancelSignIn);
   const logout = useUserStore(state => state.logout);
+
+  const isSigningIn = useUserTokenStore(state => state.isSigningIn);
+  const signInError = useUserTokenStore(state => state.signInError);
+
   const { mode, setMode } = useThemeStore();
+
   const [preferences, setPreferences] = useState({
     darkMode: mode === 'dark',
     language: locale
@@ -43,9 +51,28 @@ function UserPreferences() {
     toast.info(intl.formatMessage({ id: 'toast.signingIn' }));
   };
 
+  const handleCancelSignIn = () => {
+    cancelSignIn();
+    toast.info(intl.formatMessage({ id: 'toast.signInCancelled' }));
+  };
+
   const handleLogout = () => {
     logout();
     toast.info(intl.formatMessage({ id: 'toast.loggedOut' }));
+  };
+
+  const handleManageAccount = async () => {
+    try {
+      const result = await window.electron.app.openAccountManagement();
+      if (result.success) {
+        toast.info(intl.formatMessage({ id: 'toast.openingExternalLink' }));
+      } else {
+        toast.error(intl.formatMessage({ id: 'toast.errorOpeningLink' }));
+      }
+    } catch (error) {
+      console.error('Error opening account management:', error);
+      toast.error(intl.formatMessage({ id: 'toast.errorOpeningLink' }));
+    }
   };
 
   const handlePreferenceChange = (key: string, value: any) => {
@@ -65,6 +92,9 @@ function UserPreferences() {
     }
   };
 
+  const isAuthenticating = isLoading || isSigningIn;
+  const authError = error || signInError;
+
   return (
     <>
       <SettingsSection title={<FormattedMessage id="settings.account" />} sx={{ mb: 3 }}>
@@ -74,20 +104,33 @@ function UserPreferences() {
               <Typography variant="body1" sx={{ mb: 2 }}>
                 <FormattedMessage id="settings.signinMessage" />
               </Typography>
-              {error && (
+              {authError && (
                 <Typography color="error" variant="body2" sx={{ mb: 2 }}>
-                  {error}
+                  {authError}
                 </Typography>
               )}
-              <Button
-                variant="contained"
-                onClick={handleSignIn}
-                disabled={isLoading}
-              >
-                {isLoading ?
-                  <FormattedMessage id="settings.signingIn" /> :
-                  <FormattedMessage id="settings.signin" />}
-              </Button>
+
+              {!isAuthenticating ? (
+                <Button
+                  variant="contained"
+                  onClick={handleSignIn}
+                >
+                  <FormattedMessage id="settings.signin" />
+                </Button>
+              ) : (
+                <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+                  <Button
+                    variant="outlined"
+                    color="error"
+                    onClick={handleCancelSignIn}
+                  >
+                    <FormattedMessage id="settings.cancelSignIn" />
+                  </Button>
+                  <Typography variant="body2" color="text.secondary">
+                    <FormattedMessage id="settings.signingIn" />
+                  </Typography>
+                </Box>
+              )}
             </>
           ) : (
             <>
@@ -97,13 +140,24 @@ function UserPreferences() {
               <Typography variant="body1" sx={{ mb: 2 }}>
                 {user.username} ({user.email})
               </Typography>
-              <Button
-                variant="outlined"
-                color="error"
-                onClick={handleLogout}
-              >
-                <FormattedMessage id="settings.logout" />
-              </Button>
+
+              <Box sx={{ display: 'flex', gap: 2, mb: 1 }}>
+                <Button
+                  variant="contained"
+                  startIcon={<AccountBox />}
+                  onClick={handleManageAccount}
+                >
+                  <FormattedMessage id="settings.manageAccount" />
+                </Button>
+
+                <Button
+                  variant="outlined"
+                  color="error"
+                  onClick={handleLogout}
+                >
+                  <FormattedMessage id="settings.logout" />
+                </Button>
+              </Box>
             </>
           )}
         </Box>

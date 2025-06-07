@@ -1,6 +1,6 @@
 import React from "react";
 import { IEnhancedServerModule } from "@/../../types/MCP/server";
-import { Field } from "@/renderer/components/Dialog/MCPDialog";
+import { Field } from "@/renderer/components/Dialog/MCP/MCPDialog";
 import { serverRegistry } from "../ServerRegistry";
 import type { IOTRSConfig } from "@/renderer/stores/MCP/Servers/OTRSServer";
 

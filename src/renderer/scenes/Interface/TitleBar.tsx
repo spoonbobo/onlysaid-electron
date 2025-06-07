@@ -23,12 +23,14 @@ import { useNotificationStore } from "@/renderer/stores/Notification/Notificatio
 import { useTopicStore } from "@/renderer/stores/Topic/TopicStore";
 import { useWorkspaceStore } from "@/renderer/stores/Workspace/WorkspaceStore";
 import NotificationView from "@/renderer/components/Dialog/NotificationView";
+import AboutDialog from "@/renderer/components/Dialog/AboutDialog";
 
 const TitleBar = () => {
   const intl = useIntl();
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
   const [showNotifications, setShowNotifications] = useState(false);
+  const [showAbout, setShowAbout] = useState(false);
 
   // Subscribe to notification store to get live updates
   const totalNotificationCount = useNotificationStore((state) =>
@@ -78,7 +80,11 @@ const TitleBar = () => {
   };
 
   const handleMenuAction = (action: string) => {
-    window.electron.ipcRenderer.invoke('menu-action', action);
+    if (action === 'help:about') {
+      setShowAbout(true);
+    } else {
+      window.electron.ipcRenderer.invoke('menu-action', action);
+    }
     handleClose();
   };
 
@@ -92,6 +98,10 @@ const TitleBar = () => {
 
   const handleCloseNotifications = () => {
     setShowNotifications(false);
+  };
+
+  const handleCloseAbout = () => {
+    setShowAbout(false);
   };
 
   return (
@@ -448,12 +458,23 @@ const TitleBar = () => {
               {intl.formatMessage({ id: 'titleBar.help.reportIssues' })}
             </Typography>
           </MenuItem>
+          <Divider />
+          <MenuItem onClick={() => handleMenuAction('help:about')}>
+            <Typography variant="body2">
+              {intl.formatMessage({ id: 'titleBar.help.about' })}
+            </Typography>
+          </MenuItem>
         </MuiMenu>
       </Box>
 
       <NotificationView
         open={showNotifications}
         onClose={handleCloseNotifications}
+      />
+
+      <AboutDialog
+        open={showAbout}
+        onClose={handleCloseAbout}
       />
     </>
   );

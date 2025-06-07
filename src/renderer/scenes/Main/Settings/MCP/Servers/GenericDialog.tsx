@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import MCPDialog from "@/renderer/components/Dialog/MCPDialog";
+import MCPDialog from "@/renderer/components/Dialog/MCP/MCPDialog";
 import { serverRegistry } from "../Registry/ServerRegistry";
 
 interface GenericDialogProps {

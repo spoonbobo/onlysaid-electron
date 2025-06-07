@@ -1,6 +1,6 @@
 import React from "react";
 import { IEnhancedServerModule, ITavilyConfig } from "@/../../types/MCP/server";
-import { Field } from "@/renderer/components/Dialog/MCPDialog";
+import { Field } from "@/renderer/components/Dialog/MCP/MCPDialog";
 import { serverRegistry } from "../ServerRegistry";
 
 export const TavilyServerModule: IEnhancedServerModule<ITavilyConfig> = {

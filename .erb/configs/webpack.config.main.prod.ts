@@ -65,6 +65,7 @@ const configuration: webpack.Configuration = {
       NODE_ENV: 'production',
       DEBUG_PROD: false,
       START_MINIMIZED: false,
+      BUILD_TIME: new Date().toISOString(),
       ONLYSAID_API_URL: process.env.ONLYSAID_API_URL,
       ONLYSAID_DOMAIN: process.env.ONLYSAID_DOMAIN,
       SOCKET_SERVER_URL: process.env.SOCKET_SERVER_URL,

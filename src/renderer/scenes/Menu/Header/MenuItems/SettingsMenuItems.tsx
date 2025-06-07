@@ -55,12 +55,12 @@ function SettingsMenuItems({ handleClose }: SettingsMenuItemsProps) {
         <FormattedMessage id="settings.developer" />
       </MenuItem>
 
-      <Divider sx={{ my: 1 }} />
+      {/* <Divider sx={{ my: 1 }} />
 
       <MenuItem onClick={() => handleNavigateToSection('logout')} sx={{ minHeight: 36, fontSize: 14, color: "error.main" }}>
         <LogoutIcon fontSize="small" sx={{ mr: 1.5, color: "error.main" }} />
         <FormattedMessage id="menu.settings.logout" />
-      </MenuItem>
+      </MenuItem> */}
     </>
   );
 }

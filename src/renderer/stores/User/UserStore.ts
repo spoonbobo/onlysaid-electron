@@ -14,6 +14,7 @@ interface UserStore {
   setUser: (user: IUser | null) => void;
   updateUser: (user: IUser) => void;
   signIn: () => void;
+  cancelSignIn: () => void;
   logout: () => void;
   handleAuthentication: (input: { response?: any; token?: string; cookieName?: string | null }, intl?: any) => Promise<void>;
   clearAuthTimeout: () => void;
@@ -50,13 +51,38 @@ export const useUserStore = create<UserStore>()(
           }
 
           const errorMsg = 'Authentication timed out. Please try again.';
-          set({ error: errorMsg, timeoutId: null });
-
+          set({ error: errorMsg, timeoutId: null, isLoading: false });
           setSigningIn(false);
           setSignInError(errorMsg);
         }, 60000);
 
         set({ timeoutId: newTimeoutHandle });
+      },
+
+      cancelSignIn: () => {
+        const { setSignInError, setSigningIn } = useUserTokenStore.getState();
+        const { timeoutId } = get();
+
+        console.log('[UserStore] Cancelling sign-in...');
+
+        if (timeoutId) {
+          clearTimeout(timeoutId);
+        }
+
+        set({
+          isLoading: false,
+          error: null,
+          timeoutId: null
+        });
+        setSigningIn(false);
+        setSignInError(null);
+
+        try {
+          // @ts-ignore
+          window.electron.ipcRenderer.sendMessage('auth:cancel');
+        } catch (error) {
+          console.warn('[UserStore] Could not notify main process of auth cancellation:', error);
+        }
       },
 
       handleAuthentication: async (input: { response?: any; token?: string; cookieName?: string | null }, intl?: any) => {

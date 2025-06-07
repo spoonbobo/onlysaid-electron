@@ -17,6 +17,7 @@ import { createMSTeamsServer } from "./Servers/MSTeamsServer";
 import { createGoogleCalendarServer } from "./Servers/GoogleCalendarServer";
 import { createLaraServer } from "./Servers/LaraServer";
 import { createChessServer } from "./Servers/ChessMCPServer";
+import { createMoodleServer } from "./Servers/MoodleMCPServer";
 import type { IMCPTool } from "@/../../types/MCP/tool";
 import type {
   ITavilyState,
@@ -35,6 +36,7 @@ import type {
   IMSTeamsState,
   IGoogleCalendarState,
   ILaraState,
+  IMoodleState,
   IServerModule
 } from "@/../../types/MCP/server";
 import type { IChessState } from "./Servers/ChessMCPServer";
@@ -58,6 +60,7 @@ const SERVER_REGISTRY = {
   googleCalendar: createGoogleCalendarServer,
   lara: createLaraServer,
   chess: createChessServer,
+  moodle: createMoodleServer,
 };
 
 const SERVICE_TYPE_MAPPING: Record<string, string> = {
@@ -78,6 +81,7 @@ const SERVICE_TYPE_MAPPING: Record<string, string> = {
   'google-calendar': 'googleCalendar',
   'lara-translate': 'lara',
   'chess': 'chess',
+  'moodle': 'moodle',
 };
 
 interface MCPState extends
@@ -97,7 +101,8 @@ interface MCPState extends
   IMSTeamsState,
   IGoogleCalendarState,
   ILaraState,
-  IChessState {
+  IChessState,
+  IMoodleState {
 
   serviceTools: Record<string, IMCPTool[]>;
   servers: Record<string, IServerModule>;

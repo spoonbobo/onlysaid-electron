@@ -540,6 +540,7 @@
   "titleBar.help.documentation": "說明文件",
   "titleBar.help.community": "社群",
   "titleBar.help.reportIssues": "回報問題",
+  "titleBar.help.about": "關於",
 
   "titleBar.shortcut.ctrlO": "Ctrl+O",
   "titleBar.shortcut.ctrlQ": "Ctrl+Q",
@@ -556,5 +557,41 @@
   "titleBar.shortcut.ctrl0": "Ctrl+0",
   "titleBar.shortcut.f12": "F12",
 
-  "settings.mcp.category.other": "其他"
+  "about.version": "版本",
+  "about.description": "一個用於AI對話和工作空間協作的桌面應用程式。",
+  "about.copyright": "© 2024 Onlysaid. 版權所有。",
+
+  "settings.mcp.category.other": "其他",
+  "settings.mcp.category.learning": "學習",
+
+  "payment.title": "付款與訂閱",
+  "payment.currentPlan": "目前方案",
+  "payment.month": "月",
+  "payment.requestsRemaining": "已使用 {used} / {total} 次請求",
+  "payment.renewalDate": "續約日期：{date}",
+  "payment.loading": "載入中...",
+  "payment.manageSubscription": "管理訂閱",
+  "payment.upgradePlan": "升級方案",
+  "payment.planFeatures": "方案功能",
+  "payment.feature.requests": "每月 {count} 次 AI 請求",
+  "payment.feature.support": "優先客戶支援",
+  "payment.feature.models": "存取所有 AI 模型",
+  "payment.signInRequired": "請登入以查看付款資訊",
+  "payment.error.manageSubscription": "無法開啟訂閱管理",
+  "payment.error.loadData": "無法載入使用數據：{error}",
+  "payment.upgradeComingSoon": "方案升級即將推出！",
+  "payment.refresh": "重新整理",
+  "payment.refreshing": "正在重新整理使用數據...",
+  "payment.retry": "重試",
+  "payment.warning.nearLimit": "您即將達到每月限制。請考慮升級您的方案。",
+  "payment.usageStats": "使用統計",
+  "payment.stats.totalRequests": "本月總請求數",
+  "payment.stats.remainingRequests": "剩餘請求數",
+  "payment.stats.modelsUsed": "已使用模型數",
+  "payment.stats.totalCost": "本月總費用",
+  "payment.modelUsage": "模型使用明細",
+
+  "settings.payment": "付款與訂閱",
+  "settings.cancelSignIn": "取消登入",
+  "settings.manageAccount": "管理帳戶"
 }

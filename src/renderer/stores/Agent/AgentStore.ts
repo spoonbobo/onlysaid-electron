@@ -47,6 +47,9 @@ interface AgentState {
   processAgentResponse: (params: AgentResponseParams) => Promise<{ success: boolean; assistantMessageId?: string; error?: any }>;
   setProcessingResponse: (isProcessing: boolean) => void;
 
+  // Usage logging
+  logAgentUsage: (modelId: string, mode: "ask" | "query" | "agent", success: boolean, responseLength?: number) => Promise<void>;
+
   // Simplified methods
   sendAgentMessage: (chatId: string, prompt: string, mode?: "ask" | "query" | "agent") => Promise<{ success: boolean; messageId?: string; error?: any }>;
   quickResponse: (prompt: string, mode?: "ask") => Promise<{ success: boolean; response?: string; error?: any }>;
@@ -227,6 +230,35 @@ export const useAgentStore = create<AgentState>()(
 
       setProcessingResponse: (isProcessing) => set({ isProcessingResponse: isProcessing }),
 
+      logAgentUsage: async (modelId: string, mode: "ask" | "query" | "agent", success: boolean, responseLength: number = 0) => {
+        try {
+          const { token } = useUserTokenStore.getState();
+          if (!token) {
+            console.warn("[AgentStore] No token available for usage logging");
+            return;
+          }
+
+          // Calculate cost based on response length (simple estimation)
+          const estimatedCost = responseLength > 0 ? Math.max(0.1, responseLength / 1000) : 0.5;
+
+          // @ts-ignore
+          await window.electron.user.logUsage({
+            token,
+            data: {
+              kind: 'Included in Pro', // You might want to get this from user's plan
+              max_mode: false,
+              model: modelId,
+              cost_requests: estimatedCost,
+            }
+          });
+
+          console.log(`[AgentStore] Usage logged - Mode: ${mode}, Model: ${modelId}, Cost: ${estimatedCost}`);
+        } catch (error: any) {
+          console.error('[AgentStore] Failed to log usage:', error);
+          // Don't throw error to avoid breaking the main flow
+        }
+      },
+
       processAgentResponse: async (params: AgentResponseParams) => {
         const {
           activeChatId,
@@ -321,6 +353,14 @@ export const useAgentStore = create<AgentState>()(
               throw new Error(`Unsupported AI mode: ${aiMode}`);
           }
 
+          // Log usage for the agent response
+          await get().logAgentUsage(
+            modelId,
+            aiMode,
+            result.success,
+            result.responseText?.length || 0
+          );
+
           if (result.success) {
             // Calculate and award experience based on response
             const tokenCount = result.responseText?.length || 0;
@@ -339,6 +379,10 @@ export const useAgentStore = create<AgentState>()(
 
         } catch (error: any) {
           console.error("[AgentStore] Error processing agent response:", error);
+
+          // Log failed usage attempt
+          await get().logAgentUsage(modelId, aiMode, false, 0);
+
           set({ isProcessingResponse: false, error: error.message });
           return { success: false, error };
         }
@@ -408,6 +452,9 @@ export const useAgentStore = create<AgentState>()(
             return { success: false, error: "No model selected" };
           }
 
+          // Log usage for quick response
+          await get().logAgentUsage(modelId, mode, true, prompt.length);
+
           // Create a temporary chat context for the response
           const tempChatId = `temp-${Date.now()}`;
 
@@ -437,6 +484,14 @@ export const useAgentStore = create<AgentState>()(
             agent: currentAgent,
           });
 
+          // Log usage for tool summarization
+          await get().logAgentUsage(
+            params.modelId,
+            "agent", // Tool summarization is part of agent mode
+            result.success,
+            result.responseText?.length || 0
+          );
+
           if (result.success) {
             // Award experience for summarization
             const earnedXP = Math.floor((result.responseText?.length || 0) / 20);
@@ -450,6 +505,10 @@ export const useAgentStore = create<AgentState>()(
 
         } catch (error: any) {
           console.error("[AgentStore] Error summarizing tool results:", error);
+
+          // Log failed usage attempt
+          await get().logAgentUsage(params.modelId, "agent", false, 0);
+
           set({ isProcessingResponse: false, error: error.message });
           return { success: false, error };
         }

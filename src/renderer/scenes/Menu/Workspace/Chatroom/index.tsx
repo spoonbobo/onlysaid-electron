@@ -5,7 +5,7 @@ import { FormattedMessage } from "react-intl";
 import { useTopicStore } from "@/renderer/stores/Topic/TopicStore";
 import { useChatStore } from "@/renderer/stores/Chat/ChatStore";
 import MenuListItem from "@/renderer/components/Navigation/MenuListItem";
-import ChatUpdate from '@/renderer/components/Dialog/ChatUpdate';
+import ChatUpdate from '@/renderer/components/Dialog/Chat/ChatUpdate';
 import { IChatRoom } from '@/../../types/Chat/Chatroom';
 import { useCurrentTopicContext } from "@/renderer/stores/Topic/TopicStore";
 import { getUserFromStore } from "@/utils/user";

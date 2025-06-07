@@ -2,9 +2,17 @@
 /* eslint no-unused-vars: off */
 import { contextBridge, ipcRenderer, IpcRendererEvent, shell } from 'electron';
 import os from 'os';
+import {
+  ILogUsageArgs,
+  IGetUsageLogsArgs,
+  IGetUsageAnalyticsArgs,
+  IGetPlanArgs,
+  ICreatePlanArgs,
+  IUpdatePlanArgs
+} from '@/../../types/Usage/Usage';
 
 // namespace
-type AuthChannels = 'auth:sign-in' | 'auth:signed-in';
+type AuthChannels = 'auth:sign-in' | 'auth:signed-in' | 'auth:cancel';
 type GoogleAuthChannels = 'google-auth:request-calendar' | 'google-auth:result' | 'google-auth:disconnect' | 'google-auth:disconnected' | 'google-calendar:fetch-calendars' | 'google-calendar:fetch-events';
 type MenuChannels = 'menu:close-tab' | 'menu:new-tab';
 type MiscChannels = 'ipc-example';
@@ -47,7 +55,7 @@ type SSEChannels = 'streaming:abort_stream' | 'streaming:chat_stream_complete' |
 type MCPChannels = 'mcp:initialize_client' | 'mcp:list_tools' | 'mcp:execute_tool';
 
 type ApiChatChannels = 'chat:get' | 'chat:create' | 'chat:update' | 'chat:delete';
-type ApiUserChannels = 'user:auth' | 'user:get' | 'user:get_one' | 'user:update' | 'user:search';
+type ApiUserChannels = 'user:auth' | 'user:get' | 'user:get_one' | 'user:update' | 'user:search' | 'user:usage:log' | 'user:usage:get-logs' | 'user:usage:get-analytics' | 'user:plan:get' | 'user:plan:create' | 'user:plan:update';
 type ApiWorkspaceChannels =
   | 'workspace:get'
   | 'workspace:create'
@@ -107,6 +115,9 @@ type OneasiaChannels = 'oneasia:authenticate' | 'oneasia:get-models';
 // Add these new channel types
 type MenuBarChannels = 'menu-action' | 'window-action';
 
+// Add this new type near the other type definitions (around line 7-15)
+type AppChannels = 'app:get-version' | 'app:get-build-time' | 'app:get-device-id' | 'app:get-device-info' | 'app:open-account-management';
+
 export type Channels =
   | AuthChannels
   | GoogleAuthChannels
@@ -126,7 +137,8 @@ export type Channels =
   | SocketChannels
   | KnowledgeBaseChannels
   | AIChannels
-  | OneasiaChannels;
+  | OneasiaChannels
+  | AppChannels;
 
 const electronHandler = {
   ipcRenderer: {
@@ -174,6 +186,22 @@ const electronHandler = {
     update: (...args: unknown[]) => ipcRenderer.invoke('user:update', ...args),
     search: (args: { token: string; email: string; limit?: number }) =>
       ipcRenderer.invoke('user:search', args),
+
+    // Usage tracking with proper types
+    logUsage: (args: ILogUsageArgs) =>
+      ipcRenderer.invoke('user:usage:log', args),
+    getUsageLogs: (args: IGetUsageLogsArgs) =>
+      ipcRenderer.invoke('user:usage:get-logs', args),
+    getUsageAnalytics: (args: IGetUsageAnalyticsArgs) =>
+      ipcRenderer.invoke('user:usage:get-analytics', args),
+
+    // Plan management with proper types
+    getPlan: (args: IGetPlanArgs) =>
+      ipcRenderer.invoke('user:plan:get', args),
+    createPlan: (args: ICreatePlanArgs) =>
+      ipcRenderer.invoke('user:plan:create', args),
+    updatePlan: (args: IUpdatePlanArgs) =>
+      ipcRenderer.invoke('user:plan:update', args),
   },
 
   workspace: {
@@ -320,6 +348,13 @@ const electronHandler = {
   },
   window: {
     action: (action: string) => ipcRenderer.invoke('window-action', action),
+  },
+  app: {
+    getVersion: () => ipcRenderer.invoke('app:get-version'),
+    getBuildTime: () => ipcRenderer.invoke('app:get-build-time'),
+    getDeviceId: () => ipcRenderer.invoke('app:get-device-id'),
+    getDeviceInfo: () => ipcRenderer.invoke('app:get-device-info'),
+    openAccountManagement: () => ipcRenderer.invoke('app:open-account-management'),
   },
 };
 

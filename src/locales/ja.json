@@ -639,5 +639,22 @@
   "titleBar.shortcut.ctrlPlus": "Ctrl++",
   "titleBar.shortcut.ctrlMinus": "Ctrl+-",
   "titleBar.shortcut.ctrl0": "Ctrl+0",
-  "titleBar.shortcut.f12": "F12"
+  "titleBar.shortcut.f12": "F12",
+
+  "about.version": "バージョン",
+  "about.description": "AI会話とワークスペースコラボレーションのためのデスクトップアプリケーション。",
+  "about.copyright": "© 2024 Onlysaid. All rights reserved.",
+
+  "settings.mcp.category.other": "その他",
+  "settings.mcp.category.learning": "学習",
+
+  "titleBar.help.about": "について",
+
+  "settings.kb.auth.tokenMissing": "認証トークンがありません。ナレッジベースのステータスを更新できません。",
+  "settings.kb.register.success": "ナレッジベースの登録が成功しました。",
+  "settings.kb.register.error": "ナレッジベースの登録に失敗しました。",
+  "settings.kb.register.exception": "ナレッジベースの登録中にエラーが発生しました。",
+  "settings.kb.update.error.exception": "ナレッジベースの無効化完了中にエラーが発生しました。",
+  "settings.kb.create.noWorkspaceContext": "ナレッジベースを作成するには、アクティブなワークスペースが必要です。",
+  "settings.kb.create.error": "ナレッジベースの作成に失敗しました。"
 }

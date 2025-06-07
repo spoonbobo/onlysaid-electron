@@ -1,5 +1,5 @@
 import { IEnhancedServerModule, IMSTeamsConfig } from "@/../../types/MCP/server";
-import { Field } from "@/renderer/components/Dialog/MCPDialog";
+import { Field } from "@/renderer/components/Dialog/MCP/MCPDialog";
 import { serverRegistry } from "../ServerRegistry";
 
 export const MSTeamsServerModule: IEnhancedServerModule<IMSTeamsConfig> = {

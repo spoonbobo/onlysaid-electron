@@ -12,10 +12,8 @@ import path from 'path';
 import { app, BrowserWindow, shell, ipcMain, dialog, session, net, Menu } from 'electron';
 import { autoUpdater } from 'electron-updater';
 import log from 'electron-log';
-import MenuBuilder from './menu';
 import { resolveHtmlPath } from './util';
 import { initializeDatabase, executeQuery, executeTransaction, closeDatabase, runMigrations } from '../service/db';
-import { allMigrations } from '../service/migration/migrations';
 import { initAuth } from './auth';
 import dotenv from 'dotenv';
 import { setupChatroomHandlers } from './api/v2/chat';
@@ -36,7 +34,7 @@ import { setupStorageHandlers } from './api/v2/storage';
 import { initMicrosoftAuth } from './msft';
 import { setupOneasiaHandlers } from './oneasia';
 import { setupMenuBarHandlers, unregisterMenuAccelerators } from './menubar';
-
+import { setupAppHandlers } from './app';
 // Load environment variables
 dotenv.config();
 
@@ -54,6 +52,7 @@ setupOneasiaHandlers();
 initializeDeeplinkHandling();
 setupFileHandlers();
 setupStorageHandlers();
+setupAppHandlers();
 
 // Initialize authentication modules
 initAuth(process.env.ONLYSAID_API_URL || '', process.env.ONLYSAID_DOMAIN || '');

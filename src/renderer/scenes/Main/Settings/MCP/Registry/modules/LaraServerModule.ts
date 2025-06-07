@@ -1,6 +1,6 @@
 import React from "react";
 import { IEnhancedServerModule, ILaraConfig } from "@/../../types/MCP/server";
-import { Field } from "@/renderer/components/Dialog/MCPDialog";
+import { Field } from "@/renderer/components/Dialog/MCP/MCPDialog";
 import { serverRegistry } from "../ServerRegistry";
 
 export const LaraServerModule: IEnhancedServerModule<ILaraConfig> = {

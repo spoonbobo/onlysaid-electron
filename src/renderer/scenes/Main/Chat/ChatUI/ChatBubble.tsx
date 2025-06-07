@@ -13,7 +13,7 @@ import { useCurrentTopicContext } from "@/renderer/stores/Topic/TopicStore";
 import * as R from 'ramda';
 import MarkdownRenderer from "@/renderer/components/Chat/MarkdownRenderer";
 import { FormattedMessage } from "react-intl";
-import DeleteMessageDialog from "@/renderer/components/Dialog/DeleteMessage";
+import DeleteMessageDialog from "@/renderer/components/Dialog/Chat/DeleteMessage";
 import ToolDisplay from "@/renderer/scenes/Main/Chat/ChatUI/ToolDisplay";
 import FileDisplay from "./FileDisplay";
 
