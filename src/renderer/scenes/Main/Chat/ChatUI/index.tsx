@@ -3,6 +3,7 @@ import { useRef, useEffect, useState, useCallback, useMemo, memo } from "react";
 import { IChatMessage } from "@/../../types/Chat/Message";
 import { getUserFromStore } from "@/utils/user";
 import ChatBubble from "@/renderer/scenes/Main/Chat/ChatUI/ChatBubble";
+import NoMessage from "@/renderer/scenes/Main/Chat/ChatUI/NoMessage";
 import { useIntl } from "react-intl";
 import { throttle } from "lodash";
 import { useCurrentTopicContext } from "@/renderer/stores/Topic/TopicStore";
@@ -417,16 +418,9 @@ function ChatUI({ messages, onReply, streamingMessageId, streamContentForBubble,
       onScroll={handleScroll}
     >
       {!chatId ? (
-        <Stack
-          direction="column"
-          alignItems="center"
-          justifyContent="center"
-          sx={{ height: '100%', width: '100%' }}
-        >
-          <Typography variant="subtitle1" sx={{ fontWeight: 500, color: "text.secondary" }}>
-            # No chat selected
-          </Typography>
-        </Stack>
+        <NoMessage type="no-chat" />
+      ) : messages.length === 0 && !isLoadingMore ? (
+        <NoMessage type="no-messages" />
       ) : (
         <>
           {!isLoadingMore && !hasMoreMessages && messages.length > 0 && (

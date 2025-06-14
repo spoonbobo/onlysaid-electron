@@ -122,6 +122,7 @@
     "@mui/material": "^7.0.2",
     "@mui/x-date-pickers": "^8.1.0",
     "@mui/x-tree-view": "^8.3.1",
+    "@playwright/mcp": "^0.0.29",
     "add": "^2.0.6",
     "axios": "^1.9.0",
     "cors-anywhere": "^0.4.4",

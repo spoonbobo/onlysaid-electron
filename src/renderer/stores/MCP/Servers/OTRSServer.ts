@@ -10,6 +10,7 @@ export interface IOTRSConfig {
   defaultState: string;
   defaultPriority: string;
   defaultType: string;
+  path: string;
 }
 
 export interface IOTRSState {
@@ -32,38 +33,33 @@ export const createOTRSServer = (
     defaultQueue: "Raw",
     defaultState: "new",
     defaultPriority: "3 normal",
-    defaultType: "Unclassified"
+    defaultType: "Unclassified",
+    path: ""
   };
 
   const isConfigured = (config: IOTRSConfig): boolean => {
-    return !!(config.baseUrl && config.username && config.password);
+    return !!(config.baseUrl && config.username && config.password && config.path);
   };
 
   const createClientConfig = (config: IOTRSConfig, homedir: string) => ({
     enabled: getEnabled(),
-    command: "docker",
+    command: "uv",
     args: [
+      "--directory",
+      config.path,
       "run",
-      "--rm",
-      "-i",
-      "-e",
-      `OTRS_BASE_URL=${config.baseUrl}`,
-      "-e",
-      `OTRS_USERNAME=${config.username}`,
-      "-e",
-      `OTRS_PASSWORD=${config.password}`,
-      "-e",
-      `OTRS_VERIFY_SSL=${config.verifySSL}`,
-      "-e",
-      `OTRS_DEFAULT_QUEUE=${config.defaultQueue}`,
-      "-e",
-      `OTRS_DEFAULT_STATE=${config.defaultState}`,
-      "-e",
-      `OTRS_DEFAULT_PRIORITY=${config.defaultPriority}`,
-      "-e",
-      `OTRS_DEFAULT_TYPE=${config.defaultType}`,
-      "ghcr.io/spoonbobo/otrs-mcp-server:latest"
+      "src/otrs_mcp/main.py"
     ],
+    env: {
+      "OTRS_BASE_URL": config.baseUrl,
+      "OTRS_USERNAME": config.username,
+      "OTRS_PASSWORD": config.password,
+      "OTRS_VERIFY_SSL": config.verifySSL.toString(),
+      "OTRS_DEFAULT_QUEUE": config.defaultQueue,
+      "OTRS_DEFAULT_STATE": config.defaultState,
+      "OTRS_DEFAULT_PRIORITY": config.defaultPriority,
+      "OTRS_DEFAULT_TYPE": config.defaultType
+    },
     clientName: "otrs-client",
     clientVersion: "0.1.0"
   });
@@ -135,5 +131,5 @@ export const createOTRSServer = (
 
 // Export for backward compatibility
 export const isOTRSConfigured = (config: IOTRSConfig): boolean => {
-  return !!(config.baseUrl && config.username && config.password);
+  return !!(config.baseUrl && config.username && config.password && config.path);
 };

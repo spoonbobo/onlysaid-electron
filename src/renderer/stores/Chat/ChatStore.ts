@@ -13,6 +13,7 @@ import { useLLMStore } from '@/renderer/stores/LLM/LLMStore';
 import { IChatMessageToolCall } from '@/../../types/Chat/Message';
 import { DBTABLES } from '@/../../constants/db';
 import { IFile } from "@/../../types/File/File";
+import { useTopicStore } from '@/renderer/stores/Topic/TopicStore';
 
 const MESSAGE_FETCH_LIMIT = 35;
 
@@ -725,6 +726,13 @@ export const useChatStore = create<ChatState>()(
       deleteMessage: async (chatId, messageId) => {
         set({ isLoading: true, error: null });
         try {
+          // Check if the message being deleted is currently streaming
+          const { streamingState, setStreamingState } = useTopicStore.getState();
+          if (streamingState.messageId === messageId && streamingState.chatId === chatId) {
+            // Clear the streaming state to prevent the UI from recreating the deleted message
+            setStreamingState(null, null);
+          }
+
           set((state) => ({
             messages: {
               ...state.messages,
@@ -734,9 +742,9 @@ export const useChatStore = create<ChatState>()(
 
           await window.electron.db.query({
             query: `
-                            delete from reactions
-                            where message_id = @messageId
-                        `,
+              delete from reactions
+              where message_id = @messageId
+            `,
             params: {
               messageId
             }
@@ -744,10 +752,10 @@ export const useChatStore = create<ChatState>()(
 
           await window.electron.db.query({
             query: `
-                            delete from messages
-                            where id = @messageId
-                            and chat_id = @chatId
-                        `,
+              delete from messages
+              where id = @messageId
+              and chat_id = @chatId
+            `,
             params: {
               messageId,
               chatId

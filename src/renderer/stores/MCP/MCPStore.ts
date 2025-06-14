@@ -15,9 +15,13 @@ import { createLinkedInServer } from "./Servers/LinkedInServer";
 import { createMS365Server } from "./Servers/MS365Server";
 import { createMSTeamsServer } from "./Servers/MSTeamsServer";
 import { createGoogleCalendarServer } from "./Servers/GoogleCalendarServer";
+import { createGoogleGmailServer } from "./Servers/GoogleEmailServer";
 import { createLaraServer } from "./Servers/LaraServer";
 import { createChessServer } from "./Servers/ChessMCPServer";
 import { createMoodleServer } from "./Servers/MoodleMCPServer";
+import { createOTRSServer } from "./Servers/OTRSServer";
+import { createN8nServer } from "./Servers/N8nServer";
+import { createPlaywrightServer } from "./Servers/PlaywrightServer";
 import type { IMCPTool } from "@/../../types/MCP/tool";
 import type {
   ITavilyState,
@@ -35,8 +39,12 @@ import type {
   IMS365State,
   IMSTeamsState,
   IGoogleCalendarState,
+  IGoogleGmailState,
   ILaraState,
   IMoodleState,
+  IOTRSState,
+  IN8nState,
+  IPlaywrightState,
   IServerModule
 } from "@/../../types/MCP/server";
 import type { IChessState } from "./Servers/ChessMCPServer";
@@ -58,9 +66,13 @@ const SERVER_REGISTRY = {
   ms365: createMS365Server,
   msTeams: createMSTeamsServer,
   googleCalendar: createGoogleCalendarServer,
+  googleGmail: createGoogleGmailServer,
   lara: createLaraServer,
   chess: createChessServer,
   moodle: createMoodleServer,
+  otrs: createOTRSServer,
+  n8n: createN8nServer,
+  playwright: createPlaywrightServer,
 };
 
 const SERVICE_TYPE_MAPPING: Record<string, string> = {
@@ -79,9 +91,13 @@ const SERVICE_TYPE_MAPPING: Record<string, string> = {
   'ms365': 'ms365',
   'ms-teams': 'msTeams',
   'google-calendar': 'googleCalendar',
+  'googleGmail': 'googleGmail',
   'lara-translate': 'lara',
   'chess': 'chess',
   'moodle': 'moodle',
+  'otrs': 'otrs',
+  'n8n': 'n8n',
+  'playwright': 'playwright',
 };
 
 interface MCPState extends
@@ -100,9 +116,13 @@ interface MCPState extends
   IMS365State,
   IMSTeamsState,
   IGoogleCalendarState,
+  IGoogleGmailState,
   ILaraState,
   IChessState,
-  IMoodleState {
+  IMoodleState,
+  IOTRSState,
+  IN8nState,
+  IPlaywrightState {
 
   serviceTools: Record<string, IMCPTool[]>;
   servers: Record<string, IServerModule>;

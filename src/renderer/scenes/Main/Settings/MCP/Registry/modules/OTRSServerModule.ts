@@ -24,43 +24,46 @@ export const OTRSServerModule: IEnhancedServerModule<IOTRSConfig> = {
     defaultQueue: "Raw",
     defaultState: "new",
     defaultPriority: "3 normal",
-    defaultType: "Unclassified"
+    defaultType: "Unclassified",
+    path: ""
   },
 
   isConfigured: (config: IOTRSConfig) => {
-    return !!(config.baseUrl && config.username && config.password);
+    return !!(config.baseUrl && config.username && config.password && config.path);
   },
 
   createClientConfig: (config: IOTRSConfig, homedir: string) => ({
     enabled: true,
-    command: "docker",
+    command: "uv",
     args: [
+      "--directory",
+      config.path,
       "run",
-      "--rm",
-      "-i",
-      "-e",
-      `OTRS_BASE_URL=${config.baseUrl}`,
-      "-e",
-      `OTRS_USERNAME=${config.username}`,
-      "-e",
-      `OTRS_PASSWORD=${config.password}`,
-      "-e",
-      `OTRS_VERIFY_SSL=${config.verifySSL}`,
-      "-e",
-      `OTRS_DEFAULT_QUEUE=${config.defaultQueue}`,
-      "-e",
-      `OTRS_DEFAULT_STATE=${config.defaultState}`,
-      "-e",
-      `OTRS_DEFAULT_PRIORITY=${config.defaultPriority}`,
-      "-e",
-      `OTRS_DEFAULT_TYPE=${config.defaultType}`,
-      "ghcr.io/spoonbobo/otrs-mcp-server:latest"
+      "src/otrs_mcp/main.py"
     ],
+    env: {
+      "OTRS_BASE_URL": config.baseUrl,
+      "OTRS_USERNAME": config.username,
+      "OTRS_PASSWORD": config.password,
+      "OTRS_VERIFY_SSL": config.verifySSL.toString(),
+      "OTRS_DEFAULT_QUEUE": config.defaultQueue,
+      "OTRS_DEFAULT_STATE": config.defaultState,
+      "OTRS_DEFAULT_PRIORITY": config.defaultPriority,
+      "OTRS_DEFAULT_TYPE": config.defaultType
+    },
     clientName: "otrs-mcp",
     clientVersion: "0.1.0"
   }),
 
   getDialogFields: (): Field[] => [
+    {
+      key: "path",
+      label: "OTRS MCP Server Path",
+      type: "text",
+      required: true,
+      description: "Full path to the OTRS MCP server directory",
+      placeholder: "/path/to/otrs-mcp-server"
+    },
     {
       key: "baseUrl",
       label: "OTRS Base URL",
@@ -129,6 +132,11 @@ export const OTRSServerModule: IEnhancedServerModule<IOTRSConfig> = {
     const errors: Record<string, string> = {};
     let isValid = true;
 
+    if (!config.path) {
+      errors.path = "OTRS MCP Server path is required";
+      isValid = false;
+    }
+
     if (!config.baseUrl) {
       errors.baseUrl = "OTRS Base URL is required";
       isValid = false;
@@ -162,7 +170,8 @@ export const OTRSServerModule: IEnhancedServerModule<IOTRSConfig> = {
     defaultQueue: "Raw",
     defaultState: "new",
     defaultPriority: "3 normal",
-    defaultType: "Unclassified"
+    defaultType: "Unclassified",
+    path: ""
   }),
   getConfigured: () => false,
   getAutoApproved: () => false

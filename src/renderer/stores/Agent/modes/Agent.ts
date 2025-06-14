@@ -8,6 +8,7 @@ import { useMCPStore } from '@/renderer/stores/MCP/MCPStore';
 import { useLLMStore } from '@/renderer/stores/LLM/LLMStore';
 import { getAgentFromStore } from '@/utils/agent';
 import { getServiceTools, formatMCPName } from '@/utils/mcp';
+import { formatMessagesForContext } from '@/utils/message';
 import type OpenAI from 'openai';
 
 export const agentModeSystemPrompt = (user: IUser, agent: IUser) => {
@@ -15,10 +16,8 @@ export const agentModeSystemPrompt = (user: IUser, agent: IUser) => {
 You are ${agent.username}, an autonomous AI agent. You are in a chat with your companion, ${user.username}.
 You have access to a set of tools. Your available tools will be provided to you separately.
 
-Based on messages in this chat, select tools that are most relevant to the conversation and briefly explain why you are using them.
+Based on messages in this chat, select and use tools that are most relevant to the conversation and briefly explain why you are using them.
 If no tools are relevant, you can ignore the messages and do nothing.
-
-Your primary goal is to be an effective assistant within this chat.
   `.trim();
 };
 
@@ -152,29 +151,26 @@ export async function processAgentModeAIResponse({
     const lastMessages: OpenAIMessage[] = [];
     const recentMessages = existingMessages.slice(-10);
 
-    for (const msg of recentMessages) {
-      let role: "assistant" | "user" | "system" | "tool" = "assistant";
-      if (msg.sender === currentUser?.id) {
-        role = "user";
-      } else if (msg.is_tool_response) {
-        role = "tool";
-      }
-
-      const messageContent: any = {
-        role: role,
-        content: msg.text || ""
-      };
-
-      lastMessages.push(messageContent);
-    }
+    // Format all past messages into a single context message
+    const formattedMessagesContext = formatMessagesForContext(recentMessages, currentUser);
 
     if (systemPromptText) {
-      lastMessages.unshift({ role: "system", content: systemPromptText });
+      lastMessages.push({ role: "system", content: systemPromptText });
     }
+
+    // Add the formatted context as a single user message if there are past messages
+    if (formattedMessagesContext.trim()) {
+      lastMessages.push({
+        role: "user",
+        content: `Previous conversation context:\n${formattedMessagesContext}`
+      });
+    }
+
+    // Add the current user message
     const currentUserName = currentUser?.username || "user";
     lastMessages.push({
       role: "user",
-      content: `[${new Date().toISOString()}] ${currentUserName}: ${userMessageText}`
+      content: `${currentUserName} (User) [${new Date().toISOString()}]: ${userMessageText}`
     });
 
     const completionResponse = await getOpenAICompletion(
