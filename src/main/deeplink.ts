@@ -6,6 +6,48 @@ import { execSync } from 'child_process';
 
 const PROTOCOL = 'onlysaid-electron';
 
+function isValidDeeplinkUrl(url: string): boolean {
+    try {
+        const parsedUrl = new URL(url);
+        return parsedUrl.protocol === `${PROTOCOL}:` && 
+               (parsedUrl.hostname === 'auth' || parsedUrl.pathname.startsWith('/auth'));
+    } catch (error) {
+        console.error('[Deeplink] Invalid URL format:', url, error);
+        return false;
+    }
+}
+
+function getMainScriptPath(): string {
+    // In development, we need to find the actual main script path
+    // process.argv might contain flags like --require, so we need to find the actual script
+    
+    if (app.isPackaged) {
+        return process.argv[1] || '';
+    }
+    
+    // For development, look for the main script in different ways
+    console.log('[Deeplink] Full process.argv:', process.argv);
+    
+    // Method 1: Look for .js files in argv
+    const jsFile = process.argv.find(arg => arg.endsWith('.js') && !arg.includes('node_modules'));
+    if (jsFile) {
+        console.log('[Deeplink] Found JS file in argv:', jsFile);
+        return jsFile;
+    }
+    
+    // Method 2: Look for the current working directory + main entry
+    const mainEntry = path.join(process.cwd(), '.erb', 'dll', 'main.bundle.dev.js');
+    if (fs.existsSync(mainEntry)) {
+        console.log('[Deeplink] Using main bundle:', mainEntry);
+        return mainEntry;
+    }
+    
+    // Method 3: Fallback to current directory
+    const fallback = process.cwd();
+    console.log('[Deeplink] Using fallback path:', fallback);
+    return fallback;
+}
+
 function registerLinuxProtocolHandler() {
     if (process.platform !== 'linux') return;
 
@@ -56,6 +98,12 @@ function sendAuthInfoToRenderer(token: string, cookieName: string | null) {
 
 export function handleDeeplinkUrl(urlLink: string) {
     console.log(`[Deeplink] Received URL: ${urlLink}`);
+    
+    if (!isValidDeeplinkUrl(urlLink)) {
+        console.error('[Deeplink] Invalid deeplink URL:', urlLink);
+        return;
+    }
+    
     try {
         const parsedUrl = new URL(urlLink);
         if (parsedUrl.protocol === `${PROTOCOL}:` && (parsedUrl.hostname === 'auth' || parsedUrl.pathname.startsWith('/auth'))) {
@@ -82,15 +130,23 @@ export function initializeDeeplinkHandling() {
     }
 
     if (!app.isPackaged) {
-        const mainScriptPath = process.argv[1];
-        let launchArgs = [mainScriptPath];
-
-        if (process.platform === 'win32' || process.platform === 'linux') {
-            console.log(`[Deeplink Dev Registration] Setting protocol client for ${process.platform}`);
+        const mainScriptPath = getMainScriptPath();
+        
+        if (process.platform === 'win32') {
+            console.log(`[Deeplink Dev Registration] Setting protocol client for Windows dev`);
             console.log(`  PROTOCOL: ${PROTOCOL}`);
             console.log(`  process.execPath: ${process.execPath}`);
-            console.log(`  mainScriptArg (process.argv[1]): ${mainScriptPath}`);
-
+            console.log(`  mainScriptArg: ${mainScriptPath}`);
+            
+            // For Windows development, we'll use a different approach
+            // Instead of trying to pass the exact script path, we'll use the working directory
+            const workingDir = process.cwd();
+            console.log(`  workingDir: ${workingDir}`);
+            
+            // Register with working directory approach
+            app.setAsDefaultProtocolClient(PROTOCOL, process.execPath, [workingDir]);
+        } else if (process.platform === 'linux') {
+            console.log(`[Deeplink Dev Registration] Setting protocol client for Linux dev`);
             app.setAsDefaultProtocolClient(PROTOCOL, process.execPath, [mainScriptPath]);
         } else {
             app.setAsDefaultProtocolClient(PROTOCOL);
@@ -109,6 +165,7 @@ export function initializeDeeplinkHandling() {
     app.on('second-instance', (event, commandLine, workingDirectory) => {
         console.log('<<<<< SECOND-INSTANCE EVENT FIRED >>>>>');
         console.log('Received commandLine:', commandLine);
+        console.log('Working directory:', workingDirectory);
 
         const mainWindow = BrowserWindow.getAllWindows()[0];
         if (mainWindow) {
@@ -116,30 +173,40 @@ export function initializeDeeplinkHandling() {
             mainWindow.focus();
         }
 
-        const url = commandLine.find((arg) => arg.startsWith(`${PROTOCOL}://`));
-        if (url) {
+        // Better URL extraction - look for the protocol URL anywhere in the command line
+        const url = commandLine.find((arg) => {
+            const trimmedArg = arg.trim();
+            return trimmedArg.startsWith(`${PROTOCOL}://`);
+        });
+        
+        if (url && isValidDeeplinkUrl(url)) {
             console.log('Deeplink URL found in commandLine:', url);
             handleDeeplinkUrl(url);
         } else {
-            console.log('No deeplink URL found in commandLine for second-instance.');
+            console.log('No valid deeplink URL found in commandLine for second-instance.');
+            console.log('CommandLine args:', commandLine);
         }
     });
 
     app.on('open-url', (event, url) => {
         event.preventDefault();
-        handleDeeplinkUrl(url);
+        console.log('[Deeplink] open-url event received:', url);
+        if (isValidDeeplinkUrl(url)) {
+            handleDeeplinkUrl(url);
+        } else {
+            console.warn('[Deeplink] Invalid URL received in open-url:', url);
+        }
     });
 
-    if (app.isPackaged) {
-        const url = process.argv.find((arg) => arg.startsWith(`${PROTOCOL}://`));
-        if (url) {
-            app.whenReady().then(() => handleDeeplinkUrl(url));
-        }
-    } else if (process.platform !== 'darwin') {
-        const url = process.argv.find((arg) => arg.startsWith(`${PROTOCOL}://`));
-        if (url) {
-            app.whenReady().then(() => handleDeeplinkUrl(url));
-        }
+    // Process initial URL for both dev and prod
+    const initialUrl = process.argv.find((arg) => {
+        const trimmedArg = arg.trim();
+        return trimmedArg.startsWith(`${PROTOCOL}://`);
+    });
+    
+    if (initialUrl && isValidDeeplinkUrl(initialUrl)) {
+        console.log('[Deeplink] Initial URL found:', initialUrl);
+        app.whenReady().then(() => handleDeeplinkUrl(initialUrl));
     }
 
     console.log(`[Deeplink] Initialized for protocol "${PROTOCOL}://" (isPackaged: ${app.isPackaged})`);
