@@ -31,7 +31,8 @@ type FileSystemChannels =
   | 'file:completed'
   | 'file:error'
   | 'file:get-metadata'
-  | 'file:get-multiple-metadata';
+  | 'file:get-multiple-metadata'
+  | 'file:get-workspace-icon';
 
 // Add dialog channels
 type DialogChannels = 'dialog:showSaveDialog';
@@ -278,6 +279,8 @@ const electronHandler = {
       ipcRenderer.invoke('file:get-metadata', args),
     getFilesMetadata: (args: { workspaceId: string; fileIds: string[]; token: string }) =>
       ipcRenderer.invoke('file:get-multiple-metadata', args),
+    getWorkspaceIcon: (args: { workspaceId: string; imagePath: string; token: string }) =>
+      ipcRenderer.invoke('file:get-workspace-icon', args),
   },
   homedir: () => os.homedir(),
   session: {

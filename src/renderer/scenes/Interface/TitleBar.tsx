@@ -1,4 +1,4 @@
-import { Box, Typography, Divider, IconButton, Badge } from '@mui/material';
+import { Box, Typography, Divider, IconButton, Badge, Avatar } from '@mui/material';
 import { useState } from 'react';
 import { Menu as MuiMenu, MenuItem } from '@mui/material';
 import {
@@ -25,6 +25,7 @@ import { useTopicStore } from "@/renderer/stores/Topic/TopicStore";
 import { useWorkspaceStore } from "@/renderer/stores/Workspace/WorkspaceStore";
 import NotificationView from "@/renderer/components/Dialog/NotificationView";
 import AboutDialog from "@/renderer/components/Dialog/AboutDialog";
+import { useWorkspaceIcons } from '@/renderer/hooks/useWorkspaceIcons';
 
 const TitleBar = () => {
   const intl = useIntl();
@@ -42,33 +43,72 @@ const TitleBar = () => {
   const selectedContext = useTopicStore((state) => state.selectedContext);
   const getWorkspaceById = useWorkspaceStore((state) => state.getWorkspaceById);
 
+  // Add this line after the existing hooks
+  const { workspaces } = useWorkspaceStore();
+  const { getWorkspaceIcon } = useWorkspaceIcons(workspaces);
+
   // Function to get current topic display name
-  const getCurrentTopicName = () => {
-    if (!selectedContext) return intl.formatMessage({ id: 'titleBar.topic.home' });
+  const getCurrentTopicInfo = () => {
+    if (!selectedContext) {
+      return {
+        name: intl.formatMessage({ id: 'titleBar.topic.home' }),
+        icon: null
+      };
+    }
 
     switch (selectedContext.type) {
       case 'home':
-        return intl.formatMessage({ id: 'titleBar.topic.home' });
+        return {
+          name: intl.formatMessage({ id: 'titleBar.topic.home' }),
+          icon: null
+        };
       case 'workspace':
         if (selectedContext.id) {
           const workspace = getWorkspaceById(selectedContext.id);
-          return workspace?.name || intl.formatMessage({ id: 'titleBar.topic.workspace' });
+          const workspaceIcon = getWorkspaceIcon(selectedContext.id);
+          return {
+            name: workspace?.name || intl.formatMessage({ id: 'titleBar.topic.workspace' }),
+            icon: workspaceIcon
+          };
         }
-        return intl.formatMessage({ id: 'titleBar.topic.workspace' });
+        return {
+          name: intl.formatMessage({ id: 'titleBar.topic.workspace' }),
+          icon: null
+        };
       case 'settings':
-        return intl.formatMessage({ id: 'titleBar.topic.settings' });
+        return {
+          name: intl.formatMessage({ id: 'titleBar.topic.settings' }),
+          icon: null
+        };
       case 'file':
-        return intl.formatMessage({ id: 'titleBar.topic.file' });
+        return {
+          name: intl.formatMessage({ id: 'titleBar.topic.file' }),
+          icon: null
+        };
       case 'playground':
-        return intl.formatMessage({ id: 'titleBar.topic.playground' });
+        return {
+          name: intl.formatMessage({ id: 'titleBar.topic.playground' }),
+          icon: null
+        };
       case 'calendar':
-        return intl.formatMessage({ id: 'titleBar.topic.calendar' });
+        return {
+          name: intl.formatMessage({ id: 'titleBar.topic.calendar' }),
+          icon: null
+        };
       case 'workspace:calendar':
-        return intl.formatMessage({ id: 'titleBar.topic.calendar' });
+        return {
+          name: intl.formatMessage({ id: 'titleBar.topic.calendar' }),
+          icon: null
+        };
       default:
-        return selectedContext.name || selectedContext.type;
+        return {
+          name: selectedContext.name || selectedContext.type,
+          icon: null
+        };
     }
   };
+
+  const currentTopicInfo = getCurrentTopicInfo();
 
   const handleMenuClick = (event: React.MouseEvent<HTMLElement>, menuType: string) => {
     setAnchorEl(event.currentTarget);
@@ -188,13 +228,22 @@ const TitleBar = () => {
           </Box>
         </Box>
 
-        {/* App Title with Topic Info (center) */}
+        {/* Topic Info with Icon (center) */}
         <Box sx={{ flex: 1, display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 1 }}>
-          <Typography variant="body2" sx={{ fontSize: '13px', color: 'text.secondary' }}>
-            {intl.formatMessage({ id: 'titleBar.appName' })}
-          </Typography>
-          <Typography variant="body2" sx={{ fontSize: '12px', color: 'text.disabled' }}>
-            [{getCurrentTopicName()}]
+          {currentTopicInfo.icon && (
+            <Avatar 
+              src={currentTopicInfo.icon} 
+              sx={{ 
+                width: 16, 
+                height: 16,
+                fontSize: '10px'
+              }}
+            >
+              {currentTopicInfo.name[0]?.toUpperCase()}
+            </Avatar>
+          )}
+          <Typography variant="body2" sx={{ fontSize: '13px', color: 'text.primary', fontWeight: 500 }}>
+            {currentTopicInfo.name}
           </Typography>
         </Box>
 

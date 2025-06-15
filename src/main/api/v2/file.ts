@@ -306,6 +306,63 @@ export function setupFileHandlers(): void {
       throw error.response?.data || new Error('Failed to get multiple files metadata');
     }
   });
+
+  // Handler to get workspace icon
+  ipcMain.handle('file:get-workspace-icon', async (event, args: {
+    workspaceId: string,
+    imagePath: string,
+    token: string
+  }) => {
+    const { workspaceId, imagePath, token } = args;
+    
+    try {
+      // First, get all files for the workspace to find the logo
+      const response = await onlysaidServiceInstance.get(
+        `workspace/${workspaceId}/file`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`
+          }
+        }
+      );
+      
+      if (response.data?.data) {
+        // Find the file that matches the workspace logo path
+        const logoFile = response.data.data.find((file: any) => 
+          file.metadata?.type === 'workspace-logo' && 
+          file.metadata?.path === imagePath
+        );
+        
+        if (logoFile) {
+          // Now download the file using its ID
+          const downloadResponse = await onlysaidServiceInstance.get(
+            `workspace/${workspaceId}/file?fileId=${logoFile.id}`,
+            {
+              headers: {
+                Authorization: `Bearer ${token}`
+              },
+              responseType: 'arraybuffer'
+            }
+          );
+          
+          // Convert to base64 for easy handling in renderer
+          const base64 = Buffer.from(downloadResponse.data).toString('base64');
+          const mimeType = logoFile.mime_type || 'image/png';
+          
+          return {
+            data: `data:${mimeType};base64,${base64}`,
+            mimeType,
+            name: logoFile.name
+          };
+        }
+      }
+      
+      return null;
+    } catch (error: any) {
+      console.error('Error fetching workspace icon:', error);
+      throw error;
+    }
+  });
 }
 
 // Enhanced upload function with multi-stage progress tracking

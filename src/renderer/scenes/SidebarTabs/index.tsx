@@ -6,7 +6,7 @@ import CalendarTodayIcon from "@mui/icons-material/CalendarToday";
 import { useState, useEffect, useRef, useMemo } from "react";
 import AddTeamDialog from "@/renderer/components/Dialog/Workspace/AddWorkspace";
 import ExitWorkspaceDialog from "@/renderer/components/Dialog/Workspace/ExitWorkspace";
-import { getUserFromStore } from "@/utils/user";
+import { getUserFromStore, getUserTokenFromStore } from "@/utils/user";
 import { IWorkspace } from "@/../../types/Workspace/Workspace";
 import { useChatStore } from "@/renderer/stores/Chat/ChatStore";
 import { useTopicStore, TopicContext } from "@/renderer/stores/Topic/TopicStore";
@@ -14,10 +14,12 @@ import { useWorkspaceStore } from "@/renderer/stores/Workspace/WorkspaceStore";
 import { useUserStore } from "@/renderer/stores/User/UserStore";
 import { useNotificationStore } from "@/renderer/stores/Notification/NotificationStore";
 import { useIntl } from "react-intl";
+import { useWorkspaceIcons } from '@/renderer/hooks/useWorkspaceIcons';
 
 function SidebarTabs() {
   const { selectedContext, contexts, setSelectedContext, removeContext, addContext } = useTopicStore();
   const { workspaces, getWorkspace, exitWorkspace, isLoading, setWorkspaceCreatedCallback } = useWorkspaceStore();
+  console.log('workspaces', workspaces);
   const {
     hasHomeNotifications,
     hasWorkspaceNotifications,
@@ -39,6 +41,7 @@ function SidebarTabs() {
   const previousUserRef = useRef(user);
   const [renderKey, setRenderKey] = useState(0);
   const [tooltipKey, setTooltipKey] = useState(0);
+  const { workspaceIcons, getWorkspaceIcon } = useWorkspaceIcons(workspaces);
 
   const homeContext = useMemo(() => {
     const foundContext = contexts.find(context => context.name === "home" && context.type === "home");
@@ -390,7 +393,7 @@ function SidebarTabs() {
 
         {WorkspaceContexts.map(workspaceContext => {
           const workspace = workspaces.find(w => w.id === workspaceContext.id);
-          const imageUrl = workspace?.image;
+          const imageUrl = getWorkspaceIcon(workspaceContext.id || '') || workspace?.image;
           const workspaceNameInitial = workspaceContext.name[0]?.toUpperCase();
           const hasNotifications = hasWorkspaceNotifications(workspaceContext.id || '');
 

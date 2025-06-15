@@ -1,6 +1,7 @@
 import React from 'react';
 import { Box, Typography, Stack } from '@mui/material';
 import { ChatBubbleOutline as ChatIcon } from '@mui/icons-material';
+import { FormattedMessage } from 'react-intl';
 
 interface NoMessageProps {
   type?: 'no-chat' | 'no-messages';
@@ -29,7 +30,7 @@ const NoMessage: React.FC<NoMessageProps> = ({ type = 'no-messages' }) => {
             color: "text.secondary" 
           }}
         >
-          # No chat selected
+          <FormattedMessage id="chat.noChatSelected" />
         </Typography>
         <Typography 
           variant="body2" 
@@ -39,7 +40,7 @@ const NoMessage: React.FC<NoMessageProps> = ({ type = 'no-messages' }) => {
             maxWidth: 300
           }}
         >
-          Select a chat from the sidebar to start viewing messages
+          <FormattedMessage id="chat.selectChatFromSidebar" />
         </Typography>
       </Stack>
     );
@@ -66,7 +67,7 @@ const NoMessage: React.FC<NoMessageProps> = ({ type = 'no-messages' }) => {
           color: "text.secondary" 
         }}
       >
-        No messages yet
+        <FormattedMessage id="chat.noMessagesYet" />
       </Typography>
       <Typography 
         variant="body2" 
@@ -76,7 +77,7 @@ const NoMessage: React.FC<NoMessageProps> = ({ type = 'no-messages' }) => {
           maxWidth: 300
         }}
       >
-        Start a conversation by sending a message below
+        <FormattedMessage id="chat.startConversation" />
       </Typography>
     </Stack>
   );
