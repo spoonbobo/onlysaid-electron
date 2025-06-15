@@ -71,6 +71,71 @@ export function setupFileSystemHandlers() {
     }
   });
 
+  // Add handler to get local app assets
+  ipcMain.handle('assets:get-local-asset', async (event, assetPath) => {
+    try {
+      // Resolve the asset path relative to the app's root directory
+      const absolutePath = path.resolve(process.cwd(), 'assets', assetPath);
+      
+      // Security check: ensure the path is within the assets directory
+      const assetsDir = path.resolve(process.cwd(), 'assets');
+      if (!absolutePath.startsWith(assetsDir)) {
+        throw new Error('Invalid asset path - outside assets directory');
+      }
+
+      // Check if file exists
+      const fileExists = await fs.promises.access(absolutePath, fs.constants.F_OK)
+        .then(() => true)
+        .catch(() => false);
+
+      if (!fileExists) {
+        throw new Error(`Asset not found: ${assetPath}`);
+      }
+
+      // Read the file as buffer
+      const buffer = await fs.promises.readFile(absolutePath);
+      
+      // Get file extension to determine mime type
+      const ext = path.extname(assetPath).toLowerCase();
+      let mimeType = 'application/octet-stream';
+      
+      switch (ext) {
+        case '.png':
+          mimeType = 'image/png';
+          break;
+        case '.jpg':
+        case '.jpeg':
+          mimeType = 'image/jpeg';
+          break;
+        case '.gif':
+          mimeType = 'image/gif';
+          break;
+        case '.svg':
+          mimeType = 'image/svg+xml';
+          break;
+        case '.ico':
+          mimeType = 'image/x-icon';
+          break;
+        case '.webp':
+          mimeType = 'image/webp';
+          break;
+      }
+
+      // Convert to base64 data URL
+      const base64 = buffer.toString('base64');
+      const dataUrl = `data:${mimeType};base64,${base64}`;
+
+      return {
+        data: dataUrl,
+        mimeType,
+        size: buffer.length,
+        path: assetPath
+      };
+    } catch (error) {
+      console.error(`Error loading local asset ${assetPath}:`, error);
+      throw error;
+    }
+  });
 }
 
 export function setupContentHandlers() {

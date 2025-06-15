@@ -7,53 +7,68 @@ interface ThemeContextProviderProps {
 }
 
 export function ThemeContextProvider({ children }: ThemeContextProviderProps) {
-  const { mode } = useThemeStore();
+  const { mode, customization, isCustomThemeEnabled } = useThemeStore();
 
-  const theme = useMemo(() =>
-    createTheme({
+  const theme = useMemo(() => {
+    const currentColors = isCustomThemeEnabled 
+      ? customization.colors[mode]
+      : (mode === 'light' 
+          ? customization.colors.light 
+          : customization.colors.dark);
+
+    const fontFamily = isCustomThemeEnabled 
+      ? [customization.typography.fontFamily, 'Arial', 'sans-serif'].join(',')
+      : [
+          'Inter',
+          'Source Sans Pro',
+          'Roboto',
+          'Noto Serif HK',
+          'Space Mono',
+          'Space Grotesk',
+          'Arial',
+          'sans-serif',
+        ].join(',');
+
+    return createTheme({
       palette: {
         mode,
         primary: {
-          // More accessible indigo with better contrast
-          main: '#4f5bd5',
-          light: '#7986cb',
-          dark: '#3949ab',
+          main: currentColors.primary,
+          light: mode === 'light' ? '#7986cb' : '#7986cb',
+          dark: mode === 'light' ? '#3949ab' : '#3949ab',
           contrastText: '#ffffff',
         },
         secondary: {
-          // Optimized teal for better harmony with primary
-          main: '#009688',
-          light: '#4db6ac',
-          dark: '#00796b',
+          main: currentColors.secondary,
+          light: mode === 'light' ? '#4db6ac' : '#4db6ac',
+          dark: mode === 'light' ? '#00796b' : '#00796b',
           contrastText: '#ffffff',
         },
         error: {
-          main: mode === 'light' ? '#d32f2f' : '#f44336',
+          main: currentColors.error,
           light: mode === 'light' ? '#ef5350' : '#e57373',
           dark: mode === 'light' ? '#c62828' : '#d32f2f',
         },
         warning: {
-          main: mode === 'light' ? '#ed6c02' : '#ff9800',
+          main: currentColors.warning,
           light: mode === 'light' ? '#ff9800' : '#ffb74d',
           dark: mode === 'light' ? '#e65100' : '#f57c00',
         },
         info: {
-          main: mode === 'light' ? '#0288d1' : '#29b6f6',
+          main: currentColors.info,
           light: mode === 'light' ? '#03a9f4' : '#4fc3f7',
           dark: mode === 'light' ? '#01579b' : '#0277bd',
         },
         success: {
-          main: mode === 'light' ? '#2e7d32' : '#66bb6a',
+          main: currentColors.success,
           light: mode === 'light' ? '#4caf50' : '#81c784',
           dark: mode === 'light' ? '#1b5e20' : '#388e3c',
         },
         background: {
-          // Softer backgrounds to reduce eye strain
-          default: mode === 'light' ? '#f8f9fc' : '#121212',
-          paper: mode === 'light' ? '#ffffff' : '#1e1e1e',
+          default: currentColors.background,
+          paper: currentColors.paper,
         },
         text: {
-          // Improved text contrast for better readability
           primary: mode === 'light' ? 'rgba(0, 0, 0, 0.87)' : 'rgba(255, 255, 255, 0.95)',
           secondary: mode === 'light' ? 'rgba(0, 0, 0, 0.6)' : 'rgba(255, 255, 255, 0.7)',
           disabled: mode === 'light' ? 'rgba(0, 0, 0, 0.38)' : 'rgba(255, 255, 255, 0.45)',
@@ -68,22 +83,15 @@ export function ThemeContextProvider({ children }: ThemeContextProviderProps) {
         },
       },
       typography: {
-        fontFamily: [
-          'Inter',
-          'Source Sans Pro',
-          'Roboto',
-          'Noto Serif HK',
-          'Space Mono',
-          'Space Grotesk',
-          'Arial',
-          'sans-serif',
-        ].join(','),
+        fontFamily,
+        fontSize: isCustomThemeEnabled ? customization.typography.fontSize : 14,
       },
+      spacing: isCustomThemeEnabled ? customization.spacing : 8,
       components: {
         MuiButton: {
           styleOverrides: {
             root: {
-              borderRadius: 8,
+              borderRadius: isCustomThemeEnabled ? customization.borderRadius : 8,
               textTransform: 'none',
               fontWeight: 500,
             },
@@ -92,7 +100,7 @@ export function ThemeContextProvider({ children }: ThemeContextProviderProps) {
         MuiPaper: {
           styleOverrides: {
             root: {
-              borderRadius: 8,
+              borderRadius: isCustomThemeEnabled ? customization.borderRadius : 8,
               backgroundImage: 'none',
             },
           },
@@ -111,7 +119,7 @@ export function ThemeContextProvider({ children }: ThemeContextProviderProps) {
                   transform: 'translateX(16px)',
                   color: '#fff',
                   '& + .MuiSwitch-track': {
-                    backgroundColor: mode === 'light' ? '#4f5bd5' : '#4f5bd5',
+                    backgroundColor: currentColors.primary,
                     opacity: 1,
                     border: 0,
                   },
@@ -131,8 +139,8 @@ export function ThemeContextProvider({ children }: ThemeContextProviderProps) {
           },
         },
       },
-    }), [mode]
-  );
+    });
+  }, [mode, customization, isCustomThemeEnabled]);
 
   return (
     <ThemeProvider theme={theme}>

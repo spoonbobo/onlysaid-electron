@@ -6,6 +6,7 @@ import { useUserTokenStore } from '@/renderer/stores/User/UserToken';
 import { useMCPStore } from '@/renderer/stores/MCP/MCPStore';
 import { useToastStore } from '@/renderer/stores/Notification/ToastStore';
 import { useSocketStore } from '@/renderer/stores/Socket/SocketStore';
+import { useAppAssets } from '@/renderer/hooks/useAppAssets';
 
 function App() {
   const { selectedContext, contexts, setSelectedContext } = useTopicStore();
@@ -16,6 +17,7 @@ function App() {
   const { user } = useUserStore();
   const { initialize: initializeSocket, close: closeSocket } = useSocketStore();
   const { initializeGoogleCalendarListeners, initializeMicrosoftCalendarListeners } = useUserTokenStore();
+  const { preloadAssets } = useAppAssets();
 
   useEffect(() => {
     if (!selectedContext && contexts.length > 0) {
@@ -160,6 +162,11 @@ function App() {
 
     initializeServices();
   }, [getAllConfiguredServers, initializeClient]);
+
+  useEffect(() => {
+    // Preload essential app assets on app start
+    preloadAssets(['icon.png']); // Only load assets that actually exist
+  }, [preloadAssets]);
 
   return (
     <>

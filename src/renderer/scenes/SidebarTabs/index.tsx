@@ -19,7 +19,6 @@ import { useWorkspaceIcons } from '@/renderer/hooks/useWorkspaceIcons';
 function SidebarTabs() {
   const { selectedContext, contexts, setSelectedContext, removeContext, addContext } = useTopicStore();
   const { workspaces, getWorkspace, exitWorkspace, isLoading, setWorkspaceCreatedCallback } = useWorkspaceStore();
-  console.log('workspaces', workspaces);
   const {
     hasHomeNotifications,
     hasWorkspaceNotifications,

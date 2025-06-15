@@ -32,6 +32,9 @@
   "toast.loggedOut": "您已登出",
   "toast.signingIn": "登入中...",
   "toast.authTimeout": "驗證超時。請重試。",
+  "toast.signInCancelled": "已取消登入",
+  "toast.openingExternalLink": "正在開啟外部連結...",
+  "toast.errorOpeningLink": "開啟連結時發生錯誤",
 
 
   "file.emptyFolder": "這個資料夾是空的",
@@ -597,5 +600,24 @@
   "settings.payment": "付款與訂閱",
   "settings.cancelSignIn": "取消登入",
   "settings.manageAccount": "管理帳戶",
-  "titleBar.view.n8n": "在N8n中編輯工作流"
+  "titleBar.view.n8n": "在N8n中編輯工作流",
+  "settings.connectedDevices": "已連接裝置",
+  "settings.connectedDevicesDescription": "管理連接到您帳戶的裝置。您最多可以連接 4 台裝置。",
+  "settings.currentDevice": "目前裝置",
+  "settings.deviceId": "裝置 ID：{id}",
+  "settings.lastSeen": "最後使用：{time}",
+  "settings.themeCustomization": "主題自訂",
+  "settings.enableCustomTheme": "啟用自訂主題",
+  "settings.customThemeWarning": "自訂主題設定將覆蓋預設主題。變更會立即套用。",
+  "settings.colors": "顏色",
+  "settings.colorsDescription": "自訂 {mode} 模式的顏色。在淺色和深色模式之間切換以自訂兩種主題。",
+  "settings.typography": "字體",
+  "settings.fontFamily": "字體系列",
+  "settings.fontSize": "字體大小",
+  "settings.layout": "版面配置",
+  "settings.borderRadius": "圓角半徑",
+  "settings.spacing": "間距",
+  "settings.resetTheme": "重置為預設值",
+  "titleBar.navigation.back": "返回",
+  "titleBar.navigation.forward": "前進"
 }

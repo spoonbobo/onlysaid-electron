@@ -33,6 +33,9 @@
   "toast.loggedOut": "ログアウトしました",
   "toast.signingIn": "ログイン中...",
   "toast.authTimeout": "認証がタイムアウトしました。もう一度お試しください。",
+  "toast.signInCancelled": "ログインがキャンセルされました",
+  "toast.openingExternalLink": "外部リンクを開いています...",
+  "toast.errorOpeningLink": "リンクを開く際にエラーが発生しました",
 
   "file.emptyFolder": "このフォルダは空です",
 
@@ -290,6 +293,18 @@
   "settings.kb.private.notConfigured": "未設定",
   "settings.kb.private.configured": "設定済み",
   "settings.kb": "ナレッジベースの管理",
+  "settings.themeCustomization": "テーマカスタマイズ",
+  "settings.enableCustomTheme": "カスタムテーマを有効化",
+  "settings.customThemeWarning": "カスタムテーマ設定はデフォルトテーマを上書きします。変更は即座に適用されます。",
+  "settings.colors": "色",
+  "settings.colorsDescription": "{mode}モードの色をカスタマイズします。ライトモードとダークモードを切り替えて両方のテーマをカスタマイズできます。",
+  "settings.typography": "タイポグラフィ",
+  "settings.fontFamily": "フォントファミリー",
+  "settings.fontSize": "フォントサイズ",
+  "settings.layout": "レイアウト",
+  "settings.borderRadius": "角の丸み",
+  "settings.spacing": "間隔",
+  "settings.resetTheme": "デフォルトにリセット",
   "settings.llmSettings.ollamaVerificationError": "Ollamaの検証に失敗しました。",
   "settings.kb.noKb": "ナレッジベースがありません。新しいナレッジベースを追加してください。",
 
@@ -689,5 +704,10 @@
   "settings.payment": "支払いとサブスクリプション",
   "settings.cancelSignIn": "ログインをキャンセル",
   "settings.manageAccount": "アカウント管理",
-  "titleBar.view.n8n": "N8nでワークフローを編集"
+  "titleBar.view.n8n": "N8nでワークフローを編集",
+  "settings.connectedDevices": "接続済みデバイス",
+  "settings.connectedDevicesDescription": "アカウントに接続されているデバイスを管理します。最大4台のデバイスを接続できます。",
+  "settings.currentDevice": "現在のデバイス",
+  "settings.deviceId": "デバイスID：{id}",
+  "settings.lastSeen": "最終使用：{time}"
 }

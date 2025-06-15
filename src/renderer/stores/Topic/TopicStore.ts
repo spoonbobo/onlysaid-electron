@@ -32,6 +32,13 @@ interface StreamState {
   completionTime?: number;
 }
 
+// Navigation history interface
+interface NavigationHistory {
+  contexts: TopicContext[];
+  currentIndex: number;
+  maxSize: number;
+}
+
 interface TopicStore {
   contexts: TopicContext[];
   selectedContext: TopicContext | null;
@@ -39,6 +46,14 @@ interface TopicStore {
   addContext: (context: TopicContext) => void;
   removeContext: (context: TopicContext) => void;
   setSelectedContext: (context: TopicContext) => void;
+
+  // Navigation history
+  navigationHistory: NavigationHistory;
+  canGoBack: () => boolean;
+  canGoForward: () => boolean;
+  goBack: () => void;
+  goForward: () => void;
+  addToHistory: (context: TopicContext) => void;
 
   selectedTopics: Record<string, string>;
   setSelectedTopic: (sectionName: string, topicId: string) => void;
@@ -73,6 +88,14 @@ interface TopicStore {
 
 export type CalendarViewMode = "month" | "week" | "day";
 
+// Helper function to compare contexts
+const areContextsEqual = (a: TopicContext, b: TopicContext): boolean => {
+  return a.name === b.name && 
+         a.type === b.type && 
+         a.id === b.id && 
+         a.section === b.section;
+};
+
 export const useTopicStore = create<TopicStore>()(
   persist(
     (set, get) => ({
@@ -85,6 +108,13 @@ export const useTopicStore = create<TopicStore>()(
       ],
       selectedContext: { name: "home", type: "home", section: "homepage" },
       lastSections: {},
+
+      // Initialize navigation history
+      navigationHistory: {
+        contexts: [{ name: "home", type: "home", section: "homepage" }],
+        currentIndex: 0,
+        maxSize: 10
+      },
 
       addContext: (context) =>
         set((state) => ({
@@ -105,6 +135,78 @@ export const useTopicStore = create<TopicStore>()(
               ? (state.contexts.length > 1 ? state.contexts[0] : null)
               : state.selectedContext
         })),
+
+      // Navigation history methods
+      canGoBack: () => {
+        const state = get();
+        return state.navigationHistory.currentIndex > 0;
+      },
+
+      canGoForward: () => {
+        const state = get();
+        return state.navigationHistory.currentIndex < state.navigationHistory.contexts.length - 1;
+      },
+
+      goBack: () => {
+        const state = get();
+        if (state.canGoBack()) {
+          const newIndex = state.navigationHistory.currentIndex - 1;
+          const contextToNavigateTo = state.navigationHistory.contexts[newIndex];
+          
+          set((state) => ({
+            navigationHistory: {
+              ...state.navigationHistory,
+              currentIndex: newIndex
+            },
+            selectedContext: contextToNavigateTo
+          }));
+        }
+      },
+
+      goForward: () => {
+        const state = get();
+        if (state.canGoForward()) {
+          const newIndex = state.navigationHistory.currentIndex + 1;
+          const contextToNavigateTo = state.navigationHistory.contexts[newIndex];
+          
+          set((state) => ({
+            navigationHistory: {
+              ...state.navigationHistory,
+              currentIndex: newIndex
+            },
+            selectedContext: contextToNavigateTo
+          }));
+        }
+      },
+
+      addToHistory: (context) => {
+        set((state) => {
+          const currentHistory = state.navigationHistory;
+          const lastContext = currentHistory.contexts[currentHistory.currentIndex];
+          
+          // Don't add if it's the same as the current context
+          if (lastContext && areContextsEqual(lastContext, context)) {
+            return state;
+          }
+
+          // Remove any contexts after current index (when navigating to a new context after going back)
+          const newContexts = currentHistory.contexts.slice(0, currentHistory.currentIndex + 1);
+          
+          // Add the new context
+          newContexts.push(context);
+          
+          // Keep only the last maxSize contexts
+          const trimmedContexts = newContexts.slice(-currentHistory.maxSize);
+          
+          return {
+            navigationHistory: {
+              ...currentHistory,
+              contexts: trimmedContexts,
+              currentIndex: trimmedContexts.length - 1
+            }
+          };
+        });
+      },
 
       setSelectedContext: (newContext) =>
         set((state) => {
@@ -140,6 +242,9 @@ export const useTopicStore = create<TopicStore>()(
                     `${newContext.type}:${newContext.name}`;
 
           const contextAttachments = { ...(state.attachmentsByContext[newContextKey] || {}) };
+
+          // Add to navigation history
+          state.addToHistory(updatedContext);
 
           return {
             selectedContext: updatedContext,
@@ -348,8 +453,9 @@ export const useTopicStore = create<TopicStore>()(
         selectedTopics: state.selectedTopics,
         contexts: state.contexts,
         scrollPositions: state.scrollPositions,
+        navigationHistory: state.navigationHistory,
       }),
-      version: 9,
+      version: 10, // Increment version due to new navigationHistory field
     }
   )
 );

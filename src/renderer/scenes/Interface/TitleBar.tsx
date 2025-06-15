@@ -1,5 +1,5 @@
-import { Box, Typography, Divider, IconButton, Badge, Avatar } from '@mui/material';
-import { useState } from 'react';
+import { Box, Typography, Divider, IconButton, Badge, Avatar, TextField, Autocomplete, Chip, InputAdornment } from '@mui/material';
+import { useState, useEffect, useMemo } from 'react';
 import { Menu as MuiMenu, MenuItem } from '@mui/material';
 import {
   Close,
@@ -17,7 +17,10 @@ import {
   ZoomOut,
   Code,
   Notifications,
-  AccountTree
+  AccountTree,
+  ArrowBack,
+  ArrowForward,
+  Search
 } from '@mui/icons-material';
 import { useIntl } from 'react-intl';
 import { useNotificationStore } from "@/renderer/stores/Notification/NotificationStore";
@@ -26,6 +29,8 @@ import { useWorkspaceStore } from "@/renderer/stores/Workspace/WorkspaceStore";
 import NotificationView from "@/renderer/components/Dialog/NotificationView";
 import AboutDialog from "@/renderer/components/Dialog/AboutDialog";
 import { useWorkspaceIcons } from '@/renderer/hooks/useWorkspaceIcons';
+import { useAppAssets } from '@/renderer/hooks/useAppAssets';
+import { useUserStore } from '@/renderer/stores/User/UserStore';
 
 const TitleBar = () => {
   const intl = useIntl();
@@ -33,19 +38,109 @@ const TitleBar = () => {
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
   const [showNotifications, setShowNotifications] = useState(false);
   const [showAbout, setShowAbout] = useState(false);
+  const [appIcon, setAppIcon] = useState<string | null>(null);
+  const [searchOpen, setSearchOpen] = useState(false);
 
   // Subscribe to notification store to get live updates
   const totalNotificationCount = useNotificationStore((state) =>
     state.notifications.filter(n => !n.read).length
   );
 
-  // Get current topic context
+  // Get current topic context and navigation methods
   const selectedContext = useTopicStore((state) => state.selectedContext);
+  const canGoBack = useTopicStore((state) => state.canGoBack());
+  const canGoForward = useTopicStore((state) => state.canGoForward());
+  const goBack = useTopicStore((state) => state.goBack);
+  const goForward = useTopicStore((state) => state.goForward);
+  const setSelectedContext = useTopicStore((state) => state.setSelectedContext);
+  const addToHistory = useTopicStore((state) => state.addToHistory);
   const getWorkspaceById = useWorkspaceStore((state) => state.getWorkspaceById);
 
-  // Add this line after the existing hooks
+  // Get workspaces and user info
   const { workspaces } = useWorkspaceStore();
   const { getWorkspaceIcon } = useWorkspaceIcons(workspaces);
+  const user = useUserStore((state) => state.user);
+
+  // Add app assets hook
+  const { getAsset } = useAppAssets();
+
+  // Define available contexts for search with sections
+  const availableContexts = useMemo(() => {
+    const contexts: Array<{
+      name: string;
+      type: string;
+      section: string;
+      value: any;
+      icon: string | null;
+      workspaceId?: string;
+    }> = [
+      // Core sections
+      {
+        name: intl.formatMessage({ id: 'titleBar.topic.home' }),
+        type: 'home',
+        section: 'Core',
+        value: { name: 'home', type: 'home', section: 'homepage' },
+        icon: null
+      },
+      {
+        name: intl.formatMessage({ id: 'titleBar.topic.playground' }),
+        type: 'playground', 
+        section: 'Core',
+        value: { name: 'playground', type: 'playground' },
+        icon: null
+      }
+    ];
+
+    // Add workspaces if user is logged in
+    if (user && workspaces.length > 0) {
+      const workspaceContexts = workspaces.map(workspace => ({
+        name: workspace.name || 'Unnamed Workspace',
+        type: 'workspace',
+        section: 'Workspaces',
+        value: { 
+          id: workspace.id,
+          name: workspace.name?.toLowerCase() || 'unnamed workspace',
+          type: 'workspace',
+          section: 'workspace:chatroom'
+        },
+        icon: getWorkspaceIcon(workspace.id) || workspace.image,
+        workspaceId: workspace.id
+      }));
+      
+      contexts.push(...workspaceContexts);
+    }
+
+    return contexts;
+  }, [intl, user, workspaces, getWorkspaceIcon]);
+
+  // Group contexts by section
+  const groupedContexts = useMemo(() => {
+    const groups = availableContexts.reduce((acc, context) => {
+      if (!acc[context.section]) {
+        acc[context.section] = [];
+      }
+      acc[context.section].push(context);
+      return acc;
+    }, {} as Record<string, typeof availableContexts>);
+
+    return groups;
+  }, [availableContexts]);
+
+  // Load app icon on component mount
+  useEffect(() => {
+    const loadAppIcon = async () => {
+      try {
+        const iconUrl = await getAsset('icon.png');
+        if (iconUrl) {
+          setAppIcon(iconUrl);
+        }
+      } catch (error) {
+        console.error('Failed to load app icon:', error);
+      }
+    };
+    
+    loadAppIcon();
+  }, [getAsset]);
 
   // Function to get current topic display name
   const getCurrentTopicInfo = () => {
@@ -145,6 +240,32 @@ const TitleBar = () => {
     setShowAbout(false);
   };
 
+  const handleGoBack = () => {
+    goBack();
+  };
+
+  const handleGoForward = () => {
+    goForward();
+  };
+
+  const handleContextChange = (event: any, newValue: any) => {
+    if (newValue && newValue.value) {
+      const contextToSet = newValue.value;
+      setSelectedContext(contextToSet);
+      addToHistory(contextToSet);
+      setSearchOpen(false);
+    }
+  };
+
+  const getCurrentContextOption = () => {
+    if (selectedContext?.type === 'workspace' && selectedContext?.id) {
+      return availableContexts.find(ctx => 
+        ctx.type === 'workspace' && ctx.workspaceId === selectedContext.id
+      );
+    }
+    return availableContexts.find(ctx => ctx.type === selectedContext?.type) || availableContexts[0];
+  };
+
   return (
     <>
       <Box
@@ -160,6 +281,20 @@ const TitleBar = () => {
           position: 'relative',
         }}
       >
+        {/* App Icon (leftmost) */}
+        <Box sx={{ display: 'flex', alignItems: 'center', pl: 1, WebkitAppRegion: 'no-drag' }}>
+          {appIcon && (
+            <Avatar 
+              src={appIcon} 
+              sx={{ 
+                width: 20, 
+                height: 20,
+                mr: 1
+              }}
+            />
+          )}
+        </Box>
+
         {/* Menu Items (left side) */}
         <Box sx={{ display: 'flex', alignItems: 'center', WebkitAppRegion: 'no-drag' }}>
           {/* File Menu */}
@@ -228,23 +363,159 @@ const TitleBar = () => {
           </Box>
         </Box>
 
-        {/* Topic Info with Icon (center) */}
-        <Box sx={{ flex: 1, display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 1 }}>
-          {currentTopicInfo.icon && (
-            <Avatar 
-              src={currentTopicInfo.icon} 
-              sx={{ 
-                width: 16, 
-                height: 16,
-                fontSize: '10px'
+        {/* Navigation Arrows and Search Bar (center) */}
+        <Box sx={{ flex: 1, display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 1, WebkitAppRegion: 'no-drag' }}>
+          {/* Navigation Arrows - moved to left of search bar */}
+          <Box sx={{ display: 'flex', alignItems: 'center' }}>
+            <IconButton
+              size="small"
+              onClick={handleGoBack}
+              disabled={!canGoBack}
+              sx={{
+                width: 24,
+                height: 24,
+                mr: 0.5,
+                '&:hover': { bgcolor: 'action.hover' },
+                '&.Mui-disabled': {
+                  color: 'action.disabled'
+                }
               }}
+              title={intl.formatMessage({ id: 'titleBar.navigation.back' })}
             >
-              {currentTopicInfo.name[0]?.toUpperCase()}
-            </Avatar>
-          )}
-          <Typography variant="body2" sx={{ fontSize: '13px', color: 'text.primary', fontWeight: 500 }}>
-            {currentTopicInfo.name}
-          </Typography>
+              <ArrowBack sx={{ fontSize: 12 }} />
+            </IconButton>
+            <IconButton
+              size="small"
+              onClick={handleGoForward}
+              disabled={!canGoForward}
+              sx={{
+                width: 24,
+                height: 24,
+                mr: 1,
+                '&:hover': { bgcolor: 'action.hover' },
+                '&.Mui-disabled': {
+                  color: 'action.disabled'
+                }
+              }}
+              title={intl.formatMessage({ id: 'titleBar.navigation.forward' })}
+            >
+              <ArrowForward sx={{ fontSize: 12 }} />
+            </IconButton>
+          </Box>
+
+          {/* Context Search Bar */}
+          <Autocomplete
+            options={availableContexts}
+            getOptionLabel={(option) => option.name}
+            value={getCurrentContextOption()}
+            onChange={handleContextChange}
+            open={searchOpen}
+            onOpen={() => setSearchOpen(true)}
+            onClose={() => setSearchOpen(false)}
+            disableClearable
+            size="small"
+            groupBy={(option) => option.section}
+            sx={{
+              minWidth: 250,
+              maxWidth: 350,
+              '& .MuiOutlinedInput-root': {
+                height: 24,
+                fontSize: '13px',
+                paddingLeft: '8px',
+                '& .MuiOutlinedInput-notchedOutline': {
+                  border: 'none'
+                },
+                '&:hover .MuiOutlinedInput-notchedOutline': {
+                  border: '1px solid',
+                  borderColor: 'divider'
+                },
+                '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                  border: '1px solid',
+                  borderColor: 'primary.main'
+                }
+              },
+              '& .MuiAutocomplete-input': {
+                fontSize: '13px',
+                fontWeight: 500,
+                color: 'text.primary',
+                textAlign: 'center',
+                cursor: 'pointer',
+                paddingLeft: '4px !important'
+              },
+              '& .MuiAutocomplete-endAdornment': {
+                display: 'none'
+              },
+              '& .MuiInputAdornment-root': {
+                marginRight: '4px'
+              }
+            }}
+            renderInput={(params) => (
+              <TextField
+                {...params}
+                variant="outlined"
+                placeholder="Search contexts..."
+                InputProps={{
+                  ...params.InputProps,
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <Search 
+                        sx={{ 
+                          fontSize: 14, 
+                          color: 'text.secondary',
+                          opacity: searchOpen ? 0.8 : 0.6
+                        }} 
+                      />
+                    </InputAdornment>
+                  ),
+                }}
+                sx={{
+                  '& .MuiInputBase-input': {
+                    cursor: 'pointer'
+                  }
+                }}
+              />
+            )}
+            renderGroup={(params) => (
+              <Box key={params.group}>
+                <Typography
+                  variant="caption"
+                  sx={{
+                    px: 2,
+                    py: 1,
+                    display: 'block',
+                    fontWeight: 600,
+                    color: 'text.secondary',
+                    backgroundColor: 'action.hover',
+                    fontSize: '11px',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.5px'
+                  }}
+                >
+                  {params.group}
+                </Typography>
+                {params.children}
+              </Box>
+            )}
+            renderOption={(props, option) => (
+              <Box component="li" {...props} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                {option.icon && (
+                  <Avatar 
+                    src={option.icon} 
+                    sx={{ 
+                      width: 16, 
+                      height: 16,
+                      fontSize: '10px'
+                    }}
+                  >
+                    {option.name[0]?.toUpperCase()}
+                  </Avatar>
+                )}
+                <Typography variant="body2" sx={{ fontSize: '13px' }}>
+                  {option.name}
+                </Typography>
+              </Box>
+            )}
+          />
         </Box>
 
         {/* Window Controls (right side) */}
