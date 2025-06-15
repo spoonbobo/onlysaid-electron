@@ -593,5 +593,6 @@
 
   "settings.payment": "付款與訂閱",
   "settings.cancelSignIn": "取消登入",
-  "settings.manageAccount": "管理帳戶"
+  "settings.manageAccount": "管理帳戶",
+  "titleBar.view.n8n": "在N8n中編輯工作流"
 }

@@ -62,13 +62,19 @@ export function setupMenuBarHandlers(mainWindow: BrowserWindow) {
         shell.openExternal('https://onlysaid.com/zh-HK');
         break;
       case 'help:documentation':
-        shell.openExternal('https://github.com/electron/electron/tree/main/docs#readme');
+        shell.openExternal('https://onlysaid.com/docs/#/');
+        break;
+      case 'view:n8n':
+        const n8nUrl = process.env.NODE_ENV === 'production' 
+          ? 'https://n8n.onlysaid.com/' 
+          : 'http://n8n.onlysaid-dev.com/';
+        shell.openExternal(n8nUrl);
         break;
       case 'help:community':
         shell.openExternal('https://www.electronjs.org/community');
         break;
       case 'help:issues':
-        shell.openExternal('https://github.com/electron/electron/issues');
+        shell.openExternal('https://github.com/spoonbobo/onlysaid/issues');
         break;
       default:
         console.warn('Unknown menu action:', action);

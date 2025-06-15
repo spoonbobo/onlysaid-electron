@@ -49,3 +49,4 @@ import "./modules/LaraServerModule";
 import "./modules/ChessMCPServerModule";
 import "./modules/OTRSServerModule";
 import "./modules/MoodleServerModule";
+import "./modules/AtlassianServerModule";

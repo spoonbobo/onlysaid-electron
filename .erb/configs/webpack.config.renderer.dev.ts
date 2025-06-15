@@ -51,6 +51,14 @@ const configuration: webpack.Configuration = {
 
   target: ['web', 'electron-renderer'],
 
+  // Add externals to prevent bundling Node.js-specific modules
+  externals: [
+    '@playwright/mcp',
+    'playwright',
+    'playwright-core',
+    'chromium-bidi',
+  ],
+
   entry: [
     `webpack-dev-server/client?http://localhost:${port}/dist`,
     'webpack/hot/only-dev-server',

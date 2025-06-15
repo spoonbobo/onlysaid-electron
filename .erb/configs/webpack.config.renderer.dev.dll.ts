@@ -28,6 +28,10 @@ const configuration: webpack.Configuration = {
         'crypto-browserify',
         '@openbnb/mcp-server-airbnb',
         '@modelcontextprotocol/sdk',
+        '@playwright/mcp',
+        'playwright',
+        'playwright-core',
+        'chromium-bidi',
     ],
 
     /**
@@ -39,7 +43,10 @@ const configuration: webpack.Configuration = {
         renderer: Object.keys(dependencies || {}).filter(
             (dependency) =>
                 dependency !== '@openbnb/mcp-server-airbnb' &&
-                dependency !== '@modelcontextprotocol/sdk'
+                dependency !== '@modelcontextprotocol/sdk' &&
+                dependency !== '@playwright/mcp' &&
+                dependency !== 'playwright' &&
+                dependency !== 'playwright-core'
         ),
     },
 

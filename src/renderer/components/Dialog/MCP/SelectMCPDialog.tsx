@@ -77,12 +77,12 @@ export default function SelectMCPDialog({
   };
 
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth scroll="paper">
+    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth scroll="paper" sx={{ '& .MuiDialog-paper': { minHeight: '500px' } }}>
       <DialogTitle sx={{ pb: 1 }}>
         {intl.formatMessage({ id: "mcp.selectDialog.title", defaultMessage: "Select MCP Services" })}
       </DialogTitle>
       <DialogContent sx={{ padding: 0, borderTop: '1px solid divider', borderBottom: '1px solid divider' }}>
-        <List dense sx={{ width: '100%', bgcolor: 'background.paper', maxHeight: 300, overflowY: 'auto' }}>
+        <List dense sx={{ width: '100%', bgcolor: 'background.paper', maxHeight: 450, overflowY: 'auto' }}>
           {availableMcps.length > 0 && (
             <>
               <ListItem

@@ -16,7 +16,8 @@ import {
   ZoomIn,
   ZoomOut,
   Code,
-  Notifications
+  Notifications,
+  AccountTree
 } from '@mui/icons-material';
 import { useIntl } from 'react-intl';
 import { useNotificationStore } from "@/renderer/stores/Notification/NotificationStore";
@@ -392,6 +393,13 @@ const TitleBar = () => {
             </Typography>
           </MenuItem>
           <Divider />
+          <MenuItem onClick={() => handleMenuAction('view:n8n')}>
+            <AccountTree sx={{ fontSize: 16, mr: 1 }} />
+            <Typography variant="body2">
+              {intl.formatMessage({ id: 'titleBar.view.n8n' })}
+            </Typography>
+          </MenuItem>
+          <Divider />
           <MenuItem onClick={() => handleMenuAction('view:zoom-in')}>
             <ZoomIn sx={{ fontSize: 16, mr: 1 }} />
             <Typography variant="body2">
@@ -446,11 +454,6 @@ const TitleBar = () => {
           <MenuItem onClick={() => handleMenuAction('help:documentation')}>
             <Typography variant="body2">
               {intl.formatMessage({ id: 'titleBar.help.documentation' })}
-            </Typography>
-          </MenuItem>
-          <MenuItem onClick={() => handleMenuAction('help:community')}>
-            <Typography variant="body2">
-              {intl.formatMessage({ id: 'titleBar.help.community' })}
             </Typography>
           </MenuItem>
           <MenuItem onClick={() => handleMenuAction('help:issues')}>
