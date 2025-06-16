@@ -1,4 +1,4 @@
-import { TextField, Switch, Button, FormControlLabel, Typography, Box, List, ListItem, ListItemText, ListItemIcon, Chip } from "@mui/material";
+import { TextField, Switch, Button, FormControlLabel, Typography, Box, List, ListItem, ListItemText, ListItemIcon, Chip, IconButton, CircularProgress } from "@mui/material";
 import { useState, useEffect } from "react";
 import { FormattedMessage, useIntl as useReactIntl } from "react-intl";
 import SettingsSection from "@/renderer/components/Settings/SettingsSection";
@@ -8,7 +8,7 @@ import { useUserTokenStore } from "@/renderer/stores/User/UserToken";
 import { useIntl } from "@/renderer/providers/IntlProvider";
 import { useThemeStore } from "@/renderer/providers/MaterialTheme";
 import { toast } from "@/utils/toast";
-import { AccountBox, Computer, Smartphone, Tablet } from "@mui/icons-material";
+import { AccountBox, Computer, Smartphone, Tablet, Delete, Refresh } from "@mui/icons-material";
 import ThemeCustomization from "@/renderer/components/Settings/ThemeCustomization";
 
 interface DeviceInfo {
@@ -22,24 +22,26 @@ interface DeviceInfo {
   electronVersion: string;
 }
 
-interface Device {
-  id: string;
-  name: string;
-  platform: string;
-  osVersion: string;
-  lastSeen: string;
-  isCurrent: boolean;
-}
-
 function UserPreferences() {
   const { locale, setLocale } = useIntl();
   const intl = useReactIntl();
+  
+  // User store
   const user = useUserStore(state => state.user);
   const isLoading = useUserStore(state => state.isLoading);
   const error = useUserStore(state => state.error);
   const signIn = useUserStore(state => state.signIn);
   const cancelSignIn = useUserStore(state => state.cancelSignIn);
   const logout = useUserStore(state => state.logout);
+  
+  // Device management from store
+  const devices = useUserStore(state => state.devices);
+  const isDevicesLoading = useUserStore(state => state.isDevicesLoading);
+  const devicesError = useUserStore(state => state.devicesError);
+  const fetchDevices = useUserStore(state => state.fetchDevices);
+  const registerDevice = useUserStore(state => state.registerDevice);
+  const removeDevice = useUserStore(state => state.removeDevice);
+  const updateDeviceLastSeenOnStartup = useUserStore(state => state.updateDeviceLastSeenOnStartup);
 
   const isSigningIn = useUserTokenStore(state => state.isSigningIn);
   const signInError = useUserTokenStore(state => state.signInError);
@@ -51,9 +53,9 @@ function UserPreferences() {
     language: locale
   });
 
-  const [devices, setDevices] = useState<Device[]>([]);
   const [currentDeviceInfo, setCurrentDeviceInfo] = useState<DeviceInfo | null>(null);
-  const [deviceId, setDeviceId] = useState<string>("");
+  const [currentDeviceId, setCurrentDeviceId] = useState<string>("");
+  const [hasRegisteredCurrentDevice, setHasRegisteredCurrentDevice] = useState(false);
 
   useEffect(() => {
     // Update language preference when locale changes
@@ -81,21 +83,7 @@ function UserPreferences() {
         ]);
         
         setCurrentDeviceInfo(deviceInfo);
-        setDeviceId(deviceIdResult);
-
-        // Create current device entry
-        const currentDevice: Device = {
-          id: deviceIdResult,
-          name: deviceInfo.hostname,
-          platform: formatPlatform(deviceInfo.platform),
-          osVersion: deviceInfo.osVersion,
-          lastSeen: new Date().toISOString(),
-          isCurrent: true
-        };
-
-        // For now, just show the current device
-        // TODO: Replace with actual API call when device list endpoint is implemented
-        setDevices([currentDevice]);
+        setCurrentDeviceId(deviceIdResult);
       } catch (error) {
         console.error('Error fetching device info:', error);
       }
@@ -103,6 +91,33 @@ function UserPreferences() {
 
     fetchDeviceInfo();
   }, []);
+
+  useEffect(() => {
+    // Fetch devices when user is authenticated
+    if (user) {
+      fetchDevices();
+    }
+  }, [user, fetchDevices]);
+
+  useEffect(() => {
+    // Register current device if not in the list and user is authenticated
+    // Only run this once when the component mounts and we have all the required data
+    if (user && currentDeviceId && currentDeviceInfo && !hasRegisteredCurrentDevice && !isDevicesLoading) {
+      const currentDeviceExists = devices.some(device => device.device_id === currentDeviceId);
+      
+      if (!currentDeviceExists) {
+        const deviceName = `${formatPlatform(currentDeviceInfo.platform)} - ${currentDeviceInfo.hostname}`;
+        console.log('Registering current device:', currentDeviceId, deviceName);
+        registerDevice(currentDeviceId, deviceName);
+      } else {
+        // Update last seen for current device only once when app starts
+        console.log('Updating last seen for current device on app start');
+        updateDeviceLastSeenOnStartup(currentDeviceId);
+      }
+      
+      setHasRegisteredCurrentDevice(true);
+    }
+  }, [user, currentDeviceId, currentDeviceInfo, devices, isDevicesLoading, hasRegisteredCurrentDevice, registerDevice, updateDeviceLastSeenOnStartup]);
 
   const formatPlatform = (platform: string) => {
     const platformMap: Record<string, string> = {
@@ -116,13 +131,13 @@ function UserPreferences() {
     return platformMap[platform] || platform;
   };
 
-  const getDeviceIcon = (platform: string) => {
-    const lowerPlatform = platform.toLowerCase();
-    if (lowerPlatform.includes('windows') || lowerPlatform.includes('mac') || lowerPlatform.includes('linux')) {
+  const getDeviceIcon = (deviceName: string) => {
+    const lowerName = deviceName.toLowerCase();
+    if (lowerName.includes('windows') || lowerName.includes('mac') || lowerName.includes('linux')) {
       return <Computer />;
-    } else if (lowerPlatform.includes('android') || lowerPlatform.includes('ios')) {
+    } else if (lowerName.includes('android') || lowerName.includes('ios') || lowerName.includes('iphone')) {
       return <Smartphone />;
-    } else if (lowerPlatform.includes('tablet') || lowerPlatform.includes('ipad')) {
+    } else if (lowerName.includes('tablet') || lowerName.includes('ipad')) {
       return <Tablet />;
     }
     return <Computer />;
@@ -155,6 +170,21 @@ function UserPreferences() {
       console.error('Error opening account management:', error);
       toast.error(intl.formatMessage({ id: 'toast.errorOpeningLink' }));
     }
+  };
+
+  const handleRemoveDevice = async (deviceId: string) => {
+    if (deviceId === currentDeviceId) {
+      toast.error('Cannot remove current device');
+      return;
+    }
+    
+    if (window.confirm(intl.formatMessage({ id: 'settings.confirmRemoveDevice' }))) {
+      await removeDevice(deviceId);
+    }
+  };
+
+  const handleRefreshDevices = () => {
+    fetchDevices();
   };
 
   const handlePreferenceChange = (key: string, value: any) => {
@@ -245,61 +275,102 @@ function UserPreferences() {
         </Box>
       </SettingsSection>
 
-      <SettingsSection title={<FormattedMessage id="settings.connectedDevices" />} sx={{ mb: 3 }}>
-        <Box sx={{ py: 2 }}>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            <FormattedMessage id="settings.connectedDevicesDescription" />
-          </Typography>
-          
-          <List sx={{ bgcolor: 'background.paper', borderRadius: 1, border: '1px solid', borderColor: 'divider' }}>
-            {devices.map((device, index) => (
-              <ListItem key={device.id} divider={index < devices.length - 1}>
-                <ListItemIcon>
-                  {getDeviceIcon(device.platform)}
-                </ListItemIcon>
-                <ListItemText
-                  primary={
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                      <Typography variant="subtitle2">
-                        {device.name}
-                      </Typography>
-                      {device.isCurrent && (
-                        <Chip 
-                          label={<FormattedMessage id="settings.currentDevice" />}
-                          size="small" 
-                          color="primary" 
-                          variant="outlined"
-                        />
-                      )}
-                    </Box>
-                  }
-                  secondary={
-                    <Box>
-                      <Typography variant="body2" color="text.secondary">
-                        {device.platform} {device.osVersion}
-                      </Typography>
-                      <Typography variant="caption" color="text.secondary">
-                        <FormattedMessage 
-                          id="settings.deviceId" 
-                          values={{ id: device.id }}
-                        />
-                      </Typography>
-                      <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
-                        <FormattedMessage 
-                          id="settings.lastSeen" 
-                          values={{ 
-                            time: new Date(device.lastSeen).toLocaleString(locale)
-                          }}
-                        />
-                      </Typography>
-                    </Box>
-                  }
-                />
-              </ListItem>
-            ))}
-          </List>
-        </Box>
-      </SettingsSection>
+      {user && (
+        <SettingsSection title={<FormattedMessage id="settings.connectedDevices" />} sx={{ mb: 3 }}>
+          <Box sx={{ py: 2 }}>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+              <Typography variant="body2" color="text.secondary">
+                <FormattedMessage id="settings.connectedDevicesDescription" />
+              </Typography>
+              <IconButton 
+                onClick={handleRefreshDevices} 
+                disabled={isDevicesLoading}
+                size="small"
+              >
+                {isDevicesLoading ? <CircularProgress size={20} /> : <Refresh />}
+              </IconButton>
+            </Box>
+
+            {devicesError && (
+              <Typography color="error" variant="body2" sx={{ mb: 2 }}>
+                {devicesError}
+              </Typography>
+            )}
+            
+            <List sx={{ bgcolor: 'background.paper', borderRadius: 1, border: '1px solid', borderColor: 'divider' }}>
+              {devices.length === 0 && !isDevicesLoading ? (
+                <ListItem>
+                  <ListItemText
+                    primary={<FormattedMessage id="settings.noDevicesFound" />}
+                    secondary={<FormattedMessage id="settings.noDevicesFoundDescription" />}
+                  />
+                </ListItem>
+              ) : (
+                devices.map((device, index) => {
+                  const isCurrentDevice = device.device_id === currentDeviceId;
+                  return (
+                    <ListItem 
+                      key={device.device_id} 
+                      divider={index < devices.length - 1}
+                      secondaryAction={
+                        !isCurrentDevice && (
+                          <IconButton 
+                            edge="end" 
+                            aria-label="delete"
+                            onClick={() => handleRemoveDevice(device.device_id)}
+                            size="small"
+                          >
+                            <Delete />
+                          </IconButton>
+                        )
+                      }
+                    >
+                      <ListItemIcon>
+                        {getDeviceIcon(device.device_name || 'computer')}
+                      </ListItemIcon>
+                      <ListItemText
+                        primary={
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <Typography variant="subtitle2">
+                              {device.device_name || 'Unknown Device'}
+                            </Typography>
+                            {isCurrentDevice && (
+                              <Chip 
+                                label={<FormattedMessage id="settings.currentDevice" />}
+                                size="small" 
+                                color="primary" 
+                                variant="outlined"
+                              />
+                            )}
+                          </Box>
+                        }
+                        secondary={
+                          <Box>
+                            <Typography variant="caption" color="text.secondary">
+                              <FormattedMessage 
+                                id="settings.deviceId" 
+                                values={{ id: device.device_id }}
+                              />
+                            </Typography>
+                            <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                              <FormattedMessage 
+                                id="settings.lastSeen" 
+                                values={{ 
+                                  time: new Date(device.last_seen).toLocaleString(locale)
+                                }}
+                              />
+                            </Typography>
+                          </Box>
+                        }
+                      />
+                    </ListItem>
+                  );
+                })
+              )}
+            </List>
+          </Box>
+        </SettingsSection>
+      )}
 
       <SettingsSection title={<FormattedMessage id="settings.userPreferences" />} sx={{ mb: 3 }}>
         <SettingsFormField>

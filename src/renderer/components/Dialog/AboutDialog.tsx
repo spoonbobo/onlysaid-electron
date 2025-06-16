@@ -31,22 +31,19 @@ function AboutDialog({ open, onClose }: AboutDialogProps) {
   const intl = useIntl();
   const [version, setVersion] = useState<string>("Loading...");
   const [buildTime, setBuildTime] = useState<string>("");
-  const [deviceId, setDeviceId] = useState<string>("Loading...");
   const [deviceInfo, setDeviceInfo] = useState<DeviceInfo | null>(null);
   const currentYear = new Date().getFullYear();
 
   useEffect(() => {
     const fetchAppInfo = async () => {
       try {
-        const [appVersion, appBuildTime, appDeviceId, appDeviceInfo] = await Promise.all([
+        const [appVersion, appBuildTime, appDeviceInfo] = await Promise.all([
           window.electron.ipcRenderer.invoke('app:get-version'),
           window.electron.ipcRenderer.invoke('app:get-build-time'),
-          window.electron.ipcRenderer.invoke('app:get-device-id'),
           window.electron.ipcRenderer.invoke('app:get-device-info')
         ]);
 
         setVersion(appVersion);
-        setDeviceId(appDeviceId);
         setDeviceInfo(appDeviceInfo);
 
         // Format build time nicely
@@ -56,7 +53,6 @@ function AboutDialog({ open, onClose }: AboutDialogProps) {
         console.error('Failed to get app info:', error);
         setVersion('Unknown');
         setBuildTime('Unknown');
-        setDeviceId('Unknown');
         setDeviceInfo(null);
       }
     };
@@ -94,7 +90,7 @@ function AboutDialog({ open, onClose }: AboutDialogProps) {
           </Typography>
 
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            Device ID: {deviceId} ({deviceInfo ? formatPlatform(deviceInfo.platform) : 'Loading...'})
+            Platform: {deviceInfo ? formatPlatform(deviceInfo.platform) : 'Loading...'}
           </Typography>
 
           <Divider sx={{ my: 2 }} />

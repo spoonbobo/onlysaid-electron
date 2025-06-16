@@ -10,6 +10,12 @@ import {
   ICreatePlanArgs,
   IUpdatePlanArgs
 } from '@/../../types/Usage/Usage';
+import {
+  IUserDeviceListArgs,
+  IUserDeviceRegisterArgs,
+  IUserDeviceUpdateArgs,
+  IUserDeviceRemoveArgs
+} from '@/../../types/User/UserDevice';
 
 // namespace
 type AuthChannels = 'auth:sign-in' | 'auth:signed-in' | 'auth:cancel';
@@ -57,7 +63,7 @@ type SSEChannels = 'streaming:abort_stream' | 'streaming:chat_stream_complete' |
 type MCPChannels = 'mcp:initialize_client' | 'mcp:list_tools' | 'mcp:execute_tool';
 
 type ApiChatChannels = 'chat:get' | 'chat:create' | 'chat:update' | 'chat:delete';
-type ApiUserChannels = 'user:auth' | 'user:get' | 'user:get_one' | 'user:update' | 'user:search' | 'user:usage:log' | 'user:usage:get-logs' | 'user:usage:get-analytics' | 'user:plan:get' | 'user:plan:create' | 'user:plan:update';
+type ApiUserChannels = 'user:auth' | 'user:get' | 'user:get_one' | 'user:update' | 'user:search' | 'user:usage:log' | 'user:usage:get-logs' | 'user:usage:get-analytics' | 'user:plan:get' | 'user:plan:create' | 'user:plan:update' | 'user:devices:list' | 'user:devices:register' | 'user:devices:update' | 'user:devices:remove';
 type ApiWorkspaceChannels =
   | 'workspace:get'
   | 'workspace:create'
@@ -204,6 +210,16 @@ const electronHandler = {
       ipcRenderer.invoke('user:plan:create', args),
     updatePlan: (args: IUpdatePlanArgs) =>
       ipcRenderer.invoke('user:plan:update', args),
+
+    // Device management
+    listDevices: (args: IUserDeviceListArgs) =>
+      ipcRenderer.invoke('user:devices:list', args),
+    registerDevice: (args: IUserDeviceRegisterArgs) =>
+      ipcRenderer.invoke('user:devices:register', args),
+    updateDevice: (args: IUserDeviceUpdateArgs) =>
+      ipcRenderer.invoke('user:devices:update', args),
+    removeDevice: (args: IUserDeviceRemoveArgs) =>
+      ipcRenderer.invoke('user:devices:remove', args),
   },
 
   workspace: {

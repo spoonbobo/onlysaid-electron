@@ -363,160 +363,208 @@ const TitleBar = () => {
           </Box>
         </Box>
 
-        {/* Navigation Arrows and Search Bar (center) */}
-        <Box sx={{ flex: 1, display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 1, WebkitAppRegion: 'no-drag' }}>
-          {/* Navigation Arrows - moved to left of search bar */}
-          <Box sx={{ display: 'flex', alignItems: 'center' }}>
-            <IconButton
-              size="small"
-              onClick={handleGoBack}
-              disabled={!canGoBack}
-              sx={{
-                width: 24,
-                height: 24,
-                mr: 0.5,
-                '&:hover': { bgcolor: 'action.hover' },
-                '&.Mui-disabled': {
-                  color: 'action.disabled'
-                }
-              }}
-              title={intl.formatMessage({ id: 'titleBar.navigation.back' })}
-            >
-              <ArrowBack sx={{ fontSize: 12 }} />
-            </IconButton>
-            <IconButton
-              size="small"
-              onClick={handleGoForward}
-              disabled={!canGoForward}
-              sx={{
-                width: 24,
-                height: 24,
-                mr: 1,
-                '&:hover': { bgcolor: 'action.hover' },
-                '&.Mui-disabled': {
-                  color: 'action.disabled'
-                }
-              }}
-              title={intl.formatMessage({ id: 'titleBar.navigation.forward' })}
-            >
-              <ArrowForward sx={{ fontSize: 12 }} />
-            </IconButton>
-          </Box>
+        {/* Draggable spacer */}
+        <Box sx={{ width: 20, WebkitAppRegion: 'drag' }} />
 
-          {/* Context Search Bar */}
-          <Autocomplete
-            options={availableContexts}
-            getOptionLabel={(option) => option.name}
-            value={getCurrentContextOption()}
-            onChange={handleContextChange}
-            open={searchOpen}
-            onOpen={() => setSearchOpen(true)}
-            onClose={() => setSearchOpen(false)}
-            disableClearable
-            size="small"
-            groupBy={(option) => option.section}
-            sx={{
-              minWidth: 250,
-              maxWidth: 350,
-              '& .MuiOutlinedInput-root': {
-                height: 24,
-                fontSize: '13px',
-                paddingLeft: '8px',
-                '& .MuiOutlinedInput-notchedOutline': {
-                  border: 'none'
-                },
-                '&:hover .MuiOutlinedInput-notchedOutline': {
-                  border: '1px solid',
-                  borderColor: 'divider'
-                },
-                '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
-                  border: '1px solid',
-                  borderColor: 'primary.main'
-                }
-              },
-              '& .MuiAutocomplete-input': {
-                fontSize: '13px',
-                fontWeight: 500,
-                color: 'text.primary',
-                textAlign: 'center',
-                cursor: 'pointer',
-                paddingLeft: '4px !important'
-              },
-              '& .MuiAutocomplete-endAdornment': {
-                display: 'none'
-              },
-              '& .MuiInputAdornment-root': {
-                marginRight: '4px'
-              }
-            }}
-            renderInput={(params) => (
-              <TextField
-                {...params}
-                variant="outlined"
-                placeholder="Search contexts..."
-                InputProps={{
-                  ...params.InputProps,
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <Search 
-                        sx={{ 
-                          fontSize: 14, 
-                          color: 'text.secondary',
-                          opacity: searchOpen ? 0.8 : 0.6
-                        }} 
-                      />
-                    </InputAdornment>
-                  ),
-                }}
+        {/* Navigation Arrows and Search Bar (center) - with specific drag regions */}
+        <Box sx={{ 
+          flex: 1, 
+          display: 'flex', 
+          justifyContent: 'center', 
+          alignItems: 'center', 
+          gap: 1,
+          position: 'relative'
+        }}>
+          {/* Draggable area before controls */}
+          <Box sx={{ 
+            position: 'absolute',
+            left: 0,
+            right: 0,
+            top: 0,
+            bottom: 0,
+            WebkitAppRegion: 'drag',
+            zIndex: 0
+          }} />
+          
+          {/* Navigation and Search Container - no-drag zone */}
+          <Box sx={{ 
+            display: 'flex', 
+            alignItems: 'center', 
+            gap: 1,
+            WebkitAppRegion: 'no-drag',
+            position: 'relative',
+            zIndex: 1
+          }}>
+            {/* Navigation Arrows */}
+            <Box sx={{ display: 'flex', alignItems: 'center' }}>
+              <IconButton
+                size="small"
+                onClick={handleGoBack}
+                disabled={!canGoBack}
                 sx={{
-                  '& .MuiInputBase-input': {
-                    cursor: 'pointer'
+                  width: 24,
+                  height: 24,
+                  mr: 0.5,
+                  '&:hover': { bgcolor: 'action.hover' },
+                  '&.Mui-disabled': {
+                    color: 'action.disabled'
                   }
                 }}
-              />
-            )}
-            renderGroup={(params) => (
-              <Box key={params.group}>
-                <Typography
-                  variant="caption"
-                  sx={{
-                    px: 2,
-                    py: 1,
-                    display: 'block',
-                    fontWeight: 600,
-                    color: 'text.secondary',
-                    backgroundColor: 'action.hover',
-                    fontSize: '11px',
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.5px'
+                title={intl.formatMessage({ id: 'titleBar.navigation.back' })}
+              >
+                <ArrowBack sx={{ fontSize: 12 }} />
+              </IconButton>
+              <IconButton
+                size="small"
+                onClick={handleGoForward}
+                disabled={!canGoForward}
+                sx={{
+                  width: 24,
+                  height: 24,
+                  mr: 1,
+                  '&:hover': { bgcolor: 'action.hover' },
+                  '&.Mui-disabled': {
+                    color: 'action.disabled'
+                  }
+                }}
+                title={intl.formatMessage({ id: 'titleBar.navigation.forward' })}
+              >
+                <ArrowForward sx={{ fontSize: 12 }} />
+              </IconButton>
+            </Box>
+
+            {/* Context Search Bar */}
+            <Autocomplete
+              options={availableContexts}
+              getOptionLabel={(option) => option.name}
+              value={getCurrentContextOption()}
+              onChange={handleContextChange}
+              open={searchOpen}
+              onOpen={() => setSearchOpen(true)}
+              onClose={() => setSearchOpen(false)}
+              disableClearable
+              size="small"
+              groupBy={(option) => option.section}
+              sx={{
+                minWidth: 250,
+                maxWidth: 350,
+                '& .MuiOutlinedInput-root': {
+                  height: 24,
+                  fontSize: '13px',
+                  paddingLeft: '8px',
+                  '& .MuiOutlinedInput-notchedOutline': {
+                    border: 'none'
+                  },
+                  '&:hover .MuiOutlinedInput-notchedOutline': {
+                    border: '1px solid',
+                    borderColor: 'divider'
+                  },
+                  '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                    border: '1px solid',
+                    borderColor: 'primary.main'
+                  }
+                },
+                '& .MuiAutocomplete-input': {
+                  fontSize: '13px',
+                  fontWeight: 500,
+                  color: 'text.primary',
+                  textAlign: 'center',
+                  cursor: 'pointer',
+                  paddingLeft: '4px !important'
+                },
+                '& .MuiAutocomplete-endAdornment': {
+                  display: 'none'
+                },
+                '& .MuiInputAdornment-root': {
+                  marginRight: '4px'
+                }
+              }}
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  variant="outlined"
+                  placeholder="Search contexts..."
+                  InputProps={{
+                    ...params.InputProps,
+                    startAdornment: (
+                      <InputAdornment position="start">
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                          <Search 
+                            sx={{ 
+                              fontSize: 14, 
+                              color: 'text.secondary',
+                              opacity: searchOpen ? 0.8 : 0.6
+                            }} 
+                          />
+                          {getCurrentContextOption()?.icon && (
+                            <Avatar 
+                              src={getCurrentContextOption()?.icon || ''} 
+                              sx={{ 
+                                width: 14, 
+                                height: 14,
+                                fontSize: '8px'
+                              }}
+                            >
+                              {getCurrentContextOption()?.name[0]?.toUpperCase()}
+                            </Avatar>
+                          )}
+                        </Box>
+                      </InputAdornment>
+                    ),
                   }}
-                >
-                  {params.group}
-                </Typography>
-                {params.children}
-              </Box>
-            )}
-            renderOption={(props, option) => (
-              <Box component="li" {...props} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                {option.icon && (
-                  <Avatar 
-                    src={option.icon} 
-                    sx={{ 
-                      width: 16, 
-                      height: 16,
-                      fontSize: '10px'
+                  sx={{
+                    '& .MuiInputBase-input': {
+                      cursor: 'pointer'
+                    }
+                  }}
+                />
+              )}
+              renderGroup={(params) => (
+                <Box key={params.group}>
+                  <Typography
+                    variant="caption"
+                    sx={{
+                      px: 2,
+                      py: 1,
+                      display: 'block',
+                      fontWeight: 600,
+                      color: 'text.secondary',
+                      backgroundColor: 'action.hover',
+                      fontSize: '11px',
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.5px'
                     }}
                   >
-                    {option.name[0]?.toUpperCase()}
-                  </Avatar>
-                )}
-                <Typography variant="body2" sx={{ fontSize: '13px' }}>
-                  {option.name}
-                </Typography>
-              </Box>
-            )}
-          />
+                    {params.group}
+                  </Typography>
+                  {params.children}
+                </Box>
+              )}
+              renderOption={(props, option) => (
+                <Box component="li" {...props} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  {option.icon && (
+                    <Avatar 
+                      src={option.icon} 
+                      sx={{ 
+                        width: 16, 
+                        height: 16,
+                        fontSize: '10px'
+                      }}
+                    >
+                      {option.name[0]?.toUpperCase()}
+                    </Avatar>
+                  )}
+                  <Typography variant="body2" sx={{ fontSize: '13px' }}>
+                    {option.name}
+                  </Typography>
+                </Box>
+              )}
+            />
+          </Box>
         </Box>
+
+        {/* Draggable spacer */}
+        <Box sx={{ width: 20, WebkitAppRegion: 'drag' }} />
 
         {/* Window Controls (right side) */}
         <Box sx={{ display: 'flex', alignItems: 'center', WebkitAppRegion: 'no-drag' }}>

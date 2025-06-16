@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { IUser } from "@/../../types/User/User";
+import { IUserDevice } from "@/../../types/User/UserDevice";
 import { useUserTokenStore } from "./UserToken";
 import { useAgentStore } from "../Agent/AgentStore";
 import { useSocketStore } from "../Socket/SocketStore";
@@ -8,9 +9,13 @@ import { toast } from "@/utils/toast";
 
 interface UserStore {
   user: IUser | null;
+  devices: IUserDevice[];
   isLoading: boolean;
+  isDevicesLoading: boolean;
   error: string | null;
+  devicesError: string | null;
   timeoutId: NodeJS.Timeout | null;
+  hasUpdatedLastSeenOnStartup: boolean;
   setUser: (user: IUser | null) => void;
   updateUser: (user: IUser) => void;
   signIn: () => void;
@@ -18,15 +23,28 @@ interface UserStore {
   logout: () => void;
   handleAuthentication: (input: { response?: any; token?: string; cookieName?: string | null }, intl?: any) => Promise<void>;
   clearAuthTimeout: () => void;
+  
+  // Device management actions
+  fetchDevices: () => Promise<void>;
+  registerDevice: (deviceId: string, deviceName?: string) => Promise<void>;
+  updateDevice: (deviceId: string, deviceName?: string) => Promise<void>;
+  removeDevice: (deviceId: string) => Promise<void>;
+  updateDeviceLastSeen: (deviceId: string) => Promise<void>;
+  clearDevices: () => void;
+  updateDeviceLastSeenOnStartup: (deviceId: string) => Promise<void>;
 }
 
 export const useUserStore = create<UserStore>()(
   persist(
     (set, get) => ({
       user: null,
+      devices: [],
       isLoading: false,
+      isDevicesLoading: false,
       error: null,
+      devicesError: null,
       timeoutId: null,
+      hasUpdatedLastSeenOnStartup: false,
 
       setUser: (user) => set({ user: user ? { ...user } : null }),
 
@@ -239,7 +257,12 @@ export const useUserStore = create<UserStore>()(
         const { clearAgent } = useAgentStore.getState();
         const { close } = useSocketStore.getState();
 
-        set({ user: null });
+        set({ 
+          user: null,
+          devices: [],
+          devicesError: null,
+          hasUpdatedLastSeenOnStartup: false
+        });
         clearToken();
         clearAgent();
         close();
@@ -256,11 +279,203 @@ export const useUserStore = create<UserStore>()(
       updateUser: (user: IUser) => {
         set({ user: { ...user } });
       },
+
+      // Device management actions
+      fetchDevices: async () => {
+        const { token } = useUserTokenStore.getState();
+        if (!token) {
+          set({ devicesError: 'No authentication token available' });
+          return;
+        }
+
+        set({ isDevicesLoading: true, devicesError: null });
+
+        try {
+          const response = await window.electron.user.listDevices({ token });
+          
+          if (response.error) {
+            throw new Error(response.error);
+          }
+
+          set({ 
+            devices: response.data?.data || [],
+            isDevicesLoading: false,
+            devicesError: null
+          });
+        } catch (error: any) {
+          console.error('[UserStore] Error fetching devices:', error);
+          const errorMsg = error.message || 'Failed to fetch devices';
+          set({ 
+            devicesError: errorMsg,
+            isDevicesLoading: false
+          });
+          toast.error(errorMsg);
+        }
+      },
+
+      registerDevice: async (deviceId: string, deviceName?: string) => {
+        const { token } = useUserTokenStore.getState();
+        if (!token) {
+          toast.error('No authentication token available');
+          return;
+        }
+
+        try {
+          const response = await window.electron.user.registerDevice({
+            token,
+            data: { device_id: deviceId, device_name: deviceName }
+          });
+
+          if (response.error) {
+            throw new Error(response.error);
+          }
+
+          // Refresh devices list
+          await get().fetchDevices();
+          
+          const successMsg = `Device "${deviceName || deviceId}" registered successfully`;
+          toast.success(successMsg);
+        } catch (error: any) {
+          console.error('[UserStore] Error registering device:', error);
+          const errorMsg = error.message || 'Failed to register device';
+          toast.error(errorMsg);
+        }
+      },
+
+      updateDevice: async (deviceId: string, deviceName?: string) => {
+        const { token } = useUserTokenStore.getState();
+        if (!token) {
+          toast.error('No authentication token available');
+          return;
+        }
+
+        try {
+          const response = await window.electron.user.updateDevice({
+            token,
+            data: { device_id: deviceId, device_name: deviceName }
+          });
+
+          if (response.error) {
+            throw new Error(response.error);
+          }
+
+          // Update local state
+          set(state => ({
+            devices: state.devices.map(device => 
+              device.device_id === deviceId 
+                ? { ...device, device_name: deviceName || device.device_name, last_seen: new Date().toISOString() }
+                : device
+            )
+          }));
+
+          const successMsg = `Device updated successfully`;
+          toast.success(successMsg);
+        } catch (error: any) {
+          console.error('[UserStore] Error updating device:', error);
+          const errorMsg = error.message || 'Failed to update device';
+          toast.error(errorMsg);
+        }
+      },
+
+      removeDevice: async (deviceId: string) => {
+        const { token } = useUserTokenStore.getState();
+        if (!token) {
+          toast.error('No authentication token available');
+          return;
+        }
+
+        try {
+          const response = await window.electron.user.removeDevice({
+            token,
+            device_id: deviceId
+          });
+
+          if (response.error) {
+            throw new Error(response.error);
+          }
+
+          // Remove from local state
+          set(state => ({
+            devices: state.devices.filter(device => device.device_id !== deviceId)
+          }));
+
+          toast.success('Device removed successfully');
+        } catch (error: any) {
+          console.error('[UserStore] Error removing device:', error);
+          const errorMsg = error.message || 'Failed to remove device';
+          toast.error(errorMsg);
+        }
+      },
+
+      updateDeviceLastSeen: async (deviceId: string) => {
+        const { token } = useUserTokenStore.getState();
+        if (!token) return;
+
+        try {
+          await window.electron.user.updateDevice({
+            token,
+            data: { 
+              device_id: deviceId,
+              last_seen: new Date().toISOString()
+            }
+          });
+
+          // Update local state silently (no toast for this)
+          set(state => ({
+            devices: state.devices.map(device => 
+              device.device_id === deviceId 
+                ? { ...device, last_seen: new Date().toISOString() }
+                : device
+            )
+          }));
+        } catch (error: any) {
+          console.error('[UserStore] Error updating device last seen:', error);
+          // Don't show toast for this background operation
+        }
+      },
+
+      clearDevices: () => {
+        set({ 
+          devices: [],
+          devicesError: null,
+          isDevicesLoading: false
+        });
+      },
+
+      updateDeviceLastSeenOnStartup: async (deviceId: string) => {
+        const { token } = useUserTokenStore.getState();
+        if (!token || get().hasUpdatedLastSeenOnStartup) return;
+
+        try {
+          await window.electron.user.updateDevice({
+            token,
+            data: { 
+              device_id: deviceId,
+              last_seen: new Date().toISOString()
+            }
+          });
+
+          // Update local state silently (no toast for this)
+          set(state => ({
+            devices: state.devices.map(device => 
+              device.device_id === deviceId 
+                ? { ...device, last_seen: new Date().toISOString() }
+                : device
+            ),
+            hasUpdatedLastSeenOnStartup: true
+          }));
+          
+          console.log('[UserStore] Updated last seen for current device on startup');
+        } catch (error: any) {
+          console.error('[UserStore] Error updating device last seen on startup:', error);
+        }
+      },
     }),
     {
       name: "user-storage",
       partialize: (state) => ({
         user: state.user,
+        devices: state.devices,
       }),
     }
   )

@@ -15,6 +15,14 @@ import {
   IUsageAnalyticsResponse,
   IUserPlanResponse
 } from "@/../../types/Usage/Usage";
+import {
+  IUserDeviceListArgs,
+  IUserDeviceRegisterArgs,
+  IUserDeviceUpdateArgs,
+  IUserDeviceRemoveArgs,
+  IUserDeviceResponse,
+  IUserDeviceListResponse
+} from "@/../../types/User/UserDevice";
 
 export const setupUserHandlers = () => {
   ipcMain.handle('user:auth', async (event, args) => {
@@ -223,6 +231,89 @@ export const setupUserHandlers = () => {
       return { data: response.data };
     } catch (error: any) {
       console.error('Error in main process API call (update_user_plan):', error.message);
+      return {
+        error: error.message,
+        status: error.response?.status
+      };
+    }
+  });
+
+  // User devices handlers
+  ipcMain.handle('user:devices:list', async (event, args: IUserDeviceListArgs) => {
+    try {
+      const response = await onlysaidServiceInstance.get<IUserDeviceListResponse>(
+        '/user/devices',
+        {
+          headers: {
+            Authorization: `Bearer ${args.token}`
+          }
+        }
+      );
+      return { data: response.data };
+    } catch (error: any) {
+      console.error('Error in main process API call (list_user_devices):', error.message);
+      return {
+        error: error.message,
+        status: error.response?.status
+      };
+    }
+  });
+
+  ipcMain.handle('user:devices:register', async (event, args: IUserDeviceRegisterArgs) => {
+    try {
+      const response = await onlysaidServiceInstance.post<IUserDeviceResponse>(
+        '/user/devices',
+        args.data,
+        {
+          headers: {
+            Authorization: `Bearer ${args.token}`
+          }
+        }
+      );
+      return { data: response.data };
+    } catch (error: any) {
+      console.error('Error in main process API call (register_user_device):', error.message);
+      return {
+        error: error.message,
+        status: error.response?.status
+      };
+    }
+  });
+
+  ipcMain.handle('user:devices:update', async (event, args: IUserDeviceUpdateArgs) => {
+    try {
+      const response = await onlysaidServiceInstance.put<IUserDeviceResponse>(
+        '/user/devices',
+        args.data,
+        {
+          headers: {
+            Authorization: `Bearer ${args.token}`
+          }
+        }
+      );
+      return { data: response.data };
+    } catch (error: any) {
+      console.error('Error in main process API call (update_user_device):', error.message);
+      return {
+        error: error.message,
+        status: error.response?.status
+      };
+    }
+  });
+
+  ipcMain.handle('user:devices:remove', async (event, args: IUserDeviceRemoveArgs) => {
+    try {
+      const response = await onlysaidServiceInstance.delete(
+        `/user/devices?device_id=${encodeURIComponent(args.device_id)}`,
+        {
+          headers: {
+            Authorization: `Bearer ${args.token}`
+          }
+        }
+      );
+      return { data: response.data };
+    } catch (error: any) {
+      console.error('Error in main process API call (remove_user_device):', error.message);
       return {
         error: error.message,
         status: error.response?.status
