@@ -116,9 +116,9 @@ export const useCryptoStore = create<CryptoStore>((set, get) => ({
   },
 
   getChatKey: async (chatId: string) => {
-    const { masterKey, chatKeys, isUnlocked, currentUserId } = get();
+    const { chatKeys, isUnlocked, currentUserId } = get();
 
-    if (!currentUserId || !masterKey || !isUnlocked) {
+    if (!currentUserId || !isUnlocked) {
       return null;
     }
 
@@ -128,7 +128,10 @@ export const useCryptoStore = create<CryptoStore>((set, get) => ({
     }
 
     try {
-      const response = await window.electron.crypto.getChatKey(currentUserId, chatId, masterKey);
+      // ✅ FIX: Use the same shared workspace key for decryption
+      const sharedWorkspaceKey = await deriveCryptoPasswordFromToken(chatId, "workspace-key");
+      
+      const response = await window.electron.crypto.getChatKey(currentUserId, chatId, sharedWorkspaceKey);
       
       if (!response.success) {
         console.error('Failed to get chat key:', response.error);
@@ -164,20 +167,20 @@ export const useCryptoStore = create<CryptoStore>((set, get) => ({
     set({ isLoading: true, error: null });
 
     try {
-      // Create master keys for ALL users using a shared workspace secret
-      const userMasterKeys: Record<string, string> = {};
+      // ✅ EASY FIX: Use workspace ID as shared secret
+      const sharedWorkspaceKey = await deriveCryptoPasswordFromToken(chatId, "workspace-key");
       
-      for (const userId of userIds) {
-        // Use workspace ID + user ID to derive a consistent key
-        const workspaceSecret = await deriveCryptoPasswordFromToken(chatId, userId);
-        userMasterKeys[userId] = workspaceSecret;
-      }
+      // Create same key for all users
+      const userMasterKeys: Record<string, string> = {};
+      userIds.forEach(userId => {
+        userMasterKeys[userId] = sharedWorkspaceKey; // Same key for everyone
+      });
 
       const response = await window.electron.crypto.createChatKey(
         chatId,
         currentUserId,
         userIds, // ✅ All users
-        userMasterKeys // ✅ Keys for all users
+        userMasterKeys // ✅ Same key for all
       );
 
       if (!response.success) {
