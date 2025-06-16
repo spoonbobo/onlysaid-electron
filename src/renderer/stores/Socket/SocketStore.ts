@@ -2,6 +2,8 @@ import { create } from 'zustand';
 import { IUser } from '@/../../types/User/User';
 import { IChatMessage } from '@/../../types/Chat/Message';
 import { useChatStore } from '@/renderer/stores/Chat/ChatStore';
+import { useUserStore } from '@/renderer/stores/User/UserStore';
+import { useUserTokenStore } from '@/renderer/stores/User/UserToken';
 
 interface SocketState {
   isConnected: boolean;
@@ -18,6 +20,7 @@ interface SocketState {
   deleteMessage: (roomId: string, messageId: string) => void;
   sendPing: () => void;
   joinWorkspace: (workspaceId: string) => void;
+  leaveWorkspace: (workspaceId: string) => void;
   attemptReconnect: () => void;
   handleNewMessage: (data: { message: IChatMessage, workspaceId: string }) => Promise<void>;
   handleMessageDeleted: (data: { roomId: string, messageId: string }) => void;
@@ -28,6 +31,8 @@ interface SocketState {
   handleFileCompleted: (data: { operationId: string, result?: any }) => void;
   handleFileError: (data: { operationId: string, error: string }) => void;
   setFileProgress: (progress: Record<string, { progress: number, stage?: 'network' | 'server' | 'complete' }>) => void;
+  handleWorkspaceJoined: (data: { workspaceId: string, userId: string }) => void;
+  handleWorkspaceLeft: (data: { workspaceId: string, userId: string }) => void;
 }
 
 let connectedListener: (() => void) | null = null;
@@ -42,6 +47,8 @@ let reconnectTimeoutId: NodeJS.Timeout | null = null;
 let fileProgressListener: (() => void) | null = null;
 let fileCompletedListener: (() => void) | null = null;
 let fileErrorListener: (() => void) | null = null;
+let workspaceJoinedListener: (() => void) | null = null;
+let workspaceLeftListener: (() => void) | null = null;
 
 const PING_INTERVAL = 30000;
 const PONG_TIMEOUT_DURATION = PING_INTERVAL + 15000;
@@ -74,7 +81,8 @@ export const useSocketStore = create<SocketState>((set, get) => ({
 
     set({ isConnecting: true, currentUser: user });
 
-    window.electron.socket.initialize(user)
+    const { token } = useUserTokenStore.getState();
+    window.electron.socket.initialize(user, token)
       .then(() => {
         if (!get().listenersReady) {
           if (!connectedListener) {
@@ -166,6 +174,19 @@ export const useSocketStore = create<SocketState>((set, get) => ({
               get().handleFileError(args[0] as { operationId: string, error: string });
             });
           }
+
+          if (!workspaceJoinedListener) {
+            workspaceJoinedListener = window.electron.ipcRenderer.on('socket:workspace-joined', (_event, ...args) => {
+              get().handleWorkspaceJoined(args[0] as { workspaceId: string, userId: string });
+            });
+          }
+
+          if (!workspaceLeftListener) {
+            workspaceLeftListener = window.electron.ipcRenderer.on('socket:workspace-left', (_event, ...args) => {
+              get().handleWorkspaceLeft(args[0] as { workspaceId: string, userId: string });
+            });
+          }
+
           set({ listenersReady: true });
         }
       })
@@ -230,6 +251,8 @@ export const useSocketStore = create<SocketState>((set, get) => ({
     if (fileProgressListener) { fileProgressListener(); fileProgressListener = null; }
     if (fileCompletedListener) { fileCompletedListener(); fileCompletedListener = null; }
     if (fileErrorListener) { fileErrorListener(); fileErrorListener = null; }
+    if (workspaceJoinedListener) { workspaceJoinedListener(); workspaceJoinedListener = null; }
+    if (workspaceLeftListener) { workspaceLeftListener(); workspaceLeftListener = null; }
 
     set({
       isConnected: false,
@@ -268,6 +291,12 @@ export const useSocketStore = create<SocketState>((set, get) => ({
     }
   },
 
+  leaveWorkspace: (workspaceId: string) => {
+    if (get().isConnected) {
+      window.electron.socket.leaveWorkspace(workspaceId);
+    }
+  },
+
   handleNewMessage: async (data: { message: IChatMessage, workspaceId: string }) => {
     console.log("message received", data);
 
@@ -295,6 +324,10 @@ export const useSocketStore = create<SocketState>((set, get) => ({
     set({ socketId: details.socketId });
     if (get().isConnected) {
       set({ isConnecting: false, isReconnecting: false, reconnectAttempts: 0 });
+      
+      // Auto-register device when socket connects
+      useUserStore.getState().autoRegisterDeviceOnConnect();
+      
       if (reconnectTimeoutId) {
         clearTimeout(reconnectTimeoutId);
         reconnectTimeoutId = null;
@@ -344,5 +377,15 @@ export const useSocketStore = create<SocketState>((set, get) => ({
     });
 
     set({ fileProgress: progress });
+  },
+
+  handleWorkspaceJoined: (data: { workspaceId: string, userId: string }) => {
+    console.log(`✅ Joined workspace: ${data.workspaceId}`);
+    // You can add any UI updates here if needed
+  },
+
+  handleWorkspaceLeft: (data: { workspaceId: string, userId: string }) => {
+    console.log(`❌ Left workspace: ${data.workspaceId}`);
+    // You can add any UI updates here if needed
   }
 }));

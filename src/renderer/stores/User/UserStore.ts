@@ -32,6 +32,7 @@ interface UserStore {
   updateDeviceLastSeen: (deviceId: string) => Promise<void>;
   clearDevices: () => void;
   updateDeviceLastSeenOnStartup: (deviceId: string) => Promise<void>;
+  autoRegisterDeviceOnConnect: () => Promise<void>;
 }
 
 export const useUserStore = create<UserStore>()(
@@ -470,6 +471,35 @@ export const useUserStore = create<UserStore>()(
           console.error('[UserStore] Error updating device last seen on startup:', error);
         }
       },
+
+      autoRegisterDeviceOnConnect: async () => {
+        const { user } = get();
+        const { token } = useUserTokenStore.getState();
+        
+        if (!user || !token) return;
+
+        try {
+          const [deviceId, deviceInfo] = await Promise.all([
+            window.electron.app.getDeviceId(),
+            window.electron.app.getDeviceInfo()
+          ]);
+
+          // Check if device exists
+          const devices = get().devices;
+          const deviceExists = devices.some(device => device.device_id === deviceId);
+
+          if (!deviceExists) {
+            // Register device
+            const deviceName = `${formatPlatform(deviceInfo.platform)} - ${deviceInfo.hostname}`;
+            await get().registerDevice(deviceId, deviceName);
+          } else {
+            // Just update last seen
+            await get().updateDeviceLastSeenOnStartup(deviceId);
+          }
+        } catch (error) {
+          console.error('[UserStore] Error auto-registering device:', error);
+        }
+      },
     }),
     {
       name: "user-storage",
@@ -523,4 +553,13 @@ const fetchUserData = async (token: string, retries = 3, delay = 1000) => {
     }
   }
   return null;
+}
+
+function formatPlatform(platform: string): string {
+  const platformMap: Record<string, string> = {
+    'win32': 'Windows',
+    'darwin': 'macOS',
+    'linux': 'Linux'
+  };
+  return platformMap[platform] || platform;
 }

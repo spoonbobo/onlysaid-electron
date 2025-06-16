@@ -6,6 +6,7 @@ export class SocketClient {
   private socketInstance: any = null;
   private socketServerUrl: string | null = null;
   private currentUser: IUser | null = null;
+  private currentDeviceId: string | null = null;
   private currentSocketId: string | null = null;
 
   // Message tracking to prevent duplicates/loops
@@ -22,16 +23,28 @@ export class SocketClient {
   private fileProgressCallback: ((data: { operationId: string, progress: number, stage?: string }) => void) | null = null;
   private fileCompletedCallback: ((data: { operationId: string, result?: any }) => void) | null = null;
   private fileErrorCallback: ((data: { operationId: string, error: string }) => void) | null = null;
+  private workspaceJoinedCallback: ((data: { workspaceId: string, userId: string }) => void) | null = null;
+  private workspaceLeftCallback: ((data: { workspaceId: string, userId: string }) => void) | null = null;
 
   constructor() { }
 
-  initialize(user: IUser): void {
+  async initialize(user: IUser, deviceId?: string, token?: string): Promise<void> {
     console.log("Socket URL", process.env.SOCKET_SERVER_URL);
-    this.socketServerUrl = process.env.SOCKET_SERVER_URL || 'https://onlysaid-dev.com';
+    this.socketServerUrl = process.env.SOCKET_SERVER_URL || 'http://localhost:3001';
     console.log("Connecting to socket server:", this.socketServerUrl);
     this.currentUser = user;
     this.currentSocketId = null;
 
+    // Use provided deviceId or generate fallback
+    const finalDeviceId = deviceId || `fallback-${Date.now()}`;
+    this.currentDeviceId = finalDeviceId;
+    
+    console.log("🔧 Initializing socket with:", { 
+      user: user.username, 
+      deviceId: finalDeviceId,
+      url: this.socketServerUrl 
+    });
+    
     if (this.socketInstance) {
       this.socketInstance.disconnect();
     }
@@ -39,7 +52,9 @@ export class SocketClient {
     this.socketInstance = io(this.socketServerUrl, {
       path: '/socket.io/',
       auth: {
-        user: user
+        user: user,
+        deviceId: finalDeviceId,
+        token: token
       },
       reconnection: true,
       reconnectionAttempts: 5,
@@ -47,37 +62,16 @@ export class SocketClient {
       transports: ['websocket', 'polling']
     });
 
-    if (this.socketInstance) {
-      // Add error handling
-      this.socketInstance.on('connect_error', (err: any) => {
-        console.error('Socket connection error:', err.message);
-      });
+    // Add connection event logging
+    this.socketInstance.on('connect_error', (err: any) => {
+      console.error('❌ Socket connection error:', err);
+    });
 
-      this.socketInstance.on('connect_timeout', () => {
-        console.error('Socket connection timeout');
-      });
+    this.socketInstance.on('connect', () => {
+      console.log('✅ Socket connected successfully to:', this.socketServerUrl);
+    });
 
-      this.socketInstance.on('error', (err: any) => {
-        console.error('Socket error:', err);
-      });
-
-      this.socketInstance.on('connect', () => {
-        console.log('Socket connected successfully');
-        if (this.connectCallback) this.connectCallback();
-      });
-
-      this.socketInstance.on('disconnect', () => {
-        console.log('Socket disconnected');
-        this.currentSocketId = null;
-        if (this.disconnectCallback) this.disconnectCallback();
-      });
-
-      this.setupMessageListener();
-      this.setupMessageDeletedListener();
-      this.setupPongListener();
-      this.setupConnectionEstablishedListener();
-      this.setupFileProgressListeners();
-    }
+    this.setupSocketListeners();
   }
 
   close(): void {
@@ -143,9 +137,18 @@ export class SocketClient {
 
   joinWorkspace(workspaceId: string): void {
     if (this.socketInstance && this.socketInstance.connected) {
-      this.socketInstance.emit('join_workspace', workspaceId);
+      // Use new user-level workspace joining
+      this.socketInstance.emit('user_join_workspace', workspaceId);
     } else {
       console.warn('Socket not connected, cannot join workspace');
+    }
+  }
+
+  leaveWorkspace(workspaceId: string): void {
+    if (this.socketInstance && this.socketInstance.connected) {
+      this.socketInstance.emit('user_leave_workspace', workspaceId);
+    } else {
+      console.warn('Socket not connected, cannot leave workspace');
     }
   }
 
@@ -161,7 +164,51 @@ export class SocketClient {
     this.fileErrorCallback = callback;
   }
 
+  onWorkspaceJoined(callback: (data: { workspaceId: string, userId: string }) => void): void {
+    this.workspaceJoinedCallback = callback;
+  }
+
+  onWorkspaceLeft(callback: (data: { workspaceId: string, userId: string }) => void): void {
+    this.workspaceLeftCallback = callback;
+  }
+
   // Private helper methods
+  private setupSocketListeners(): void {
+    if (!this.socketInstance) return;
+
+    this.socketInstance.on('connect', () => {
+      console.log('Socket connected successfully');
+      if (this.connectCallback) this.connectCallback();
+    });
+
+    this.socketInstance.on('disconnect', () => {
+      console.log('Socket disconnected');
+      this.currentSocketId = null;
+      if (this.disconnectCallback) this.disconnectCallback();
+    });
+
+    // Add new workspace event listeners
+    this.socketInstance.on('workspace_joined', (data: { workspaceId: string, userId: string }) => {
+      console.log(`✅ Workspace joined: ${data.workspaceId}`);
+      if (this.workspaceJoinedCallback) {
+        this.workspaceJoinedCallback(data);
+      }
+    });
+
+    this.socketInstance.on('workspace_left', (data: { workspaceId: string, userId: string }) => {
+      console.log(`❌ Workspace left: ${data.workspaceId}`);
+      if (this.workspaceLeftCallback) {
+        this.workspaceLeftCallback(data);
+      }
+    });
+
+    this.setupMessageListener();
+    this.setupMessageDeletedListener();
+    this.setupPongListener();
+    this.setupConnectionEstablishedListener();
+    this.setupFileProgressListeners();
+  }
+
   private setupMessageListener(): void {
     if (!this.socketInstance) return;
 

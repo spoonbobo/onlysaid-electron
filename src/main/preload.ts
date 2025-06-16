@@ -2,6 +2,8 @@
 /* eslint no-unused-vars: off */
 import { contextBridge, ipcRenderer, IpcRendererEvent, shell } from 'electron';
 import os from 'os';
+import { IChatMessage } from '@/../../types/Chat/Message';
+import { IUser } from '@/../../types/User/User';
 import {
   ILogUsageArgs,
   IGetUsageLogsArgs,
@@ -110,7 +112,10 @@ type SocketChannels =
   | 'socket:join-workspace'
   | 'socket:file-progress'
   | 'socket:file-completed'
-  | 'socket:file-error';
+  | 'socket:file-error'
+  | 'socket:leave-workspace'
+  | 'socket:workspace-joined'
+  | 'socket:workspace-left';
 
 // Add these channels to the type definitions
 type GoogleServiceChannels = 'google-services:ready' | 'google-services:error';
@@ -310,13 +315,17 @@ const electronHandler = {
     stopServer: (...args: unknown[]) => ipcRenderer.invoke('redis:stop-server', ...args),
   },
   socket: {
-    initialize: (user: any) => ipcRenderer.invoke('socket:initialize', user),
+    initialize: (user: IUser, token?: string | null) => ipcRenderer.invoke('socket:initialize', user, token),
     close: () => ipcRenderer.invoke('socket:close'),
-    sendMessage: (message: any, workspaceId: string) => ipcRenderer.invoke('socket:send-message', message, workspaceId),
-    deleteMessage: (roomId: string, messageId: string) =>
+    sendMessage: (message: IChatMessage, workspaceId: string) => 
+      ipcRenderer.invoke('socket:send-message', message, workspaceId),
+    deleteMessage: (roomId: string, messageId: string) => 
       ipcRenderer.invoke('socket:delete-message', { roomId, messageId }),
     sendPing: () => ipcRenderer.invoke('socket:send-ping'),
-    joinWorkspace: (workspaceId: string) => ipcRenderer.invoke('socket:join-workspace', workspaceId),
+    joinWorkspace: (workspaceId: string) => 
+      ipcRenderer.invoke('socket:join-workspace', workspaceId),
+    leaveWorkspace: (workspaceId: string) => 
+      ipcRenderer.invoke('socket:leave-workspace', workspaceId),
   },
   knowledgeBase: {
     list: (...args: unknown[]) => ipcRenderer.invoke('kb:list', ...args),

@@ -8,9 +8,18 @@ export const setupSocketHandlers = (mainWindow: BrowserWindow): void => {
   ipcMain.handle('socket:is-ready', () => true);
 
   // IPC handlers for socket operations
-  ipcMain.handle('socket:initialize', (_event, user) => {
+  ipcMain.handle('socket:initialize', async (_event, user, token) => {
     console.log('Socket initialize handler called with user:', user?.username);
-    socketClient.initialize(user);
+    
+    // Generate deviceId in main process
+    const crypto = require('crypto');
+    const os = require('os');
+    const deviceId = crypto.createHash('sha256')
+      .update(os.hostname() + os.platform() + os.arch())
+      .digest('hex')
+      .substring(0, 16);
+    
+    socketClient.initialize(user, deviceId, token);
     return { success: true };
   });
 
@@ -34,6 +43,12 @@ export const setupSocketHandlers = (mainWindow: BrowserWindow): void => {
 
   ipcMain.handle('socket:join-workspace', (_event, workspaceId) => {
     socketClient.joinWorkspace(workspaceId);
+    return { success: true };
+  });
+
+  // Add new leave workspace handler
+  ipcMain.handle('socket:leave-workspace', (_event, workspaceId) => {
+    socketClient.leaveWorkspace(workspaceId);
     return { success: true };
   });
 
@@ -108,6 +123,21 @@ export const setupSocketHandlers = (mainWindow: BrowserWindow): void => {
         error: data.error,
         timestamp: Date.now()
       });
+    }
+  });
+
+  // Add new workspace event forwarding
+  socketClient.onWorkspaceJoined((data) => {
+    console.log('Main: User joined workspace, forwarding to renderer', data);
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('socket:workspace-joined', data);
+    }
+  });
+
+  socketClient.onWorkspaceLeft((data) => {
+    console.log('Main: User left workspace, forwarding to renderer', data);
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('socket:workspace-left', data);
     }
   });
 };
