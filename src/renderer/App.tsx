@@ -168,10 +168,22 @@ function App() {
     preloadAssets(['icon.png']); // Only load assets that actually exist
   }, [preloadAssets]);
 
+  // Ensure crypto is unlocked for logged-in users
+  useEffect(() => {
+    if (user && user.id) {
+      const timer = setTimeout(() => {
+        console.log('[App] Ensuring crypto is unlocked for user:', user.username);
+        useUserStore.getState().ensureCryptoUnlocked();
+      }, 2000); // Give a bit more time for everything to initialize
+
+      return () => clearTimeout(timer);
+    }
+  }, [user]);
+
   return (
-    <>
+    <div>
       <MainInterface />
-    </>
+    </div>
   );
 }
 

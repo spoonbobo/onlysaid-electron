@@ -14,8 +14,11 @@ import * as R from 'ramda';
 import MarkdownRenderer from "@/renderer/components/Chat/MarkdownRenderer";
 import { FormattedMessage } from "react-intl";
 import DeleteMessageDialog from "@/renderer/components/Dialog/Chat/DeleteMessage";
+import ThisIsEncrypted from "@/renderer/components/Dialog/Chat/ThisIsEncrypted";
 import ToolDisplay from "@/renderer/scenes/Main/Chat/ChatUI/ToolDisplay";
 import FileDisplay from "./FileDisplay";
+import LockIcon from '@mui/icons-material/Lock';
+import LockOpenIcon from '@mui/icons-material/LockOpen';
 
 interface ChatBubbleProps {
   message: IChatMessage;
@@ -50,6 +53,7 @@ const ChatBubble = memo(({
   const { selectedTopics, selectedContext } = useCurrentTopicContext();
   const toggleReaction = useChatStore(state => state.toggleReaction);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [encryptionDialogOpen, setEncryptionDialogOpen] = useState(false);
   const [thinkingDuration, setThinkingDuration] = useState(0);
 
   const activeChatId = selectedContext?.section ? selectedTopics[selectedContext.section] || null : null;
@@ -145,6 +149,14 @@ const ChatBubble = memo(({
     setDeleteDialogOpen(false);
   }, []);
 
+  const handleEncryptionClick = useCallback(() => {
+    setEncryptionDialogOpen(true);
+  }, []);
+
+  const handleCloseEncryptionDialog = useCallback(() => {
+    setEncryptionDialogOpen(false);
+  }, []);
+
   const handleMenuButtonClick = useCallback((event: React.MouseEvent<HTMLButtonElement>) => {
     event.preventDefault();
     event.stopPropagation();
@@ -228,7 +240,10 @@ const ChatBubble = memo(({
             fontWeight: 600,
             fontSize: "0.95rem",
             color: "text.primary",
-            mb: 0
+            mb: 0,
+            display: "flex",
+            alignItems: "center",
+            gap: 0.5
           }}>
             {msg.sender_object?.username}
             <Typography component="span" sx={{ color: "text.secondary", fontWeight: 400, fontSize: "0.8rem", ml: 1 }}>
@@ -384,6 +399,15 @@ const ChatBubble = memo(({
             borderColor: 'divider'
           }}
         >
+          {msg.is_encrypted ? (
+            <IconButton size="small" sx={{ p: 0.5, borderRadius: 1, m: 0.1 }} onClick={handleEncryptionClick}>
+              <LockIcon fontSize="small" sx={{ color: "success.main" }} />
+            </IconButton>
+          ) : (
+            <IconButton size="small" sx={{ p: 0.5, borderRadius: 1, m: 0.1 }} onClick={handleEncryptionClick}>
+              <LockOpenIcon fontSize="small" sx={{ color: "error.main" }} />
+            </IconButton>
+          )}
           <IconButton size="small" sx={{ p: 0.5, borderRadius: 1, m: 0.1 }} onClick={() => handleReaction("👍")}>
             <ThumbUpIcon fontSize="small" />
           </IconButton>
@@ -440,6 +464,12 @@ const ChatBubble = memo(({
         onClose={handleCloseDeleteDialog}
         message={deleteDialogOpen ? msg : null}
         chatId={activeChatId || ''}
+      />
+
+      <ThisIsEncrypted
+        open={encryptionDialogOpen}
+        onClose={handleCloseEncryptionDialog}
+        message={encryptionDialogOpen ? msg : null}
       />
     </Box>
   );

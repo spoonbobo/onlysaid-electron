@@ -131,6 +131,15 @@ type MenuBarChannels = 'menu-action' | 'window-action';
 // Add this new type near the other type definitions (around line 7-15)
 type AppChannels = 'app:get-version' | 'app:get-build-time' | 'app:get-device-id' | 'app:get-device-info' | 'app:open-account-management';
 
+type CryptoChannels = 
+  | 'crypto:initialize-user'
+  | 'crypto:derive-master-key'
+  | 'crypto:get-user-keys'
+  | 'crypto:create-chat-key'
+  | 'crypto:get-chat-key'
+  | 'crypto:encrypt-message'
+  | 'crypto:decrypt-message';
+
 export type Channels =
   | AuthChannels
   | GoogleAuthChannels
@@ -151,7 +160,8 @@ export type Channels =
   | KnowledgeBaseChannels
   | AIChannels
   | OneasiaChannels
-  | AppChannels;
+  | AppChannels
+  | CryptoChannels;
 
 const electronHandler = {
   ipcRenderer: {
@@ -386,6 +396,22 @@ const electronHandler = {
     getDeviceId: () => ipcRenderer.invoke('app:get-device-id'),
     getDeviceInfo: () => ipcRenderer.invoke('app:get-device-info'),
     openAccountManagement: () => ipcRenderer.invoke('app:open-account-management'),
+  },
+  crypto: {
+    initializeUser: (userId: string, password: string) => 
+      ipcRenderer.invoke('crypto:initialize-user', userId, password),
+    deriveMasterKey: (password: string, salt: string) => 
+      ipcRenderer.invoke('crypto:derive-master-key', password, salt),
+    getUserKeys: (userId: string) => 
+      ipcRenderer.invoke('crypto:get-user-keys', userId),
+    createChatKey: (chatId: string, createdBy: string, userIds: string[], userMasterKeys: Record<string, string>) => 
+      ipcRenderer.invoke('crypto:create-chat-key', chatId, createdBy, userIds, userMasterKeys),
+    getChatKey: (userId: string, chatId: string, masterKey: string) => 
+      ipcRenderer.invoke('crypto:get-chat-key', userId, chatId, masterKey),
+    encryptMessage: (message: string, chatKey: string) => 
+      ipcRenderer.invoke('crypto:encrypt-message', message, chatKey),
+    decryptMessage: (encryptedMessage: any, chatKey: string) => 
+      ipcRenderer.invoke('crypto:decrypt-message', encryptedMessage, chatKey),
   },
 };
 

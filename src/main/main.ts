@@ -35,6 +35,7 @@ import { initMicrosoftAuth } from './msft';
 import { setupOneasiaHandlers } from './oneasia';
 import { setupMenuBarHandlers, unregisterMenuAccelerators } from './menubar';
 import { setupAppHandlers } from './app';
+import { setupCryptoHandlers } from './crypto/cryptoHandlers';
 // Load environment variables
 dotenv.config();
 
@@ -53,7 +54,7 @@ initializeDeeplinkHandling();
 setupFileHandlers();
 setupStorageHandlers();
 setupAppHandlers();
-
+setupCryptoHandlers();
 // Initialize authentication modules
 initAuth(process.env.ONLYSAID_API_URL || '', process.env.ONLYSAID_DOMAIN || '');
 

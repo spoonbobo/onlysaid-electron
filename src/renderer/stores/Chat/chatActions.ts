@@ -5,6 +5,7 @@ import { IChatRoom } from "@/../../types/Chat/Chatroom";
 import { NewChat } from './utils';
 import { ChatState } from './types';
 import { useTopicStore } from '@/renderer/stores/Topic/TopicStore';
+import { useCryptoStore } from '../Crypto/CryptoStore';
 
 export const createChatActions = (set: any, get: () => ChatState) => ({
   getActiveChatIdForContext: (contextId: string) => {
@@ -74,6 +75,21 @@ export const createChatActions = (set: any, get: () => ChatState) => ({
           id: chatId
         };
 
+        // Auto-create chat encryption key if crypto is unlocked
+        const { isUnlocked, createChatKey } = useCryptoStore.getState();
+        if (isUnlocked) {
+          try {
+            const currentUser = getUserFromStore();
+            if (currentUser?.id) {
+              await createChatKey(chatId, [currentUser.id]);
+              console.log('✅ Chat encryption key created for local chat');
+            }
+          } catch (error) {
+            console.warn('⚠️ Failed to create chat encryption key:', error);
+            // Continue without encryption
+          }
+        }
+
         set((state: ChatState) => ({
           chats: [...state.chats, localChat],
           isLoading: false
@@ -87,9 +103,27 @@ export const createChatActions = (set: any, get: () => ChatState) => ({
           request: newChat
         });
 
+        // Auto-create chat encryption key if crypto is unlocked
+        const createdChatId = response.data?.data?.[0]?.id;
+        if (createdChatId) {
+          const { isUnlocked, createChatKey } = useCryptoStore.getState();
+          if (isUnlocked) {
+            try {
+              const currentUser = getUserFromStore();
+              if (currentUser?.id) {
+                await createChatKey(createdChatId, [currentUser.id]);
+                console.log('✅ Chat encryption key created for remote chat');
+              }
+            } catch (error) {
+              console.warn('⚠️ Failed to create chat encryption key:', error);
+              // Continue without encryption
+            }
+          }
+        }
+
         await get().getChat(userId, type, workspaceId);
-        if (response.data?.data?.[0]?.id) {
-          get().setActiveChat(response.data.data[0].id, workspaceId);
+        if (createdChatId) {
+          get().setActiveChat(createdChatId, workspaceId);
         }
 
         return response.data?.data?.[0];

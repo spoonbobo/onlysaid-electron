@@ -261,9 +261,9 @@ const TitleBar = () => {
     if (selectedContext?.type === 'workspace' && selectedContext?.id) {
       return availableContexts.find(ctx => 
         ctx.type === 'workspace' && ctx.workspaceId === selectedContext.id
-      );
+      ) || undefined;
     }
-    return availableContexts.find(ctx => ctx.type === selectedContext?.type) || availableContexts[0];
+    return availableContexts.find(ctx => ctx.type === selectedContext?.type) || availableContexts[0] || undefined;
   };
 
   return (
@@ -437,7 +437,7 @@ const TitleBar = () => {
             <Autocomplete
               options={availableContexts}
               getOptionLabel={(option) => option.name}
-              value={getCurrentContextOption()}
+              // value={getCurrentContextOption()}
               onChange={handleContextChange}
               open={searchOpen}
               onOpen={() => setSearchOpen(true)}
@@ -445,6 +445,12 @@ const TitleBar = () => {
               disableClearable
               size="small"
               groupBy={(option) => option.section}
+              isOptionEqualToValue={(option, value) => {
+                if (!option || !value) return option === value;
+                return option.type === value.type && 
+                       option.workspaceId === value.workspaceId &&
+                       option.name === value.name;
+              }}
               sx={{
                 minWidth: 250,
                 maxWidth: 350,

@@ -5,6 +5,7 @@ import { IUserDevice } from "@/../../types/User/UserDevice";
 import { useUserTokenStore } from "./UserToken";
 import { useAgentStore } from "../Agent/AgentStore";
 import { useSocketStore } from "../Socket/SocketStore";
+import { useCryptoStore } from "../Crypto/CryptoStore";
 import { toast } from "@/utils/toast";
 
 interface UserStore {
@@ -16,6 +17,7 @@ interface UserStore {
   devicesError: string | null;
   timeoutId: NodeJS.Timeout | null;
   hasUpdatedLastSeenOnStartup: boolean;
+  
   setUser: (user: IUser | null) => void;
   updateUser: (user: IUser) => void;
   signIn: () => void;
@@ -23,6 +25,7 @@ interface UserStore {
   logout: () => void;
   handleAuthentication: (input: { response?: any; token?: string; cookieName?: string | null }, intl?: any) => Promise<void>;
   clearAuthTimeout: () => void;
+  ensureCryptoUnlocked: () => Promise<void>;
   
   // Device management actions
   fetchDevices: () => Promise<void>;
@@ -147,6 +150,8 @@ export const useUserStore = create<UserStore>()(
             if (userPayload) {
               set({ user: { ...userPayload }, error: null, isLoading: false });
               setSignInError(null);
+              
+              // Fetch agent
               const { fetchAgent, clearAgent } = useAgentStore.getState();
               if (userPayload.agent_id && currentActiveToken) {
                 await fetchAgent(userPayload.agent_id, currentActiveToken);
@@ -154,6 +159,18 @@ export const useUserStore = create<UserStore>()(
               } else {
                 clearAgent();
                 console.warn('[UserStore] agent_id not found in userPayload or token missing. Agent not fetched.');
+              }
+
+              // Auto-unlock encryption when user logs in
+              console.log('[UserStore] 🔐 Auto-unlocking encryption...');
+              const { unlockForUser } = useCryptoStore.getState();
+              const cryptoSuccess = await unlockForUser(userPayload.id!, currentActiveToken);
+              
+              if (cryptoSuccess) {
+                console.log('[UserStore] ✅ Encryption unlocked');
+                toast.success('🔐 End-to-end encryption enabled');
+              } else {
+                console.warn('[UserStore] ⚠️ Encryption failed to unlock');
               }
 
               const userName = userPayload.username || 'User';
@@ -195,6 +212,18 @@ export const useUserStore = create<UserStore>()(
                   } else {
                     clearAgent();
                     console.warn('[UserStore] agent_id not found or token missing (response path). Agent not fetched.');
+                  }
+
+                  // Auto-unlock encryption when user logs in (response path)
+                  console.log('[UserStore] 🔐 Auto-unlocking encryption (response path)...');
+                  const { unlockForUser } = useCryptoStore.getState();
+                  const cryptoSuccess = await unlockForUser(userPayload.id!, currentActiveToken);
+                  
+                  if (cryptoSuccess) {
+                    console.log('[UserStore] ✅ Encryption unlocked (response path)');
+                    toast.success('🔐 End-to-end encryption enabled');
+                  } else {
+                    console.warn('[UserStore] ⚠️ Encryption failed to unlock (response path)');
                   }
 
                   const userName = userPayload.username || 'User';
@@ -257,24 +286,18 @@ export const useUserStore = create<UserStore>()(
         const { clearToken } = useUserTokenStore.getState();
         const { clearAgent } = useAgentStore.getState();
         const { close } = useSocketStore.getState();
+        const { lockCrypto } = useCryptoStore.getState();
 
         set({ 
           user: null,
           devices: [],
           devicesError: null,
-          hasUpdatedLastSeenOnStartup: false
+          hasUpdatedLastSeenOnStartup: false,
         });
         clearToken();
         clearAgent();
+        lockCrypto(); // Lock crypto on logout
         close();
-      },
-
-      clearAuthTimeout: () => {
-        const { timeoutId } = get();
-        if (timeoutId) {
-          clearTimeout(timeoutId);
-          set({ timeoutId: null });
-        }
       },
 
       updateUser: (user: IUser) => {
@@ -498,6 +521,39 @@ export const useUserStore = create<UserStore>()(
           }
         } catch (error) {
           console.error('[UserStore] Error auto-registering device:', error);
+        }
+      },
+
+      clearAuthTimeout: () => {
+        const { timeoutId } = get();
+        if (timeoutId) {
+          clearTimeout(timeoutId);
+          set({ timeoutId: null });
+        }
+      },
+
+      ensureCryptoUnlocked: async () => {
+        const { user } = get();
+        const { token } = useUserTokenStore.getState();
+        const { isUnlocked, unlockForUser } = useCryptoStore.getState();
+        
+        if (user?.id && token && !isUnlocked) {
+          console.log('[UserStore] 🔐 User logged in but crypto locked, auto-unlocking...');
+          try {
+            const success = await unlockForUser(user.id, token);
+            if (success) {
+              console.log('[UserStore] ✅ Crypto auto-unlocked for existing user');
+              toast.success('🔐 End-to-end encryption enabled');
+            } else {
+              console.warn('[UserStore] ⚠️ Failed to auto-unlock crypto for existing user');
+            }
+          } catch (error) {
+            console.error('[UserStore] ❌ Error auto-unlocking crypto for existing user:', error);
+          }
+        } else if (user?.id && token && isUnlocked) {
+          console.log('[UserStore] ✅ Crypto already unlocked for user');
+        } else {
+          console.log('[UserStore] ⚠️ Cannot unlock crypto:', { hasUser: !!user?.id, hasToken: !!token, isUnlocked });
         }
       },
     }),

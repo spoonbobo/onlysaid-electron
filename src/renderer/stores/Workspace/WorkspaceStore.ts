@@ -7,6 +7,7 @@ import { toast } from "@/utils/toast";
 import { useToastStore } from "../Notification/ToastStore";
 import { useKBStore } from "@/renderer/stores/KB/KBStore";
 import { useFileExplorerStore } from "@/renderer/stores/File/FileExplorerStore";
+import { useSocketStore } from "@/renderer/stores/Socket/SocketStore";
 
 interface WorkspaceCreateData extends Partial<IWorkspace> {
   name: string;
@@ -271,6 +272,15 @@ export const useWorkspaceStore = create<WorkspaceState>()((set, get) => ({
           // Re-throw other errors (permissions, network issues, etc.)
           throw serverError;
         }
+      }
+
+      // Notify socket server that user is leaving the workspace
+      const { leaveWorkspace, isConnected } = useSocketStore.getState();
+      if (isConnected) {
+        leaveWorkspace(workspaceId);
+        console.log(`🔌 Notified socket server: User ${userId} leaving workspace ${workspaceId}`);
+      } else {
+        console.warn(`🔌 Socket not connected, could not notify server about leaving workspace ${workspaceId}`);
       }
 
       // Always perform local cleanup regardless of server response

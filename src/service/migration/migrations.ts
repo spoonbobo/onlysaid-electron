@@ -313,6 +313,91 @@ export const featureMigrations: IMigration[] = [
       FOREIGN KEY (parent_id) REFERENCES documents(id)
     )`,
     down: `DROP TABLE IF EXISTS documents`
+  },
+  {
+    id: 'feature_012',
+    version: '2.0.0',
+    name: 'create_user_crypto_keys_table',
+    description: 'Create user crypto keys table for storing user master key salts',
+    category: 'feature',
+    createdAt: '2024-01-12T00:00:00Z',
+    up: `CREATE TABLE IF NOT EXISTS user_crypto_keys (
+      user_id TEXT PRIMARY KEY,
+      master_key_salt TEXT NOT NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )`,
+    down: `DROP TABLE IF EXISTS user_crypto_keys`
+  },
+  {
+    id: 'feature_013',
+    version: '2.0.0',
+    name: 'create_workspace_keys_table',
+    description: 'Create workspace keys table for storing workspace encryption keys',
+    category: 'feature',
+    dependencies: ['feature_012'],
+    createdAt: '2024-01-12T00:01:00Z',
+    up: `CREATE TABLE IF NOT EXISTS workspace_keys (
+      id TEXT PRIMARY KEY,
+      workspace_id TEXT NOT NULL,
+      key_data TEXT NOT NULL,
+      key_version INTEGER NOT NULL DEFAULT 1,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      created_by TEXT NOT NULL,
+      is_active BOOLEAN DEFAULT TRUE,
+      UNIQUE(workspace_id, key_version)
+    )`,
+    down: `DROP TABLE IF EXISTS workspace_keys`
+  },
+  {
+    id: 'feature_014',
+    version: '2.0.0',
+    name: 'create_user_workspace_keys_table',
+    description: 'Create user workspace keys table for storing encrypted workspace keys per user',
+    category: 'feature',
+    dependencies: ['feature_012', 'feature_013'],
+    createdAt: '2024-01-12T00:02:00Z',
+    up: `CREATE TABLE IF NOT EXISTS user_workspace_keys (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      workspace_id TEXT NOT NULL,
+      encrypted_workspace_key TEXT NOT NULL,
+      key_version INTEGER NOT NULL DEFAULT 1,
+      has_access BOOLEAN DEFAULT TRUE,
+      granted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      granted_by TEXT NOT NULL,
+      UNIQUE(user_id, workspace_id, key_version),
+      FOREIGN KEY (user_id) REFERENCES user_crypto_keys(user_id),
+      FOREIGN KEY (workspace_id, key_version) REFERENCES workspace_keys(workspace_id, key_version)
+    )`,
+    down: `DROP TABLE IF EXISTS user_workspace_keys`
+  },
+  {
+    id: 'feature_015',
+    version: '2.0.0',
+    name: 'add_encryption_to_messages',
+    description: 'Add encryption fields to messages table',
+    category: 'feature',
+    dependencies: ['feature_002'],
+    createdAt: '2024-01-12T00:03:00Z',
+    up: `
+      -- Add encryption columns to messages table
+      ALTER TABLE messages ADD COLUMN encrypted_text TEXT;
+      ALTER TABLE messages ADD COLUMN encryption_iv TEXT;
+      ALTER TABLE messages ADD COLUMN encryption_key_version INTEGER;
+      ALTER TABLE messages ADD COLUMN encryption_algorithm TEXT DEFAULT 'AES-GCM-256';
+      ALTER TABLE messages ADD COLUMN is_encrypted BOOLEAN DEFAULT FALSE;
+    `,
+    down: `
+      -- Remove encryption columns (SQLite doesn't support DROP COLUMN directly)
+      -- This would require recreating the table without these columns
+      CREATE TABLE messages_temp AS SELECT 
+        id, created_at, updated_at, sent_at, chat_id, sender, status, 
+        reactions, reply_to, mentions, file_ids, poll, contact, gif, text
+      FROM messages;
+      DROP TABLE messages;
+      ALTER TABLE messages_temp RENAME TO messages;
+    `
   }
 ];
 

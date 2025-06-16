@@ -619,5 +619,14 @@
   "settings.spacing": "間距",
   "settings.resetTheme": "重置為預設值",
   "titleBar.navigation.back": "返回",
-  "titleBar.navigation.forward": "前進"
+  "titleBar.navigation.forward": "前進",
+  "encryption.dialog.title": "訊息加密詳情",
+  "encryption.dialog.description": "此訊息受端對端加密保護。只有您和預期的收件人可以閱讀。",
+  "encryption.algorithm": "加密演算法",
+  "encryption.keyVersion": "金鑰版本",
+  "encryption.status": "加密狀態",
+  "encryption.status.encrypted": "已加密",
+  "encryption.dialog.titleUnencrypted": "訊息未加密",
+  "encryption.dialog.descriptionUnencrypted": "此訊息未加密，任何有權訪問伺服器的人都可以閱讀。",
+  "encryption.status.unencrypted": "未加密"
 }
