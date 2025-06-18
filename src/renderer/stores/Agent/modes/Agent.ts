@@ -2,7 +2,6 @@ import { v4 as uuidv4 } from 'uuid';
 import { IChatMessage, IChatMessageToolCall } from '@/../../types/Chat/Message';
 import { IUser } from '@/../../types/User/User';
 import { OpenAIMessage } from '@/renderer/stores/Stream/StreamStore';
-import { useMCPClientStore } from '@/renderer/stores/MCP/MCPClient';
 import { useMCPSettingsStore } from '@/renderer/stores/MCP/MCPSettingsStore';
 import { useMCPStore } from '@/renderer/stores/MCP/MCPStore';
 import { useLLMStore } from '@/renderer/stores/LLM/LLMStore';
@@ -193,6 +192,7 @@ export async function processAgentModeAIResponse({
     const responseMessage = completionResponse.choices[0]?.message;
     let finalResponseText = responseMessage?.content || "";
     const rawToolCalls = responseMessage?.tool_calls;
+    console.log("rawToolCalls", rawToolCalls);
     const openAIToolCalls: OpenAI.Chat.Completions.ChatCompletionMessageToolCall[] | undefined = rawToolCalls ? JSON.parse(JSON.stringify(rawToolCalls)) : undefined;
 
     let assistantMessageUpdate: Partial<IChatMessage> = {

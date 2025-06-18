@@ -437,7 +437,10 @@ const TitleBar = () => {
             <Autocomplete
               options={availableContexts}
               getOptionLabel={(option) => option.name}
-              // value={getCurrentContextOption()}
+              inputValue={getCurrentContextOption()?.name || ''}
+              onInputChange={(event: React.SyntheticEvent, newInputValue: string, reason: string) => {
+                // Handle typing if needed
+              }}
               onChange={handleContextChange}
               open={searchOpen}
               onOpen={() => setSearchOpen(true)}
@@ -490,33 +493,35 @@ const TitleBar = () => {
                   {...params}
                   variant="outlined"
                   placeholder="Search contexts..."
-                  InputProps={{
-                    ...params.InputProps,
-                    startAdornment: (
-                      <InputAdornment position="start">
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                          <Search 
-                            sx={{ 
-                              fontSize: 14, 
-                              color: 'text.secondary',
-                              opacity: searchOpen ? 0.8 : 0.6
-                            }} 
-                          />
-                          {getCurrentContextOption()?.icon && (
-                            <Avatar 
-                              src={getCurrentContextOption()?.icon || ''} 
+                  slotProps={{
+                    input: {
+                      ...params.InputProps,
+                      startAdornment: (
+                        <InputAdornment position="start">
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                            <Search 
                               sx={{ 
-                                width: 14, 
-                                height: 14,
-                                fontSize: '8px'
-                              }}
-                            >
-                              {getCurrentContextOption()?.name[0]?.toUpperCase()}
-                            </Avatar>
-                          )}
-                        </Box>
-                      </InputAdornment>
-                    ),
+                                fontSize: 14, 
+                                color: 'text.secondary',
+                                opacity: searchOpen ? 0.8 : 0.6
+                              }} 
+                            />
+                            {getCurrentContextOption()?.icon && (
+                              <Avatar 
+                                src={getCurrentContextOption()?.icon || ''} 
+                                sx={{ 
+                                  width: 14, 
+                                  height: 14,
+                                  fontSize: '8px'
+                                }}
+                              >
+                                {getCurrentContextOption()?.name[0]?.toUpperCase()}
+                              </Avatar>
+                            )}
+                          </Box>
+                        </InputAdornment>
+                      ),
+                    }
                   }}
                   sx={{
                     '& .MuiInputBase-input': {

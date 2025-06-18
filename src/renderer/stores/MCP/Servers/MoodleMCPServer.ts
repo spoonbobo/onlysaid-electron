@@ -2,9 +2,10 @@ import { toast } from "@/utils/toast";
 import type { IServerModule } from "@/../../types/MCP/server";
 
 export interface IMoodleConfig {
-  apiUrl: string;
-  apiToken: string;
-  courseId: string;
+  baseUrl: string;
+  token: string;
+  verifySSL: boolean;
+  path: string;
 }
 
 export interface IMoodleState {
@@ -20,34 +21,35 @@ export const createMoodleServer = (
 ): IServerModule<IMoodleConfig> => {
 
   const defaultConfig: IMoodleConfig = {
-    apiUrl: "",
-    apiToken: "",
-    courseId: "",
+    baseUrl: "",
+    token: "",
+    verifySSL: false,
+    path: ""
   };
 
   const isConfigured = (config: IMoodleConfig): boolean => {
-    return !!(config.apiUrl && config.apiToken && config.courseId);
+    return !!(config.baseUrl && config.token && config.path);
   };
 
   const createClientConfig = (config: IMoodleConfig, homedir: string) => ({
     enabled: getEnabled(),
-    command: "npx",
+    command: "uv",
     args: [
-      "-y",
-      "moodle-mcp-server@latest"
+      "--directory",
+      config.path,
+      "run",
+      "src/moodle_mcp/main.py"
     ],
     env: {
-      "MOODLE_API_URL": config.apiUrl,
-      "MOODLE_API_TOKEN": config.apiToken,
-      "MOODLE_COURSE_ID": config.courseId
+      "MOODLE_BASE_URL": config.baseUrl,
+      "MOODLE_TOKEN": config.token,
+      "MOODLE_VERIFY_SSL": config.verifySSL.toString()
     },
     clientName: "moodle-client",
-    clientVersion: "1.0.0"
+    clientVersion: "0.1.0"
   });
 
   const setEnabled = async (enabled: boolean) => {
-    if (enabled && !isConfigured(getConfig())) return;
-
     set((state: any) => ({
       ...state,
       moodleEnabled: enabled
@@ -81,7 +83,7 @@ export const createMoodleServer = (
 
   const getConfig = () => {
     const state = get();
-    return state.moodleConfig || defaultConfig;
+    return { ...defaultConfig, ...(state.moodleConfig || {}) };
   };
 
   const getConfigured = () => isConfigured(getConfig());
@@ -114,5 +116,5 @@ export const createMoodleServer = (
 
 // Export for backward compatibility
 export const isMoodleConfigured = (config: IMoodleConfig): boolean => {
-  return !!(config.apiUrl && config.apiToken && config.courseId);
+  return !!(config.baseUrl && config.token && config.path);
 };

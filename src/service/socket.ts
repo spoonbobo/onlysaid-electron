@@ -189,7 +189,6 @@ export class SocketClient {
 
     // Add new workspace event listeners
     this.socketInstance.on('workspace_joined', (data: { workspaceId: string, userId: string }) => {
-      console.log(`✅ Workspace joined: ${data.workspaceId}`);
       if (this.workspaceJoinedCallback) {
         this.workspaceJoinedCallback(data);
       }

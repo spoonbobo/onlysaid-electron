@@ -534,7 +534,10 @@ export const createMessageActions = (set: any, get: () => ChatState) => ({
           ...existingMessage,
           ...message,
           // Preserve existing text if new message has empty text but existing has content
-          text: (message.text && message.text.trim()) ? message.text : existingMessage.text,
+          // Also preserve if new message is encrypted but existing has decrypted text
+          text: (message.text && message.text.trim()) ? message.text : 
+                (existingMessage.text && existingMessage.text.trim()) ? existingMessage.text :
+                message.text,
           reactions: message.reactions || existingMessage.reactions || [],
           files: message.files || existingMessage.files
         };
@@ -643,7 +646,7 @@ export const createMessageActions = (set: any, get: () => ChatState) => ({
       try {
         let textToSave: string | null = message.text;
         
-        // For encrypted messages, if we don't have decrypted text, don't save empty text
+        // For encrypted messages, if we don't have decrypted text, try to decrypt but don't overwrite existing data
         if (message.is_encrypted && message.encrypted_text && (!textToSave || textToSave.trim() === '')) {
           const { isUnlocked, decryptMessage } = useCryptoStore.getState();
           if (isUnlocked) {
@@ -652,14 +655,18 @@ export const createMessageActions = (set: any, get: () => ChatState) => ({
               textToSave = decrypted || null;
             } catch (error) {
               console.error('Failed to decrypt for database save:', error);
-              textToSave = null;
+              // CRITICAL FIX: Don't save null/empty text if decryption fails
+              // This prevents overwriting existing decrypted text in the database
+              return; // Exit early, don't save to database
             }
           } else {
-            textToSave = null; // Don't save empty text for locked crypto
+            // CRITICAL FIX: Don't save when crypto is locked to avoid overwriting existing data
+            return; // Exit early, don't save to database
           }
         }
 
         // Only save to database if we have meaningful text or it's not encrypted
+        // CRITICAL FIX: Also check if message already exists to avoid overwriting good data
         if (textToSave || !message.is_encrypted) {
           const checkQuery = `
             select count(*) as count from messages
@@ -672,6 +679,19 @@ export const createMessageActions = (set: any, get: () => ChatState) => ({
           });
 
           const messageExists = result && result[0] && result[0].count > 0;
+
+          // CRITICAL FIX: If message exists and is encrypted, check if it already has text
+          if (messageExists && message.is_encrypted) {
+            const existingMessage = await window.electron.db.query({
+              query: 'SELECT text FROM messages WHERE id = ? AND chat_id = ?',
+              params: [message.id, chatId]
+            });
+            
+            if (existingMessage && existingMessage[0] && existingMessage[0].text && existingMessage[0].text.trim()) {
+              console.log('🔒 Message already has decrypted text in database, skipping save to prevent overwrite');
+              return; // Don't overwrite existing decrypted text
+            }
+          }
 
           if (!messageExists) {
             const dbParams: any = {

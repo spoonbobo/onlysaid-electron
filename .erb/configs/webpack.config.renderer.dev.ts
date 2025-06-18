@@ -172,7 +172,7 @@ const configuration: webpack.Configuration = {
         removeComments: true,
       },
       isBrowser: false,
-      env: process.env.NODE_ENV,
+      env: process.env.NODE_ENV || 'development',
       isDevelopment: process.env.NODE_ENV !== 'production',
       nodeModules: webpackPaths.appNodeModulesPath,
     }),

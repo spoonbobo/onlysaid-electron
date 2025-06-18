@@ -398,6 +398,104 @@ export const featureMigrations: IMigration[] = [
       DROP TABLE messages;
       ALTER TABLE messages_temp RENAME TO messages;
     `
+  },
+  {
+    id: 'feature_016',
+    version: '2.1.0',
+    name: 'create_chat_keys_tables',
+    description: 'Create chat-specific encryption key tables',
+    category: 'feature',
+    dependencies: ['feature_012'], // Depends on user_crypto_keys
+    createdAt: '2024-01-13T00:00:00Z',
+    up: `
+      -- Chat-level encryption keys
+      CREATE TABLE IF NOT EXISTS chat_keys (
+        id TEXT PRIMARY KEY,
+        chat_id TEXT NOT NULL,
+        key_data TEXT NOT NULL,
+        key_version INTEGER NOT NULL DEFAULT 1,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        created_by TEXT NOT NULL,
+        is_active BOOLEAN DEFAULT TRUE,
+        UNIQUE(chat_id, key_version)
+      );
+
+      -- User access to chat keys
+      CREATE TABLE IF NOT EXISTS user_chat_keys (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        chat_id TEXT NOT NULL,
+        encrypted_chat_key TEXT NOT NULL,
+        key_version INTEGER NOT NULL DEFAULT 1,
+        has_access BOOLEAN DEFAULT TRUE,
+        granted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        granted_by TEXT NOT NULL,
+        UNIQUE(user_id, chat_id, key_version),
+        FOREIGN KEY (user_id) REFERENCES user_crypto_keys(user_id)
+      );
+
+      -- Create indexes for performance
+      CREATE INDEX IF NOT EXISTS idx_chat_keys_chat_id ON chat_keys(chat_id);
+      CREATE INDEX IF NOT EXISTS idx_user_chat_keys_user_id ON user_chat_keys(user_id);
+      CREATE INDEX IF NOT EXISTS idx_user_chat_keys_chat_id ON user_chat_keys(chat_id);
+    `,
+    down: `
+      DROP INDEX IF EXISTS idx_user_chat_keys_chat_id;
+      DROP INDEX IF EXISTS idx_user_chat_keys_user_id;
+      DROP INDEX IF EXISTS idx_chat_keys_chat_id;
+      DROP TABLE IF EXISTS user_chat_keys;
+      DROP TABLE IF EXISTS chat_keys;
+    `
+  },
+  {
+    id: 'feature_017',
+    version: '2.1.1',
+    name: 'ensure_chat_keys_migration',
+    description: 'Ensure chat keys tables exist with backward compatibility',
+    category: 'feature',
+    dependencies: ['feature_016'],
+    createdAt: '2024-01-13T00:01:00Z',
+    up: `
+      -- Ensure chat_keys table exists
+      CREATE TABLE IF NOT EXISTS chat_keys (
+        id TEXT PRIMARY KEY,
+        chat_id TEXT NOT NULL,
+        key_data TEXT NOT NULL,
+        key_version INTEGER NOT NULL DEFAULT 1,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        created_by TEXT NOT NULL,
+        is_active BOOLEAN DEFAULT TRUE,
+        UNIQUE(chat_id, key_version)
+      );
+
+      -- Ensure user_chat_keys table exists
+      CREATE TABLE IF NOT EXISTS user_chat_keys (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        chat_id TEXT NOT NULL,
+        encrypted_chat_key TEXT NOT NULL,
+        key_version INTEGER NOT NULL DEFAULT 1,
+        has_access BOOLEAN DEFAULT TRUE,
+        granted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        granted_by TEXT NOT NULL,
+        UNIQUE(user_id, chat_id, key_version)
+      );
+
+      -- ✅ KEEP OLD KEYS for backward compatibility
+      -- Don't delete old workspace keys - they're needed for old messages
+
+      -- Create indexes
+      CREATE INDEX IF NOT EXISTS idx_chat_keys_chat_id ON chat_keys(chat_id);
+      CREATE INDEX IF NOT EXISTS idx_user_chat_keys_user_id ON user_chat_keys(user_id);
+      CREATE INDEX IF NOT EXISTS idx_user_chat_keys_chat_id ON user_chat_keys(chat_id);
+    `,
+    down: `
+      DROP INDEX IF EXISTS idx_user_chat_keys_chat_id;
+      DROP INDEX IF EXISTS idx_user_chat_keys_user_id;
+      DROP INDEX IF EXISTS idx_chat_keys_chat_id;
+      DROP TABLE IF EXISTS user_chat_keys;
+      DROP TABLE IF EXISTS chat_keys;
+    `
   }
 ];
 

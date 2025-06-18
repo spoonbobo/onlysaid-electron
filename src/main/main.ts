@@ -201,25 +201,26 @@ const installExtensions = async () => {
 };
 
 const createWindow = async () => {
-  console.log('[Main] ===== CREATE WINDOW STARTED =====');
+  console.log('[Main] ===== INITIALIZATION STARTED =====');
+  console.log('[Main] 📋 Task 1/7: Setting up development environment...');
 
   if (isDebug) {
-    console.log('[Main] Installing extensions...');
+    console.log('[Main] Installing development extensions...');
     await installExtensions();
-    console.log('[Main] Extensions installed');
+    console.log('[Main] ✅ Development extensions installed');
   }
 
+  console.log('[Main] 📋 Task 2/7: Initializing database...');
   // Initialize database directly during app startup
   try {
-    console.log('[Main] Initializing database during app startup...');
     const db = initializeDatabase();
     await runMigrations();
-    console.log('[Main] Database initialized and migrations applied successfully');
+    console.log('[Main] ✅ Database initialized and migrations applied');
   } catch (error) {
-    console.error('[Main] Failed to initialize database during startup:', error);
+    console.error('[Main] ❌ Failed to initialize database:', error);
   }
 
-  console.log('[Main] Setting up resources path...');
+  console.log('[Main] 📋 Task 3/7: Setting up application window...');
   const RESOURCES_PATH = app.isPackaged
     ? path.join(process.resourcesPath, 'assets')
     : path.join(__dirname, '../../assets');
@@ -228,7 +229,6 @@ const createWindow = async () => {
     return path.join(RESOURCES_PATH, ...paths);
   };
 
-  console.log('[Main] Creating BrowserWindow...');
   mainWindow = new BrowserWindow({
     show: true,
     width: 1024,
@@ -246,28 +246,25 @@ const createWindow = async () => {
       webSecurity: true
     },
   });
-  console.log('[Main] BrowserWindow created');
+  console.log('[Main] ✅ Application window created');
 
   // Disable the native application menu completely
   Menu.setApplicationMenu(null);
 
-  // Call setupSocketHandlers immediately after BrowserWindow creation
-  // and before loading the URL
-  console.log('[Main] Setting up socket handlers...');
+  console.log('[Main] 📋 Task 4/7: Setting up socket handlers...');
   setupSocketHandlers(mainWindow);
-  console.log('[Main] Socket handlers set up');
+  console.log('[Main] ✅ Socket handlers configured');
 
-  // Add menubar handlers setup
-  console.log('[Main] Setting up menubar handlers...');
+  console.log('[Main] 📋 Task 5/7: Setting up menubar handlers...');
   setupMenuBarHandlers(mainWindow);
-  console.log('[Main] Menubar handlers set up');
+  console.log('[Main] ✅ Menubar handlers configured');
 
-  console.log('[Main] Loading URL...');
+  console.log('[Main] 📋 Task 6/7: Loading application interface...');
   mainWindow.loadURL(resolveHtmlPath('index.html'));
-  console.log('[Main] URL loaded');
+  console.log('[Main] ✅ Application interface loaded');
 
   mainWindow.on('ready-to-show', () => {
-    console.log('[Main] Window ready-to-show event fired');
+    console.log('[Main] 📋 Task 7/7: Finalizing window setup...');
     if (!mainWindow) {
       throw new Error('"mainWindow" is not defined');
     }
@@ -280,10 +277,12 @@ const createWindow = async () => {
     // Since we're using direct HTTP requests, Google services are ready immediately
     setTimeout(() => {
       if (mainWindow && mainWindow.webContents) {
-        console.log('[Main] Google services ready (using direct HTTP requests)');
+        console.log('[Main] ✅ Google services ready (using direct HTTP requests)');
         mainWindow.webContents.send('google-services:ready');
       }
     }, 1000); // Small delay to let UI settle
+    
+    console.log('[Main] ✅ Window setup completed');
   });
 
   mainWindow.on('closed', () => {
@@ -291,28 +290,21 @@ const createWindow = async () => {
     mainWindow = null;
   });
 
-  console.log('[Main] Building menu...');
-  // const menuBuilder = new MenuBuilder(mainWindow);
-  // menuBuilder.buildMenu();
-  console.log('[Main] Menu not built');
-
   // Open urls in the user's browser
   mainWindow.webContents.setWindowOpenHandler((edata) => {
     shell.openExternal(edata.url);
     return { action: 'deny' };
   });
 
-  // Remove this if your app does not use auto updates
-  // eslint-disable-next-line
-  console.log('[Main] Creating AppUpdater...');
+  console.log('[Main] Setting up auto-updater...');
   new AppUpdater();
-  console.log('[Main] AppUpdater created');
+  console.log('[Main] ✅ Auto-updater configured');
 
-  console.log('[Main] Setting up window handlers...');
+  console.log('[Main] Setting up window event handlers...');
   setupWindowHandlers(mainWindow);
-  console.log('[Main] Window handlers set up');
+  console.log('[Main] ✅ Window event handlers configured');
 
-  console.log('[Main] ===== CREATE WINDOW COMPLETED =====');
+  console.log('[Main] ===== INITIALIZATION COMPLETED =====');
 };
 
 /**

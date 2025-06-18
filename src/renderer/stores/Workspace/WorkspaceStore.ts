@@ -8,6 +8,7 @@ import { useToastStore } from "../Notification/ToastStore";
 import { useKBStore } from "@/renderer/stores/KB/KBStore";
 import { useFileExplorerStore } from "@/renderer/stores/File/FileExplorerStore";
 import { useSocketStore } from "@/renderer/stores/Socket/SocketStore";
+import { useCryptoStore } from '../Crypto/CryptoStore';
 
 interface WorkspaceCreateData extends Partial<IWorkspace> {
   name: string;
@@ -514,8 +515,6 @@ export const useWorkspaceStore = create<WorkspaceState>()((set, get) => ({
     try {
       const hasPermission = await checkManagementPermission(workspaceId, get, set);
       if (!hasPermission) {
-        // isLoading is already handled by checkManagementPermission or initial set
-        // set({ isLoading: false }); // ensure isLoading is false if permission denied early
         throw new Error("Permission denied to approve join request.");
       }
 
@@ -535,12 +534,24 @@ export const useWorkspaceStore = create<WorkspaceState>()((set, get) => ({
 
       // Refresh workspace users
       await get().getUsersByWorkspace(workspaceId);
-      // The component (WorkspaceMembersMenu) will trigger a refresh of join requests via refreshTrigger
+
+      // 🔑 NEW: Grant access to existing chat keys for the new user
+      try {
+        const { grantWorkspaceChatKeysToUser } = useCryptoStore.getState();
+        const success = await grantWorkspaceChatKeysToUser(workspaceId, userId);
+        if (success) {
+          console.log(`✅ Successfully granted chat key access to user ${userId}`);
+        } else {
+          console.warn(`⚠️ Failed to grant chat key access to user ${userId}`);
+        }
+      } catch (cryptoError) {
+        console.error('Error granting chat key access:', cryptoError);
+        // Don't fail the approval process if crypto fails
+      }
 
       return response.data?.data;
     } catch (error: any) {
       set({ error: error.message, isLoading: false });
-      // Avoid double toasting if checkManagementPermission already toasted
       if (error.message !== "Permission denied to approve join request." && error.message !== "User not authenticated.") {
         toast.error(error.message || "Failed to approve join request");
       }

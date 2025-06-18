@@ -6,6 +6,7 @@ import { NewChat } from './utils';
 import { ChatState } from './types';
 import { useTopicStore } from '@/renderer/stores/Topic/TopicStore';
 import { useCryptoStore } from '../Crypto/CryptoStore';
+import { useWorkspaceStore } from '@/renderer/stores/Workspace/WorkspaceStore';
 
 export const createChatActions = (set: any, get: () => ChatState) => ({
   getActiveChatIdForContext: (contextId: string) => {
@@ -79,6 +80,7 @@ export const createChatActions = (set: any, get: () => ChatState) => ({
         const { isUnlocked, createChatKey } = useCryptoStore.getState();
         if (isUnlocked) {
           try {
+            // ✅ FIX: Always get current user for local chats
             const currentUser = getUserFromStore();
             if (currentUser?.id) {
               await createChatKey(chatId, [currentUser.id]);
@@ -109,10 +111,29 @@ export const createChatActions = (set: any, get: () => ChatState) => ({
           const { isUnlocked, createChatKey } = useCryptoStore.getState();
           if (isUnlocked) {
             try {
-              const currentUser = getUserFromStore();
-              if (currentUser?.id) {
-                await createChatKey(createdChatId, [currentUser.id]);
-                console.log('✅ Chat encryption key created for remote chat');
+              if (workspaceId && workspaceId !== 'undefined') {
+                // ✅ FIX: Get ALL workspace users for workspace chats
+                const workspaceUsers = await useWorkspaceStore.getState().getUsersByWorkspace(workspaceId);
+                const allUserIds = workspaceUsers.map(user => user.user_id);
+                
+                if (allUserIds.length > 0) {
+                  await createChatKey(createdChatId, allUserIds);
+                  console.log(`✅ Chat encryption key created for ${allUserIds.length} workspace users`);
+                } else {
+                  // Fallback to just current user if no workspace users found
+                  const currentUser = getUserFromStore();
+                  if (currentUser?.id) {
+                    await createChatKey(createdChatId, [currentUser.id]);
+                    console.log('✅ Chat encryption key created for current user only (no workspace users found)');
+                  }
+                }
+              } else {
+                // For non-workspace chats, just use current user
+                const currentUser = getUserFromStore();
+                if (currentUser?.id) {
+                  await createChatKey(createdChatId, [currentUser.id]);
+                  console.log('✅ Chat encryption key created for non-workspace chat');
+                }
               }
             } catch (error) {
               console.warn('⚠️ Failed to create chat encryption key:', error);

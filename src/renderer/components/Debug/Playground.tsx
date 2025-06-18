@@ -2,7 +2,6 @@ import React, { useState, useEffect } from "react";
 import {
   Box,
   Typography,
-  Paper,
   Divider,
   FormControl,
   Select,
@@ -16,11 +15,30 @@ import {
   CardContent,
   Breadcrumbs,
   Link,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Paper,
+  Alert,
+  Stack,
+  useTheme,
+  alpha,
 } from "@mui/material";
+import {
+  MenuBook as MenuBookIcon,
+  Code as CodeIcon,
+  Warning as WarningIcon,
+  CheckCircle as CheckCircleIcon,
+  Info as InfoIcon,
+} from "@mui/icons-material";
 import { useMCPStore } from "@/renderer/stores/MCP/MCPStore";
 import { SERVICE_TYPE_MAPPING, getServiceTools } from "@/utils/mcp";
 
 const Playground = () => {
+  const theme = useTheme();
   const mcpStore = useMCPStore();
   const [services, setServices] = useState<{ [key: string]: any }>({});
   const [selectedService, setSelectedService] = useState<string>("");
@@ -79,287 +97,220 @@ const Playground = () => {
 
   const currentTool = getCurrentTool();
 
-  // Enhanced schema formatting for documentation style
+  // Enhanced schema formatting using MUI Table components
   const formatSchema = (schema: any) => {
     if (!schema) {
       return (
-        <Card variant="outlined" sx={{ mt: 2 }}>
-          <CardContent>
-            <Typography variant="body2" color="text.secondary">
-              No input schema defined for this tool.
-            </Typography>
-          </CardContent>
-        </Card>
+        <Alert severity="info" icon={<InfoIcon />}>
+          No input schema defined for this tool.
+        </Alert>
       );
     }
 
     if (schema.type === 'object' && schema.properties) {
       return (
-        <Box sx={{ mt: 2 }}>
-          {/* Required Parameters Section */}
+        <Stack spacing={2}>
+          {/* Required Parameters Alert */}
           {schema.required && schema.required.length > 0 && (
-            <Card variant="outlined" sx={{ mb: 2, bgcolor: 'warning.light', borderColor: 'warning.main' }}>
-              <CardContent sx={{ py: 1.5 }}>
-                <Typography variant="subtitle2" fontWeight="600" color="warning.dark" sx={{ mb: 1 }}>
-                  ⚠️ Required Parameters
-                </Typography>
-                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                  {schema.required.map((field: string) => (
-                    <Chip
-                      key={field}
-                      label={field}
-                      size="small"
-                      sx={{ 
-                        bgcolor: 'warning.main', 
-                        color: 'warning.contrastText',
-                        fontFamily: 'monospace',
-                        fontSize: '0.75rem'
-                      }}
-                    />
-                  ))}
-                </Box>
-              </CardContent>
-            </Card>
+            <Alert severity="warning" icon={<WarningIcon />}>
+              <Typography variant="subtitle2" fontWeight="600" sx={{ mb: 1 }}>
+                Required Parameters
+              </Typography>
+              <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+                {schema.required.map((field: string) => (
+                  <Chip
+                    key={field}
+                    label={field}
+                    size="small"
+                    color="warning"
+                    sx={{ fontFamily: 'monospace' }}
+                  />
+                ))}
+              </Stack>
+            </Alert>
           )}
 
           {/* Parameters Table */}
-          <Card variant="outlined">
-            <CardContent sx={{ p: 0 }}>
-              <Box sx={{ 
-                overflowX: 'auto',
-                '& table': {
-                  width: '100%',
-                  borderCollapse: 'collapse',
-                },
-                '& th': {
-                  textAlign: 'left',
-                  p: 2,
-                  bgcolor: 'grey.50',
-                  borderBottom: '2px solid',
-                  borderColor: 'divider',
-                  fontWeight: 600,
-                  fontSize: '0.875rem',
-                  color: 'text.primary'
-                },
-                '& td': {
-                  p: 2,
-                  borderBottom: '1px solid',
-                  borderColor: 'divider',
-                  fontSize: '0.875rem',
-                  verticalAlign: 'top'
-                },
-                '& tr:hover': {
-                  bgcolor: 'action.hover'
-                }
-              }}>
-                <table>
-                  <thead>
-                    <tr>
-                      <th style={{ width: '25%' }}>Parameter</th>
-                      <th style={{ width: '15%' }}>Type</th>
-                      <th style={{ width: '45%' }}>Description</th>
-                      <th style={{ width: '15%' }}>Required</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {Object.entries(schema.properties).map(([name, prop]: [string, any]) => (
-                      <tr key={name}>
-                        <td>
-                          <Typography 
-                            component="code" 
-                            sx={{ 
-                              fontFamily: 'monospace',
-                              bgcolor: 'grey.100',
-                              px: 0.5,
-                              py: 0.25,
-                              borderRadius: 0.5,
-                              fontSize: '0.8rem',
-                              fontWeight: 500
-                            }}
-                          >
-                            {name}
-                          </Typography>
-                        </td>
-                        <td>
-                          <Chip 
-                            label={prop.type} 
-                            size="small" 
-                            variant="outlined"
-                            sx={{ 
-                              fontFamily: 'monospace',
-                              fontSize: '0.7rem',
-                              height: '20px'
-                            }}
-                          />
-                        </td>
-                        <td>
-                          <Typography variant="body2" color="text.secondary">
-                            {prop.description || 'No description provided'}
-                          </Typography>
-                        </td>
-                        <td>
-                          {schema.required?.includes(name) ? (
-                            <Chip 
-                              label="Required" 
-                              size="small" 
-                              color="warning"
-                              sx={{ fontSize: '0.7rem', height: '20px' }}
-                            />
-                          ) : (
-                            <Chip 
-                              label="Optional" 
-                              size="small" 
-                              variant="outlined"
-                              sx={{ fontSize: '0.7rem', height: '20px' }}
-                            />
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </Box>
-            </CardContent>
-          </Card>
+          <TableContainer component={Paper} variant="outlined">
+            <Table size="small">
+              <TableHead>
+                <TableRow sx={{ bgcolor: alpha(theme.palette.primary.main, 0.05) }}>
+                  <TableCell sx={{ fontWeight: 600 }}>Parameter</TableCell>
+                  <TableCell sx={{ fontWeight: 600 }}>Type</TableCell>
+                  <TableCell sx={{ fontWeight: 600 }}>Description</TableCell>
+                  <TableCell sx={{ fontWeight: 600 }}>Required</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {Object.entries(schema.properties).map(([name, prop]: [string, any]) => (
+                  <TableRow key={name} hover>
+                    <TableCell>
+                      <Chip
+                        label={name}
+                        variant="outlined"
+                        size="small"
+                        sx={{ 
+                          fontFamily: 'monospace',
+                          fontWeight: 500
+                        }}
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <Chip 
+                        label={prop.type} 
+                        size="small" 
+                        color="primary"
+                        variant="outlined"
+                        sx={{ fontFamily: 'monospace' }}
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <Typography variant="body2" color="text.secondary">
+                        {prop.description || 'No description provided'}
+                      </Typography>
+                    </TableCell>
+                    <TableCell>
+                      {schema.required?.includes(name) ? (
+                        <Chip 
+                          label="Required" 
+                          size="small" 
+                          color="warning"
+                          icon={<WarningIcon />}
+                        />
+                      ) : (
+                        <Chip 
+                          label="Optional" 
+                          size="small" 
+                          variant="outlined"
+                          icon={<CheckCircleIcon />}
+                        />
+                      )}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
 
           {/* Additional Properties Info */}
           {schema.additionalProperties !== undefined && (
-            <Box sx={{ mt: 1 }}>
-              <Typography variant="caption" color="text.secondary">
-                Additional properties: {schema.additionalProperties ? 'Allowed' : 'Not allowed'}
-              </Typography>
-            </Box>
+            <Typography variant="caption" color="text.secondary">
+              Additional properties: {schema.additionalProperties ? 'Allowed' : 'Not allowed'}
+            </Typography>
           )}
-        </Box>
+        </Stack>
       );
     }
 
-    // Fallback JSON display with better styling
+    // Fallback JSON display
     return (
-      <Card variant="outlined" sx={{ mt: 2 }}>
-        <CardContent>
-          <Typography variant="subtitle2" sx={{ mb: 1 }}>Raw Schema:</Typography>
-          <Box sx={{ 
-            bgcolor: 'grey.50', 
-            p: 2, 
-            borderRadius: 1,
-            overflow: 'auto',
-            border: '1px solid',
-            borderColor: 'divider'
-          }}>
-            <pre style={{ 
-              margin: 0, 
-              fontFamily: 'monospace', 
-              fontSize: '0.8rem',
-              lineHeight: 1.4
-            }}>
-              {JSON.stringify(schema, null, 2)}
-            </pre>
-          </Box>
-        </CardContent>
-      </Card>
+      <Paper variant="outlined">
+        <Box sx={{ p: 2, borderBottom: 1, borderColor: 'divider' }}>
+          <Typography variant="subtitle2">Raw Schema</Typography>
+        </Box>
+        <Box sx={{ 
+          p: 2,
+          bgcolor: alpha(theme.palette.grey[500], 0.05),
+          overflow: 'auto'
+        }}>
+          <Typography 
+            component="pre" 
+            variant="body2"
+            sx={{ 
+              fontFamily: 'monospace',
+              margin: 0,
+              lineHeight: 1.4,
+              whiteSpace: 'pre-wrap'
+            }}
+          >
+            {JSON.stringify(schema, null, 2)}
+          </Typography>
+        </Box>
+      </Paper>
     );
   };
 
   return (
-    <Box sx={{
-      width: '100%',
-      height: '100%',
-      display: 'flex',
-      bgcolor: '#fafafa'
-    }}>
-      {/* Documentation-style Sidebar */}
+    <Box sx={{ display: 'flex', height: '100%', minHeight: 400 }}>
+      {/* Sidebar */}
       <Box sx={{
-        width: '280px',
-        bgcolor: 'white',
-        borderRight: '1px solid',
+        width: 280,
+        borderRight: 1,
         borderColor: 'divider',
         display: 'flex',
         flexDirection: 'column',
-        overflow: 'hidden'
+        bgcolor: 'background.paper'
       }}>
-        {/* Sidebar Header */}
+        {/* Header */}
         <Box sx={{ 
-          p: 3, 
-          borderBottom: '1px solid', 
-          borderColor: 'divider',
+          p: 2, 
           bgcolor: 'primary.main',
           color: 'primary.contrastText'
         }}>
-          <Typography variant="h6" fontWeight="600">
-            📚 MCP Tools Reference
-          </Typography>
-          <Typography variant="body2" sx={{ opacity: 0.9, mt: 0.5 }}>
-            Interactive API Documentation
-          </Typography>
+          <Stack direction="row" spacing={1} alignItems="center">
+            <MenuBookIcon fontSize="small" />
+            <Box>
+              <Typography variant="subtitle1" fontWeight="600">
+                MCP Tools
+              </Typography>
+              <Typography variant="caption" sx={{ opacity: 0.9 }}>
+                API Documentation
+              </Typography>
+            </Box>
+          </Stack>
         </Box>
 
         {/* Service Selector */}
-        <Box sx={{ p: 2, borderBottom: '1px solid', borderColor: 'divider' }}>
-          <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>
-            Select Service
+        <Box sx={{ p: 2, borderBottom: 1, borderColor: 'divider' }}>
+          <Typography variant="subtitle2" sx={{ mb: 1 }}>
+            Service
           </Typography>
           <FormControl fullWidth size="small">
             <Select
               value={selectedService}
               onChange={handleServiceChange}
               displayEmpty
-              sx={{ fontSize: '0.875rem' }}
             >
-              <MenuItem value="" disabled>Choose a service...</MenuItem>
+              <MenuItem value="" disabled>Choose service...</MenuItem>
               {Object.entries(services).map(([key, service]) => (
                 <MenuItem key={key} value={key}>
-                  {service.name} ({service.tools.length} tools)
+                  {service.name} ({service.tools.length})
                 </MenuItem>
               ))}
             </Select>
           </FormControl>
         </Box>
 
-        {/* Tools Navigation */}
-        <Box sx={{ flexGrow: 1, overflow: 'auto' }}>
+        {/* Tools List */}
+        <Box sx={{ flex: 1, overflow: 'auto' }}>
           {selectedService ? (
             services[selectedService]?.tools.length === 0 ? (
               <Box sx={{ p: 2, textAlign: 'center' }}>
                 <Typography variant="body2" color="text.secondary">
-                  No tools available for this service
+                  No tools available
                 </Typography>
               </Box>
             ) : (
-              <List disablePadding>
-                <ListItemButton sx={{ px: 2, py: 1, bgcolor: 'grey.50' }}>
-                  <Typography variant="subtitle2" fontWeight="600" color="text.secondary">
-                    Available Tools ({services[selectedService]?.tools.length})
-                  </Typography>
-                </ListItemButton>
+              <List dense>
                 {services[selectedService]?.tools.map((tool: any, index: number) => (
                   <ListItemButton
                     key={index}
                     selected={selectedTool === tool.name}
                     onClick={() => handleToolSelect(tool.name)}
                     sx={{
-                      px: 3,
-                      py: 1.5,
-                      borderLeft: selectedTool === tool.name ? '3px solid' : '3px solid transparent',
-                      borderColor: 'primary.main',
                       '&.Mui-selected': {
-                        bgcolor: 'primary.light',
-                        '&:hover': {
-                          bgcolor: 'primary.light',
-                        }
-                      },
-                      '&:hover': {
-                        bgcolor: 'action.hover',
+                        borderRight: 3,
+                        borderColor: 'primary.main',
+                        bgcolor: alpha(theme.palette.primary.main, 0.08)
                       }
                     }}
                   >
+                    <CodeIcon sx={{ mr: 1, fontSize: '1rem', color: 'text.secondary' }} />
                     <ListItemText
                       primary={tool.name}
                       primaryTypographyProps={{
                         fontFamily: 'monospace',
-                        fontSize: '0.875rem',
-                        fontWeight: selectedTool === tool.name ? 600 : 400,
-                        color: selectedTool === tool.name ? 'primary.main' : 'text.primary'
+                        fontSize: '0.875rem'
                       }}
                     />
                   </ListItemButton>
@@ -369,67 +320,64 @@ const Playground = () => {
           ) : (
             <Box sx={{ p: 2, textAlign: 'center' }}>
               <Typography variant="body2" color="text.secondary">
-                Select a service to view available tools
+                Select a service
               </Typography>
             </Box>
           )}
         </Box>
       </Box>
 
-      {/* Main Documentation Content */}
-      <Box sx={{
-        flexGrow: 1,
-        overflow: 'auto',
-        bgcolor: 'white'
-      }}>
+      {/* Main Content */}
+      <Box sx={{ flex: 1, overflow: 'auto', bgcolor: 'background.default' }}>
         {!selectedService ? (
           <Box sx={{ 
             display: 'flex', 
             alignItems: 'center', 
             justifyContent: 'center', 
             height: '100%',
-            flexDirection: 'column',
-            gap: 2
+            textAlign: 'center',
+            p: 3
           }}>
-            <Typography variant="h5" color="text.secondary">
-              Welcome to MCP Tools Documentation
-            </Typography>
-            <Typography variant="body1" color="text.secondary">
-              Select a service from the sidebar to explore available tools and their documentation.
-            </Typography>
+            <Stack spacing={2} alignItems="center">
+              <MenuBookIcon sx={{ fontSize: 48, color: 'text.secondary' }} />
+              <Typography variant="h6" color="text.secondary">
+                Welcome to MCP Tools
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                Select a service to explore available tools
+              </Typography>
+            </Stack>
           </Box>
         ) : !selectedTool ? (
-          <Box sx={{ p: 4 }}>
-            <Typography variant="h4" fontWeight="600" sx={{ mb: 2 }}>
+          <Box sx={{ p: 3 }}>
+            <Typography variant="h5" sx={{ mb: 2 }}>
               {services[selectedService]?.name}
             </Typography>
             <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
-              This service provides {services[selectedService]?.tools.length} tools for integration.
-              Select a tool from the sidebar to view its detailed documentation.
+              {services[selectedService]?.tools.length} tools available
             </Typography>
             
-            <Card variant="outlined">
-              <CardContent>
-                <Typography variant="h6" sx={{ mb: 2 }}>Available Tools</Typography>
-                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-                  {services[selectedService]?.tools.map((tool: any, index: number) => (
-                    <Chip
-                      key={index}
-                      label={tool.name}
-                      onClick={() => handleToolSelect(tool.name)}
-                      clickable
-                      variant="outlined"
-                      sx={{ fontFamily: 'monospace' }}
-                    />
-                  ))}
-                </Box>
-              </CardContent>
-            </Card>
+            <Paper sx={{ p: 2 }}>
+              <Typography variant="h6" sx={{ mb: 2 }}>Tools</Typography>
+              <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+                {services[selectedService]?.tools.map((tool: any, index: number) => (
+                  <Chip
+                    key={index}
+                    label={tool.name}
+                    onClick={() => handleToolSelect(tool.name)}
+                    clickable
+                    variant="outlined"
+                    icon={<CodeIcon />}
+                    sx={{ fontFamily: 'monospace' }}
+                  />
+                ))}
+              </Stack>
+            </Paper>
           </Box>
         ) : currentTool ? (
-          <Box sx={{ maxWidth: '900px', mx: 'auto', p: 4 }}>
-            {/* Breadcrumb Navigation */}
-            <Breadcrumbs sx={{ mb: 3 }}>
+          <Box sx={{ p: 3 }}>
+            {/* Breadcrumbs */}
+            <Breadcrumbs sx={{ mb: 2 }}>
               <Link 
                 color="inherit" 
                 href="#" 
@@ -443,11 +391,10 @@ const Playground = () => {
               </Typography>
             </Breadcrumbs>
 
-            {/* Tool Header */}
-            <Box sx={{ mb: 4 }}>
+            {/* Tool Details */}
+            <Paper sx={{ p: 3, mb: 3 }}>
               <Typography 
-                variant="h3" 
-                fontWeight="700" 
+                variant="h4" 
                 sx={{ 
                   mb: 1,
                   fontFamily: 'monospace',
@@ -457,35 +404,27 @@ const Playground = () => {
                 {currentTool.name}
               </Typography>
               
-              <Typography 
-                variant="h6" 
-                color="text.secondary" 
-                sx={{ mb: 2, lineHeight: 1.6 }}
-              >
-                {currentTool.description || "No description available for this tool."}
+              <Typography variant="body1" color="text.secondary">
+                {currentTool.description || "No description available"}
               </Typography>
+            </Paper>
 
-              <Divider />
-            </Box>
-
-            {/* Parameters Section */}
-            <Box sx={{ mb: 4 }}>
-              <Typography variant="h5" fontWeight="600" sx={{ mb: 2 }}>
+            {/* Parameters */}
+            <Paper sx={{ p: 3 }}>
+              <Typography variant="h6" sx={{ mb: 2 }}>
                 Parameters
               </Typography>
               {formatSchema(currentTool.inputSchema)}
-            </Box>
+            </Paper>
           </Box>
         ) : (
           <Box sx={{ 
             display: 'flex', 
             alignItems: 'center', 
             justifyContent: 'center', 
-            height: '100%' 
+            height: '100%'
           }}>
-            <Typography variant="h6" color="error">
-              Tool not found
-            </Typography>
+            <Alert severity="error">Tool not found</Alert>
           </Box>
         )}
       </Box>

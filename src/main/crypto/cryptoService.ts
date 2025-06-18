@@ -167,50 +167,194 @@ export class CryptoService implements ICryptoService {
    * Create chat key and distribute to users
    */
   async createChatKey(chatId: string, createdBy: string, userIds: string[], userMasterKeys: Record<string, string>): Promise<void> {
-    const chatKey = await this.generateWorkspaceKey();
-    chatKey.workspaceId = chatId;
-    chatKey.createdBy = createdBy;
-
-    // Store chat key
-    await executeQuery(
-      `INSERT INTO workspace_keys (id, workspace_id, key_data, key_version, created_by) 
-       VALUES (?, ?, ?, ?, ?)`,
-      [crypto.randomUUID(), chatId, chatKey.keyData, chatKey.keyVersion, createdBy]
+    console.log(`🔑 [createChatKey] Creating key for chat ${chatId}, users: ${userIds.join(', ')}`);
+    
+    // Check if chat key already exists in chat_keys table
+    const existingKey = await executeQuery(
+      'SELECT id, key_data FROM chat_keys WHERE chat_id = ? AND key_version = ?',
+      [chatId, 1]
     );
 
-    // Encrypt and distribute to each user
+    let chatKeyData: string;
+
+    if (existingKey.length > 0) {
+      console.log(`🔑 [createChatKey] Chat key already exists for chat ${chatId}, using existing key`);
+      chatKeyData = existingKey[0].key_data;
+    } else {
+      // Generate new chat key
+      const chatKey = await this.generateWorkspaceKey();
+      chatKey.workspaceId = chatId;
+      chatKey.createdBy = createdBy;
+      chatKeyData = chatKey.keyData;
+
+      console.log(`🔑 [createChatKey] Generated new chat key:`, chatKeyData ? 'YES' : 'NO');
+
+      // Store chat key in chat_keys table
+      await executeQuery(
+        `INSERT INTO chat_keys (id, chat_id, key_data, key_version, created_by) 
+         VALUES (?, ?, ?, ?, ?)`,
+        [crypto.randomUUID(), chatId, chatKeyData, 1, createdBy]
+      );
+
+      console.log(`✅ [createChatKey] Stored new chat key in chat_keys table`);
+    }
+
+    // Encrypt and distribute to each user (even if key already existed)
     for (const userId of userIds) {
       const masterKey = userMasterKeys[userId];
-      if (!masterKey) continue;
+      if (!masterKey) {
+        console.log(`❌ [createChatKey] No master key for user ${userId}`);
+        continue;
+      }
 
-      const encryptedChatKey = await this.encryptWorkspaceKey(chatKey.keyData, masterKey);
-      
-      await executeQuery(
-        `INSERT INTO user_workspace_keys (id, user_id, workspace_id, encrypted_workspace_key, key_version, granted_by)
-         VALUES (?, ?, ?, ?, ?, ?)`,
-        [crypto.randomUUID(), userId, chatId, encryptedChatKey, chatKey.keyVersion, createdBy]
+      console.log(`🔑 [createChatKey] Processing user ${userId}`);
+
+      // Check if user already has access to this key
+      const existingUserKey = await executeQuery(
+        'SELECT id FROM user_chat_keys WHERE user_id = ? AND chat_id = ? AND key_version = ?',
+        [userId, chatId, 1]
       );
+
+      if (existingUserKey.length > 0) {
+        console.log(`✅ [createChatKey] User ${userId} already has access to chat ${chatId}, skipping`);
+        continue;
+      }
+
+      console.log(`🔐 [createChatKey] Encrypting chat key for user ${userId}`);
+      const encryptedChatKey = await this.encryptWorkspaceKey(chatKeyData, masterKey);
+      console.log(`🔐 [createChatKey] Encrypted key length:`, encryptedChatKey.length);
+      
+      // ✅ FIX: Explicitly set has_access = 1 (SQLite boolean)
+      await executeQuery(
+        `INSERT INTO user_chat_keys (id, user_id, chat_id, encrypted_chat_key, key_version, granted_by, has_access)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [crypto.randomUUID(), userId, chatId, encryptedChatKey, 1, createdBy, 1]
+      );
+
+      console.log(`✅ [createChatKey] Stored encrypted key for user ${userId}`);
+      
+      // ✅ ADD: Verify the record was inserted correctly
+      const verifyInsert = await executeQuery(
+        'SELECT id, has_access FROM user_chat_keys WHERE user_id = ? AND chat_id = ? AND key_version = ?',
+        [userId, chatId, 1]
+      );
+      console.log(`🔍 [createChatKey] Verification query result:`, verifyInsert);
     }
+
+    console.log(`✅ [createChatKey] Completed chat key creation for ${userIds.length} users`);
   }
 
   /**
-   * Get decrypted chat key for user
+   * Get decrypted chat key for user with backward compatibility
    */
-  async getChatKeyForUser(userId: string, chatId: string, masterKey: string): Promise<string | null> {
-    const result = await executeQuery(
-      `SELECT encrypted_workspace_key, key_version FROM user_workspace_keys 
-       WHERE user_id = ? AND workspace_id = ? AND has_access = TRUE 
+  async getChatKeyForUser(userId: string, chatId: string, sharedWorkspaceKey: string): Promise<string | null> {
+    console.log(`🔍 [getChatKeyForUser] Looking for key: userId=${userId}, chatId=${chatId}`);
+    
+    let result = await executeQuery(
+      `SELECT encrypted_chat_key FROM user_chat_keys 
+       WHERE user_id = ? AND chat_id = ? AND has_access = 1 
        ORDER BY key_version DESC LIMIT 1`,
       [userId, chatId]
     );
 
-    if (result.length === 0) return null;
+    if (result.length > 0) {
+      try {
+        console.log(`🔍 [getChatKeyForUser] Found encrypted key, attempting decryption...`);
+        const decryptedKey = await this.decryptWorkspaceKey(result[0].encrypted_chat_key, sharedWorkspaceKey);
+        console.log(`✅ [getChatKeyForUser] Successfully decrypted key:`, decryptedKey ? 'YES' : 'NO');
+        return decryptedKey;
+      } catch (error) {
+        console.error('Failed to decrypt chat key:', error);
+      }
+    }
 
+    result = await executeQuery(
+      `SELECT encrypted_workspace_key FROM user_workspace_keys 
+       WHERE user_id = ? AND workspace_id = ? AND has_access = 1 
+       ORDER BY key_version DESC LIMIT 1`,
+      [userId, chatId]
+    );
+
+    if (result.length > 0) {
+      try {
+        console.log(`🔍 [getChatKeyForUser] Found encrypted key, attempting decryption...`);
+        const decrypted = await this.decryptWorkspaceKey(result[0].encrypted_workspace_key, sharedWorkspaceKey);
+        await this.migrateChatKeyToNewFormat(userId, chatId, decrypted, sharedWorkspaceKey);
+        console.log(`✅ [getChatKeyForUser] Successfully decrypted key:`, decrypted ? 'YES' : 'NO');
+        return decrypted;
+      } catch (error) {
+        console.log('New format failed, trying old format...');
+        
+        try {
+          console.log(`🔍 [getChatKeyForUser] Trying old format...`);
+          const oldFormatKey = await this.deriveOldKeyFromChatId(chatId, "workspace-key");
+          const decrypted = await this.decryptWorkspaceKey(result[0].encrypted_workspace_key, oldFormatKey);
+          await this.migrateChatKeyToNewFormat(userId, chatId, decrypted, sharedWorkspaceKey);
+          console.log(`✅ [getChatKeyForUser] Successfully decrypted key:`, decrypted ? 'YES' : 'NO');
+          return decrypted;
+        } catch (oldError) {
+          console.error('Both key formats failed:', { newError: error, oldError });
+        }
+      }
+    }
+
+    console.log(`❌ [getChatKeyForUser] No chat key found for user ${userId} in chat ${chatId}`);
+    return null;
+  }
+
+  /**
+   * Derive key using new base64 format
+   */
+  private async deriveKeyFromChatId(chatId: string, secret: string): Promise<string> {
+    const combined = `${chatId}:${secret}`;
+    const encoder = new TextEncoder();
+    const data = encoder.encode(combined);
+    const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    return btoa(String.fromCharCode(...hashArray));
+  }
+
+  /**
+   * Derive key using old hex format (for backward compatibility)
+   */
+  private async deriveOldKeyFromChatId(chatId: string, secret: string): Promise<string> {
+    const combined = `${chatId}:${secret}`;
+    const encoder = new TextEncoder();
+    const data = encoder.encode(combined);
+    const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    return hashHex.substring(0, 32);
+  }
+
+  /**
+   * Migrate old chat key to new format
+   */
+  private async migrateChatKeyToNewFormat(userId: string, chatId: string, decryptedKey: string, sharedWorkspaceKey: string): Promise<void> {
     try {
-      return await this.decryptWorkspaceKey(result[0].encrypted_workspace_key, masterKey);
+      // Check if already migrated
+      const existing = await executeQuery(
+        'SELECT id FROM user_chat_keys WHERE user_id = ? AND chat_id = ?',
+        [userId, chatId]
+      );
+
+      if (existing.length > 0) {
+        return; // Already migrated
+      }
+
+      // ✅ FIX: Use the provided sharedWorkspaceKey for encryption
+      const encryptedWithNewFormat = await this.encryptWorkspaceKey(decryptedKey, sharedWorkspaceKey);
+
+      // Store in new table with explicit has_access = 1
+      await executeQuery(
+        `INSERT INTO user_chat_keys (id, user_id, chat_id, encrypted_chat_key, key_version, granted_by, has_access)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [crypto.randomUUID(), userId, chatId, encryptedWithNewFormat, 1, userId, 1]
+      );
+
+      console.log(`✅ Migrated chat key for user ${userId} in chat ${chatId} to new format`);
     } catch (error) {
-      console.error('Failed to decrypt chat key:', error);
-      return null;
+      console.error('Failed to migrate chat key:', error);
     }
   }
 }

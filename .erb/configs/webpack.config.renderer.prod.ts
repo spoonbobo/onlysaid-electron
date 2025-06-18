@@ -137,6 +137,7 @@ const configuration: webpack.Configuration = {
         removeComments: true,
       },
       isBrowser: false,
+      env: process.env.NODE_ENV || 'production',
       isDevelopment: false,
     }),
 
