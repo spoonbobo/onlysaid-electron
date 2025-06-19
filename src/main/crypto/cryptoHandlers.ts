@@ -74,5 +74,25 @@ export function setupCryptoHandlers() {
     }
   });
 
+  // ✅ NEW: Standardized chat key derivation
+  ipcMain.handle('crypto:derive-chat-key', async (event, chatId: string, workspaceId: string) => {
+    try {
+      const result = await cryptoService.deriveChatKey(chatId, workspaceId);
+      return { success: true, data: result };
+    } catch (error: any) {
+      return { success: false, error: error.message };
+    }
+  });
+
+  // ✅ NEW: Standardized workspace key derivation
+  ipcMain.handle('crypto:derive-workspace-key', async (event, workspaceId: string, context: string = 'chat-encryption') => {
+    try {
+      const result = await cryptoService.deriveWorkspaceKey(workspaceId, context);
+      return { success: true, data: result };
+    } catch (error: any) {
+      return { success: false, error: error.message };
+    }
+  });
+
   console.log('[Main] Crypto handlers set up successfully');
 } 

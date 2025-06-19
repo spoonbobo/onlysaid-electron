@@ -19,14 +19,25 @@ interface CryptoStore {
   // Actions
   unlockForUser: (userId: string, token: string) => Promise<boolean>;
   lockCrypto: () => void;
-  getChatKey: (chatId: string) => Promise<string | null>;
+  getChatKey: (chatId: string, workspaceId?: string) => Promise<string | null>;
   createChatKey: (chatId: string, userIds: string[]) => Promise<boolean>;
   grantWorkspaceChatKeysToUser: (workspaceId: string, userId: string) => Promise<boolean>;
   encryptMessage: (message: string, chatId: string) => Promise<any>;
   decryptMessage: (encryptedMessage: any, chatId: string) => Promise<string | null>;
+  debugEncryptedMessage: (encryptedMessage: any, chatId: string) => Promise<void>;
 }
 
-// Helper function to derive crypto password from user token
+// ✅ NEW: Standardized key derivation using HKDF
+const deriveStandardChatKey = async (chatId: string, workspaceId: string): Promise<string> => {
+  // This will call the main process to use the standardized HKDF derivation
+  const response = await window.electron.crypto.deriveChatKey(chatId, workspaceId);
+  if (!response.success) {
+    throw new Error(response.error);
+  }
+  return response.data;
+};
+
+// ✅ LEGACY: Keep for backward compatibility
 const deriveCryptoPasswordFromToken = async (userId: string, token: string): Promise<string> => {
   const combined = `${userId}:${token}`;
   const encoder = new TextEncoder();
@@ -130,7 +141,7 @@ export const useCryptoStore = create<CryptoStore>((set, get) => ({
     });
   },
 
-  getChatKey: async (chatId: string) => {
+  getChatKey: async (chatId: string, workspaceId?: string) => {
     const { chatKeys, isUnlocked, currentUserId } = get();
 
     if (!currentUserId || !isUnlocked) {
@@ -144,64 +155,33 @@ export const useCryptoStore = create<CryptoStore>((set, get) => ({
       return chatKeys[chatId];
     }
 
-    console.log('[CryptoStore] 🔍 Chat key not cached, fetching from database for:', chatId);
+    console.log('[CryptoStore] 🔍 Chat key not cached, deriving standard key for:', chatId);
 
     try {
-      const sharedWorkspaceKey = await deriveCryptoPasswordFromToken(chatId, "workspace-key");
+      // ✅ NEW: Get workspace ID from context if not provided
+      const effectiveWorkspaceId = workspaceId || useTopicStore.getState().selectedContext?.id;
       
-      console.log('🔍 Getting chat key:', { 
-        userId: currentUserId, 
-        chatId, 
-        keyLength: sharedWorkspaceKey.length,
-        keyFormat: 'base64'
-      });
-      
-      const response = await window.electron.crypto.getChatKey(currentUserId, chatId, sharedWorkspaceKey);
-      
-      console.log('🔍 Get chat key response:', response);
-      
-      if (!response.success || !response.data) {
-        const { selectedContext } = useTopicStore.getState();
-        if (selectedContext?.id) {
-          console.log('🔑 No chat key found, checking if user is in workspace...');
-          
-          const userInWorkspace = await useWorkspaceStore.getState().getUserInWorkspace(selectedContext.id, currentUserId);
-          if (userInWorkspace) {
-            console.log('✅ User is in workspace, attempting to auto-grant chat key access...');
-            
-            const success = await get().grantWorkspaceChatKeysToUser(selectedContext.id, currentUserId);
-            if (success) {
-              console.log('✅ Auto-granted chat key access, retrying...');
-              const retryResponse = await window.electron.crypto.getChatKey(currentUserId, chatId, sharedWorkspaceKey);
-              console.log('🔍 Retry response after granting access:', retryResponse);
-              
-              if (retryResponse.success && retryResponse.data) {
-                console.log('✅ Retry successful, caching key:', retryResponse.data);
-                set(state => ({
-                  chatKeys: {
-                    ...state.chatKeys,
-                    [chatId]: retryResponse.data
-                  }
-                }));
-                return retryResponse.data;
-              } else {
-                console.error('❌ Retry failed:', retryResponse);
-              }
-            } else {
-              console.warn('⚠️ Failed to auto-grant chat key access');
-            }
-          } else {
-            console.log('❌ User not found in workspace, cannot auto-grant access');
-          }
-        }
-        
-        console.error('Failed to get chat key:', response.error);
+      if (!effectiveWorkspaceId) {
+        console.error('No workspace ID available for key derivation');
         return null;
       }
 
-      const chatKey = response.data;
+      // ✅ NEW: Use standardized key derivation
+      let chatKey: string;
+      
+      try {
+        chatKey = await deriveStandardChatKey(chatId, effectiveWorkspaceId);
+        console.log('✅ Successfully derived standard chat key');
+      } catch (error) {
+        console.warn('⚠️ Standard key derivation failed, trying legacy method:', error);
+        
+        // Fallback to legacy method
+        chatKey = await deriveCryptoPasswordFromToken(chatId, "workspace-key");
+        console.log('✅ Using legacy key derivation');
+      }
+
       if (chatKey) {
-        console.log('[CryptoStore] ✅ Successfully retrieved and caching chat key for:', chatId);
+        console.log('[CryptoStore] ✅ Successfully derived and caching chat key for:', chatId);
         set(state => ({
           chatKeys: {
             ...state.chatKeys,
@@ -349,9 +329,41 @@ export const useCryptoStore = create<CryptoStore>((set, get) => ({
     }
 
     try {
+      // ✅ FIX: Add validation and better error handling
+      if (!encryptedMessage || !encryptedMessage.encryptedContent || !encryptedMessage.iv) {
+        console.error('Invalid encrypted message format:', encryptedMessage);
+        return null;
+      }
+
+      // ✅ FIX: Log the encrypted message structure for debugging
+      console.log('🔍 Decrypting message:', {
+        chatId,
+        keyLength: chatKey.length,
+        hasIv: !!encryptedMessage.iv,
+        hasContent: !!encryptedMessage.encryptedContent,
+        keyVersion: encryptedMessage.keyVersion,
+        algorithm: encryptedMessage.algorithm
+      });
+
       const response = await window.electron.crypto.decryptMessage(encryptedMessage, chatKey);
       
       if (!response.success) {
+        // ✅ FIX: Try with different key derivation methods for backward compatibility
+        console.warn('❌ Decryption failed with current key, trying fallback methods...');
+        
+        // Try with old key format if available
+        try {
+          const fallbackKey = await deriveCryptoPasswordFromToken(chatId, "workspace-key-old");
+          const fallbackResponse = await window.electron.crypto.decryptMessage(encryptedMessage, fallbackKey);
+          
+          if (fallbackResponse.success) {
+            console.log('✅ Decryption successful with fallback key');
+            return fallbackResponse.data;
+          }
+        } catch (fallbackError) {
+          console.error('❌ Fallback decryption also failed:', fallbackError);
+        }
+        
         console.error('Failed to decrypt message:', response.error);
         return null;
       }
@@ -359,6 +371,14 @@ export const useCryptoStore = create<CryptoStore>((set, get) => ({
       return response.data;
     } catch (error: any) {
       console.error('Failed to decrypt message:', error);
+      
+      // ✅ FIX: Clear the cached key if decryption fails, it might be wrong
+      set(state => {
+        const newChatKeys = { ...state.chatKeys };
+        delete newChatKeys[chatId];
+        return { chatKeys: newChatKeys };
+      });
+      
       return null;
     }
   },
@@ -471,6 +491,30 @@ export const useCryptoStore = create<CryptoStore>((set, get) => ({
     } catch (error: any) {
       console.error('Failed to grant workspace chat keys:', error);
       return false;
+    }
+  },
+
+  // Add this helper method to debug encrypted messages
+  debugEncryptedMessage: async (encryptedMessage: any, chatId: string) => {
+    console.log('🔍 Debug encrypted message:', {
+      chatId,
+      messageStructure: {
+        hasEncryptedContent: !!encryptedMessage?.encryptedContent,
+        hasIv: !!encryptedMessage?.iv,
+        hasKeyVersion: !!encryptedMessage?.keyVersion,
+        algorithm: encryptedMessage?.algorithm,
+        keyVersion: encryptedMessage?.keyVersion
+      },
+      contentLength: encryptedMessage?.encryptedContent?.length,
+      ivLength: encryptedMessage?.iv?.length
+    });
+    
+    const chatKey = await get().getChatKey(chatId);
+    if (chatKey) {
+      console.log('🔑 Chat key info:', {
+        keyLength: chatKey.length,
+        keyFormat: 'base64'
+      });
     }
   },
 })); 

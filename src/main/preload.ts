@@ -139,7 +139,9 @@ type CryptoChannels =
   | 'crypto:create-chat-key'
   | 'crypto:get-chat-key'
   | 'crypto:encrypt-message'
-  | 'crypto:decrypt-message';
+  | 'crypto:decrypt-message'
+  | 'crypto:derive-chat-key'
+  | 'crypto:derive-workspace-key';
 
 export type Channels =
   | AuthChannels
@@ -413,6 +415,10 @@ const electronHandler = {
       ipcRenderer.invoke('crypto:encrypt-message', message, chatKey),
     decryptMessage: (encryptedMessage: any, chatKey: string) => 
       ipcRenderer.invoke('crypto:decrypt-message', encryptedMessage, chatKey),
+    deriveChatKey: (chatId: string, workspaceId: string) => 
+      ipcRenderer.invoke('crypto:derive-chat-key', chatId, workspaceId),
+    deriveWorkspaceKey: (workspaceId: string, context?: string) => 
+      ipcRenderer.invoke('crypto:derive-workspace-key', workspaceId, context),
   },
 };
 
