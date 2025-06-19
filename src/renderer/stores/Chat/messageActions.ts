@@ -64,7 +64,8 @@ export const createMessageActions = (set: any, get: () => ChatState) => ({
         file_ids: messageData.file_ids,
         files: files,
         sent_at: sent_at || new Date().toISOString(),
-        status: status
+        status: status,
+        workspace_id: workspaceId
       };
 
       // Try to encrypt the message if crypto is available
@@ -109,7 +110,8 @@ export const createMessageActions = (set: any, get: () => ChatState) => ({
         file_ids: message.file_ids || null,
         sent_at: message.sent_at,
         status: message.status,
-        is_encrypted: isEncrypted ? 1 : 0, // Convert boolean to integer
+        workspace_id: message.workspace_id || null,
+        is_encrypted: isEncrypted ? 1 : 0,
         encrypted_text: null,
         encryption_iv: null,
         encryption_key_version: null,
@@ -124,14 +126,14 @@ export const createMessageActions = (set: any, get: () => ChatState) => ({
         dbParams.encryption_algorithm = encryptedMessage.algorithm;
       }
 
-      // Store in local database with encryption fields
+      // Store in local database with encryption fields and workspace_id
       await window.electron.db.query({
         query: `
         insert into messages
-        (id, chat_id, sender, text, created_at, reply_to, file_ids, sent_at, status, 
+        (id, chat_id, sender, text, created_at, reply_to, file_ids, sent_at, status, workspace_id,
          encrypted_text, encryption_iv, encryption_key_version, encryption_algorithm, is_encrypted)
         values
-        (@id, @chat_id, @sender, @text, @created_at, @reply_to, @file_ids, @sent_at, @status,
+        (@id, @chat_id, @sender, @text, @created_at, @reply_to, @file_ids, @sent_at, @status, @workspace_id,
          @encrypted_text, @encryption_iv, @encryption_key_version, @encryption_algorithm, @is_encrypted)
         `,
         params: dbParams
@@ -262,10 +264,10 @@ export const createMessageActions = (set: any, get: () => ChatState) => ({
 
       const existingMessageIds = new Set(existingMessages.map(msg => msg.id));
 
-      // Fetch messages including encryption fields
+      // Fetch messages including encryption fields and workspace_id
       const response = await window.electron.db.query({
         query: `
-          select id, chat_id, sender, text, created_at, reply_to, file_ids, sent_at, status,
+          select id, chat_id, sender, text, created_at, reply_to, file_ids, sent_at, status, workspace_id,
                  encrypted_text, encryption_iv, encryption_key_version, encryption_algorithm, is_encrypted
           from messages
           where chat_id = @chatId
@@ -523,6 +525,7 @@ export const createMessageActions = (set: any, get: () => ChatState) => ({
       textLength: message.text?.length || 0,
       isEncrypted: message.is_encrypted,
       hasEncryptedText: !!message.encrypted_text,
+      workspaceId: message.workspace_id,
       text: message.text?.substring(0, 20) + '...'
     });
 
@@ -648,7 +651,7 @@ export const createMessageActions = (set: any, get: () => ChatState) => ({
     // Database save - but ONLY save after we have proper text
     (async () => {
       try {
-        let textToSave: string | null = message.text;
+        let textToSave: string | null = message.text ?? null;
         
         // For encrypted messages, if we don't have decrypted text, try to decrypt but don't overwrite existing data
         if (message.is_encrypted && message.encrypted_text && (!textToSave || textToSave.trim() === '')) {
@@ -702,12 +705,13 @@ export const createMessageActions = (set: any, get: () => ChatState) => ({
               id: message.id,
               chat_id: chatId,
               sender: message.sender,
-              text: textToSave || '', // This converts null to empty string for the database
+              text: textToSave || '',
               created_at: message.created_at,
               reply_to: message.reply_to || null,
               file_ids: message.file_ids || null,
               sent_at: message.sent_at || message.created_at,
               status: message.status || 'sent',
+              workspace_id: message.workspace_id || null,
               reactions: message.reactions ? JSON.stringify(message.reactions) : null,
               mentions: message.mentions ? JSON.stringify(message.mentions) : null,
               poll: message.poll || null,
@@ -723,11 +727,11 @@ export const createMessageActions = (set: any, get: () => ChatState) => ({
             await window.electron.db.query({
               query: `
                 insert into messages
-                (id, chat_id, sender, text, created_at, reply_to, file_ids, sent_at, status, 
+                (id, chat_id, sender, text, created_at, reply_to, file_ids, sent_at, status, workspace_id,
                  reactions, mentions, poll, contact, gif, is_encrypted, encrypted_text, 
                  encryption_iv, encryption_key_version, encryption_algorithm)
                 values
-                (@id, @chat_id, @sender, @text, @created_at, @reply_to, @file_ids, @sent_at, @status, 
+                (@id, @chat_id, @sender, @text, @created_at, @reply_to, @file_ids, @sent_at, @status, @workspace_id,
                  @reactions, @mentions, @poll, @contact, @gif, @is_encrypted, @encrypted_text,
                  @encryption_iv, @encryption_key_version, @encryption_algorithm)
               `,
@@ -835,7 +839,7 @@ export const createMessageActions = (set: any, get: () => ChatState) => ({
       const reactionId = reactionExists ? existingReaction[0]?.id : uuidv4();
       const createdAt = new Date().toISOString();
 
-      const currentReactions = message.reactions || [];
+      const currentReactions = Array.isArray(message.reactions) ? message.reactions : [];
 
       set((state: ChatState) => {
         const messages = state.messages[chatId] || [];
@@ -847,7 +851,7 @@ export const createMessageActions = (set: any, get: () => ChatState) => ({
         }
 
         const updatedReactions = reactionExists
-          ? currentReactions.filter(r => !(r.reaction === reaction && r.user_id === currentUser.id))
+          ? currentReactions.filter((r: IReaction) => !(r.reaction === reaction && r.user_id === currentUser.id))
           : [...currentReactions, {
             id: reactionId,
             message_id: messageId,
@@ -858,7 +862,7 @@ export const createMessageActions = (set: any, get: () => ChatState) => ({
 
         const updatedMessages = R.update(
           messageIndex,
-          { ...message, reactions: updatedReactions as IReaction[] },
+          { ...message, reactions: JSON.stringify(updatedReactions) },
           messages
         );
 
@@ -957,7 +961,7 @@ export const createMessageActions = (set: any, get: () => ChatState) => ({
       });
 
       // Update local state
-      set(state => {
+      set((state: ChatState) => {
         const chatMessages = state.messages[chatId] || [];
         const updatedMessages = chatMessages.map(msg => 
           msg.sender !== currentUser.id ? { ...msg, isRead: true } : msg
@@ -972,7 +976,6 @@ export const createMessageActions = (set: any, get: () => ChatState) => ({
       });
 
       // Clear notifications for this chat
-      const { clearNotificationsForContext } = await import('@/utils/notifications');
       if (workspaceId) {
         clearNotificationsForContext(workspaceId, 'chatroom', chatId);
       } else {
@@ -1074,7 +1077,7 @@ export const createMessageActions = (set: any, get: () => ChatState) => ({
       });
 
       // Update local state
-      set(state => {
+      set((state: ChatState) => {
         const chatMessages = state.messages[chatId] || [];
         const updatedMessages = chatMessages.map(msg => 
           msg.id === messageId ? { ...msg, isRead: true } : msg
@@ -1102,8 +1105,5 @@ export const createMessageActions = (set: any, get: () => ChatState) => ({
     ).length;
   },
 
-  hasUnreadMessages: (chatId: string) => {
-    const messageActions = createMessageActions(set, get);
-    return messageActions.getUnreadMessageCount(chatId) > 0;
-  },
+
 }); 

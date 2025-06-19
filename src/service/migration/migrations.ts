@@ -525,6 +525,45 @@ export const featureMigrations: IMigration[] = [
       DROP TABLE messages;
       ALTER TABLE messages_temp RENAME TO messages;
     `
+  },
+  {
+    id: 'feature_019',
+    version: '2.3.0',
+    name: 'add_workspace_id_to_messages',
+    description: 'Add workspace_id field to messages table for better performance and data modeling',
+    category: 'feature',
+    dependencies: ['feature_018'],
+    createdAt: '2024-01-15T00:00:00Z',
+    up: `
+      -- Add workspace_id field to messages table
+      ALTER TABLE messages ADD COLUMN workspace_id TEXT;
+      
+      -- Populate workspace_id from the chat table for existing messages
+      UPDATE messages 
+      SET workspace_id = (
+        SELECT c.workspace_id 
+        FROM chat c 
+        WHERE c.id = messages.chat_id
+      );
+      
+      -- Create index for performance
+      CREATE INDEX IF NOT EXISTS idx_messages_workspace_id ON messages(workspace_id);
+      CREATE INDEX IF NOT EXISTS idx_messages_workspace_id_created_at ON messages(workspace_id, created_at);
+    `,
+    down: `
+      DROP INDEX IF EXISTS idx_messages_workspace_id_created_at;
+      DROP INDEX IF EXISTS idx_messages_workspace_id;
+      
+      -- SQLite doesn't support DROP COLUMN directly, so we'd need to recreate table
+      CREATE TABLE messages_temp AS SELECT 
+        id, created_at, updated_at, sent_at, chat_id, sender, status, 
+        reactions, reply_to, mentions, file_ids, poll, contact, gif, text,
+        encrypted_text, encryption_iv, encryption_key_version, 
+        encryption_algorithm, is_encrypted, isRead
+      FROM messages;
+      DROP TABLE messages;
+      ALTER TABLE messages_temp RENAME TO messages;
+    `
   }
 ];
 
@@ -636,10 +675,10 @@ export const dataMigrations: IMigration[] = [
     name: 'fix_messages_table_schema',
     description: 'Fix messages table schema by recreating with all required columns',
     category: 'data',
-    dependencies: ['feature_002', 'feature_018'],
+    dependencies: ['feature_002', 'feature_018', 'feature_019'],
     createdAt: '2024-01-11T00:00:00Z',
     up: `
-      -- Check if messages table exists and recreate it with proper schema
+      -- Check if messages table exists and recreate it with proper schema INCLUDING ALL COLUMNS
       DROP TABLE IF EXISTS messages_backup;
 
       -- Create backup of existing data
@@ -648,7 +687,7 @@ export const dataMigrations: IMigration[] = [
       -- Drop the old table
       DROP TABLE messages;
 
-      -- Recreate messages table with correct schema INCLUDING isRead
+      -- Recreate messages table with correct schema INCLUDING ALL COLUMNS
       CREATE TABLE messages (
         id TEXT PRIMARY KEY,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -665,29 +704,61 @@ export const dataMigrations: IMigration[] = [
         contact TEXT,
         gif TEXT,
         text TEXT,
-        isRead BOOLEAN DEFAULT FALSE
+        encrypted_text TEXT,
+        encryption_iv TEXT,
+        encryption_key_version INTEGER,
+        encryption_algorithm TEXT DEFAULT 'AES-GCM-256',
+        is_encrypted BOOLEAN DEFAULT FALSE,
+        isRead BOOLEAN DEFAULT FALSE,
+        workspace_id TEXT
       );
 
       -- Restore data from backup, handling missing columns gracefully
       INSERT INTO messages (
         id, created_at, updated_at, sent_at, chat_id, sender, status,
-        reactions, reply_to, text, mentions, file_ids, poll, contact, gif, isRead
+        reactions, reply_to, text, mentions, file_ids, poll, contact, gif, 
+        encrypted_text, encryption_iv, encryption_key_version, 
+        encryption_algorithm, is_encrypted, isRead, workspace_id
       )
       SELECT
         id, created_at, updated_at, sent_at, chat_id, sender, status,
         COALESCE(reactions, NULL) as reactions,
         COALESCE(reply_to, NULL) as reply_to,
         text,
-        NULL as mentions,
-        NULL as file_ids,
-        NULL as poll,
-        NULL as contact,
-        NULL as gif,
-        COALESCE(isRead, FALSE) as isRead
+        COALESCE(mentions, NULL) as mentions,
+        COALESCE(file_ids, NULL) as file_ids,
+        COALESCE(poll, NULL) as poll,
+        COALESCE(contact, NULL) as contact,
+        COALESCE(gif, NULL) as gif,
+        COALESCE(encrypted_text, NULL) as encrypted_text,
+        COALESCE(encryption_iv, NULL) as encryption_iv,
+        COALESCE(encryption_key_version, NULL) as encryption_key_version,
+        COALESCE(encryption_algorithm, 'AES-GCM-256') as encryption_algorithm,
+        COALESCE(is_encrypted, FALSE) as is_encrypted,
+        COALESCE(isRead, FALSE) as isRead,
+        COALESCE(workspace_id, NULL) as workspace_id
       FROM messages_backup;
+
+      -- Populate workspace_id from the chat table for existing messages that don't have it
+      UPDATE messages 
+      SET workspace_id = (
+        SELECT c.workspace_id 
+        FROM chat c 
+        WHERE c.id = messages.chat_id
+      )
+      WHERE workspace_id IS NULL;
 
       -- Clean up backup table
       DROP TABLE messages_backup;
+
+      -- Recreate indexes
+      CREATE INDEX IF NOT EXISTS idx_messages_chat_id ON messages(chat_id);
+      CREATE INDEX IF NOT EXISTS idx_messages_sender ON messages(sender);
+      CREATE INDEX IF NOT EXISTS idx_messages_created_at ON messages(created_at);
+      CREATE INDEX IF NOT EXISTS idx_messages_isRead ON messages(isRead);
+      CREATE INDEX IF NOT EXISTS idx_messages_chat_id_isRead ON messages(chat_id, isRead);
+      CREATE INDEX IF NOT EXISTS idx_messages_workspace_id ON messages(workspace_id);
+      CREATE INDEX IF NOT EXISTS idx_messages_workspace_id_created_at ON messages(workspace_id, created_at);
     `,
     down: `
       -- This rollback recreates the old schema (without new columns)

@@ -407,17 +407,13 @@ const markMessagesAsReadInDB = async (
     
     const params: any = { currentUserId };
 
-    // Add workspace filtering
+    // Add workspace filtering using direct workspace_id field
     if (workspaceId) {
-      query += ` AND chat_id IN (
-        SELECT id FROM chat WHERE workspace_id = @workspaceId
-      )`;
+      query += ` AND workspace_id = @workspaceId`;
       params.workspaceId = workspaceId;
     } else {
       // Home messages (no workspace)
-      query += ` AND chat_id IN (
-        SELECT id FROM chat WHERE workspace_id IS NULL
-      )`;
+      query += ` AND workspace_id IS NULL`;
     }
 
     // Add context filtering (specific chat)
@@ -473,11 +469,11 @@ export const createNotificationsForUnreadMessages = async () => {
     const hasIsReadColumn = await checkIsReadColumnExists();
     console.log('🔔 [DEBUG] isRead column exists:', hasIsReadColumn);
 
-    // Use different queries based on column availability
+    // Use workspace_id directly from messages table for better performance
     const query = hasIsReadColumn 
       ? `
         SELECT DISTINCT m.id, m.chat_id, m.sender, m.text, m.created_at, m.file_ids,
-               c.workspace_id, c.type as chat_type, c.name as chat_name
+               m.workspace_id, c.type as chat_type, c.name as chat_name
         FROM messages m
         LEFT JOIN chat c ON m.chat_id = c.id
         WHERE m.sender != @currentUserId
@@ -488,7 +484,7 @@ export const createNotificationsForUnreadMessages = async () => {
       `
       : `
         SELECT DISTINCT m.id, m.chat_id, m.sender, m.text, m.created_at, m.file_ids,
-               c.workspace_id, c.type as chat_type, c.name as chat_name
+               m.workspace_id, c.type as chat_type, c.name as chat_name
         FROM messages m
         LEFT JOIN chat c ON m.chat_id = c.id
         WHERE m.sender != @currentUserId
@@ -550,12 +546,12 @@ export const createNotificationsForUnreadMessages = async () => {
       console.log('🔔 [DEBUG] Creating notification for NEW message:', {
         messageId: message.id,
         chatId: message.chat_id,
-        workspaceId: message.workspace_id,
+        workspaceId: message.workspace_id, // Now directly from messages table
         senderName,
         preview: messagePreview
       });
 
-      // Determine if this is a workspace or home message
+      // Determine if this is a workspace or home message using direct workspace_id
       if (message.workspace_id) {
         // Workspace message
         addWorkspaceNotification(
@@ -565,7 +561,7 @@ export const createNotificationsForUnreadMessages = async () => {
             type: 'message',
             title: `${senderName}`,
             content: messagePreview,
-            messageId: message.id  // Add this field for deduplication
+            messageId: message.id
           },
           message.chat_id
         );
@@ -577,7 +573,7 @@ export const createNotificationsForUnreadMessages = async () => {
             type: 'message', 
             title: `${senderName}`,
             content: messagePreview,
-            messageId: message.id  // Add this field for deduplication
+            messageId: message.id
           },
           message.chat_id
         );
