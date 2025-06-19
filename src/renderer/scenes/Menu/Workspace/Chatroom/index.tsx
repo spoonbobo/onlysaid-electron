@@ -1,9 +1,10 @@
-import { Box, IconButton, Menu, MenuItem } from "@mui/material";
+import { Box, IconButton, Menu, MenuItem, Badge, Typography } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { FormattedMessage } from "react-intl";
 import { useTopicStore } from "@/renderer/stores/Topic/TopicStore";
 import { useChatStore } from "@/renderer/stores/Chat/ChatStore";
+import { useNotificationStore } from "@/renderer/stores/Notification/NotificationStore";
 import MenuListItem from "@/renderer/components/Navigation/MenuListItem";
 import ChatUpdate from '@/renderer/components/Dialog/Chat/ChatUpdate';
 import { IChatRoom } from '@/../../types/Chat/Chatroom';
@@ -23,6 +24,9 @@ export default function WorkspaceChatMenu() {
   const getChat = useChatStore((state) => state.getChat);
   const getUserInWorkspace = useWorkspaceStore((state) => state.getUserInWorkspace);
 
+  // Get notification data for unread counts
+  const allNotifications = useNotificationStore(state => state.notifications);
+
   const [menuAnchorEl, setMenuAnchorEl] = useState<null | HTMLElement>(null);
   const [selectedChatId, setSelectedChatId] = useState<string>('');
   const [chatUpdateOpen, setChatUpdateOpen] = useState(false);
@@ -34,10 +38,37 @@ export default function WorkspaceChatMenu() {
   const section = selectedContext?.section || '';
   const selectedSubcategory = section ? selectedTopics[section] || '' : '';
 
+  // Move workspaceChats definition before memoized calculations
+  const workspaceChats = useMemo(() => 
+    chats.filter(chat => chat.workspace_id === workspaceId), 
+    [chats, workspaceId]
+  );
+
   const getContextId = () => {
     if (!selectedContext) return '';
     return `${selectedContext.name}:${selectedContext.type}`;
   };
+
+  // Memoize unread counts for each chat to prevent unnecessary recalculations
+  const chatUnreadCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    
+    if (workspaceId && workspaceChats.length > 0) {
+      workspaceChats.forEach(chat => {
+        // Get unread notifications for this specific chat in this workspace
+        const unreadCount = allNotifications.filter(notification => 
+          notification.workspaceId === workspaceId &&
+          notification.workspaceSection === 'chatroom' &&
+          notification.workspaceContext === chat.id &&
+          !notification.read
+        ).length;
+        
+        counts[chat.id] = unreadCount;
+      });
+    }
+    
+    return counts;
+  }, [allNotifications, workspaceId, workspaceChats]);
 
   useEffect(() => {
     const currentUser = getUserFromStore();
@@ -48,12 +79,11 @@ export default function WorkspaceChatMenu() {
   }, [selectedContext?.id, getChat]);
 
   useEffect(() => {
-    const workspaceChats = chats.filter(chat => chat.workspace_id === workspaceId);
     if (workspaceChats.length > 0 && (!selectedSubcategory || !workspaceChats.some(chat => chat.id === selectedSubcategory))) {
       setSelectedTopic(section, workspaceChats[0].id);
       setActiveChat(workspaceChats[0].id, getContextId());
     }
-  }, [chats, workspaceId, selectedSubcategory, setSelectedTopic, setActiveChat, section]);
+  }, [workspaceChats, selectedSubcategory, setSelectedTopic, setActiveChat, section]);
 
   useEffect(() => {
     const fetchWorkspaceUser = async () => {
@@ -110,8 +140,6 @@ export default function WorkspaceChatMenu() {
     handleCloseMenu();
   };
 
-  const workspaceChats = chats.filter(chat => chat.workspace_id === workspaceId);
-
   const menuItems = [];
 
   if (canModifyChat) {
@@ -144,32 +172,70 @@ export default function WorkspaceChatMenu() {
       <Box sx={{ mt: 2, px: 2 }}>
         <Box sx={{ mt: 2 }}>
           {workspaceChats.length > 0 ? (
-            chats.map((chat) => (
-              <MenuListItem
-                key={chat.id}
-                label={chat.name}
-                isSelected={selectedSubcategory === chat.id}
-                onClick={() => handleSelectChat(chat.id)}
-                onContextMenu={(e) => handleContextMenu(e, chat.id)}
-                endIcon={
-                  canModifyChat && (
-                    <IconButton
-                      size="small"
-                      sx={{
-                        p: 0.25,
-                        opacity: 0,
-                        '&:hover': { opacity: 1 },
-                        '.MuiListItemButton-root:hover &': { opacity: 1 }
-                      }}
-                      onClick={(e) => handleDeleteChat(chat.id, e)}
-                    >
-                      <CloseIcon sx={{ fontSize: 16 }} />
-                    </IconButton>
-                  )
-                }
-                sx={{ pl: 4 }}
-              />
-            ))
+            workspaceChats.map((chat) => {
+              const unreadCount = chatUnreadCounts[chat.id] || 0;
+              const isUnread = unreadCount > 0;
+              
+              return (
+                <MenuListItem
+                  key={chat.id}
+                  label={
+                    <Box sx={{ 
+                      display: 'flex', 
+                      alignItems: 'center', 
+                      justifyContent: 'space-between',
+                      width: '100%',
+                      pr: 1
+                    }}>
+                      <span>{chat.name}</span>
+                      {isUnread && (
+                        <Badge
+                          badgeContent={unreadCount}
+                          color="primary"
+                          sx={{
+                            '& .MuiBadge-badge': {
+                              fontSize: '0.7rem',
+                              minWidth: 16,
+                              height: 16,
+                              padding: '0 4px',
+                              borderRadius: '8px'
+                            }
+                          }}
+                        />
+                      )}
+                    </Box>
+                  }
+                  isSelected={selectedSubcategory === chat.id}
+                  onClick={() => handleSelectChat(chat.id)}
+                  onContextMenu={(e) => handleContextMenu(e, chat.id)}
+                  endIcon={
+                    canModifyChat && (
+                      <IconButton
+                        size="small"
+                        sx={{
+                          p: 0.25,
+                          opacity: 0,
+                          '&:hover': { opacity: 1 },
+                          '.MuiListItemButton-root:hover &': { opacity: 1 }
+                        }}
+                        onClick={(e) => handleDeleteChat(chat.id, e)}
+                      >
+                        <CloseIcon sx={{ fontSize: 16 }} />
+                      </IconButton>
+                    )
+                  }
+                  sx={{ 
+                    pl: 4,
+                    '& .MuiListItemText-root': {
+                      margin: 0,
+                      '& .MuiListItemText-primary': {
+                        overflow: 'hidden'
+                      }
+                    }
+                  }}
+                />
+              );
+            })
           ) : (
             <Box sx={{ pl: 4, py: 1, color: 'text.secondary', fontSize: '0.875rem' }}>
               <FormattedMessage id="workspace.noChats" defaultMessage="No chats found" />

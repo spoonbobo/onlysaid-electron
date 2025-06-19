@@ -11,6 +11,11 @@ import { useTopicStore } from '@/renderer/stores/Topic/TopicStore';
 import { useCryptoStore } from '../Crypto/CryptoStore';
 import { getUsersWithCache, messagesByIdCache } from './utils';
 import { ChatState, MESSAGE_FETCH_LIMIT } from './types';
+import { 
+  clearNotificationsForContext, 
+  clearNotificationsForWorkspaceSection,
+  clearNotificationsForHomeSection 
+} from '@/utils/notifications';
 
 export const createMessageActions = (set: any, get: () => ChatState) => ({
   sendMessage: async (chatId: string, messageData: Partial<IChatMessage>, workspaceId?: string) => {
@@ -525,28 +530,26 @@ export const createMessageActions = (set: any, get: () => ChatState) => ({
       const currentMessages = state.messages[chatId] || [];
       const existingMessageIndex = currentMessages.findIndex(msg => msg.id === message.id);
 
+      // NEW: Set message as unread by default (unless it's from current user)
+      const currentUser = getUserFromStore();
+      const isFromCurrentUser = message.sender === currentUser?.id;
+      
       if (existingMessageIndex !== -1) {
         console.log('🔄 Updating existing message:', message.id);
         const existingMessage = currentMessages[existingMessageIndex];
         
-        // CRITICAL FIX: Don't overwrite existing decrypted text with empty text
         const updatedMessage = {
           ...existingMessage,
           ...message,
-          // Preserve existing text if new message has empty text but existing has content
-          // Also preserve if new message is encrypted but existing has decrypted text
           text: (message.text && message.text.trim()) ? message.text : 
                 (existingMessage.text && existingMessage.text.trim()) ? existingMessage.text :
                 message.text,
           reactions: message.reactions || existingMessage.reactions || [],
-          files: message.files || existingMessage.files
+          files: message.files || existingMessage.files,
+          // NEW: Preserve existing read status or set based on sender
+          isRead: existingMessage.isRead !== undefined ? existingMessage.isRead : isFromCurrentUser,
+          readAt: existingMessage.readAt
         };
-
-        console.log('🔍 Updated message text:', {
-          original: existingMessage.text?.substring(0, 20),
-          incoming: message.text?.substring(0, 20),
-          final: updatedMessage.text?.substring(0, 20)
-        });
 
         const updatedMessages = [...currentMessages];
         updatedMessages[existingMessageIndex] = updatedMessage;
@@ -570,6 +573,9 @@ export const createMessageActions = (set: any, get: () => ChatState) => ({
       let messageWithReactions = {
         ...message,
         reactions: message.reactions || [],
+        // NEW: Set read status based on sender
+        isRead: isFromCurrentUser, // Messages from current user are always read
+        readAt: isFromCurrentUser ? new Date().toISOString() : undefined
       };
 
       // Handle encrypted messages immediately
@@ -577,12 +583,10 @@ export const createMessageActions = (set: any, get: () => ChatState) => ({
         const { isUnlocked, decryptMessage } = useCryptoStore.getState();
         
         if (isUnlocked) {
-          // If crypto is unlocked but text is empty, decrypt immediately
           if (!message.text || message.text.trim() === '') {
             console.log('🔐 Setting decrypting placeholder for:', message.id);
             messageWithReactions.text = '🔐 [Decrypting...]';
             
-            // Try to decrypt immediately
             decryptMessage(message.encrypted_text, chatId).then(decryptedText => {
               console.log('🔓 Decryption result for', message.id, ':', !!decryptedText);
               if (decryptedText) {
@@ -615,7 +619,7 @@ export const createMessageActions = (set: any, get: () => ChatState) => ({
         }
       }
 
-      // Rest of the insertion logic...
+      // Insert message in correct position
       const newMessageTime = new Date(messageWithReactions.created_at).getTime();
       const insertIndex = currentMessages.findIndex(msg => {
         const msgTime = new Date(msg.created_at).getTime();
@@ -932,5 +936,174 @@ export const createMessageActions = (set: any, get: () => ChatState) => ({
       ...msg,
       sender_object: msg.sender_object || userMap[msg.sender] || null
     }));
+  },
+
+  // Add new method to mark chat as read and clear notifications
+  markChatAsRead: async (chatId: string, workspaceId?: string) => {
+    try {
+      const currentUser = getUserFromStore();
+      if (!currentUser?.id) return;
+
+      // Update database - mark all unread messages in this chat as read
+      await window.electron.db.query({
+        query: `
+          UPDATE messages 
+          SET isRead = TRUE 
+          WHERE chat_id = @chatId 
+          AND sender != @currentUserId 
+          AND isRead = FALSE
+        `,
+        params: { chatId, currentUserId: currentUser.id }
+      });
+
+      // Update local state
+      set(state => {
+        const chatMessages = state.messages[chatId] || [];
+        const updatedMessages = chatMessages.map(msg => 
+          msg.sender !== currentUser.id ? { ...msg, isRead: true } : msg
+        );
+
+        return {
+          messages: {
+            ...state.messages,
+            [chatId]: updatedMessages
+          }
+        };
+      });
+
+      // Clear notifications for this chat
+      const { clearNotificationsForContext } = await import('@/utils/notifications');
+      if (workspaceId) {
+        clearNotificationsForContext(workspaceId, 'chatroom', chatId);
+      } else {
+        clearNotificationsForContext(undefined, 'agents', chatId);
+      }
+
+      console.log(`📖 Marked chat ${chatId} as read`);
+    } catch (error) {
+      console.error('Error marking chat as read:', error);
+    }
+  },
+
+  // NEW: Enhanced methods for read tracking
+  markMessagesAsRead: async (chatId: string, messageIds?: string[]) => {
+    try {
+      const currentUser = getUserFromStore();
+      if (!currentUser?.id) return;
+
+      const readAt = new Date().toISOString();
+      
+      set((state: ChatState) => {
+        const messages = state.messages[chatId] || [];
+        let lastReadMessageId = state.lastReadMessageIds[chatId];
+
+        const updatedMessages = messages.map(msg => {
+          // If specific messageIds provided, only mark those
+          // Otherwise mark all unread messages from others as read
+          const shouldMarkAsRead = messageIds 
+            ? messageIds.includes(msg.id)
+            : (msg.sender !== currentUser.id && !msg.isRead);
+
+          if (shouldMarkAsRead) {
+            lastReadMessageId = msg.id; // Update last read message
+            return {
+              ...msg,
+              isRead: true,
+              readAt
+            };
+          }
+          return msg;
+        });
+
+        return {
+          ...state,
+          messages: {
+            ...state.messages,
+            [chatId]: updatedMessages
+          },
+          lastReadMessageIds: {
+            ...state.lastReadMessageIds,
+            [chatId]: lastReadMessageId || state.lastReadMessageIds[chatId]
+          }
+        };
+      });
+
+      // Clear notifications for this chat
+      const workspace = getCurrentWorkspace();
+      if (workspace?.id) {
+        clearNotificationsForContext(workspace.id, 'chatroom', chatId);
+      } else {
+        clearNotificationsForContext(undefined, 'agents', chatId);
+      }
+
+      console.log(`✅ Marked messages as read in chat ${chatId}`);
+    } catch (error) {
+      console.error('Error marking messages as read:', error);
+    }
+  },
+
+  getUnreadMessages: (chatId: string): IChatMessage[] => {
+    const { messages } = get();
+    const chatMessages = messages[chatId] || [];
+    const currentUser = getUserFromStore();
+    
+    return chatMessages.filter(msg => 
+      msg.sender !== currentUser?.id && !msg.isRead
+    );
+  },
+
+  getUnreadCount: (chatId: string): number => {
+    const unreadMessages = get().getUnreadMessages(chatId);
+    return unreadMessages.length;
+  },
+
+  hasUnreadMessages: (chatId: string): boolean => {
+    const unreadMessages = get().getUnreadMessages(chatId);
+    return unreadMessages.length > 0;
+  },
+
+  markMessageAsRead: async (chatId: string, messageId: string) => {
+    try {
+      const currentUser = getUserFromStore();
+      if (!currentUser?.id) return;
+
+      // Update database
+      await window.electron.db.query({
+        query: `UPDATE messages SET isRead = TRUE WHERE id = @messageId AND sender != @currentUserId`,
+        params: { messageId, currentUserId: currentUser.id }
+      });
+
+      // Update local state
+      set(state => {
+        const chatMessages = state.messages[chatId] || [];
+        const updatedMessages = chatMessages.map(msg => 
+          msg.id === messageId ? { ...msg, isRead: true } : msg
+        );
+
+        return {
+          messages: {
+            ...state.messages,
+            [chatId]: updatedMessages
+          }
+        };
+      });
+    } catch (error) {
+      console.error('Error marking message as read:', error);
+    }
+  },
+
+  getUnreadMessageCount: (chatId: string) => {
+    const state = get();
+    const chatMessages = state.messages[chatId] || [];
+    const currentUser = getUserFromStore();
+    
+    return chatMessages.filter(msg => 
+      msg.sender !== currentUser?.id && !msg.isRead
+    ).length;
+  },
+
+  hasUnreadMessages: (chatId: string) => {
+    const messageActions = createMessageActions(set, get);
+    return messageActions.getUnreadMessageCount(chatId) > 0;
   },
 }); 

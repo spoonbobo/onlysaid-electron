@@ -628,5 +628,25 @@
   "encryption.status.encrypted": "已加密",
   "encryption.dialog.titleUnencrypted": "訊息未加密",
   "encryption.dialog.descriptionUnencrypted": "此訊息未加密，任何有權訪問伺服器的人都可以閱讀。",
-  "encryption.status.unencrypted": "未加密"
+  "encryption.status.unencrypted": "未加密",
+  
+  "homepage.welcome": "歡迎回來，{username}",
+  "homepage.workspaces": "工作區",
+  "homepage.scheduledTasks": "預定任務和提醒",
+  "homepage.noTasks": "沒有預定任務",
+  "homepage.tasksComingSoon": "任務管理功能即將推出",
+  
+  "workspace.grid.itemsPerRow": "每行項目數",
+  "workspace.addOrJoin": "新增或加入工作區",
+  "workspace.clickToStart": "點擊開始",
+  "workspace.noNotifications": "沒有通知",
+  "workspace.notifications": "通知/訊息更新",
+  
+  "tasks.today": "今天",
+  "tasks.upcoming": "即將到來",
+  "tasks.all": "所有任務",
+  "tasks.summary": "{total} 個任務中已完成 {completed} 個",
+  "tasks.noTasks": "沒有預定任務",
+  "tasks.emptyStateDescription": "使用任務和提醒保持井然有序",
+  "tasks.addFirst": "新增您的第一個任務"
 }

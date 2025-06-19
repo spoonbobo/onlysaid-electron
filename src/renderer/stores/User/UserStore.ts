@@ -7,6 +7,8 @@ import { useAgentStore } from "../Agent/AgentStore";
 import { useSocketStore } from "../Socket/SocketStore";
 import { useCryptoStore } from "../Crypto/CryptoStore";
 import { toast } from "@/utils/toast";
+import { useTopicStore } from "../Topic/TopicStore";
+import { createNotificationsForUnreadMessages } from '@/utils/notifications';
 
 interface UserStore {
   user: IUser | null;
@@ -169,9 +171,31 @@ export const useUserStore = create<UserStore>()(
               if (cryptoSuccess) {
                 console.log('[UserStore] ✅ Encryption unlocked');
                 toast.success('🔐 End-to-end encryption enabled');
+
+                // Add this after the encryption unlock and before navigation
+                console.log('[UserStore] 🔔 Creating notifications for unread messages...');
+                setTimeout(() => {
+                  createNotificationsForUnreadMessages();
+                }, 2000); // Delay slightly to ensure database is ready
+
+                // Navigate to home after successful login
+                console.log('[UserStore] 🏠 Navigating to home after successful login...');
+                const { setSelectedContext } = useTopicStore.getState();
+                setSelectedContext({ name: "home", type: "home", section: "homepage" });
+
+                const userName = userPayload.username || 'User';
+                const successMsg = intl ? intl.formatMessage({ id: 'toast.welcome' }, { name: userName }) : `Welcome, ${userName}!`;
+                toast.success(successMsg);
+                console.log('[UserStore] Authentication successful for:', userName);
+                return;
               } else {
                 console.warn('[UserStore] ⚠️ Encryption failed to unlock');
               }
+
+              // Navigate to home after successful login
+              console.log('[UserStore] 🏠 Navigating to home after successful login...');
+              const { setSelectedContext } = useTopicStore.getState();
+              setSelectedContext({ name: "home", type: "home", section: "homepage" });
 
               const userName = userPayload.username || 'User';
               const successMsg = intl ? intl.formatMessage({ id: 'toast.welcome' }, { name: userName }) : `Welcome, ${userName}!`;
@@ -222,9 +246,35 @@ export const useUserStore = create<UserStore>()(
                   if (cryptoSuccess) {
                     console.log('[UserStore] ✅ Encryption unlocked (response path)');
                     toast.success('🔐 End-to-end encryption enabled');
+
+                    // Add this after the encryption unlock and before navigation
+                    console.log('[UserStore] 🔔 Creating notifications for unread messages (response path)...');
+                    setTimeout(() => {
+                      createNotificationsForUnreadMessages();
+                    }, 2000);
+
+                    // Navigate to home after successful login (response path)
+                    console.log('[UserStore] 🏠 Navigating to home after successful login (response path)...');
+                    const { setSelectedContext } = useTopicStore.getState();
+                    setSelectedContext({ name: "home", type: "home", section: "homepage" });
+
+                    const userName = userPayload.username || 'User';
+                    if (intl) {
+                      toast.success(intl.formatMessage(
+                        { id: 'toast.welcome' },
+                        { name: userName }
+                      ));
+                    }
+                    console.log('[UserStore] Authentication successful for (response path):', userName);
+                    return;
                   } else {
                     console.warn('[UserStore] ⚠️ Encryption failed to unlock (response path)');
                   }
+
+                  // Navigate to home after successful login (response path)
+                  console.log('[UserStore] 🏠 Navigating to home after successful login (response path)...');
+                  const { setSelectedContext } = useTopicStore.getState();
+                  setSelectedContext({ name: "home", type: "home", section: "homepage" });
 
                   const userName = userPayload.username || 'User';
                   if (intl) {

@@ -496,6 +496,35 @@ export const featureMigrations: IMigration[] = [
       DROP TABLE IF EXISTS user_chat_keys;
       DROP TABLE IF EXISTS chat_keys;
     `
+  },
+  {
+    id: 'feature_018',
+    version: '2.2.0',
+    name: 'add_message_read_field',
+    description: 'Add isRead field to messages table',
+    category: 'feature',
+    dependencies: ['feature_002'],
+    createdAt: '2024-01-14T00:00:00Z',
+    up: `
+      -- Add isRead field to messages table
+      ALTER TABLE messages ADD COLUMN isRead BOOLEAN DEFAULT FALSE;
+      
+      -- Create index for performance
+      CREATE INDEX IF NOT EXISTS idx_messages_isRead ON messages(isRead);
+      CREATE INDEX IF NOT EXISTS idx_messages_chat_id_isRead ON messages(chat_id, isRead);
+    `,
+    down: `
+      DROP INDEX IF EXISTS idx_messages_chat_id_isRead;
+      DROP INDEX IF EXISTS idx_messages_isRead;
+      
+      -- SQLite doesn't support DROP COLUMN, so we'd need to recreate table
+      CREATE TABLE messages_temp AS SELECT 
+        id, created_at, updated_at, sent_at, chat_id, sender, status, 
+        reactions, reply_to, mentions, file_ids, poll, contact, gif, text
+      FROM messages;
+      DROP TABLE messages;
+      ALTER TABLE messages_temp RENAME TO messages;
+    `
   }
 ];
 
@@ -607,7 +636,7 @@ export const dataMigrations: IMigration[] = [
     name: 'fix_messages_table_schema',
     description: 'Fix messages table schema by recreating with all required columns',
     category: 'data',
-    dependencies: ['feature_002'],
+    dependencies: ['feature_002', 'feature_018'],
     createdAt: '2024-01-11T00:00:00Z',
     up: `
       -- Check if messages table exists and recreate it with proper schema
@@ -619,7 +648,7 @@ export const dataMigrations: IMigration[] = [
       -- Drop the old table
       DROP TABLE messages;
 
-      -- Recreate messages table with correct schema
+      -- Recreate messages table with correct schema INCLUDING isRead
       CREATE TABLE messages (
         id TEXT PRIMARY KEY,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -635,35 +664,17 @@ export const dataMigrations: IMigration[] = [
         poll TEXT,
         contact TEXT,
         gif TEXT,
-        text TEXT
+        text TEXT,
+        isRead BOOLEAN DEFAULT FALSE
       );
 
       -- Restore data from backup, handling missing columns gracefully
       INSERT INTO messages (
-        id,
-        created_at,
-        updated_at,
-        sent_at,
-        chat_id,
-        sender,
-        status,
-        reactions,
-        reply_to,
-        text,
-        mentions,
-        file_ids,
-        poll,
-        contact,
-        gif
+        id, created_at, updated_at, sent_at, chat_id, sender, status,
+        reactions, reply_to, text, mentions, file_ids, poll, contact, gif, isRead
       )
       SELECT
-        id,
-        created_at,
-        updated_at,
-        sent_at,
-        chat_id,
-        sender,
-        status,
+        id, created_at, updated_at, sent_at, chat_id, sender, status,
         COALESCE(reactions, NULL) as reactions,
         COALESCE(reply_to, NULL) as reply_to,
         text,
@@ -671,7 +682,8 @@ export const dataMigrations: IMigration[] = [
         NULL as file_ids,
         NULL as poll,
         NULL as contact,
-        NULL as gif
+        NULL as gif,
+        COALESCE(isRead, FALSE) as isRead
       FROM messages_backup;
 
       -- Clean up backup table

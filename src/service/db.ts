@@ -208,7 +208,8 @@ const recoverEssentialTables = async (): Promise<void> => {
         poll TEXT,
         contact TEXT,
         gif TEXT,
-        text TEXT
+        text TEXT,
+        isRead BOOLEAN DEFAULT FALSE
       )`
     }
   ];

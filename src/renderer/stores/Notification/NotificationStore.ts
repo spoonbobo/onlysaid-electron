@@ -36,6 +36,89 @@ interface NotificationStore {
   resetAllNotifications: () => void;
 }
 
+// Add a flag to prevent recursive count updates
+let isUpdatingCounts = false;
+
+const calculateCounts = (notifications: INotificationData[]): INotificationCounts => {
+  // Count unread notifications for home (no workspaceId)
+  const homeCount = notifications.filter(
+    notification => !notification.read && !notification.workspaceId
+  ).length;
+
+  // Count unread notifications per home section
+  const homeSectionCounts: Record<string, number> = {};
+  notifications
+    .filter(notification => !notification.read && !notification.workspaceId && notification.homeSection)
+    .forEach(notification => {
+      const section = notification.homeSection!;
+      homeSectionCounts[section] = (homeSectionCounts[section] || 0) + 1;
+    });
+
+  // Count unread notifications per home context
+  const homeContextCounts: Record<string, Record<string, number>> = {};
+  notifications
+    .filter(notification => !notification.read && !notification.workspaceId && notification.homeSection && notification.homeContext)
+    .forEach(notification => {
+      const section = notification.homeSection!;
+      const context = notification.homeContext!;
+
+      if (!homeContextCounts[section]) {
+        homeContextCounts[section] = {};
+      }
+      homeContextCounts[section][context] = (homeContextCounts[section][context] || 0) + 1;
+    });
+
+  // Count unread notifications per workspace
+  const workspaceCounts: Record<string, number> = {};
+  notifications
+    .filter(notification => !notification.read && notification.workspaceId)
+    .forEach(notification => {
+      const workspaceId = notification.workspaceId!;
+      workspaceCounts[workspaceId] = (workspaceCounts[workspaceId] || 0) + 1;
+    });
+
+  // Count unread notifications per workspace section
+  const workspaceSectionCounts: Record<string, Record<string, number>> = {};
+  notifications
+    .filter(notification => !notification.read && notification.workspaceId && notification.workspaceSection)
+    .forEach(notification => {
+      const workspaceId = notification.workspaceId!;
+      const section = notification.workspaceSection!;
+
+      if (!workspaceSectionCounts[workspaceId]) {
+        workspaceSectionCounts[workspaceId] = {};
+      }
+      workspaceSectionCounts[workspaceId][section] = (workspaceSectionCounts[workspaceId][section] || 0) + 1;
+    });
+
+  // Count unread notifications per workspace context
+  const workspaceContextCounts: Record<string, Record<string, Record<string, number>>> = {};
+  notifications
+    .filter(notification => !notification.read && notification.workspaceId && notification.workspaceSection && notification.workspaceContext)
+    .forEach(notification => {
+      const workspaceId = notification.workspaceId!;
+      const section = notification.workspaceSection!;
+      const context = notification.workspaceContext!;
+
+      if (!workspaceContextCounts[workspaceId]) {
+        workspaceContextCounts[workspaceId] = {};
+      }
+      if (!workspaceContextCounts[workspaceId][section]) {
+        workspaceContextCounts[workspaceId][section] = {};
+      }
+      workspaceContextCounts[workspaceId][section][context] = (workspaceContextCounts[workspaceId][section][context] || 0) + 1;
+    });
+
+  return {
+    home: homeCount,
+    homeSections: homeSectionCounts,
+    homeContexts: homeContextCounts,
+    workspaces: workspaceCounts,
+    workspaceSections: workspaceSectionCounts,
+    workspaceContexts: workspaceContextCounts
+  };
+};
+
 export const useNotificationStore = create<NotificationStore>()(
   persist(
     (set, get) => ({
@@ -48,7 +131,7 @@ export const useNotificationStore = create<NotificationStore>()(
         workspaceSections: {},
         workspaceContexts: {}
       },
-      enableMockNotifications: false, // Default to enabled for development
+      enableMockNotifications: false,
 
       addNotification: (notificationData) => {
         const notification: INotificationData = {
@@ -60,31 +143,34 @@ export const useNotificationStore = create<NotificationStore>()(
 
         set(state => {
           const newNotifications = [notification, ...state.notifications];
-          const newState = { notifications: newNotifications };
-
-          // Update counts after adding notification
-          setTimeout(() => get().updateCounts(), 0);
-
-          return newState;
+          const newCounts = calculateCounts(newNotifications);
+          
+          return {
+            notifications: newNotifications,
+            counts: newCounts
+          };
         });
       },
 
       markAsRead: (notificationId) => {
-        set(state => ({
-          notifications: state.notifications.map(notification =>
+        set(state => {
+          const updatedNotifications = state.notifications.map(notification =>
             notification.id === notificationId
               ? { ...notification, read: true }
               : notification
-          )
-        }));
+          );
+          const newCounts = calculateCounts(updatedNotifications);
 
-        // Update counts after marking as read
-        setTimeout(() => get().updateCounts(), 0);
+          return {
+            notifications: updatedNotifications,
+            counts: newCounts
+          };
+        });
       },
 
       markAllAsRead: (workspaceId, homeSection, workspaceSection, homeContext, workspaceContext) => {
-        set(state => ({
-          notifications: state.notifications.map(notification => {
+        set(state => {
+          const updatedNotifications = state.notifications.map(notification => {
             // Workspace context specific
             if (workspaceId && workspaceSection && workspaceContext &&
               notification.workspaceId === workspaceId &&
@@ -118,27 +204,33 @@ export const useNotificationStore = create<NotificationStore>()(
               return { ...notification, read: true };
             }
             return notification;
-          })
-        }));
+          });
+          const newCounts = calculateCounts(updatedNotifications);
 
-        // Update counts after marking all as read
-        setTimeout(() => get().updateCounts(), 0);
+          return {
+            notifications: updatedNotifications,
+            counts: newCounts
+          };
+        });
       },
 
       removeNotification: (notificationId) => {
-        set(state => ({
-          notifications: state.notifications.filter(
+        set(state => {
+          const filteredNotifications = state.notifications.filter(
             notification => notification.id !== notificationId
-          )
-        }));
+          );
+          const newCounts = calculateCounts(filteredNotifications);
 
-        // Update counts after removing notification
-        setTimeout(() => get().updateCounts(), 0);
+          return {
+            notifications: filteredNotifications,
+            counts: newCounts
+          };
+        });
       },
 
       clearAllNotifications: (workspaceId, homeSection, workspaceSection, homeContext, workspaceContext) => {
-        set(state => ({
-          notifications: state.notifications.filter(notification => {
+        set(state => {
+          const filteredNotifications = state.notifications.filter(notification => {
             // Workspace context specific
             if (workspaceId && workspaceSection && workspaceContext) {
               return !(notification.workspaceId === workspaceId &&
@@ -165,11 +257,14 @@ export const useNotificationStore = create<NotificationStore>()(
             }
             // Home general
             return !!notification.workspaceId;
-          })
-        }));
+          });
+          const newCounts = calculateCounts(filteredNotifications);
 
-        // Update counts after clearing
-        setTimeout(() => get().updateCounts(), 0);
+          return {
+            notifications: filteredNotifications,
+            counts: newCounts
+          };
+        });
       },
 
       getHomeNotificationCount: () => {
@@ -213,87 +308,14 @@ export const useNotificationStore = create<NotificationStore>()(
       },
 
       updateCounts: () => {
+        if (isUpdatingCounts) return; // Prevent recursive calls
+        
+        isUpdatingCounts = true;
         const { notifications } = get();
-
-        // Count unread notifications for home (no workspaceId)
-        const homeCount = notifications.filter(
-          notification => !notification.read && !notification.workspaceId
-        ).length;
-
-        // Count unread notifications per home section
-        const homeSectionCounts: Record<string, number> = {};
-        notifications
-          .filter(notification => !notification.read && !notification.workspaceId && notification.homeSection)
-          .forEach(notification => {
-            const section = notification.homeSection!;
-            homeSectionCounts[section] = (homeSectionCounts[section] || 0) + 1;
-          });
-
-        // Count unread notifications per home context
-        const homeContextCounts: Record<string, Record<string, number>> = {};
-        notifications
-          .filter(notification => !notification.read && !notification.workspaceId && notification.homeSection && notification.homeContext)
-          .forEach(notification => {
-            const section = notification.homeSection!;
-            const context = notification.homeContext!;
-
-            if (!homeContextCounts[section]) {
-              homeContextCounts[section] = {};
-            }
-            homeContextCounts[section][context] = (homeContextCounts[section][context] || 0) + 1;
-          });
-
-        // Count unread notifications per workspace
-        const workspaceCounts: Record<string, number> = {};
-        notifications
-          .filter(notification => !notification.read && notification.workspaceId)
-          .forEach(notification => {
-            const workspaceId = notification.workspaceId!;
-            workspaceCounts[workspaceId] = (workspaceCounts[workspaceId] || 0) + 1;
-          });
-
-        // Count unread notifications per workspace section
-        const workspaceSectionCounts: Record<string, Record<string, number>> = {};
-        notifications
-          .filter(notification => !notification.read && notification.workspaceId && notification.workspaceSection)
-          .forEach(notification => {
-            const workspaceId = notification.workspaceId!;
-            const section = notification.workspaceSection!;
-
-            if (!workspaceSectionCounts[workspaceId]) {
-              workspaceSectionCounts[workspaceId] = {};
-            }
-            workspaceSectionCounts[workspaceId][section] = (workspaceSectionCounts[workspaceId][section] || 0) + 1;
-          });
-
-        // Count unread notifications per workspace context
-        const workspaceContextCounts: Record<string, Record<string, Record<string, number>>> = {};
-        notifications
-          .filter(notification => !notification.read && notification.workspaceId && notification.workspaceSection && notification.workspaceContext)
-          .forEach(notification => {
-            const workspaceId = notification.workspaceId!;
-            const section = notification.workspaceSection!;
-            const context = notification.workspaceContext!;
-
-            if (!workspaceContextCounts[workspaceId]) {
-              workspaceContextCounts[workspaceId] = {};
-            }
-            if (!workspaceContextCounts[workspaceId][section]) {
-              workspaceContextCounts[workspaceId][section] = {};
-            }
-            workspaceContextCounts[workspaceId][section][context] = (workspaceContextCounts[workspaceId][section][context] || 0) + 1;
-          });
-
-        set(state => ({
-          counts: {
-            home: homeCount,
-            homeSections: homeSectionCounts,
-            homeContexts: homeContextCounts,
-            workspaces: workspaceCounts,
-            workspaceSections: workspaceSectionCounts,
-            workspaceContexts: workspaceContextCounts
-          }
-        }));
+        const newCounts = calculateCounts(notifications);
+        
+        set(state => ({ counts: newCounts }));
+        isUpdatingCounts = false;
       },
 
       setMockNotifications: (enabled) => {
@@ -406,10 +428,12 @@ export const useNotificationStore = create<NotificationStore>()(
         counts: state.counts,
         enableMockNotifications: state.enableMockNotifications
       }),
-      version: 4
+      version: 5 // Increment version to reset persisted state with new structure
     }
   )
 );
 
 // Initialize counts on store creation
-useNotificationStore.getState().updateCounts();
+const initialState = useNotificationStore.getState();
+const initialCounts = calculateCounts(initialState.notifications);
+useNotificationStore.setState({ counts: initialCounts });

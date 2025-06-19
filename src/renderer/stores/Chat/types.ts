@@ -12,6 +12,7 @@ export interface ChatState {
   error: string | null;
   isTyping: boolean;
   chatOverlayMinimized: boolean;
+  lastReadMessageIds: Record<string, string>;
 
   createChat: (userId: string, type: string, workspaceId?: string) => Promise<IChatRoom | null>;
   deleteChat: (chatId: string, local?: boolean) => Promise<void>;
@@ -19,6 +20,7 @@ export interface ChatState {
   updateChat: (chatId: string, data: Partial<IChatRoom>, local?: boolean) => Promise<void>;
   setActiveChat: (chatId: string, contextId?: string) => void;
   markAsRead: (chatId: string) => void;
+  markChatAsRead: (chatId: string, workspaceId?: string) => Promise<void>;
   getActiveChatIdForContext: (contextId: string) => string | null;
   cleanupContextReferences: (contextId: string) => void;
   cleanupChatReferences: (chatId: string) => void;
@@ -42,6 +44,11 @@ export interface ChatState {
   updateMessageFiles: (chatId: string, messageId: string, files: IFile[]) => void;
 
   populateMessageSenderObjects: (messages: IChatMessage[]) => Promise<IChatMessage[]>;
+
+  markMessagesAsRead: (chatId: string, messageIds?: string[]) => Promise<void>;
+  getUnreadMessages: (chatId: string) => IChatMessage[];
+  getUnreadCount: (chatId: string) => number;
+  hasUnreadMessages: (chatId: string) => boolean;
 }
 
 export const MESSAGE_FETCH_LIMIT = 35; 

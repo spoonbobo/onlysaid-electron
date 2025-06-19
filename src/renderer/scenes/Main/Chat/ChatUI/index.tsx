@@ -1,4 +1,4 @@
-import { Box, Typography, Stack } from "@mui/material";
+import { Box, Typography, Stack, Divider } from "@mui/material";
 import { useRef, useEffect, useState, useCallback, useMemo, memo } from "react";
 import { IChatMessage } from "@/../../types/Chat/Message";
 import { getUserFromStore } from "@/utils/user";
@@ -9,6 +9,9 @@ import { throttle } from "lodash";
 import { useCurrentTopicContext } from "@/renderer/stores/Topic/TopicStore";
 import { useAgentStore } from "@/renderer/stores/Agent/AgentStore";
 import { useChatStore } from "@/renderer/stores/Chat/ChatStore";
+import { useNotificationStore } from "@/renderer/stores/Notification/NotificationStore";
+import { clearNotificationsForContext } from "@/utils/notifications";
+import { useTopicStore } from "@/renderer/stores/Topic/TopicStore";
 
 interface ChatUIProps {
   messages: IChatMessage[];
@@ -48,11 +51,52 @@ function ChatUI({ messages, onReply, streamingMessageId, streamContentForBubble,
   const lastSavedScrollPosition = useRef(0);
   const { agent } = useAgentStore.getState();
 
-  const { selectedTopics, setScrollPosition, getScrollPosition } = useCurrentTopicContext();
+  const { selectedTopics, setScrollPosition, getScrollPosition, selectedContext } = useCurrentTopicContext();
   const chatId = Object.values(selectedTopics)[0];
   const intl = useIntl();
 
+  // Get unread notifications for this chat
+  const allNotifications = useNotificationStore(state => state.notifications);
+  
   const scrollMetricsRef = useRef({ scrollHeight: 0, clientHeight: 0 });
+
+  // Track when chat becomes visible/active to mark as read
+  const isVisible = useRef(false);
+  const readTimeout = useRef<NodeJS.Timeout | null>(null);
+
+  // Find unread messages - messages that have corresponding notifications
+  const unreadMessageIds = useMemo(() => {
+    if (!chatId || !selectedContext) return new Set<string>();
+    
+    const workspaceId = selectedContext.id;
+    const unreadNotifications = allNotifications.filter(notification => {
+      if (workspaceId) {
+        // Workspace chat
+        return notification.workspaceId === workspaceId &&
+               notification.workspaceSection === 'chatroom' &&
+               notification.workspaceContext === chatId &&
+               !notification.read;
+      } else {
+        // Home/agent chat
+        return notification.homeSection === 'agents' &&
+               notification.homeContext === chatId &&
+               !notification.read;
+      }
+    });
+
+    // For simplicity, we'll consider the most recent messages as unread
+    // In a more sophisticated implementation, you'd track read status per message
+    const unreadCount = unreadNotifications.length;
+    if (unreadCount === 0) return new Set<string>();
+    
+    // Mark the most recent N messages as unread (where N is notification count)
+    const recentMessages = [...messages]
+      .filter(msg => msg.sender !== userId) // Only messages from others
+      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+      .slice(0, unreadCount);
+    
+    return new Set(recentMessages.map(msg => msg.id));
+  }, [allNotifications, chatId, selectedContext, messages, userId]);
 
   const handleMessageMouseEnter = useCallback((messageId: string) => {
     setHoveredMessageId(messageId);
@@ -71,6 +115,24 @@ function ChatUI({ messages, onReply, streamingMessageId, streamContentForBubble,
     }
   }, []);
 
+  // Function to mark chat as read and clear notifications
+  const markChatAsRead = useCallback(() => {
+    if (!chatId) return;
+
+    const workspaceId = selectedContext?.id;
+    
+    // Clear notifications for this specific chat
+    if (workspaceId) {
+      // Workspace chat
+      clearNotificationsForContext(workspaceId, 'chatroom', chatId);
+    } else {
+      // Home/agent chat
+      clearNotificationsForContext(undefined, 'agents', chatId);
+    }
+
+    console.log(`🔔 Cleared notifications for chat: ${chatId} in ${workspaceId ? `workspace ${workspaceId}` : 'home'}`);
+  }, [chatId, selectedContext?.id]);
+
   const saveScrollPosition = useEvent((chatId: string, scrollTop: number) => {
     if (Math.abs(scrollTop - lastSavedScrollPosition.current) > 50) {
       setScrollPosition(chatId, scrollTop);
@@ -82,6 +144,89 @@ function ChatUI({ messages, onReply, streamingMessageId, streamContentForBubble,
     () => throttle(saveScrollPosition, 500),
     []
   );
+
+  // Mark as read when chat becomes active
+  useEffect(() => {
+    if (chatId) {
+      isVisible.current = true;
+      
+      // Clear any existing timeout
+      if (readTimeout.current) {
+        clearTimeout(readTimeout.current);
+      }
+      
+      // Mark as read after a short delay to ensure the chat is truly active
+      readTimeout.current = setTimeout(() => {
+        if (isVisible.current && chatId) {
+          markChatAsRead();
+        }
+      }, 500);
+    }
+
+    return () => {
+      if (readTimeout.current) {
+        clearTimeout(readTimeout.current);
+      }
+      isVisible.current = false;
+    };
+  }, [chatId, markChatAsRead]);
+
+  // Mark as read when user scrolls (indicating they're actively reading)
+  const handleScroll = useCallback(() => {
+    if (!scrollContainerRef.current || !chatId) return;
+
+    const { scrollTop, scrollHeight, clientHeight } = scrollContainerRef.current;
+
+    // Only track scroll if not loading more or streaming
+    if (streamingMessageId && isConnectingForBubble) {
+      shouldScrollToBottom.current = false;
+    }
+
+    if (!hasUserScrolled.current && scrollTop !== 0) {
+      hasUserScrolled.current = true;
+      // Mark as read when user first scrolls (shows engagement)
+      markChatAsRead();
+    }
+
+    const isNearBottom = scrollHeight - scrollTop - clientHeight < (clientHeight * 0.15);
+    shouldScrollToBottom.current = isNearBottom;
+
+    // Save scroll position with throttle
+    if (hasUserScrolled.current) {
+      throttledSaveScrollPosition(chatId, scrollTop);
+    }
+
+    // Check if we need to load more messages
+    const loadMoreThreshold = clientHeight * 0.1;
+    if (
+      scrollTop < loadMoreThreshold &&
+      hasMoreMessages &&
+      !isLoadingMore &&
+      hasUserScrolled.current
+    ) {
+      loadOlderMessages();
+    }
+  }, [hasMoreMessages, isLoadingMore, chatId, streamingMessageId, isConnectingForBubble, throttledSaveScrollPosition, markChatAsRead]);
+
+  // Mark as read when new messages arrive and user is viewing the chat
+  useEffect(() => {
+    if (messages.length > prevMessagesLength.current && chatId && isVisible.current) {
+      // If new messages arrived and user is actively viewing, mark as read
+      const delay = hasUserScrolled.current ? 1000 : 2000; // Shorter delay if user has interacted
+      
+      if (readTimeout.current) {
+        clearTimeout(readTimeout.current);
+      }
+      
+      readTimeout.current = setTimeout(() => {
+        if (isVisible.current && chatId) {
+          markChatAsRead();
+        }
+      }, delay);
+    }
+    
+    prevMessagesLength.current = messages.length;
+  }, [messages.length, chatId, markChatAsRead]);
 
   useEffect(() => {
     if (!chatId || !scrollContainerRef.current) return;
@@ -104,40 +249,6 @@ function ChatUI({ messages, onReply, streamingMessageId, streamContentForBubble,
       requestAnimationFrame(scrollToBottom);
     }
   }, [chatId, getScrollPosition, scrollToBottom]);
-
-  const handleScroll = useCallback(() => {
-    if (!scrollContainerRef.current || !chatId) return;
-
-    const { scrollTop, scrollHeight, clientHeight } = scrollContainerRef.current;
-
-    // Only track scroll if not loading more or streaming
-    if (streamingMessageId && isConnectingForBubble) {
-      shouldScrollToBottom.current = false;
-    }
-
-    if (!hasUserScrolled.current && scrollTop !== 0) {
-      hasUserScrolled.current = true;
-    }
-
-    const isNearBottom = scrollHeight - scrollTop - clientHeight < (clientHeight * 0.15);
-    shouldScrollToBottom.current = isNearBottom;
-
-    // Save scroll position with throttle
-    if (hasUserScrolled.current) {
-      throttledSaveScrollPosition(chatId, scrollTop);
-    }
-
-    // Check if we need to load more messages
-    const loadMoreThreshold = clientHeight * 0.1;
-    if (
-      scrollTop < loadMoreThreshold &&
-      hasMoreMessages &&
-      !isLoadingMore &&
-      hasUserScrolled.current
-    ) {
-      loadOlderMessages();
-    }
-  }, [hasMoreMessages, isLoadingMore, chatId, streamingMessageId, isConnectingForBubble, throttledSaveScrollPosition]);
 
   // Save scroll position on unmount
   useEffect(() => {
@@ -352,10 +463,23 @@ function ChatUI({ messages, onReply, streamingMessageId, streamContentForBubble,
       return previousMessage?.sender === currentSender;
     };
 
+    // Find the index where to insert the unread separator
+    let unreadSeparatorIndex = -1;
+    if (unreadMessageIds.size > 0) {
+      // Find the first unread message index
+      for (let i = 0; i < messagesToProcess.length; i++) {
+        if (unreadMessageIds.has(messagesToProcess[i].id)) {
+          unreadSeparatorIndex = i;
+          break;
+        }
+      }
+    }
+
     return messagesToProcess.map((msg, index) => {
       const isCurrentUser = msg.sender === userId;
       const nextMessage = index < messagesToProcess.length - 1 ? messagesToProcess[index + 1] : undefined;
       const isLastInSequence = nextMessage?.sender !== msg.sender;
+      const isUnread = unreadMessageIds.has(msg.id);
 
       const replyToMessage = msg.reply_to
         ? messagesToProcess.find(m => m.id === msg.reply_to) || null
@@ -373,10 +497,12 @@ function ChatUI({ messages, onReply, streamingMessageId, streamContentForBubble,
         isContinuation,
         isLastInSequence,
         replyToMessage,
-        messageKey: msg.id || `message-${index}-${Date.now()}`
+        messageKey: msg.id || `message-${index}-${Date.now()}`,
+        isUnread,
+        showUnreadSeparator: index === unreadSeparatorIndex && unreadSeparatorIndex > 0
       };
     });
-  }, [messages, userId, streamingMessageId, chatId, agent]);
+  }, [messages, userId, streamingMessageId, chatId, agent, unreadMessageIds]);
 
   useEffect(() => {
     // Update metrics on resize
@@ -440,28 +566,62 @@ function ChatUI({ messages, onReply, streamingMessageId, streamContentForBubble,
             <Box sx={{ flexGrow: 1 }} />
           )}
 
-          {processedMessages.map(({ msg, isCurrentUser, isContinuation, isLastInSequence, replyToMessage, messageKey }) => {
+          {processedMessages.map(({ msg, isCurrentUser, isContinuation, isLastInSequence, replyToMessage, messageKey, isUnread, showUnreadSeparator }) => {
             const isThisMessageStreaming = streamingMessageId === msg.id;
 
             // Use the message as-is since it's already from the store or properly created placeholder
             let messageToUse = msg;
 
             return (
-              <MemoizedChatBubble
-                key={messageKey}
-                message={messageToUse}
-                isCurrentUser={isCurrentUser}
-                isContinuation={isContinuation}
-                isLastInSequence={isLastInSequence}
-                onReply={onReply}
-                replyToMessage={replyToMessage}
-                isStreaming={isThisMessageStreaming}
-                isConnecting={isThisMessageStreaming ? isConnectingForBubble : false}
-                streamContent={isThisMessageStreaming ? (streamContentForBubble || "") : ""}
-                isHovered={hoveredMessageId === messageToUse.id}
-                onMouseEnter={() => handleMessageMouseEnter(messageToUse.id)}
-                onMouseLeave={handleMessageMouseLeave}
-              />
+              <Box key={messageKey}>
+                {/* Unread Messages Separator */}
+                {showUnreadSeparator && (
+                  <Box sx={{ 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    my: 2,
+                    mx: 2
+                  }}>
+                    <Divider sx={{ flex: 1 }} />
+                    <Typography 
+                      variant="caption" 
+                      sx={{ 
+                        mx: 2, 
+                        px: 2,
+                        py: 0.5,
+                        backgroundColor: 'primary.main',
+                        color: 'primary.contrastText',
+                        borderRadius: 2,
+                        fontSize: '0.75rem',
+                        fontWeight: 500,
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.5px'
+                      }}
+                    >
+                      {intl.formatMessage({ 
+                        id: 'chat.unreadMessages', 
+                        defaultMessage: 'Unread Messages' 
+                      })}
+                    </Typography>
+                    <Divider sx={{ flex: 1 }} />
+                  </Box>
+                )}
+
+                <MemoizedChatBubble
+                  message={messageToUse}
+                  isCurrentUser={isCurrentUser}
+                  isContinuation={isContinuation}
+                  isLastInSequence={isLastInSequence}
+                  onReply={onReply}
+                  replyToMessage={replyToMessage}
+                  isStreaming={isThisMessageStreaming}
+                  isConnecting={isThisMessageStreaming ? isConnectingForBubble : false}
+                  streamContent={isThisMessageStreaming ? (streamContentForBubble || "") : ""}
+                  isHovered={hoveredMessageId === messageToUse.id}
+                  onMouseEnter={() => handleMessageMouseEnter(messageToUse.id)}
+                  onMouseLeave={handleMessageMouseLeave}
+                />
+              </Box>
             );
           })}
 

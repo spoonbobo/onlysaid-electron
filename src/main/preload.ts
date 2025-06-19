@@ -115,7 +115,8 @@ type SocketChannels =
   | 'socket:file-error'
   | 'socket:leave-workspace'
   | 'socket:workspace-joined'
-  | 'socket:workspace-left';
+  | 'socket:workspace-left'
+  | 'socket:unread-message';
 
 // Add these channels to the type definitions
 type GoogleServiceChannels = 'google-services:ready' | 'google-services:error';

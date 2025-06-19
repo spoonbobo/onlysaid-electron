@@ -4,6 +4,9 @@ import { IChatMessage } from '@/../../types/Chat/Message';
 import { useChatStore } from '@/renderer/stores/Chat/ChatStore';
 import { useUserStore } from '@/renderer/stores/User/UserStore';
 import { useUserTokenStore } from '@/renderer/stores/User/UserToken';
+import { getUserFromStore } from '@/utils/user';
+import { addWorkspaceNotification, addHomeNotification } from '@/utils/notifications';
+import { useTopicStore } from '@/renderer/stores/Topic/TopicStore';
 
 interface SocketState {
   isConnected: boolean;
@@ -33,6 +36,7 @@ interface SocketState {
   setFileProgress: (progress: Record<string, { progress: number, stage?: 'network' | 'server' | 'complete' }>) => void;
   handleWorkspaceJoined: (data: { workspaceId: string, userId: string }) => void;
   handleWorkspaceLeft: (data: { workspaceId: string, userId: string }) => void;
+  handleUnreadMessage: (data: { message: IChatMessage, workspaceId: string }) => Promise<void>;
 }
 
 let connectedListener: (() => void) | null = null;
@@ -49,6 +53,7 @@ let fileCompletedListener: (() => void) | null = null;
 let fileErrorListener: (() => void) | null = null;
 let workspaceJoinedListener: (() => void) | null = null;
 let workspaceLeftListener: (() => void) | null = null;
+let unreadMessageListener: (() => void) | null = null;
 
 const PING_INTERVAL = 30000;
 const PONG_TIMEOUT_DURATION = PING_INTERVAL + 15000;
@@ -187,6 +192,12 @@ export const useSocketStore = create<SocketState>((set, get) => ({
             });
           }
 
+          if (!unreadMessageListener) {
+            unreadMessageListener = window.electron.ipcRenderer.on('socket:unread-message', (_event, ...args) => {
+              get().handleUnreadMessage(args[0] as { message: IChatMessage, workspaceId: string });
+            });
+          }
+
           set({ listenersReady: true });
         }
       })
@@ -253,6 +264,7 @@ export const useSocketStore = create<SocketState>((set, get) => ({
     if (fileErrorListener) { fileErrorListener(); fileErrorListener = null; }
     if (workspaceJoinedListener) { workspaceJoinedListener(); workspaceJoinedListener = null; }
     if (workspaceLeftListener) { workspaceLeftListener(); workspaceLeftListener = null; }
+    if (unreadMessageListener) { unreadMessageListener(); unreadMessageListener = null; }
 
     set({
       isConnected: false,
@@ -300,8 +312,64 @@ export const useSocketStore = create<SocketState>((set, get) => ({
   handleNewMessage: async (data: { message: IChatMessage, workspaceId: string }) => {
     console.log("message received", data);
 
-    // The appendMessage method in ChatStore will now handle populating sender_object asynchronously
-    useChatStore.getState().appendMessage(data.message.chat_id, data.message);
+    const currentUser = getUserFromStore();
+    const { selectedContext, selectedTopics } = useTopicStore.getState();
+    
+    // Check if this message is from someone else (not the current user)
+    const isFromOther = data.message.sender !== currentUser?.id;
+    
+    // Check if this is the currently active chat
+    const isCurrentlyActiveChat = selectedContext?.section && 
+      selectedTopics[selectedContext.section] === data.message.chat_id;
+
+    // Set read status based on whether user is currently viewing this chat
+    const messageWithReadStatus = {
+      ...data.message,
+      isRead: Boolean(!isFromOther || isCurrentlyActiveChat)
+    };
+
+    // Append message to chat store
+    useChatStore.getState().appendMessage(data.message.chat_id, messageWithReadStatus);
+
+    // Create notification for unread messages from others
+    if (isFromOther && !isCurrentlyActiveChat) {
+      const senderName = data.message.sender_object?.username || 
+                        data.message.sender_object?.display_name || 
+                        'Someone';
+      
+      const messagePreview = data.message.text?.substring(0, 50) || 
+                            (data.message.files?.length ? '[File attachment]' : '[Message]');
+      
+      console.log('🔔 Creating live notification for:', {
+        sender: senderName,
+        chatId: data.message.chat_id,
+        workspaceId: data.workspaceId,
+        preview: messagePreview
+      });
+      
+      if (data.workspaceId) {
+        addWorkspaceNotification(
+          data.workspaceId,
+          'chatroom',
+          {
+            type: 'message',
+            title: `${senderName}`,
+            content: messagePreview
+          },
+          data.message.chat_id
+        );
+      } else {
+        addHomeNotification(
+          'agents',
+          {
+            type: 'message',
+            title: `${senderName}`,
+            content: messagePreview
+          },
+          data.message.chat_id
+        );
+      }
+    }
   },
 
   handleMessageDeleted: (data: { roomId: string, messageId: string }) => {
@@ -387,5 +455,18 @@ export const useSocketStore = create<SocketState>((set, get) => ({
   handleWorkspaceLeft: (data: { workspaceId: string, userId: string }) => {
     console.log(`❌ Left workspace: ${data.workspaceId}`);
     // You can add any UI updates here if needed
+  },
+
+  handleUnreadMessage: async (data: { message: IChatMessage, workspaceId: string }) => {
+    console.log("unread message received (no notification)", data);
+    
+    // Mark as unread since these are historical messages
+    const messageWithReadStatus = {
+      ...data.message,
+      isRead: false
+    };
+    
+    // Only append to chat store, don't create notifications 
+    useChatStore.getState().appendMessage(data.message.chat_id, messageWithReadStatus);
   }
 }));

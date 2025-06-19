@@ -578,34 +578,41 @@ const TitleBar = () => {
         <Box sx={{ width: 20, WebkitAppRegion: 'drag' }} />
 
         {/* Window Controls (right side) */}
-        <Box sx={{ display: 'flex', alignItems: 'center', WebkitAppRegion: 'no-drag' }}>
-          {/* Notification Button */}
-          <Badge
-            badgeContent={totalNotificationCount}
-            color="error"
-            max={99}
-            sx={{
-              '& .MuiBadge-badge': {
-                fontSize: '0.6rem',
-                height: 16,
-                minWidth: 16
-              }
-            }}
-          >
-            <IconButton
-              size="small"
-              onClick={handleNotificationClick}
+        <Box sx={{ display: 'flex', alignItems: 'center', WebkitAppRegion: 'no-drag', pr: 1 }}>
+          {/* Notification Button with proper spacing */}
+          <Box sx={{ mr: 1 }}>
+            <Badge
+              badgeContent={totalNotificationCount}
+              color="error"
+              max={99}
               sx={{
-                width: 32,
-                height: 32,
-                '&:hover': { bgcolor: 'action.hover' },
+                '& .MuiBadge-badge': {
+                  fontSize: '0.65rem',
+                  height: 14,
+                  minWidth: 14,
+                  padding: '0 3px',
+                  top: 6,
+                  right: 6,
+                  borderRadius: '7px'
+                }
               }}
-              title={intl.formatMessage({ id: 'titleBar.notifications' })}
             >
-              <Notifications sx={{ fontSize: 16 }} />
-            </IconButton>
-          </Badge>
+              <IconButton
+                size="small"
+                onClick={handleNotificationClick}
+                sx={{
+                  width: 28,
+                  height: 28,
+                  '&:hover': { bgcolor: 'action.hover' },
+                }}
+                title={intl.formatMessage({ id: 'titleBar.notifications' })}
+              >
+                <Notifications sx={{ fontSize: 16 }} />
+              </IconButton>
+            </Badge>
+          </Box>
 
+          {/* Window Control Buttons */}
           <Box
             sx={{
               width: 32,

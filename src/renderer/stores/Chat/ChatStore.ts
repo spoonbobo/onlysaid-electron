@@ -100,29 +100,46 @@ export const useChatStore = create<ChatState>()(
       error: null,
       isTyping: false,
       chatOverlayMinimized: false,
+      // NEW: Track last read message per chat
+      lastReadMessageIds: {},
 
       // Combine all actions
       ...createChatActions(set, get),
       ...createMessageActions(set, get),
       ...createInputActions(set, get),
+
+      // Add new method to mark chat as read
+      markChatAsRead: async (chatId: string, workspaceId?: string) => {
+        const messageActions = createMessageActions(set, get);
+        return messageActions.markChatAsRead(chatId, workspaceId);
+      },
+
+      // Methods for read status
+      markMessageAsRead: async (chatId: string, messageId: string) => {
+        // Implementation needed
+      },
+      getUnreadMessageCount: (chatId: string) => {
+        // Implementation needed
+        return 0;
+      },
+      hasUnreadMessages: (chatId: string) => {
+        // Implementation needed
+        return false;
+      },
     }),
     {
       name: "chat-storage",
       storage: createJSONStorage(() => localStorage),
-      partialize: (state) => {
-        const limitedMessages: Record<string, any[]> = {};
-        Object.entries(state.messages).forEach(([chatId, messages]) => {
-          limitedMessages[chatId] = messages.slice(-MESSAGE_FETCH_LIMIT);
-        });
-
-        return {
-          activeChatByContext: state.activeChatByContext,
-          messages: limitedMessages,
-          messageOffsets: state.messageOffsets,
-          chats: state.chats,
-          inputByContextChat: state.inputByContextChat,
-        };
-      },
+      partialize: (state) => ({
+        activeChatByContext: state.activeChatByContext,
+        messages: state.messages,
+        messageOffsets: state.messageOffsets,
+        chats: state.chats,
+        inputByContextChat: state.inputByContextChat,
+        chatOverlayMinimized: state.chatOverlayMinimized,
+        // NEW: Persist read tracking
+        lastReadMessageIds: state.lastReadMessageIds,
+      }),
     }
   )
 );

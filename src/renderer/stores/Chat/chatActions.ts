@@ -35,7 +35,18 @@ export const createChatActions = (set: any, get: () => ChatState) => ({
           [contextId]: chatId
         }
       }));
+      
+      // Mark as read using the existing markAsRead method
       get().markAsRead(chatId);
+      
+      // Also mark chat as read for notifications - determine if it's a workspace chat
+      const chat = chats.find(c => c.id === chatId);
+      const workspaceId = chat?.workspace_id;
+      
+      // Call the new markChatAsRead method to clear notifications
+      if (get().markChatAsRead) {
+        get().markChatAsRead(chatId, workspaceId);
+      }
     } else {
       console.warn(`Attempted to set active chat to non-existent chat ID: ${chatId}`);
     }

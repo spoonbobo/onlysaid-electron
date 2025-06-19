@@ -110,7 +110,7 @@ function NotificationItem({ notification, onMarkAsRead }: NotificationItemProps)
               fontSize: '0.7rem'
             }}
           >
-            {formatTimestamp(notification.timestamp)}
+            {formatTimestamp(notification.timestamp ? Number(notification.timestamp) : Date.now())}
           </Typography>
         </Box>
         <Typography
@@ -175,20 +175,36 @@ export default function NotificationView({ open, onClose }: NotificationViewProp
     markNotificationAsRead(notificationId);
   };
 
-  const handleMarkAllHomeAsRead = () => {
-    markHomeAsRead();
+  const handleMarkAllHomeAsRead = async () => {
+    try {
+      await markHomeAsRead();
+    } catch (error) {
+      console.error('Error marking home messages as read:', error);
+    }
   };
 
-  const handleMarkWorkspaceAsRead = (workspaceId: string) => {
-    markWorkspaceAsRead(workspaceId);
+  const handleMarkWorkspaceAsRead = async (workspaceId: string) => {
+    try {
+      await markWorkspaceAsRead(workspaceId);
+    } catch (error) {
+      console.error('Error marking workspace messages as read:', error);
+    }
   };
 
-  const handleMarkHomeSectionAsRead = (section: string) => {
-    markHomeSectionAsRead(section);
+  const handleMarkHomeSectionAsRead = async (section: string) => {
+    try {
+      await markHomeSectionAsRead(section);
+    } catch (error) {
+      console.error('Error marking home section messages as read:', error);
+    }
   };
 
-  const handleMarkWorkspaceSectionAsRead = (workspaceId: string, section: string) => {
-    markWorkspaceSectionAsRead(workspaceId, section);
+  const handleMarkWorkspaceSectionAsRead = async (workspaceId: string, section: string) => {
+    try {
+      await markWorkspaceSectionAsRead(workspaceId, section);
+    } catch (error) {
+      console.error('Error marking workspace section messages as read:', error);
+    }
   };
 
   const handleClearAll = () => {
