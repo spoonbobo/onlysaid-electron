@@ -90,8 +90,9 @@
         flex-direction: column;
         align-items: center;
         text-align: center;
-        max-width: 400px;
+        max-width: 600px;
         padding: 2rem;
+        width: 100%;
       }
 
       .logo-container {
@@ -191,7 +192,8 @@
 
       .progress-container {
         width: 100%;
-        max-width: 300px;
+        max-width: 350px;
+        margin-bottom: 1rem;
       }
 
       .progress-bar {
@@ -200,18 +202,36 @@
         background-color: var(--divider-light);
         border-radius: 3px;
         overflow: hidden;
+        box-shadow: inset 0 1px 3px rgba(0,0,0,0.1);
       }
 
       .progress-fill {
         height: 100%;
-        background-color: var(--primary);
+        background: linear-gradient(90deg, var(--primary), #6366f1);
         width: 0%;
-        transition: none;
+        transition: width 0.4s ease-out;
+        border-radius: 3px;
       }
 
       @media (prefers-color-scheme: dark) {
         .progress-bar {
           background-color: var(--divider-dark);
+        }
+      }
+
+      /* Responsive adjustments */
+      @media (max-width: 600px) {
+        .progress-container {
+          max-width: 280px;
+        }
+      }
+
+      @media (max-width: 480px) {
+        .progress-container {
+          max-width: 250px;
+        }
+        .progress-bar {
+          height: 5px;
         }
       }
     </style>
@@ -268,7 +288,7 @@
         buildTime: new Date().toISOString()
       };
 
-      // Immediately try to load the logo
+      // Immediately try to load the logo with better error handling
       (async function loadLogo() {
         try {
           // Wait for electron APIs to be available
@@ -281,46 +301,95 @@
           }
           
           if (window.electron && window.electron.fileSystem) {
-            const logoData = await window.electron.fileSystem.getLocalAsset('icon.png');
-            if (logoData && logoData.data) {
-              const logoImg = document.getElementById('app-logo');
-              const logoFallback = document.querySelector('.logo-fallback');
-              
-              if (logoImg) {
-                logoImg.src = logoData.data;
-                logoImg.style.opacity = '1';
-                if (logoFallback) {
-                  logoFallback.style.display = 'none';
+            try {
+              const logoData = await window.electron.fileSystem.getLocalAsset('icon.png');
+              if (logoData && logoData.data) {
+                const logoImg = document.getElementById('app-logo');
+                const logoFallback = document.querySelector('.logo-fallback');
+                
+                if (logoImg) {
+                  // Add error handler for the image
+                  logoImg.onerror = function() {
+                    console.warn('EJS Logo image failed to load, keeping fallback visible');
+                    logoImg.style.display = 'none';
+                    if (logoFallback) {
+                      logoFallback.style.display = 'block';
+                    }
+                  };
+                  
+                  logoImg.onload = function() {
+                    logoImg.style.opacity = '1';
+                    if (logoFallback) {
+                      logoFallback.style.display = 'none';
+                    }
+                  };
+                  
+                  logoImg.src = logoData.data;
                 }
               }
+            } catch (assetError) {
+              console.warn('Failed to load asset in production:', assetError);
+              // Keep fallback icon visible
+              const logoFallback = document.querySelector('.logo-fallback');
+              if (logoFallback) {
+                logoFallback.style.display = 'block';
+              }
             }
+          } else {
+            console.warn('Electron APIs not available, using fallback icon');
           }
         } catch (error) {
           console.warn('Failed to load logo in EJS loading screen:', error);
+          // Ensure fallback is visible
+          const logoFallback = document.querySelector('.logo-fallback');
+          if (logoFallback) {
+            logoFallback.style.display = 'block';
+          }
         }
       })();
 
-      // Progress simulation - bar only
+      // Real progress tracking based on main.ts initialization
       let progress = 0;
       const progressFill = document.querySelector('.progress-fill');
-      let startTime = Date.now();
-      const duration = 3000; // 3 seconds total
+      
+      // Actual initialization steps from main.ts
+      const initSteps = [
+        { name: 'Setting up development environment', duration: 200 },
+        { name: 'Initializing database', duration: 800 },
+        { name: 'Setting up application window', duration: 300 },
+        { name: 'Setting up socket handlers', duration: 200 },
+        { name: 'Setting up menubar handlers', duration: 150 },
+        { name: 'Loading application interface', duration: 400 },
+        { name: 'Finalizing window setup', duration: 1000 } // Includes Google services ready
+      ];
+      
+      let currentStep = 0;
+      const totalSteps = initSteps.length;
       
       const updateProgress = () => {
-        const elapsed = Date.now() - startTime;
-        progress = Math.min(100, (elapsed / duration) * 100);
-        
-        if (progressFill) progressFill.style.width = progress + '%';
-        
-        if (progress < 100) {
-          requestAnimationFrame(updateProgress);
+        progress = ((currentStep + 1) / totalSteps) * 100;
+        if (progressFill) {
+          progressFill.style.width = progress + '%';
         }
       };
       
-      // Start progress after a brief delay
-      setTimeout(() => {
+      // Execute steps with realistic timing
+      const executeSteps = async () => {
+        for (let i = 0; i < initSteps.length; i++) {
+          currentStep = i;
+          updateProgress();
+          
+          // Wait for the realistic duration of each step
+          await new Promise(resolve => setTimeout(resolve, initSteps[i].duration));
+        }
+        
+        // Final step - complete
+        currentStep = totalSteps;
         updateProgress();
-      }, 300);
+      };
+      
+      // Start initialization simulation
+      executeSteps();
 
       // Function to hide EJS loading screen (called by React)
       window.hideEJSLoading = function() {

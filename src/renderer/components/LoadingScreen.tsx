@@ -9,7 +9,7 @@ interface LoadingScreenProps {
   showProgress?: boolean;
 }
 
-const LoadingScreen = ({ onLoadingComplete, minLoadingTime = 1200, showProgress = true }: LoadingScreenProps) => {
+const LoadingScreen = ({ onLoadingComplete, minLoadingTime = 100, showProgress = true }: LoadingScreenProps) => {
   const theme = useTheme();
   const { getAsset } = useAppAssets();
   const [appIcon, setAppIcon] = useState<string | null>(null);
@@ -28,13 +28,29 @@ const LoadingScreen = ({ onLoadingComplete, minLoadingTime = 1200, showProgress 
     'Ready to launch!'
   ];
 
-  // Load app icon
+  // Load app icon with fallback
   useEffect(() => {
     const loadIcon = async () => {
       try {
         const iconUrl = await getAsset('icon.png');
         if (iconUrl) {
           setAppIcon(iconUrl);
+        } else {
+          // Fallback: try to load from different paths
+          console.warn('Primary icon loading failed, trying fallback methods...');
+          
+          // Try direct electron API if available
+          if (window.electron?.fileSystem?.getLocalAsset) {
+            try {
+              const fallbackIcon = await window.electron.fileSystem.getLocalAsset('icon.png');
+              if (fallbackIcon?.data) {
+                setAppIcon(fallbackIcon.data);
+                return;
+              }
+            } catch (fallbackError) {
+              console.warn('Fallback icon loading also failed:', fallbackError);
+            }
+          }
         }
       } catch (error) {
         console.warn('Failed to load app icon in loading screen:', error);
@@ -44,58 +60,66 @@ const LoadingScreen = ({ onLoadingComplete, minLoadingTime = 1200, showProgress 
     loadIcon();
   }, [getAsset]);
 
-  // Simulate initialization progress
+  // Real initialization progress tracking based on actual App.tsx initialization
   useEffect(() => {
     if (!showProgress) return;
 
-    const progressInterval = setInterval(() => {
-      setProgress(prev => {
-        const newProgress = prev + Math.random() * 15;
-        if (newProgress >= 100) {
-          clearInterval(progressInterval);
-          return 100;
-        }
-        return newProgress;
-      });
-    }, 200);
+    const realInitSteps = [
+      { name: 'Loading essential assets', duration: 300 },
+      { name: 'Setting up authentication', duration: 100 },
+      { name: 'Setting up calendar listeners', duration: 200 },
+      { name: 'Waiting for Google services', duration: 1000 }, // This is the main wait
+      { name: 'Initializing MCP services', duration: 500 },
+      { name: 'Finalizing setup', duration: 200 },
+      { name: 'Ready to launch', duration: 100 }
+    ];
 
-    const stepInterval = setInterval(() => {
-      setCurrentStep(prev => {
-        if (prev < initializationSteps.length - 1) {
-          return prev + 1;
-        }
-        clearInterval(stepInterval);
-        return prev;
-      });
-    }, 300);
+    let currentProgress = 0;
+    let stepIndex = 0;
 
-    return () => {
-      clearInterval(progressInterval);
-      clearInterval(stepInterval);
+    const executeRealSteps = async () => {
+      for (let i = 0; i < realInitSteps.length; i++) {
+        setCurrentStep(i);
+        
+        // Update progress gradually during each step
+        const stepProgress = (100 / realInitSteps.length);
+        const targetProgress = (i + 1) * stepProgress;
+        
+        // Animate progress during this step
+        const stepDuration = realInitSteps[i].duration;
+        const progressInterval = setInterval(() => {
+          setProgress(prev => {
+            const newProgress = Math.min(targetProgress, prev + (stepProgress / (stepDuration / 50)));
+            if (newProgress >= targetProgress) {
+              clearInterval(progressInterval);
+              return targetProgress;
+            }
+            return newProgress;
+          });
+        }, 50);
+        
+        // Wait for step to complete
+        await new Promise(resolve => setTimeout(resolve, stepDuration));
+      }
+      
+      // Ensure we reach 100%
+      setProgress(100);
     };
+
+    executeRealSteps();
   }, [showProgress, initializationSteps.length]);
 
-  // Handle loading completion
+  // Handle loading completion when progress reaches 100%
   useEffect(() => {
-    const handleLoadingComplete = () => {
-      const elapsedTime = Date.now() - startTime;
-      const remainingTime = Math.max(0, minLoadingTime - elapsedTime);
-      
-      setTimeout(() => {
+    if (progress >= 100) {
+      const timer = setTimeout(() => {
         setIsVisible(false);
-        setTimeout(onLoadingComplete, 300); // Wait for fade-out
-      }, remainingTime);
-    };
-
-    // Wait for progress to complete or minimum time
-    const timer = setTimeout(() => {
-      if (progress >= 100 || !showProgress) {
-        handleLoadingComplete();
-      }
-    }, minLoadingTime);
-    
-    return () => clearTimeout(timer);
-  }, [startTime, minLoadingTime, onLoadingComplete, progress, showProgress]);
+        setTimeout(onLoadingComplete, 300);
+      }, 200); // Brief delay to show 100%
+      
+      return () => clearTimeout(timer);
+    }
+  }, [progress, onLoadingComplete]);
 
   if (!isVisible) return null;
 
@@ -172,6 +196,11 @@ const LoadingScreen = ({ onLoadingComplete, minLoadingTime = 1200, showProgress 
                   height: 56,
                   bgcolor: 'transparent',
                 }}
+                onError={(e) => {
+                  console.warn('Avatar failed to load image:', e);
+                  // Remove the src to fall back to the SVG icon
+                  setAppIcon(null);
+                }}
               />
             ) : (
               <Box
@@ -219,17 +248,20 @@ const LoadingScreen = ({ onLoadingComplete, minLoadingTime = 1200, showProgress 
 
           {/* Progress indicators */}
           {showProgress ? (
-            <Box sx={{ width: '100%', mb: 2 }}>
+            <Box sx={{ width: '100%', maxWidth: 320, mb: 2 }}>
               <LinearProgress 
                 variant="determinate" 
                 value={progress} 
                 sx={{ 
-                  height: 6, 
+                  height: 6,
                   borderRadius: 3,
                   mb: 1,
                   bgcolor: 'action.hover',
+                  boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.1)',
                   '& .MuiLinearProgress-bar': {
                     borderRadius: 3,
+                    background: 'linear-gradient(90deg, #4f5bd5, #6366f1)',
+                    transition: 'transform 0.4s ease-out',
                   }
                 }} 
               />

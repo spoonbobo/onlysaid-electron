@@ -1,4 +1,4 @@
-import { ipcMain, dialog, BrowserWindow } from 'electron';
+import { ipcMain, dialog, BrowserWindow, app } from 'electron';
 import fs from 'fs';
 import path from 'path';
 import { promisify } from 'util';
@@ -74,12 +74,21 @@ export function setupFileSystemHandlers() {
   // Add handler to get local app assets
   ipcMain.handle('assets:get-local-asset', async (event, assetPath) => {
     try {
-      // Resolve the asset path relative to the app's root directory
-      const absolutePath = path.resolve(process.cwd(), 'assets', assetPath);
+      // Use the same logic as main.ts for finding assets
+      const RESOURCES_PATH = app.isPackaged
+        ? path.join(process.resourcesPath, 'assets')
+        : path.join(__dirname, '../../assets');
+      
+      console.log(`[Assets] Loading asset: ${assetPath}`);
+      console.log(`[Assets] App packaged: ${app.isPackaged}`);
+      console.log(`[Assets] Resources path: ${RESOURCES_PATH}`);
+      
+      // Resolve the asset path relative to the correct assets directory
+      const absolutePath = path.join(RESOURCES_PATH, assetPath);
+      console.log(`[Assets] Absolute path: ${absolutePath}`);
       
       // Security check: ensure the path is within the assets directory
-      const assetsDir = path.resolve(process.cwd(), 'assets');
-      if (!absolutePath.startsWith(assetsDir)) {
+      if (!absolutePath.startsWith(RESOURCES_PATH)) {
         throw new Error('Invalid asset path - outside assets directory');
       }
 
