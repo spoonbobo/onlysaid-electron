@@ -295,7 +295,8 @@
       "deleteAppDataOnUninstall": false,
       "runAfterFinish": true,
       "artifactName": "${productName}-${version}-Setup.${ext}",
-      "warningsAsErrors": false
+      "warningsAsErrors": false,
+      "include": "build/installer.nsh"
     },
     "linux": {
       "target": [
