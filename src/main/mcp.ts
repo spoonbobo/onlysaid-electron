@@ -250,22 +250,35 @@ export function setupMCPHandlers() {
     try {
       const { serverName = 'default', toolName, arguments: toolArgs } = params;
 
+      console.log(`🔧 [MCP Main] Executing tool ${toolName} on ${serverName} with args:`, {
+        serverName,
+        toolName,
+        toolArgs,
+        hasClient: !!activeClients[serverName] || !!Object.values(activeClients)[0]
+      });
+
       const client = serverName === 'default'
         ? Object.values(activeClients)[0]
         : activeClients[serverName];
 
       if (!client) {
-        return { success: false, error: `No active MCP client found for server: ${serverName}` };
+        const error = `No active MCP client found for server: ${serverName}`;
+        console.error(`🔧 [MCP Main] ${error}`);
+        return { success: false, error };
       }
 
-      console.log(`[MCP] Executing tool ${toolName} on ${serverName}`);
+      console.log(`🔧 [MCP Main] Found client for ${serverName}, executing tool...`);
 
       const result = await client.callTool({
         name: toolName,
         arguments: toolArgs || {}
       });
 
-      console.log(`[MCP] Tool ${toolName} execution completed`);
+      console.log(`🔧 [MCP Main] Tool ${toolName} execution completed:`, {
+        hasResult: !!result,
+        resultType: typeof result,
+        result
+      });
 
       return {
         success: true,
@@ -274,7 +287,10 @@ export function setupMCPHandlers() {
         serverName
       };
     } catch (error: any) {
-      console.error(`Error executing tool ${params?.toolName} on ${params?.serverName}:`, error);
+      console.error(`🔧 [MCP Main] Error executing tool ${params?.toolName} on ${params?.serverName}:`, {
+        message: error.message,
+        stack: error.stack
+      });
       return {
         success: false,
         error: error.message,

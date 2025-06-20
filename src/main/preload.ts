@@ -148,7 +148,7 @@ type CryptoChannels =
 type HealthCheckChannels = 'health:start-periodic-check' | 'health:stop-periodic-check' | 'health:check' | 'health:check-failed' | 'health:is-running';
 
 // Add this new type around line 91 with other channel types:
-type OSSwarmChannels = 'osswarm:execute_task' | 'osswarm:get_status' | 'osswarm:clear_cache' | 'osswarm:stream_update';
+type OSSwarmChannels = 'osswarm:execute_task' | 'osswarm:get_status' | 'osswarm:clear_cache' | 'osswarm:stream_update' | 'osswarm:approve_tool' | 'osswarm:tool_approval_request' | 'osswarm:tool_execution_start' | 'osswarm:tool_execution_complete' | 'osswarm:execute_mcp_tool';
 
 export type Channels =
   | AuthChannels
@@ -461,6 +461,12 @@ const electronHandler = {
       ipcRenderer.invoke('osswarm:get_status'),
     clearCache: () =>
       ipcRenderer.invoke('osswarm:clear_cache'),
+    approveTool: (params: { approvalId: string; approved: boolean }) =>
+      ipcRenderer.invoke('osswarm:approve_tool', params),
+    onToolApprovalRequest: (callback: (event: IpcRendererEvent, data: any) => void) => {
+      ipcRenderer.on('osswarm:tool_approval_request', callback);
+      return () => ipcRenderer.removeListener('osswarm:tool_approval_request', callback);
+    },
   },
 };
 

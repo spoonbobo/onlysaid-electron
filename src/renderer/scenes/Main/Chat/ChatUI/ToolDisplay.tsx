@@ -29,7 +29,7 @@ interface ToolDisplayProps {
 
 const ToolDisplay = memo(({ toolCalls, chatId, messageId }: ToolDisplayProps) => {
   const intl = useIntl();
-  const { updateToolCallStatus, updateToolCallResult, getLogsForToolCall, addLogForToolCall } = useLLMStore.getState();
+  const { updateToolCallStatus, updateToolCallResult, getLogsForToolCall, addLogForToolCall } = useLLMStore();
   const refreshMessage = useChatStore(state => state.refreshMessage);
   const { executeTool } = useMCPClientStore.getState();
   const { getAllConfiguredServers, getServerAutoApproved } = useMCPStore.getState();
@@ -168,20 +168,122 @@ const ToolDisplay = memo(({ toolCalls, chatId, messageId }: ToolDisplayProps) =>
 
   const handleApprove = useCallback(async (toolCallId: string) => {
     console.log(`Tool call ${toolCallId} manually approved for message ${messageId} in chat ${chatId}`);
-    await updateToolCallStatus(toolCallId, 'approved');
-    await refreshMessage(chatId, messageId);
-  }, [updateToolCallStatus, chatId, messageId, refreshMessage]);
+    
+    const isOSSwarmOrchestrated = toolCallId.startsWith('approval-');
+    
+    if (isOSSwarmOrchestrated) {
+      console.log(`[ToolDisplay] 🔧 OSSwarm-orchestrated tool call ${toolCallId} approved - starting approval process`);
+      
+      try {
+        const toolCall = toolCalls.find(tc => tc.id === toolCallId);
+        if (toolCall) {
+          await addLogForToolCall(toolCallId, `OSSwarm tool "${toolCall.function.name}" approved by user. Sending approval to OSSwarm orchestrator.`);
+        }
+        
+        const result = await window.electron.osswarm.approveTool({
+          approvalId: toolCallId,
+          approved: true
+        });
+        
+        if (result && result.success) {
+          // Update chat store
+          const { updateMessage } = useChatStore.getState();
+          const messages = useChatStore.getState().messages[chatId] || [];
+          const currentMessage = messages.find(msg => msg.id === messageId);
+          
+          if (currentMessage && currentMessage.tool_calls) {
+            const updatedToolCalls = currentMessage.tool_calls.map(tc => 
+              tc.id === toolCallId ? { ...tc, status: 'approved' as const } : tc
+            );
+            
+            await updateMessage(chatId, messageId, {
+              tool_calls: updatedToolCalls
+            });
+          }
+          
+          // Now uses the properly imported store action
+          await updateToolCallStatus(toolCallId, 'approved');
+          
+          await addLogForToolCall(toolCallId, `Approval sent to OSSwarm successfully. Tool will execute automatically.`);
+          toast.success('Tool approved - executing automatically');
+        } else {
+          await addLogForToolCall(toolCallId, `OSSwarm approval failed: ${result?.error || 'Unknown error'}`);
+          toast.error(`Failed to approve tool: ${result?.error || 'Unknown error'}`);
+        }
+      } catch (error: any) {
+        await addLogForToolCall(toolCallId, `Error during OSSwarm approval: ${error.message}`);
+        toast.error(`Failed to approve tool: ${error.message}`);
+      }
+    } else {
+      await updateToolCallStatus(toolCallId, 'approved');
+      await refreshMessage(chatId, messageId);
+      toast.success('Tool approved');
+    }
+  }, [toolCalls, chatId, messageId, refreshMessage, updateToolCallStatus, addLogForToolCall]);
 
   const handleDeny = useCallback(async (toolCallId: string) => {
     console.log(`Tool call ${toolCallId} denied for message ${messageId} in chat ${chatId}`);
-    await updateToolCallStatus(toolCallId, 'denied');
-    await refreshMessage(chatId, messageId);
-  }, [updateToolCallStatus, chatId, messageId, refreshMessage]);
+    
+    // Check if this is an OSSwarm-orchestrated tool call (approval ID format)
+    const isOSSwarmOrchestrated = toolCallId.startsWith('approval-');
+    
+    if (isOSSwarmOrchestrated) {
+      console.log(`[ToolDisplay] 🔧 OSSwarm-orchestrated tool call ${toolCallId} denied`);
+      
+      try {
+        // Add log for OSSwarm denial
+        const toolCall = toolCalls.find(tc => tc.id === toolCallId);
+        if (toolCall) {
+          await addLogForToolCall(toolCallId, `OSSwarm tool "${toolCall.function.name}" denied by user. Sending denial to OSSwarm orchestrator.`);
+        }
+        
+        // Send denial to OSSwarm via IPC
+        await window.electron.osswarm.approveTool({
+          approvalId: toolCallId,
+          approved: false
+        });
+        
+        // For OSSwarm-orchestrated tools, update the message directly instead of using database functions
+        const { updateMessage } = useChatStore.getState();
+        const messages = useChatStore.getState().messages[chatId] || [];
+        const currentMessage = messages.find(msg => msg.id === messageId);
+        
+        if (currentMessage && currentMessage.tool_calls) {
+          const updatedToolCalls = currentMessage.tool_calls.map(tc => 
+            tc.id === toolCallId ? { ...tc, status: 'denied' as const } : tc
+          );
+          
+          await updateMessage(chatId, messageId, {
+            tool_calls: updatedToolCalls
+          });
+          
+          console.log(`[ToolDisplay] 🔧 OSSwarm-orchestrated tool call status updated directly in chat store`);
+        }
+        
+        // Add log for successful denial
+        await addLogForToolCall(toolCallId, `Denial sent to OSSwarm successfully. Tool execution cancelled.`);
+        
+        toast.info('Tool denied');
+      } catch (error: any) {
+        console.error('[ToolDisplay] 🔧 Error denying OSSwarm-orchestrated tool:', error);
+        await addLogForToolCall(toolCallId, `Error during OSSwarm denial: ${error.message}`);
+        toast.error(`Failed to deny tool: ${error.message}`);
+      }
+    } else {
+      // Regular MCP tool call (not OSSwarm-orchestrated) - use database operations
+      await updateToolCallStatus(toolCallId, 'denied');
+      await refreshMessage(chatId, messageId);
+      toast.info('Tool denied');
+    }
+  }, [toolCalls, updateToolCallStatus, chatId, messageId, refreshMessage, addLogForToolCall]);
 
   const handleViewLogs = useCallback(async (toolCallId: string, toolName: string) => {
     setIsLoadingLogs(true);
     setSelectedToolName(toolName);
+    
+    // Now uses the properly imported store action
     const logs = await getLogsForToolCall(toolCallId);
+    
     setSelectedLogContent(logs);
     setIsLoadingLogs(false);
     setLogDialogOpen(true);
@@ -195,15 +297,43 @@ const ToolDisplay = memo(({ toolCalls, chatId, messageId }: ToolDisplayProps) =>
 
   const handleReset = useCallback(async (toolCallId: string) => {
     console.log(`Tool call ${toolCallId} reset to pending for message ${messageId} in chat ${chatId}`);
+    
+    // Check if this is an OSSwarm-orchestrated tool call (approval ID format)
+    const isOSSwarmOrchestrated = toolCallId.startsWith('approval-');
+    
     // Remove from auto-approved set when resetting
     setAutoApprovedTools(prev => {
       const newSet = new Set(prev);
       newSet.delete(toolCallId);
       return newSet;
     });
-    await updateToolCallStatus(toolCallId, 'pending');
-    await refreshMessage(chatId, messageId);
-  }, [updateToolCallStatus, chatId, messageId, refreshMessage]);
+    
+    if (isOSSwarmOrchestrated) {
+      // For OSSwarm-orchestrated tools, update the message directly
+      const { updateMessage } = useChatStore.getState();
+      const messages = useChatStore.getState().messages[chatId] || [];
+      const currentMessage = messages.find(msg => msg.id === messageId);
+      
+      if (currentMessage && currentMessage.tool_calls) {
+        const updatedToolCalls = currentMessage.tool_calls.map(tc => 
+          tc.id === toolCallId ? { ...tc, status: 'pending' as const } : tc
+        );
+        
+        await updateMessage(chatId, messageId, {
+          tool_calls: updatedToolCalls
+        });
+        
+        console.log(`[ToolDisplay] 🔧 OSSwarm-orchestrated tool call reset directly in chat store`);
+      }
+      
+      // Add log for reset
+      await addLogForToolCall(toolCallId, `OSSwarm tool call reset to pending status by user.`);
+    } else {
+      // Regular MCP tool call (not OSSwarm-orchestrated) - use database operations
+      await updateToolCallStatus(toolCallId, 'pending');
+      await refreshMessage(chatId, messageId);
+    }
+  }, [toolCalls, updateToolCallStatus, chatId, messageId, refreshMessage, addLogForToolCall]);
 
   const handleViewResult = useCallback((toolCall: IChatMessageToolCall) => {
     setSelectedToolCall(toolCall);
@@ -214,52 +344,6 @@ const ToolDisplay = memo(({ toolCalls, chatId, messageId }: ToolDisplayProps) =>
     setResultDialogOpen(false);
     setSelectedToolCall(null);
   }, []);
-
-  // Timer component for individual tool execution
-  const ExecutionTimer = ({ toolCallId }: { toolCallId: string }) => {
-    const [elapsedTime, setElapsedTime] = useState(0);
-    const startTime = executionStartTimes.get(toolCallId);
-    const isExecuting = executingToolIds.has(toolCallId);
-
-    useEffect(() => {
-      let interval: NodeJS.Timeout | null = null;
-
-      if (isExecuting && startTime) {
-        interval = setInterval(() => {
-          const elapsed = Math.floor((Date.now() - startTime) / 1000);
-          setElapsedTime(elapsed);
-        }, 1000);
-      }
-
-      return () => {
-        if (interval) {
-          clearInterval(interval);
-        }
-      };
-    }, [isExecuting, startTime]);
-
-    const formatTime = (seconds: number): string => {
-      if (seconds < 60) {
-        return `${seconds}s`;
-      }
-      const minutes = Math.floor(seconds / 60);
-      const remainingSeconds = seconds % 60;
-      return `${minutes}m ${remainingSeconds}s`;
-    };
-
-    if (!isExecuting) return null;
-
-    return (
-      <Chip
-        icon={<AccessTimeIcon sx={{ fontSize: '0.75rem' }} />}
-        label={formatTime(elapsedTime)}
-        size="small"
-        variant="outlined"
-        color="primary"
-        sx={{ fontSize: '0.7rem', height: 20 }}
-      />
-    );
-  };
 
   const trimId = (id: string, length: number = 8) => {
     if (id.length <= length + 3) return id;
@@ -390,6 +474,7 @@ const ToolDisplay = memo(({ toolCalls, chatId, messageId }: ToolDisplayProps) =>
           const duration = toolCall.execution_time_seconds || executionDurations.get(toolCall.id);
           const isCompleted = currentStatus === 'executed' || currentStatus === 'error';
           const showSummarize = shouldShowSummarizeForTool(toolCall);
+          const isOSSwarmOrchestrated = toolCall.id.startsWith('approval-');
 
           let statusDisplayKey;
           if (currentStatus === 'approved') {
@@ -400,6 +485,8 @@ const ToolDisplay = memo(({ toolCalls, chatId, messageId }: ToolDisplayProps) =>
             statusDisplayKey = 'toolDisplay.executed';
           } else if (currentStatus === 'error') {
             statusDisplayKey = 'toolDisplay.error';
+          } else if (currentStatus === 'executing') {
+            statusDisplayKey = 'toolDisplay.executing';
           } else {
             statusDisplayKey = 'toolDisplay.statusPending';
           }
@@ -414,6 +501,11 @@ const ToolDisplay = memo(({ toolCalls, chatId, messageId }: ToolDisplayProps) =>
                 {toolCall.mcp_server && (
                   <Box component="span" sx={{ ml: 1, fontSize: '0.75rem', color: 'text.secondary', fontStyle: 'italic' }}>
                     ({formatMCPName(toolCall.mcp_server)})
+                  </Box>
+                )}
+                {isOSSwarmOrchestrated && (
+                  <Box component="span" sx={{ ml: 1, fontSize: '0.75rem', color: 'warning.main', fontStyle: 'italic' }}>
+                    via OSSwarm
                   </Box>
                 )}
                 {isAutoApproved && (
@@ -469,19 +561,38 @@ const ToolDisplay = memo(({ toolCalls, chatId, messageId }: ToolDisplayProps) =>
                           </Typography>
                         )}
                       </Typography>
-                      <Button
-                        disableElevation
-                        variant='outlined'
-                        size="small"
-                        color="primary"
-                        startIcon={<PlayArrowIcon />}
-                        onClick={() => handleExecute(toolCall)}
-                        disabled={isExecuting}
-                      >
-                        {isExecuting ? intl.formatMessage({ id: 'toolDisplay.executing' }) : intl.formatMessage({ id: 'toolDisplay.execute' })}
-                      </Button>
-                      <ExecutionTimer toolCallId={toolCall.id} />
+                      {/* Only show execute button for non-OSSwarm tools */}
+                      {!isOSSwarmOrchestrated && (
+                        <>
+                          <Button
+                            disableElevation
+                            variant='outlined'
+                            size="small"
+                            color="primary"
+                            startIcon={<PlayArrowIcon />}
+                            onClick={() => handleExecute(toolCall)}
+                            disabled={isExecuting}
+                          >
+                            {isExecuting ? intl.formatMessage({ id: 'toolDisplay.executing' }) : intl.formatMessage({ id: 'toolDisplay.execute' })}
+                          </Button>
+                          {/* Only show timer for non-OSSwarm tools */}
+                          {isExecuting && (
+                            <Chip
+                              icon={<AccessTimeIcon sx={{ fontSize: '0.75rem' }} />}
+                              label={`${Math.floor((Date.now() - (executionStartTimes.get(toolCall.id) || Date.now())) / 1000)}s`}
+                              size="small"
+                              variant="outlined"
+                              color="primary"
+                              sx={{ fontSize: '0.7rem', height: 20 }}
+                            />
+                          )}
+                        </>
+                      )}
                     </Box>
+                  ) : currentStatus === 'executing' ? (
+                    <Typography variant="body2" sx={{ color: 'info.main', fontWeight: 'bold' }}>
+                      {intl.formatMessage({ id: 'toolDisplay.executing' })}
+                    </Typography>
                   ) : currentStatus === 'denied' ? (
                     <Typography variant="body2" sx={{ color: 'error.main', fontWeight: 'bold' }}>
                       {intl.formatMessage({ id: 'toolDisplay.denied' })}

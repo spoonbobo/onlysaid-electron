@@ -108,21 +108,19 @@ export async function processAgentModeAIResponse({
     return { success: false, error: errMsg };
   }
 
-  // Collect MCP tools with enhanced debugging
-  let allSelectedToolsFromMCPs: OpenAI.Chat.Completions.ChatCompletionTool[] = [];
+  // Collect MCP tools with server information
+  let allSelectedToolsFromMCPs: (OpenAI.Chat.Completions.ChatCompletionTool & { mcpServer?: string })[] = [];
   
   if (selectedMcpServerIds && selectedMcpServerIds.length > 0) {
     try {
       selectedMcpServerIds.forEach(serverId => {
         const storedTools = getServiceTools(serverId);
         console.log(`[AgentMode DEBUG] Loading tools for server ${serverId}:`, storedTools?.length || 0);
-        console.log(`[AgentMode DEBUG] Raw tools for ${serverId}:`, storedTools);
 
         if (storedTools && storedTools.length > 0) {
           const toolsFromServer = storedTools
             .filter(tool => {
               const isValid = tool && typeof tool.name === 'string' && tool.inputSchema;
-              console.log(`[AgentMode DEBUG] Tool ${tool?.name} valid:`, isValid);
               return isValid;
             })
             .map(tool => {
@@ -132,9 +130,9 @@ export async function processAgentModeAIResponse({
                   name: tool.name,
                   description: tool.description || "No description available.",
                   parameters: tool.inputSchema,
-                }
+                },
+                mcpServer: serverId // ✅ Store the original MCP server
               };
-              console.log(`[AgentMode DEBUG] Formatted tool:`, formattedTool);
               return formattedTool;
             });
           
@@ -142,8 +140,8 @@ export async function processAgentModeAIResponse({
         }
       });
 
-      // Remove duplicates
-      const uniqueToolsMap = new Map<string, OpenAI.Chat.Completions.ChatCompletionTool>();
+      // Remove duplicates but preserve MCP server info
+      const uniqueToolsMap = new Map<string, OpenAI.Chat.Completions.ChatCompletionTool & { mcpServer?: string }>();
       allSelectedToolsFromMCPs.forEach(tool => {
         if (tool.function && tool.function.name && !uniqueToolsMap.has(tool.function.name)) {
           uniqueToolsMap.set(tool.function.name, tool);
@@ -188,11 +186,16 @@ export async function processAgentModeAIResponse({
     },
     tools: allSelectedToolsFromMCPs, // Pass the MCP tools to OSSwarm
     systemPrompt: systemPromptText, // Use agent mode system prompt
+    humanInTheLoop: true, // Enable human-in-the-loop
   };
 
   console.log("[AgentMode DEBUG] OSSwarm configuration:");
   console.log("[AgentMode DEBUG] - Tools count:", swarmOptions.tools?.length || 0);
-  console.log("[AgentMode DEBUG] - Tools array:", swarmOptions.tools);
+  console.log("[AgentMode DEBUG] - Tools details:", swarmOptions.tools?.map(t => ({
+    name: t.function?.name,
+    hasParams: !!t.function?.parameters,
+    mcpServer: (t as any).mcpServer
+  })));
   console.log("[AgentMode DEBUG] - Full swarmOptions:", swarmOptions);
 
   const swarmLimits = {
@@ -207,11 +210,26 @@ export async function processAgentModeAIResponse({
 
   try {
     // Use the existing executeOSSwarmTask function
+    console.log('[AgentMode] Calling executeOSSwarmTask with:', {
+      taskLength: taskDescription.length,
+      toolsCount: swarmOptions.tools?.length || 0,
+      provider: swarmOptions.provider,
+      model: swarmOptions.model
+    });
+
     const result = await executeOSSwarmTask(
       taskDescription,
       swarmOptions,
       swarmLimits
     );
+
+    console.log('[AgentMode] executeOSSwarmTask result:', {
+      success: result.success,
+      hasResult: !!result.result,
+      hasError: !!result.error,
+      resultType: typeof result.result,
+      errorMessage: result.error
+    });
 
     if (result.success && result.result) {
       // Create assistant message using OSSwarm result
@@ -239,13 +257,20 @@ export async function processAgentModeAIResponse({
 
     } else {
       const errorMsg = result.error || "OSSwarm execution failed without specific error.";
-      console.error("[AgentMode DEBUG] OSSwarm execution failed:", errorMsg);
+      console.error("[AgentMode] OSSwarm execution failed:", {
+        error: errorMsg,
+        fullResult: result
+      });
       
       return { success: false, error: errorMsg };
     }
 
   } catch (error: any) {
-    console.error("[AgentMode DEBUG] Error in OSSwarm AgentMode processing:", error);
+    console.error("[AgentMode] Critical error in OSSwarm AgentMode processing:", {
+      message: error.message,
+      stack: error.stack,
+      name: error.name
+    });
     return { success: false, error: error.message || error };
   }
 }

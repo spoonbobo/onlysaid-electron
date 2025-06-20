@@ -6,7 +6,8 @@ export class OSSwarmService {
 
   async initializeSwarm(
     agentOptions: LangChainAgentOptions,
-    limits?: Partial<OSSwarmLimits>
+    limits?: Partial<OSSwarmLimits>,
+    humanInTheLoop: boolean = true // Enable human-in-the-loop by default
   ): Promise<void> {
     const defaultLimits: OSSwarmLimits = {
       maxConversationLength: 100,
@@ -22,18 +23,19 @@ export class OSSwarmService {
     const config: OSSwarmConfig = {
       limits: swarmLimits,
       agentOptions,
+      humanInTheLoop, // Add human-in-the-loop configuration
       swarmPrompts: {
-        research: "You are a Research Agent in OSSwarm. Gather information, verify facts, and provide detailed analysis.",
-        analysis: "You are an Analysis Agent in OSSwarm. Break down problems, analyze data, and provide logical insights.",
-        creative: "You are a Creative Agent in OSSwarm. Generate innovative ideas, creative solutions, and design concepts.",
-        technical: "You are a Technical Agent in OSSwarm. Provide technical implementations, code solutions, and system designs.",
-        communication: "You are a Communication Agent in OSSwarm. Create clear, well-structured content and presentations.",
-        validation: "You are a Validation Agent in OSSwarm. Test, verify, and ensure quality of outputs.",
+        research: "You are a Research Agent in OSSwarm with human oversight. All tool usage requires human approval. Gather information, verify facts, and provide detailed analysis.",
+        analysis: "You are an Analysis Agent in OSSwarm with human oversight. All tool usage requires human approval. Break down problems, analyze data, and provide logical insights.",
+        creative: "You are a Creative Agent in OSSwarm with human oversight. All tool usage requires human approval. Generate innovative ideas, creative solutions, and design concepts.",
+        technical: "You are a Technical Agent in OSSwarm with human oversight. All tool usage requires human approval. Provide technical implementations, code solutions, and system designs.",
+        communication: "You are a Communication Agent in OSSwarm with human oversight. All tool usage requires human approval. Create clear, well-structured content and presentations.",
+        validation: "You are a Validation Agent in OSSwarm with human oversight. All tool usage requires human approval. Test, verify, and ensure quality of outputs.",
       },
     };
 
     this.swarmCore = new OSSwarmCore(config);
-    console.log('[OSSwarm Service] Swarm initialized with limits:', swarmLimits);
+    console.log('[OSSwarm Service] Swarm initialized with human-in-the-loop:', humanInTheLoop);
   }
 
   async executeTask(
@@ -45,6 +47,23 @@ export class OSSwarmService {
     }
 
     return this.swarmCore.processTask(task, streamCallback);
+  }
+
+  // Add method to handle approval responses
+  handleApprovalResponse(approvalId: string, approved: boolean): void {
+    console.log(`[OSSwarm Service] 🔧 handleApprovalResponse called at ${Date.now()}:`, {
+      approvalId,
+      approved,
+      hasSwarmCore: !!this.swarmCore
+    });
+    
+    if (this.swarmCore) {
+      console.log(`[OSSwarm Service] 🔧 Forwarding to swarm core...`);
+      this.swarmCore.handleApprovalResponse(approvalId, approved);
+      console.log(`[OSSwarm Service] 🔧 Forwarded to swarm core successfully`);
+    } else {
+      console.error(`[OSSwarm Service] 🔧 No swarm core available for approval ${approvalId}`);
+    }
   }
 
   getSwarmStatus() {

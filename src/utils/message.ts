@@ -23,7 +23,7 @@ export const formatMessagesForContext = (
       let role = 'Assistant';
       if (msg.sender === currentUser?.id) {
         role = 'User';
-      } else if (msg.is_tool_response) {
+      } else if (msg.tool_calls && msg.tool_calls.length > 0) {
         role = 'Tool';
       }
 

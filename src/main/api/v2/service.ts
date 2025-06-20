@@ -24,7 +24,7 @@ export const healthCheck = async (token: string): Promise<boolean> => {
   console.log('[HealthCheck] Token preview:', token.substring(0, 10) + '...');
   
   try {
-    const response = await onlysaidServiceInstance.get('/api/health', {
+    const response = await onlysaidServiceInstance.get('/health', {
       timeout: 10000,
       headers: {
         'Authorization': `Bearer ${token}`,

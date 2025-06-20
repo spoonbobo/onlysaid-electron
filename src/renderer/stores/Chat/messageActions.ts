@@ -16,6 +16,7 @@ import {
   clearNotificationsForWorkspaceSection,
   clearNotificationsForHomeSection 
 } from '@/utils/notifications';
+import { useAgentStore } from '@/renderer/stores/Agent/AgentStore';
 
 export const createMessageActions = (set: any, get: () => ChatState) => ({
   sendMessage: async (chatId: string, messageData: Partial<IChatMessage>, workspaceId?: string) => {
@@ -397,14 +398,26 @@ export const createMessageActions = (set: any, get: () => ChatState) => ({
           }
         }
 
-        const messagesWithUsersAndReactions = R.map(msg => ({
-          ...msg,
-          sender_object: userMap[msg.sender] || null,
-          reactions: reactionsByMessageId[msg.id] || [],
-          files: messageFileIdMap[msg.id] ?
-            messageFileIdMap[msg.id].map(fileId => filesMap[fileId]).filter(Boolean) :
-            undefined
-        }), decryptedMessages).filter(msg => !existingMessageIds.has(msg.id));
+        const messagesWithUsersAndReactions = R.map(msg => {
+          let senderObject = userMap[msg.sender] || null;
+          
+          // ✅ If no user found, check if this is the current user's agent
+          if (!senderObject) {
+            const { agent } = useAgentStore.getState();
+            if (agent && msg.sender === agent.id) {
+              senderObject = agent; // ✅ Use the actual agent object
+            }
+          }
+          
+          return {
+            ...msg,
+            sender_object: senderObject,
+            reactions: reactionsByMessageId[msg.id] || [],
+            files: messageFileIdMap[msg.id] ?
+              messageFileIdMap[msg.id].map(fileId => filesMap[fileId]).filter(Boolean) :
+              undefined
+          };
+        }, decryptedMessages).filter(msg => !existingMessageIds.has(msg.id));
 
         if (!messagesByIdCache.has(chatId)) {
           messagesByIdCache.set(chatId, new Map());

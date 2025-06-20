@@ -3,7 +3,7 @@ import { useEffect, useRef, useCallback, useState, useMemo } from "react";
 import ChatHeader from "./ChatHeader";
 import ChatUI from "./ChatUI";
 import ChatInput from "./ChatInput";
-import { IChatMessage } from "@/../../types/Chat/Message";
+import { IChatMessage, IChatMessageToolCall } from "@/../../types/Chat/Message";
 import { getUserFromStore, isGuestUser } from "@/utils/user";
 import { IUser } from "@/../../types/User/User";
 import { v4 as uuidv4 } from 'uuid';
@@ -19,6 +19,8 @@ import { toast } from "@/utils/toast";
 import { IChatRoom } from "@/../../types/Chat/Chatroom";
 import ChatUIWithNoChat from "./ChatUIWithNoChat";
 import AgentWorkOverlay from "./AgentWorkOverlay";
+import { useMCPClientStore } from "@/renderer/stores/MCP/MCPClient";
+import { useLLMStore } from "@/renderer/stores/LLM/LLMStore";
 
 function Chat() {
   const {
@@ -348,6 +350,279 @@ function Chat() {
       console.log('[Chat] Guest user detected, creating guest agent');
     }
   }, [isGuest, agent, createGuestAgent]);
+
+  const [osswarmToolRequests, setOSSwarmToolRequests] = useState<Map<string, {
+    approvalId: string;
+    request: any;
+    messageId: string;
+  }>>(new Map());
+
+  useEffect(() => {
+    console.log('[Chat] Setting up OSSwarm tool listeners...');
+    
+    const handleToolApprovalRequest = async (event: any, data: { approvalId: string; request: any }) => {
+      console.log('[Chat] Received OSSwarm tool approval request:', data);
+      
+      if (!activeChatId) {
+        console.warn('[Chat] No active chat ID, ignoring tool approval request');
+        return;
+      }
+      
+      // ✅ Get the current user's agent as the sender
+      const { agent } = useAgentStore.getState();
+      const currentUser = getUserFromStore();
+      
+      if (!agent) {
+        console.error('[Chat] No agent available for OSSwarm tool message');
+        return;
+      }
+      
+      // ✅ Get the original MCP server from the request
+      const originalMCPServer = data.request.originalMCPServer || 'osswarm';
+      console.log('[Chat] Original MCP server for tool:', originalMCPServer);
+      
+      const messageId = `osswarm-tool-${data.approvalId}`;
+      const currentTime = new Date().toISOString();
+      
+      // Create the tool call data
+      const toolCall: IChatMessageToolCall = {
+        id: data.approvalId,
+        type: 'function',
+        function: {
+          name: data.request.toolCall.name,
+          arguments: data.request.toolCall.arguments,
+        },
+        status: 'pending',
+        mcp_server: originalMCPServer,
+        tool_description: data.request.toolCall.description,
+      };
+      
+      // ✅ Create message using user's agent as sender
+      const toolCallMessage: IChatMessage = {
+        id: messageId,
+        chat_id: activeChatId,
+        sender: agent.id || '', // ✅ Use the user's agent ID
+        sender_object: agent, // ✅ Use the actual agent object
+        text: ``, // Keep empty text
+        tool_calls: [toolCall],
+        created_at: currentTime,
+        sent_at: currentTime,
+        status: 'completed',
+      };
+
+      console.log('[Chat] Adding OSSwarm tool message with agent sender:', agent.username, toolCallMessage);
+
+      // ✅ Save message to database using agent ID
+      try {
+        // Save the basic message first
+        await window.electron.db.query({
+          query: `
+            INSERT INTO messages 
+            (id, chat_id, sender, text, created_at, sent_at, status, workspace_id)
+            VALUES (@id, @chat_id, @sender, @text, @created_at, @sent_at, @status, @workspace_id)
+          `,
+          params: {
+            id: messageId,
+            chat_id: activeChatId,
+            sender: agent.id, // ✅ Use agent ID as sender
+            text: '',
+            created_at: currentTime,
+            sent_at: currentTime,
+            status: 'completed',
+            workspace_id: workspaceId || null,
+          }
+        });
+        
+        // Save the tool call separately
+        const { createToolCalls } = useLLMStore.getState();
+        await createToolCalls(messageId, [toolCall]);
+        
+        console.log('[Chat] OSSwarm tool message and tool call saved to database');
+      } catch (error) {
+        console.error('[Chat] Failed to save OSSwarm tool message to database:', error);
+      }
+
+      // Add to UI
+      appendMessage(activeChatId, toolCallMessage);
+      
+      // Track the request
+      setOSSwarmToolRequests(prev => new Map(prev).set(data.approvalId, {
+        approvalId: data.approvalId,
+        request: data.request,
+        messageId: toolCallMessage.id,
+      }));
+      
+      console.log('[Chat] OSSwarm tool request tracked, total requests:', osswarmToolRequests.size + 1);
+    };
+
+    // ✅ Handle tool execution start - get fresh store functions
+    const handleToolExecutionStart = async (event: any, ...args: unknown[]) => {
+      const data = args[0] as { executionId: string; toolName: string; agentId: string; agentRole: string };
+      console.log('[Chat] OSSwarm tool execution started:', data);
+      
+      // Update the tool call status to 'executing'
+      const messages = useChatStore.getState().messages[activeChatId || ''] || [];
+      const toolMessage = messages.find(msg => msg.id === `osswarm-tool-${data.executionId}`);
+      
+      if (toolMessage && toolMessage.tool_calls) {
+        const updatedToolCalls = toolMessage.tool_calls.map(tc => 
+          tc.id === data.executionId ? { ...tc, status: 'executing' as const } : tc
+        );
+        
+        // Update in chat store
+        updateMessage(activeChatId || '', toolMessage.id, {
+          tool_calls: updatedToolCalls
+        });
+        
+        // ✅ Update in database with fresh function reference
+        try {
+          const { updateToolCallStatus } = useLLMStore.getState();
+          await updateToolCallStatus(data.executionId, 'executing');
+          console.log('[Chat] Updated tool call status to executing in database');
+        } catch (error) {
+          console.error('[Chat] Failed to update tool call status in database:', error);
+        }
+      }
+    };
+
+    // ✅ Handle tool execution completion - get fresh store functions
+    const handleToolExecutionComplete = async (event: any, ...args: unknown[]) => {
+      const data = args[0] as { 
+        executionId: string; 
+        toolName: string; 
+        result?: string; 
+        error?: string; 
+        success: boolean;
+        toolResults?: any[];
+        executionTime?: number;
+      };
+      console.log('[Chat] OSSwarm tool execution completed:', data);
+      
+      // Update the tool call with results
+      const messages = useChatStore.getState().messages[activeChatId || ''] || [];
+      const toolMessage = messages.find(msg => msg.id === `osswarm-tool-${data.executionId}`);
+      
+      if (toolMessage && toolMessage.tool_calls) {
+        const updatedToolCalls = toolMessage.tool_calls.map(tc => 
+          tc.id === data.executionId ? { 
+            ...tc, 
+            status: data.success ? 'executed' as const : 'error' as const,
+            result: data.result || data.error,
+            execution_time_seconds: data.executionTime ? Math.floor(data.executionTime / 1000) : undefined
+          } : tc
+        );
+        
+        // Update in chat store
+        updateMessage(activeChatId || '', toolMessage.id, {
+          tool_calls: updatedToolCalls
+        });
+        
+        // ✅ Update in database with fresh function references
+        try {
+          const { updateToolCallResult, updateToolCallStatus } = useLLMStore.getState();
+          
+          if (data.success && data.result) {
+            await updateToolCallResult(
+              data.executionId, 
+              data.result, 
+              data.executionTime ? Math.floor(data.executionTime / 1000) : undefined
+            );
+          } else {
+            await updateToolCallStatus(data.executionId, 'error');
+          }
+          
+          console.log('[Chat] Updated tool call result/status in database');
+        } catch (error) {
+          console.error('[Chat] Failed to update tool call result in database:', error);
+        }
+      }
+    };
+
+    // ✅ Move MCP tool execution handler inside this useEffect
+    const handleMCPToolExecution = async (event: any, ...args: unknown[]) => {
+      const data = args[0] as {
+        executionId: string;
+        serverName: string;
+        toolName: string;
+        arguments: any;
+        responseChannel: string;
+      };
+      
+      console.log('[Chat] 🔧 Executing MCP tool for OSSwarm:', {
+        executionId: data.executionId,
+        serverName: data.serverName,
+        toolName: data.toolName,
+        arguments: data.arguments,
+        responseChannel: data.responseChannel
+      });
+      
+      try {
+        // Check if MCP client store is available
+        const mcpClientStore = useMCPClientStore.getState();
+        console.log('[Chat] 🔧 MCP Client Store state:', {
+          hasExecuteTool: typeof mcpClientStore.executeTool === 'function',
+          storeKeys: Object.keys(mcpClientStore)
+        });
+        
+        const { executeTool } = mcpClientStore;
+        
+        if (!executeTool) {
+          throw new Error('executeTool function not available in MCP client store');
+        }
+        
+        console.log('[Chat] 🔧 Calling executeTool with:', {
+          serverName: data.serverName,
+          toolName: data.toolName,
+          argumentsType: typeof data.arguments,
+          argumentsContent: data.arguments
+        });
+        
+        const result = await executeTool(data.serverName, data.toolName, data.arguments);
+        
+        console.log('[Chat] 🔧 MCP tool execution result:', {
+          success: result?.success,
+          hasData: !!result?.data,
+          dataType: typeof result?.data,
+          dataContent: result?.data,
+          error: result?.error,
+          fullResult: result
+        });
+        
+        // Send result back to main process
+        console.log('[Chat] 🔧 Sending result back via IPC channel:', data.responseChannel);
+        (window.electron.ipcRenderer as any).send(data.responseChannel, result);
+        
+      } catch (error: any) {
+        console.error('[Chat] 🔧 MCP tool execution failed:', {
+          message: error.message,
+          stack: error.stack,
+          name: error.name,
+          executionId: data.executionId,
+          toolName: data.toolName
+        });
+        
+        // Send error back to main process
+        (window.electron.ipcRenderer as any).send(data.responseChannel, {
+          success: false,
+          error: error.message
+        });
+      }
+    };
+
+    // Register all listeners
+    const unsubscribeApproval = window.electron?.osswarm?.onToolApprovalRequest?.(handleToolApprovalRequest);
+    const unsubscribeStart = window.electron?.ipcRenderer?.on?.('osswarm:tool_execution_start', handleToolExecutionStart);
+    const unsubscribeComplete = window.electron?.ipcRenderer?.on?.('osswarm:tool_execution_complete', handleToolExecutionComplete);
+    const unsubscribeMCPExecution = window.electron?.ipcRenderer?.on?.('osswarm:execute_mcp_tool', handleMCPToolExecution);
+    
+    return () => {
+      console.log('[Chat] Cleaning up OSSwarm tool listeners');
+      unsubscribeApproval?.();
+      unsubscribeStart?.();
+      unsubscribeComplete?.();
+      unsubscribeMCPExecution?.();
+    };
+  }, [activeChatId, appendMessage, updateMessage]);
 
   return (
     <Box

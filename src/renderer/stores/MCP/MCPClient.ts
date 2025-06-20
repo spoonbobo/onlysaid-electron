@@ -33,11 +33,12 @@ export const useMCPClientStore = create<MCPClientState>()((set, get) => ({
       // Map server key to service type for client lookup
       const serviceType = SERVICE_TYPE_MAPPING[serverName] || serverName;
 
-      console.log("executeTool action called with:", {
+      console.log("🔧 MCP executeTool called with:", {
         originalServerName: serverName,
         mappedServiceType: serviceType,
         toolName,
-        args
+        args,
+        hasMappingForServer: serverName in SERVICE_TYPE_MAPPING
       });
 
       const result = await window.electron.mcp.execute_tool({
@@ -46,10 +47,23 @@ export const useMCPClientStore = create<MCPClientState>()((set, get) => ({
         arguments: args
       });
 
-      console.log("executeTool returned:", result);
+      console.log("🔧 MCP executeTool result:", {
+        success: result?.success,
+        hasData: !!result?.data,
+        dataType: typeof result?.data,
+        error: result?.error,
+        fullResult: result
+      });
+      
       return result;
-    } catch (error) {
-      console.error("Error in executeTool:", error);
+    } catch (error: any) {
+      console.error("🔧 Error in MCP executeTool:", {
+        message: error.message,
+        stack: error.stack,
+        serverName,
+        toolName,
+        args
+      });
       throw error;
     }
   },

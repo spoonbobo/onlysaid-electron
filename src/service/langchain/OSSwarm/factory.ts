@@ -4,23 +4,30 @@ import { OSSwarmLimits } from './core';
 
 export class OSSwarmFactory {
   private static instances: Map<string, OSSwarmService> = new Map();
+  private static currentSwarm: OSSwarmService | null = null;
 
   static async createSwarm(
     options: LangChainAgentOptions,
-    limits?: Partial<OSSwarmLimits>
+    limits?: Partial<OSSwarmLimits>,
+    humanInTheLoop: boolean = true
   ): Promise<OSSwarmService> {
     const key = this.generateKey(options);
     
     let instance = this.instances.get(key);
     
     if (!instance) {
-      console.log(`[OSSwarm Factory] Creating new swarm for ${options.provider}:${options.model}`);
+      console.log(`[OSSwarm Factory] Creating new swarm for ${options.provider}:${options.model} with human-in-the-loop: ${humanInTheLoop}`);
       instance = new OSSwarmService();
-      await instance.initializeSwarm(options, limits);
+      await instance.initializeSwarm(options, limits, humanInTheLoop);
       this.instances.set(key, instance);
     }
 
+    this.currentSwarm = instance;
     return instance;
+  }
+
+  static getCurrentSwarm(): OSSwarmService | null {
+    return this.currentSwarm;
   }
 
   private static generateKey(options: LangChainAgentOptions): string {
@@ -30,6 +37,7 @@ export class OSSwarmFactory {
   static clearCache(): void {
     console.log(`[OSSwarm Factory] Clearing ${this.instances.size} swarm instances`);
     this.instances.clear();
+    this.currentSwarm = null;
   }
 
   static getCacheSize(): number {
