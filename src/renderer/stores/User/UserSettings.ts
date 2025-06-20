@@ -11,6 +11,9 @@ export const UserSettingsSubcategories = {
   LLMSettings: "llmSettings",
   LLMModels: "llm.apiKeys",
 
+  // Agent
+  AgentSettings: "agentSettings",
+
   // KnowledgeBase
   KBSettings: "kbSettings",
   KB: "kb",

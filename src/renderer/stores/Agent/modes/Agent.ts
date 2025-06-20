@@ -198,18 +198,8 @@ export async function processAgentModeAIResponse({
   })));
   console.log("[AgentMode DEBUG] - Full swarmOptions:", swarmOptions);
 
-  const swarmLimits = {
-    maxIterations: 15,
-    maxParallelAgents: 8,
-    maxSwarmSize: 4,
-    maxActiveSwarms: 2,
-    maxConversationLength: 50,
-  };
-
-  console.log("[AgentMode DEBUG] OSSwarm configuration:", { swarmOptions, swarmLimits });
-
   try {
-    // Use the existing executeOSSwarmTask function
+    // Use the existing executeOSSwarmTask function - no need to pass limits
     console.log('[AgentMode] Calling executeOSSwarmTask with:', {
       taskLength: taskDescription.length,
       toolsCount: swarmOptions.tools?.length || 0,
@@ -219,8 +209,7 @@ export async function processAgentModeAIResponse({
 
     const result = await executeOSSwarmTask(
       taskDescription,
-      swarmOptions,
-      swarmLimits
+      swarmOptions
     );
 
     console.log('[AgentMode] executeOSSwarmTask result:', {

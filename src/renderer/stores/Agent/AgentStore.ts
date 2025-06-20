@@ -645,16 +645,9 @@ export const useAgentStore = create<AgentState>()(
             systemPrompt: "You are coordinating a swarm of AI agents to solve complex tasks efficiently.",
           };
 
-          const swarmLimits = {
-            maxIterations: 15,
-            maxParallelAgents: 8,
-            maxSwarmSize: 4,
-          };
-
           const result = await executeOSSwarmTask(
             userMessageText,
-            swarmOptions,
-            swarmLimits
+            swarmOptions
           );
 
           if (result.success && result.result) {

@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { useLLMConfigurationStore } from '../LLM/LLMConfiguration';
+import { useAgentSettingsStore } from '../Agent/AgentSettingStore';
 
 interface StreamMessage {
   content: string;
@@ -34,8 +35,7 @@ interface StreamState {
   osswarmUpdates: Record<string, string[]>;
   executeOSSwarmTask: (
     task: string,
-    options: any,
-    limits?: any
+    options: any
   ) => Promise<{ success: boolean; result?: string; error?: string }>;
 }
 
@@ -336,8 +336,13 @@ export const useStreamStore = create<StreamState>((set, get) => {
 
     osswarmUpdates: {},
 
-    executeOSSwarmTask: async (task: string, options: any, limits?: any) => {
+    executeOSSwarmTask: async (task: string, options: any) => {
       const taskId = 'current';
+      
+      // ✅ Get swarm limits from AgentSettingStore instead of parameter
+      const { swarmLimits } = useAgentSettingsStore.getState();
+      
+      console.log('[StreamStore] Using swarm limits from AgentSettingStore:', swarmLimits);
       
       // Clear previous updates
       set(state => ({
@@ -348,7 +353,7 @@ export const useStreamStore = create<StreamState>((set, get) => {
         const result = await window.electron.osswarm.executeTask({
           task,
           options,
-          limits
+          limits: swarmLimits // ✅ Use limits from AgentSettingStore
         });
 
         // ✅ Clear updates when task completes (success or failure)

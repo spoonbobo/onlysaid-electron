@@ -7,6 +7,7 @@ import KBSettingsSection from "./KnowledgeBase";
 import ToolsSettingsSection from "./Tools";
 import DeveloperSettingsSection from "./Developer";
 import DangerZoneSection from "./DangerZone";
+import AgentSettingsSection from "./Agent";
 
 export default function UserSettings() {
   const {
@@ -45,6 +46,7 @@ export default function UserSettings() {
       {/* Show section-specific subitems only when a section is active */}
       {activeSection === 'user' && <UserSettingsSection {...sectionProps} />}
       {activeSection === 'llmSettings' && <LLMSettingsSection {...sectionProps} />}
+      {activeSection === 'agent' && <AgentSettingsSection {...sectionProps} />}
       {activeSection === 'kb' && <KBSettingsSection {...sectionProps} />}
       {activeSection === 'tools' && <ToolsSettingsSection {...sectionProps} />}
       {activeSection === 'developer' && <DeveloperSettingsSection {...sectionProps} />}

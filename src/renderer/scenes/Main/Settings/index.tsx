@@ -3,7 +3,6 @@ import { UserSettingsSubcategories } from "@/renderer/stores/User/UserSettings";
 import { useCurrentTopicContext } from "@/renderer/stores/Topic/TopicStore";
 import SettingsSection from "@/renderer/components/Settings/SettingsSection";
 import UserPreferences from "./UserSettings/UserPreference";
-import Payment from "./UserSettings/Payment";
 import DeleteAccount from "./UserSettings/DeleteAccount";
 import LLMConfiguration from "./LLMAPI";
 import LLMSettings from "./LLMSettings";
@@ -15,6 +14,7 @@ import PrivateKB from "./KnowledgeBase";
 import KBSettings from "./KnowledgeBase/KBSettings";
 import UserAPIKeys from "./UserSettings/UserAPIKeys";
 import { useUserStore } from "@/renderer/stores/User/UserStore";
+import AgentSettings from "./AgentSettings";
 
 function Settings() {
   const { selectedTopics } = useCurrentTopicContext();
@@ -38,6 +38,9 @@ function Settings() {
 
       case UserSettingsSubcategories.LLMSettings:
         return <LLMSettings />;
+
+      case UserSettingsSubcategories.AgentSettings:
+        return <AgentSettings />;
 
       case UserSettingsSubcategories.DebugMode:
         return <DebugMode />;

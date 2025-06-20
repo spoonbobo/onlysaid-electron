@@ -6,6 +6,7 @@ import SmartToyIcon from "@mui/icons-material/SmartToy";
 import BuildIcon from "@mui/icons-material/Build";
 import CodeIcon from "@mui/icons-material/Code";
 import LogoutIcon from "@mui/icons-material/Logout";
+import AndroidIcon from "@mui/icons-material/Android";
 import { useTopicStore } from "@/renderer/stores/Topic/TopicStore";
 
 type SettingsMenuItemsProps = {
@@ -41,6 +42,11 @@ function SettingsMenuItems({ handleClose }: SettingsMenuItemsProps) {
       <MenuItem onClick={() => handleNavigateToSection('llmSettings')} sx={{ minHeight: 36, fontSize: 14 }}>
         <SmartToyIcon fontSize="small" sx={{ mr: 1.5, color: "text.secondary" }} />
         <FormattedMessage id="settings.models" />
+      </MenuItem>
+
+      <MenuItem onClick={() => handleNavigateToSection('agent')} sx={{ minHeight: 36, fontSize: 14 }}>
+        <AndroidIcon fontSize="small" sx={{ mr: 1.5, color: "text.secondary" }} />
+        <FormattedMessage id="settings.agent" />
       </MenuItem>
 
       <MenuItem disabled onClick={() => handleNavigateToSection('kb')} sx={{ minHeight: 36, fontSize: 14 }}>

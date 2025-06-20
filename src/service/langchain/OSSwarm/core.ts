@@ -61,6 +61,7 @@ export class OSSwarmCore {
   private iterationCount: number = 0;
   private pendingApprovals: Map<string, HumanApprovalRequest> = new Map();
   private approvalCallbacks: Map<string, (approved: boolean) => void> = new Map();
+  private executionStartTimes: Map<string, number> = new Map();
 
   constructor(private config: OSSwarmConfig) {
     this.initializeMasterAgent();
@@ -105,7 +106,7 @@ All tool usage requires human approval.`;
     toolCall: any,
     context: string,
     streamCallback?: (update: string) => void
-  ): Promise<boolean> {
+  ): Promise<string | false> {
     const approvalId = `approval-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     
     const approvalRequest: HumanApprovalRequest = {
@@ -150,7 +151,7 @@ All tool usage requires human approval.`;
         this.pendingApprovals.delete(approvalId);
         this.approvalCallbacks.delete(approvalId);
         console.log(`[OSSwarm] Tool approval response received: ${approvalId} = ${approved}`);
-        resolve(approved);
+        resolve(approved ? approvalId : false);
       });
       
       // Add timeout to prevent infinite waiting
@@ -274,6 +275,8 @@ All tool usage requires human approval.`;
     taskDescription: string,
     streamCallback?: (update: string) => void
   ): Promise<{ success: boolean; result?: string; error?: string }> {
+    this.iterationCount = 0;
+    
     console.log('[OSSwarm Core] Starting processTask with:', {
       taskLength: taskDescription.length,
       iterationCount: this.iterationCount,
@@ -282,12 +285,6 @@ All tool usage requires human approval.`;
       hasTools: this.config.agentOptions.tools?.length || 0,
       humanInTheLoop: this.config.humanInTheLoop
     });
-
-    if (this.iterationCount >= this.config.limits.maxIterations) {
-      const error = `Maximum iterations (${this.config.limits.maxIterations}) reached`;
-      console.error('[OSSwarm Core]', error);
-      return { success: false, error };
-    }
 
     if (!this.masterAgent) {
       const error = 'Master agent not initialized';
@@ -300,6 +297,12 @@ All tool usage requires human approval.`;
       console.log(`[OSSwarm Core] Iteration ${this.iterationCount}/${this.config.limits.maxIterations} started`);
       
       streamCallback?.(`[OSSwarm] Master Agent analyzing task... (Iteration ${this.iterationCount}/${this.config.limits.maxIterations})`);
+
+      if (this.iterationCount > this.config.limits.maxIterations) {
+        const error = `Maximum iterations (${this.config.limits.maxIterations}) reached`;
+        console.error('[OSSwarm Core]', error);
+        return { success: false, error };
+      }
 
       const decompositionResult = await this.masterAgent.getCompletion([
         {
@@ -368,7 +371,7 @@ All tool usage requires human approval.`;
 
               console.log(`[OSSwarm] Agent ${agent.role} requesting approval for tool:`, toolCall);
 
-              const approved = await this.requestHumanApproval(
+              const approvalResult = await this.requestHumanApproval(
                 agentId,
                 agent.role,
                 toolCall,
@@ -376,29 +379,37 @@ All tool usage requires human approval.`;
                 streamCallback
               );
 
-              if (!approved) {
+              // ✅ Check if approval was granted and get the approval ID
+              if (!approvalResult) {
                 streamCallback?.(`[OSSwarm] Agent ${agent.role} tool usage denied by human`);
                 agent.status = 'failed';
                 continue;
               }
 
+              const approvalId = approvalResult; // This is the actual approval ID
+              console.log('[OSSwarm] 🔧 Using approval ID for execution tracking:', approvalId);
+
               streamCallback?.(`[OSSwarm] Agent ${agent.role} tool usage approved by human`);
-              
-              // ✅ Use stored webContents
+
+              // ✅ Get webContents reference for this execution scope
               const webContents = (global as any).osswarmWebContents;
               console.log('[OSSwarm] 🔧 WebContents available:', {
                 hasWebContents: !!webContents,
                 isDestroyed: webContents?.isDestroyed?.()
               });
-              
-              // ✅ Generate execution ID for tracking
-              const executionId = `execution-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-              console.log('[OSSwarm] 🔧 Generated execution ID:', executionId);
+
+              // ✅ Use approval ID as base for execution tracking
+              const executionId = `execution-${approvalId.split('-').slice(1).join('-')}`;
+              console.log('[OSSwarm] 🔧 Generated execution ID from approval ID:', executionId);
+
+              // ✅ Track execution start time with approval ID
+              const executionStartTime = Date.now();
+              this.executionStartTimes.set(approvalId, executionStartTime);
 
               try {
                 console.log(`[OSSwarm] 🔧 Agent ${agent.role} executing tool: ${selectedTool.function.name}`);
                 
-                // ✅ Send tool execution start notification
+                // Now webContents is available in this scope
                 if (webContents && !webContents.isDestroyed()) {
                   console.log('[OSSwarm] 🔧 Sending tool execution start notification');
                   webContents.send('osswarm:tool_execution_start', {
@@ -508,9 +519,17 @@ Based on these tool results, provide a comprehensive response.`;
                   hasResponse: !!agentResponse
                 });
                 
+                // ✅ Calculate actual execution time using approval ID
+                const startTime = this.executionStartTimes.get(approvalId) || Date.now();
+                const actualExecutionTime = Math.floor((Date.now() - startTime) / 1000);
+                
+                // Clean up timing data
+                this.executionStartTimes.delete(approvalId);
+
                 // ✅ Send tool execution completion notification with real results
                 if (webContents && !webContents.isDestroyed()) {
                   console.log('[OSSwarm] 🔧 Sending tool execution completion notification');
+                  
                   webContents.send('osswarm:tool_execution_complete', {
                     executionId,
                     toolName: selectedTool.function.name,
@@ -519,7 +538,9 @@ Based on these tool results, provide a comprehensive response.`;
                     result: JSON.stringify(toolResult),
                     agentResponse,
                     success: true,
-                    executionTime: Date.now() - Date.now() // Calculate actual time
+                    executionTime: actualExecutionTime,
+                    // ✅ Use the actual approval ID instead of trying to map from execution ID
+                    approvalId: approvalId
                   });
                 }
 
@@ -535,7 +556,7 @@ Based on these tool results, provide a comprehensive response.`;
                   toolName: selectedTool.function.name
                 });
                 
-                // ✅ Send tool execution error notification
+                // ✅ Send tool execution error notification with approval ID
                 if (webContents && !webContents.isDestroyed()) {
                   webContents.send('osswarm:tool_execution_complete', {
                     executionId,
@@ -543,7 +564,9 @@ Based on these tool results, provide a comprehensive response.`;
                     agentId,
                     agentRole: agent.role,
                     error: toolError.message,
-                    success: false
+                    success: false,
+                    // ✅ Use the actual approval ID
+                    approvalId: approvalId
                   });
                 }
                 
@@ -615,6 +638,7 @@ Based on these tool results, provide a comprehensive response.`;
     this.activeSwarms.clear();
     this.pendingApprovals.clear();
     this.approvalCallbacks.clear();
+    this.executionStartTimes.clear();
     console.log('[OSSwarm] Cleanup completed');
   }
 

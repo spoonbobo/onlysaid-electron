@@ -485,7 +485,7 @@ function Chat() {
       }
     };
 
-    // ✅ Handle tool execution completion - get fresh store functions
+    // ✅ Handle tool execution completion - simplified
     const handleToolExecutionComplete = async (event: any, ...args: unknown[]) => {
       const data = args[0] as { 
         executionId: string; 
@@ -493,48 +493,81 @@ function Chat() {
         result?: string; 
         error?: string; 
         success: boolean;
-        toolResults?: any[];
         executionTime?: number;
+        approvalId: string; // This is the original approval ID
       };
       console.log('[Chat] OSSwarm tool execution completed:', data);
       
+      // ✅ Use the approval ID directly - no complex mapping
+      const toolCallId = data.approvalId;
+      const expectedMessageId = `osswarm-tool-${toolCallId}`;
+      
+      console.log('[Chat] 🔧 Looking for tool message:', {
+        toolCallId,
+        expectedMessageId,
+        activeChatId
+      });
+      
       // Update the tool call with results
       const messages = useChatStore.getState().messages[activeChatId || ''] || [];
-      const toolMessage = messages.find(msg => msg.id === `osswarm-tool-${data.executionId}`);
+      const toolMessage = messages.find(msg => msg.id === expectedMessageId);
       
       if (toolMessage && toolMessage.tool_calls) {
-        const updatedToolCalls = toolMessage.tool_calls.map(tc => 
-          tc.id === data.executionId ? { 
-            ...tc, 
-            status: data.success ? 'executed' as const : 'error' as const,
-            result: data.result || data.error,
-            execution_time_seconds: data.executionTime ? Math.floor(data.executionTime / 1000) : undefined
-          } : tc
-        );
+        const targetToolCall = toolMessage.tool_calls.find(tc => tc.id === toolCallId);
         
-        // Update in chat store
-        updateMessage(activeChatId || '', toolMessage.id, {
-          tool_calls: updatedToolCalls
-        });
-        
-        // ✅ Update in database with fresh function references
-        try {
-          const { updateToolCallResult, updateToolCallStatus } = useLLMStore.getState();
+        if (targetToolCall) {
+          console.log('[Chat] 🔧 Found target tool call, updating...');
           
-          if (data.success && data.result) {
-            await updateToolCallResult(
-              data.executionId, 
-              data.result, 
-              data.executionTime ? Math.floor(data.executionTime / 1000) : undefined
-            );
-          } else {
-            await updateToolCallStatus(data.executionId, 'error');
+          const updatedToolCalls = toolMessage.tool_calls.map(tc => 
+            tc.id === toolCallId ? { 
+              ...tc, 
+              status: data.success ? 'executed' as const : 'error' as const,
+              result: data.result || data.error,
+              execution_time_seconds: data.executionTime
+            } : tc
+          );
+          
+          // Update in chat store
+          updateMessage(activeChatId || '', toolMessage.id, {
+            tool_calls: updatedToolCalls
+          });
+          
+          console.log('[Chat] 🔧 Updated tool call in chat store');
+          
+          // ✅ Update in database
+          try {
+            const { updateToolCallResult, updateToolCallStatus } = useLLMStore.getState();
+            
+            if (data.success && data.result) {
+              console.log('[Chat] 🔧 Saving tool result to database...');
+              
+              await updateToolCallResult(
+                toolCallId, 
+                data.result, 
+                data.executionTime
+              );
+              
+              await updateToolCallStatus(toolCallId, 'executed');
+              
+              console.log('[Chat] ✅ Tool result saved to database successfully');
+            } else {
+              await updateToolCallStatus(toolCallId, 'error');
+              console.log('[Chat] ✅ Tool error status saved to database');
+            }
+          } catch (error) {
+            console.error('[Chat] ❌ Failed to save tool result to database:', error);
           }
-          
-          console.log('[Chat] Updated tool call result/status in database');
-        } catch (error) {
-          console.error('[Chat] Failed to update tool call result in database:', error);
+        } else {
+          console.warn('[Chat] ❌ Could not find target tool call:', {
+            toolCallId,
+            availableToolCallIds: toolMessage.tool_calls.map(tc => tc.id)
+          });
         }
+      } else {
+        console.warn('[Chat] ❌ Could not find tool message:', {
+          expectedMessageId,
+          availableMessages: messages.map(m => m.id)
+        });
       }
     };
 

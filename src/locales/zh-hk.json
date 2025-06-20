@@ -762,5 +762,21 @@
   "settings.rules.noRules": "尚未創建任何規則。新增您的第一個規則以開始使用。",
   "settings.rules.mode.ask": "問答模式",
   "settings.rules.mode.query": "查詢模式",
-  "settings.rules.mode.agent": "代理模式"
+  "settings.rules.mode.agent": "代理模式",
+
+  "settings.agent": "代理",
+  "settings.agentSettings": "代理設定",
+  "settings.agentSettings.swarmLimits": "群體限制",
+  "settings.agentSettings.swarmLimitsDescription": "配置 AI 代理群體的運行參數。這些設定控制代理協調和並行處理的限制。",
+  "settings.agentSettings.maxIterations": "最大迭代次數",
+  "settings.agentSettings.maxIterationsDescription": "代理群體可執行的最大迭代次數。較高的值允許更複雜的任務處理，但會增加執行時間。",
+  "settings.agentSettings.maxParallelAgents": "最大並行代理數",
+  "settings.agentSettings.maxParallelAgentsDescription": "可同時運行的代理數量。增加此值可提高並行處理能力，但會消耗更多系統資源。",
+  "settings.agentSettings.maxSwarmSize": "最大群體大小",
+  "settings.agentSettings.maxSwarmSizeDescription": "單個群體中可包含的代理數量上限。較大的群體可處理更複雜的任務。",
+  "settings.agentSettings.maxActiveSwarms": "最大活躍群體數",
+  "settings.agentSettings.maxActiveSwarmsDescription": "可同時運行的代理群體數量。增加此值允許處理更多並發任務。",
+  "settings.agentSettings.maxConversationLength": "最大對話長度",
+  "settings.agentSettings.maxConversationLengthDescription": "代理對話中保留的最大訊息數量。較長的對話提供更多上下文，但會增加處理時間。",
+  "settings.resetSuccess": "設定已重置為預設值"
 }

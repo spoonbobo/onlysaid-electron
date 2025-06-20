@@ -186,7 +186,7 @@ const ToolDisplay = memo(({ toolCalls, chatId, messageId }: ToolDisplayProps) =>
         });
         
         if (result && result.success) {
-          // Update chat store
+          // ✅ Update both chat store AND database for OSSwarm tools
           const { updateMessage } = useChatStore.getState();
           const messages = useChatStore.getState().messages[chatId] || [];
           const currentMessage = messages.find(msg => msg.id === messageId);
@@ -201,7 +201,7 @@ const ToolDisplay = memo(({ toolCalls, chatId, messageId }: ToolDisplayProps) =>
             });
           }
           
-          // Now uses the properly imported store action
+          // ✅ ALSO update the database so the approval persists across chat re-entries
           await updateToolCallStatus(toolCallId, 'approved');
           
           await addLogForToolCall(toolCallId, `Approval sent to OSSwarm successfully. Tool will execute automatically.`);
@@ -243,7 +243,7 @@ const ToolDisplay = memo(({ toolCalls, chatId, messageId }: ToolDisplayProps) =>
           approved: false
         });
         
-        // For OSSwarm-orchestrated tools, update the message directly instead of using database functions
+        // ✅ Update both chat store AND database for OSSwarm tools
         const { updateMessage } = useChatStore.getState();
         const messages = useChatStore.getState().messages[chatId] || [];
         const currentMessage = messages.find(msg => msg.id === messageId);
@@ -257,8 +257,11 @@ const ToolDisplay = memo(({ toolCalls, chatId, messageId }: ToolDisplayProps) =>
             tool_calls: updatedToolCalls
           });
           
-          console.log(`[ToolDisplay] 🔧 OSSwarm-orchestrated tool call status updated directly in chat store`);
+          console.log(`[ToolDisplay] 🔧 OSSwarm-orchestrated tool call status updated in chat store`);
         }
+        
+        // ✅ ALSO update the database so the denial persists across chat re-entries
+        await updateToolCallStatus(toolCallId, 'denied');
         
         // Add log for successful denial
         await addLogForToolCall(toolCallId, `Denial sent to OSSwarm successfully. Tool execution cancelled.`);
@@ -309,7 +312,7 @@ const ToolDisplay = memo(({ toolCalls, chatId, messageId }: ToolDisplayProps) =>
     });
     
     if (isOSSwarmOrchestrated) {
-      // For OSSwarm-orchestrated tools, update the message directly
+      // ✅ Update both chat store AND database for OSSwarm tools
       const { updateMessage } = useChatStore.getState();
       const messages = useChatStore.getState().messages[chatId] || [];
       const currentMessage = messages.find(msg => msg.id === messageId);
@@ -323,8 +326,11 @@ const ToolDisplay = memo(({ toolCalls, chatId, messageId }: ToolDisplayProps) =>
           tool_calls: updatedToolCalls
         });
         
-        console.log(`[ToolDisplay] 🔧 OSSwarm-orchestrated tool call reset directly in chat store`);
+        console.log(`[ToolDisplay] 🔧 OSSwarm-orchestrated tool call reset in chat store`);
       }
+      
+      // ✅ ALSO update the database so the reset persists across chat re-entries
+      await updateToolCallStatus(toolCallId, 'pending');
       
       // Add log for reset
       await addLogForToolCall(toolCallId, `OSSwarm tool call reset to pending status by user.`);
@@ -453,6 +459,16 @@ const ToolDisplay = memo(({ toolCalls, chatId, messageId }: ToolDisplayProps) =>
     const isLastCompletedTool = toolCall === completedTools[completedTools.length - 1];
     
     return allToolsCompleted && hasResults && isLastCompletedTool;
+  }, [toolCalls]);
+
+  // Instead, just add a simple refresh effect when toolCalls change
+  useEffect(() => {
+    // If any OSSwarm tool calls have results, the component will re-render automatically
+    console.log('[ToolDisplay] Tool calls updated:', toolCalls.map(tc => ({ 
+      id: tc.id, 
+      status: tc.status, 
+      hasResult: !!tc.result 
+    })));
   }, [toolCalls]);
 
   if (!toolCalls || toolCalls.length === 0) {
