@@ -111,13 +111,27 @@ function SidebarTabs() {
       return;
     }
 
+    if (selectedContext) {
+      const currentChatStore = useChatStore.getState();
+      
+      const currentContextId = selectedContext ? `${selectedContext.name}:${selectedContext.type}` : '';
+      const currentActiveChatId = currentChatStore.getActiveChatIdForContext(currentContextId);
+      
+      if (selectedContext.type === "workspace" && selectedContext.id) {
+        if (currentActiveChatId) {
+          useTopicStore.getState().setWorkspaceSelectedChat(selectedContext.id, currentActiveChatId);
+        }
+      } else if (selectedContext.type === "home") {
+        if (currentActiveChatId) {
+          useTopicStore.getState().setSelectedTopic('agents', currentActiveChatId);
+        }
+      }
+    }
+
     if (context.type !== selectedContext?.type) {
       const currentTopics = useTopicStore.getState().selectedTopics;
       Object.keys(currentTopics).forEach(section => {
-        if (
-          (context.type === "home" && section.startsWith("workspace:")) ||
-          (context.type === "workspace" && section === "agents")
-        ) {
+        if (section === "knowledgeBaseMenu:selectedId") {
           useTopicStore.getState().clearSelectedTopic(section);
         }
       });
@@ -132,6 +146,25 @@ function SidebarTabs() {
         ...context,
         section: sectionToUse
       });
+
+      if (context.id) {
+        setTimeout(() => {
+          const savedChatId = useTopicStore.getState().getWorkspaceSelectedChat(context.id!);
+          if (savedChatId) {
+            const currentChats = useChatStore.getState().chats;
+            const chatExists = currentChats.some(chat => chat.id === savedChatId);
+            
+            if (chatExists) {
+              const newContextId = `${context.name}:${context.type}`;
+              
+              useTopicStore.getState().setSelectedTopic(sectionToUse, savedChatId);
+              useChatStore.getState().setActiveChat(savedChatId, newContextId);
+            } else {
+              useTopicStore.getState().clearWorkspaceSelectedChat(context.id!);
+            }
+          }
+        }, 200);
+      }
     } else if (context.type === "home") {
       const lastHomeSection = useTopicStore.getState().lastSections['home'];
 
@@ -143,6 +176,20 @@ function SidebarTabs() {
       const currentUser = getUserFromStore();
       if (currentUser?.id) {
         useChatStore.getState().getChat(currentUser.id, 'agent');
+        
+        setTimeout(() => {
+          const savedChatId = useTopicStore.getState().selectedTopics['agents'];
+          if (savedChatId) {
+            const currentChats = useChatStore.getState().chats;
+            const chatExists = currentChats.some(chat => chat.id === savedChatId && chat.type === 'agent');
+            if (chatExists) {
+              const homeContextId = `${context.name}:${context.type}`;
+              useChatStore.getState().setActiveChat(savedChatId, homeContextId);
+            } else {
+              useTopicStore.getState().clearSelectedTopic('agents');
+            }
+          }
+        }, 100);
       }
     } else {
       setSelectedContext(context);

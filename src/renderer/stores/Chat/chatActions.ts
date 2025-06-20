@@ -108,7 +108,9 @@ export const createChatActions = (set: any, get: () => ChatState) => ({
           isLoading: false
         }));
 
-        get().setActiveChat(chatId, workspaceId);
+        // ✅ FIX: Use proper context ID for local chats (empty string or 'home')
+        const contextId = workspaceId && workspaceId !== 'undefined' ? workspaceId : '';
+        get().setActiveChat(chatId, contextId);
         return localChat;
       } else {
         const response = await window.electron.chat.create({
@@ -155,7 +157,14 @@ export const createChatActions = (set: any, get: () => ChatState) => ({
 
         await get().getChat(userId, type, workspaceId);
         if (createdChatId) {
+          // ✅ FIX: Set active chat with proper context ID
           get().setActiveChat(createdChatId, workspaceId);
+          
+          // ✅ NEW: Also update TopicStore's workspace chat selection if it's a workspace chat
+          if (workspaceId && workspaceId !== 'undefined') {
+            const topicStore = useTopicStore.getState();
+            topicStore.setWorkspaceSelectedChat(workspaceId, createdChatId);
+          }
         }
 
         return response.data?.data?.[0];
@@ -240,7 +249,31 @@ export const createChatActions = (set: any, get: () => ChatState) => ({
         });
 
         if (response.data && response.data.data && Array.isArray(response.data.data)) {
-          set({ chats: [...response.data.data], isLoading: false });
+          // ✅ FIX: Merge chats instead of replacing them
+          const newChats = response.data.data;
+          
+          set((state: ChatState) => {
+            const existingChats = state.chats;
+            
+            // Remove existing chats for this workspace/type combination
+            const filteredExistingChats = existingChats.filter(chat => {
+              if (workspaceId && workspaceId !== 'undefined') {
+                // For workspace chats, remove chats from this specific workspace
+                return chat.workspace_id !== workspaceId || chat.type !== type;
+              } else {
+                // For non-workspace chats, remove chats of this type that don't have a workspace
+                return !(chat.type === type && (!chat.workspace_id || chat.workspace_id === 'undefined'));
+              }
+            });
+            
+            // Merge with new chats
+            const mergedChats = [...filteredExistingChats, ...newChats];
+            
+            return {
+              chats: mergedChats,
+              isLoading: false
+            };
+          });
         } else {
           set({ isLoading: false });
         }

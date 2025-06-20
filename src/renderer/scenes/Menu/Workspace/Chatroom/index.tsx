@@ -94,16 +94,31 @@ export default function WorkspaceChatMenu() {
         workspaceChats.some(chat => chat.id === rememberedChatId);
       
       if (rememberedChatExists) {
-        // Use the remembered chat
-        setSelectedTopic(section, rememberedChatId);
-        setActiveChat(rememberedChatId, getContextId);
+        // Use the remembered chat ONLY if current selection doesn't match
+        if (selectedSubcategory !== rememberedChatId) {
+          setSelectedTopic(section, rememberedChatId);
+          setActiveChat(rememberedChatId, getContextId);
+        }
       } else if (!selectedSubcategory || !workspaceChats.some(chat => chat.id === selectedSubcategory)) {
-        // Fall back to first chat if no remembered chat or it doesn't exist
-        const firstChatId = workspaceChats[0].id;
-        setSelectedTopic(section, firstChatId);
-        setActiveChat(firstChatId, getContextId);
-        // Remember this selection
-        setWorkspaceSelectedChat(workspaceId, firstChatId);
+        // ✅ FIX: Add a small delay to let SidebarTabs finish its restoration
+        // Only auto-select first chat if no selection is being restored
+        const timeoutId = setTimeout(() => {
+          // Double-check that we still don't have a valid selection
+          const currentSelectedSubcategory = useTopicStore.getState().selectedTopics[section] || '';
+          const currentlyValid = currentSelectedSubcategory && 
+            workspaceChats.some(chat => chat.id === currentSelectedSubcategory);
+          
+          if (!currentlyValid) {
+            // Fall back to first chat if no remembered chat or it doesn't exist
+            const firstChatId = workspaceChats[0].id;
+            setSelectedTopic(section, firstChatId);
+            setActiveChat(firstChatId, getContextId);
+            // Remember this selection
+            setWorkspaceSelectedChat(workspaceId, firstChatId);
+          }
+        }, 50); // Small delay to let SidebarTabs complete its restoration
+        
+        return () => clearTimeout(timeoutId);
       }
     } else {
       // NEW: When no chats exist, clear all selections
@@ -113,7 +128,7 @@ export default function WorkspaceChatMenu() {
       setWorkspaceSelectedChat(workspaceId, null); // Clear workspace selection
       setActiveChat('', getContextId); // Clear active chat
     }
-  }, [workspaceChats, selectedSubcategory, setSelectedTopic, setActiveChat, section, workspaceId, getWorkspaceSelectedChat, setWorkspaceSelectedChat, getContextId]);
+  }, [workspaceChats, section, workspaceId, getWorkspaceSelectedChat, setWorkspaceSelectedChat, getContextId]); // ✅ REMOVED selectedSubcategory from dependencies
 
   useEffect(() => {
     const fetchWorkspaceUser = async () => {

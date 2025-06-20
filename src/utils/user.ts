@@ -38,6 +38,19 @@ export const getUserFromStore = () => {
   return user;
 };
 
+export const getAgentFromStore = () => {
+  const agent = useAgentStore.getState().agent;
+  
+  // If no agent exists, try to create guest agent
+  if (!agent) {
+    const { createGuestAgent } = useAgentStore.getState();
+    createGuestAgent();
+    return useAgentStore.getState().agent;
+  }
+  
+  return agent;
+};
+
 export const getCurrentUserRoleInWorkspace = async (workspaceId?: string) => {
   const currentUser = getUserFromStore();
   if (!currentUser?.id || currentUser.id === "guest-user") {
@@ -65,6 +78,12 @@ export const getCurrentUserRoleInWorkspace = async (workspaceId?: string) => {
 export const isGuestUser = () => {
   const user = useUserStore.getState().user;
   return !user || user.id === "guest-user";
+};
+
+// Helper function to check if current agent is guest
+export const isGuestAgent = () => {
+  const agent = useAgentStore.getState().agent;
+  return !agent || agent.id === "guest-agent";
 };
 
 // Helper function to get the actual user (null if guest)

@@ -448,7 +448,7 @@ export const useSocketStore = create<SocketState>((set, get) => ({
   },
 
   handleWorkspaceJoined: (data: { workspaceId: string, userId: string }) => {
-    console.log(`✅ Joined workspace: ${data.workspaceId}`);
+    // console.log(`✅ Joined workspace: ${data.workspaceId}`);
     // You can add any UI updates here if needed
   },
 

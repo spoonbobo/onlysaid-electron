@@ -128,7 +128,7 @@ export const setupSocketHandlers = (mainWindow: BrowserWindow): void => {
 
   // Add new workspace event forwarding
   socketClient.onWorkspaceJoined((data) => {
-    console.log('Main: User joined workspace, forwarding to renderer', data);
+    // console.log('Main: User joined workspace, forwarding to renderer', data);
     if (mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.webContents.send('socket:workspace-joined', data);
     }

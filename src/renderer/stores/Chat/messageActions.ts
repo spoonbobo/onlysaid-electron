@@ -995,7 +995,7 @@ export const createMessageActions = (set: any, get: () => ChatState) => ({
         clearNotificationsForContext(undefined, 'agents', chatId);
       }
 
-      console.log(`📖 Marked chat ${chatId} as read`);
+      // console.log(`📖 Marked chat ${chatId} as read`);
     } catch (error) {
       console.error('Error marking chat as read:', error);
     }
