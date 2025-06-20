@@ -18,6 +18,11 @@ export default function WorkspaceChatMenu() {
   const { selectedContext } = useCurrentTopicContext();
   const selectedTopics = useTopicStore((state) => state.selectedTopics);
   const setSelectedTopic = useTopicStore((state) => state.setSelectedTopic);
+  
+  // NEW: Add workspace chat selection methods
+  const setWorkspaceSelectedChat = useTopicStore((state) => state.setWorkspaceSelectedChat);
+  const getWorkspaceSelectedChat = useTopicStore((state) => state.getWorkspaceSelectedChat);
+  
   const chats = useChatStore((state) => state.chats);
   const setActiveChat = useChatStore((state) => state.setActiveChat);
   const deleteChat = useChatStore((state) => state.deleteChat);
@@ -44,10 +49,11 @@ export default function WorkspaceChatMenu() {
     [chats, workspaceId]
   );
 
-  const getContextId = () => {
+  // Memoize getContextId to prevent infinite loops
+  const getContextId = useMemo(() => {
     if (!selectedContext) return '';
     return `${selectedContext.name}:${selectedContext.type}`;
-  };
+  }, [selectedContext?.name, selectedContext?.type]);
 
   // Memoize unread counts for each chat to prevent unnecessary recalculations
   const chatUnreadCounts = useMemo(() => {
@@ -79,11 +85,35 @@ export default function WorkspaceChatMenu() {
   }, [selectedContext?.id, getChat]);
 
   useEffect(() => {
-    if (workspaceChats.length > 0 && (!selectedSubcategory || !workspaceChats.some(chat => chat.id === selectedSubcategory))) {
-      setSelectedTopic(section, workspaceChats[0].id);
-      setActiveChat(workspaceChats[0].id, getContextId());
+    if (workspaceChats.length > 0) {
+      // NEW: Check if we have a remembered chat for this workspace
+      const rememberedChatId = getWorkspaceSelectedChat(workspaceId);
+      
+      // Check if the remembered chat still exists
+      const rememberedChatExists = rememberedChatId && 
+        workspaceChats.some(chat => chat.id === rememberedChatId);
+      
+      if (rememberedChatExists) {
+        // Use the remembered chat
+        setSelectedTopic(section, rememberedChatId);
+        setActiveChat(rememberedChatId, getContextId);
+      } else if (!selectedSubcategory || !workspaceChats.some(chat => chat.id === selectedSubcategory)) {
+        // Fall back to first chat if no remembered chat or it doesn't exist
+        const firstChatId = workspaceChats[0].id;
+        setSelectedTopic(section, firstChatId);
+        setActiveChat(firstChatId, getContextId);
+        // Remember this selection
+        setWorkspaceSelectedChat(workspaceId, firstChatId);
+      }
+    } else {
+      // NEW: When no chats exist, clear all selections
+      if (selectedSubcategory) {
+        setSelectedTopic(section, ''); // Clear the selected topic
+      }
+      setWorkspaceSelectedChat(workspaceId, null); // Clear workspace selection
+      setActiveChat('', getContextId); // Clear active chat
     }
-  }, [workspaceChats, selectedSubcategory, setSelectedTopic, setActiveChat, section]);
+  }, [workspaceChats, selectedSubcategory, setSelectedTopic, setActiveChat, section, workspaceId, getWorkspaceSelectedChat, setWorkspaceSelectedChat, getContextId]);
 
   useEffect(() => {
     const fetchWorkspaceUser = async () => {
@@ -99,7 +129,10 @@ export default function WorkspaceChatMenu() {
 
   const handleSelectChat = (chatId: string) => {
     setSelectedTopic(section, chatId);
-    setActiveChat(chatId, getContextId());
+    setActiveChat(chatId, getContextId);
+    
+    // NEW: Remember this chat selection for the workspace
+    setWorkspaceSelectedChat(workspaceId, chatId);
   };
 
   const handleContextMenu = (event: React.MouseEvent<HTMLElement>, chatId: string) => {

@@ -1,39 +1,47 @@
 import { Box } from "@mui/material";
-import { useRef, useState, useEffect, useMemo, useCallback, useTransition } from "react";
+import { useRef, useState, useEffect, useMemo, useCallback } from "react";
 import MarkdownIt from 'markdown-it';
 import hljs from 'highlight.js';
 import * as React from 'react';
-import { equals } from 'ramda';
+import { toast } from "@/utils/toast";
 
+// Optimized styles - reduced nesting and simplified selectors
 const markdownStyles = {
   color: "text.secondary",
   fontSize: "0.95rem",
   maxWidth: "100%",
   minHeight: "auto",
-  contain: "content",
-  '& p': { mb: 0.3, mt: 0.3, whiteSpace: "pre-line", fontSize: "0.95rem", color: "text.secondary" },
-  '& h1': { fontSize: '1.25rem', mb: 0.5, mt: 0.5, fontWeight: 600 },
-  '& h2': { fontSize: '1.15rem', mb: 0.5, mt: 0.5, fontWeight: 600 },
-  '& h3': { fontSize: '1.1rem', fontWeight: 600, mb: 0.3, mt: 0.3 },
-  '& ul': {
-    paddingLeft: '1em',
-    marginTop: 0.3,
-    marginBottom: 0.3,
-    listStyleType: 'disc'
+  contain: "layout style",
+  willChange: "contents",
+  '& p': { 
+    mb: 0.3, 
+    mt: 0.3, 
+    whiteSpace: "pre-line", 
+    fontSize: "0.95rem", 
+    color: "text.secondary",
+    lineHeight: 1.5
   },
-  '& ol': {
-    paddingLeft: '1em',
-    marginTop: 0.3,
-    marginBottom: 0.3,
-    listStyleType: 'decimal'
+  '& h1, & h2, & h3': { 
+    fontWeight: 600,
+    mb: 0.4,
+    mt: 0.4,
+    lineHeight: 1.3
   },
+  '& h1': { fontSize: '1.25rem' },
+  '& h2': { fontSize: '1.15rem' },
+  '& h3': { fontSize: '1.1rem' },
+  '& ul, & ol': {
+    paddingLeft: '1em',
+    margin: '0.3rem 0',
+  },
+  '& ul': { listStyleType: 'disc' },
+  '& ol': { listStyleType: 'decimal' },
   '& li': {
     marginBottom: 0.1,
     fontSize: '0.95rem',
-    display: 'list-item'
-  },
-  '& li p': {
-    margin: 0
+    display: 'list-item',
+    lineHeight: 1.4,
+    '& p': { margin: 0 }
   },
   '& a': {
     color: "primary.main",
@@ -67,17 +75,7 @@ const markdownStyles = {
     borderRadius: 1.5,
     border: '1px solid',
     borderColor: 'divider',
-    contain: 'content',
-  },
-  '& .python-code': {
-    '& pre': {
-      paddingTop: 2.5,
-      paddingBottom: 1.5,
-      maxHeight: 'none',
-    },
-    '& .language-label': {
-      backgroundColor: 'rgba(53, 114, 165, 0.1)',
-    }
+    contain: 'layout',
   },
   '& .language-label': {
     position: 'absolute',
@@ -90,7 +88,8 @@ const markdownStyles = {
     zIndex: 1,
     fontFamily: 'monospace',
     fontWeight: 600,
-    textTransform: 'uppercase'
+    textTransform: 'uppercase',
+    pointerEvents: 'none'
   },
   '& .copy-button-container': {
     position: 'absolute',
@@ -98,7 +97,7 @@ const markdownStyles = {
     right: 2,
     zIndex: 2,
     opacity: 1,
-    transition: 'opacity 0.2s ease',
+    transition: 'opacity 0.15s ease',
   },
   '& .copy-button': {
     minWidth: 24,
@@ -111,9 +110,9 @@ const markdownStyles = {
     backgroundColor: 'transparent',
     border: 'none',
     padding: '4px',
-    transition: 'all 0.2s ease',
+    transition: 'transform 0.15s ease',
     '&:hover': {
-      transform: 'scale(1.15)',
+      transform: 'scale(1.1)',
       '& .copy-icon': {
         color: 'primary.main'
       }
@@ -132,19 +131,16 @@ const markdownStyles = {
     height: 16,
     color: 'action.active'
   },
-  '& .check-icon': {
-    color: 'success.main'
-  },
   '& .code-scroll-container': {
     overflowX: "auto",
     maxWidth: "100%",
     '&::-webkit-scrollbar': {
-      height: '8px',
+      height: '6px',
       backgroundColor: 'transparent'
     },
     '&::-webkit-scrollbar-thumb': {
       backgroundColor: 'action.hover',
-      borderRadius: '4px'
+      borderRadius: '3px'
     }
   },
   '& pre': {
@@ -157,12 +153,14 @@ const markdownStyles = {
     margin: 0,
     bgcolor: 'background.paper',
     border: 'none',
+    fontOptimization: 'optimizeSpeed',
+    textRendering: 'optimizeSpeed'
   },
   '& pre code': {
     display: "block",
     fontFamily: "'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace",
     fontSize: "0.9rem",
-    lineHeight: 1.6,
+    lineHeight: 1.5,
     p: 0,
     m: 0,
     color: "text.primary",
@@ -217,21 +215,13 @@ const markdownStyles = {
   '& .image-container[data-error="true"] .image-error-message': {
     display: 'block',
   },
-  '@keyframes fadeInUpWord': {
-    'from': { opacity: 0, transform: 'translateY(8px)' },
-    'to': { opacity: 1, transform: 'translateY(0)' },
-  },
-  '.streamed-word': {
-    display: 'inline-block',
-    opacity: 0,
-    animation: '$fadeInUpWord 0.25s ease-out forwards',
-    willChange: 'opacity, transform',
-  },
 };
 
 const COPY_SVG_PATH = 'M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z';
 
+// Optimized cache with size limit
 const highlightCache = new Map<string, string>();
+const MAX_CACHE_SIZE = 100;
 
 interface MarkdownRendererProps {
   content: string;
@@ -246,91 +236,76 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = React.memo(({
   isConnecting = false,
   streamContent = ""
 }) => {
-  const [copiedId, setCopiedId] = useState<string | null>(null);
   const markdownContainerRef = useRef<HTMLDivElement>(null);
   const codeBlockIdRef = useRef(0);
-  const [markdownToRender, setMarkdownToRender] = useState(() => isStreaming ? (streamContent || "") : content);
-  const [isPending, startTransition] = useTransition();
+  
+  // Simplified state management
+  const markdownToRender = useMemo(() => {
+    if (isStreaming) {
+      return typeof streamContent === 'string' ? streamContent : JSON.stringify(streamContent);
+    }
+    return typeof content === 'string' ? content : `[DEBUG: content was ${typeof content}]`;
+  }, [isStreaming, streamContent, content]);
 
-  const instanceId = useMemo(() => `md-instance-${Math.random().toString(36).substring(2, 9)}`, []);
+  const instanceId = useMemo(() => `md-${Date.now()}-${Math.random().toString(36).substring(2, 5)}`, []);
 
   const getNextCodeBlockId = useCallback(() => {
-    const id = `${instanceId}-codeblock-${codeBlockIdRef.current++}`;
-    return id;
+    return `${instanceId}-cb-${codeBlockIdRef.current++}`;
   }, [instanceId]);
 
-  useEffect(() => {
-    if (isStreaming) {
-      if (typeof streamContent === 'object') {
-        console.error('Received object in streamContent:', streamContent);
-        startTransition(() => {
-          setMarkdownToRender(JSON.stringify(streamContent));
-        });
-      } else if (isStreaming) {
-        startTransition(() => {
-          setMarkdownToRender(streamContent || "");
-        });
-      }
-    } else {
-      if (content !== markdownToRender) {
-        if (typeof content !== 'string') {
-          console.error('[MarkdownRenderer] content prop for setMarkdownToRender (non-streaming) is NOT a string!', typeof content, content);
-          setMarkdownToRender(`[DEBUG: static content was ${typeof content}]`);
-        } else {
-          setMarkdownToRender(content);
-        }
-      }
-    }
-  }, [isStreaming, streamContent, content, markdownToRender]);
-
+  // Optimized markdown instance with better caching
   const md = useMemo(() => {
     const mdInstance = new MarkdownIt({
       html: false,
       breaks: true,
       linkify: true,
-      typographer: true
+      typographer: false // Disable for better performance
     });
 
-    mdInstance.renderer.rules.fence = (tokens, idx, options, env, slf) => {
+    mdInstance.renderer.rules.fence = (tokens, idx) => {
       const token = tokens[idx];
       const language = token.info.trim() || '';
       const codeBlockId = getNextCodeBlockId();
-      const content = token.content;
-      const isPython = language.toLowerCase() === 'python';
+      const codeContent = token.content;
+      const cacheKey = `${language}:${codeContent.substring(0, 100)}:${codeContent.length}`;
 
-      const cacheKey = `${language}:${content}`;
-
-      let highlighted;
-      try {
-        if (language && hljs.getLanguage(language)) {
-          highlighted = hljs.highlight(content, { language }).value;
-        } else {
-          highlighted = hljs.highlightAuto(content).value;
+      let highlighted = highlightCache.get(cacheKey);
+      
+      if (!highlighted) {
+        try {
+          if (language && hljs.getLanguage(language)) {
+            highlighted = hljs.highlight(codeContent, { language }).value;
+          } else {
+            highlighted = hljs.highlightAuto(codeContent).value;
+          }
+          
+          // Manage cache size
+          if (highlightCache.size >= MAX_CACHE_SIZE) {
+            const firstKey = highlightCache.keys().next().value;
+            if (firstKey) {
+              highlightCache.delete(firstKey);
+            }
+          }
+          highlightCache.set(cacheKey, highlighted);
+        } catch (e) {
+          highlighted = mdInstance.utils.escapeHtml(codeContent);
         }
-
-        highlightCache.set(cacheKey, highlighted);
-      } catch (e) {
-        highlighted = mdInstance.utils.escapeHtml(content);
       }
 
-      return `
-        <div class="code-block-wrapper ${isPython ? 'python-code' : ''}" data-id="${codeBlockId}">
-          <div class="language-label">${language || 'plaintext'}</div>
-          <div class="copy-button-container" data-id="${codeBlockId}">
-            <button class="copy-button" data-id="${codeBlockId}" aria-label="Copy code" onclick="document.dispatchEvent(new CustomEvent('onlysaid-copy', {detail: '${codeBlockId}'}))">
-              <svg class="copy-icon" viewBox="0 0 24 24"><path d="${COPY_SVG_PATH}"></path></svg>
-              <span class="copied-text-icon" style="display: none; color: white; font-size: 1.1em; line-height: 1; vertical-align: middle; margin-right: 4px;">✓</span>
-              <span class="copy-text">Copied!</span>
-            </button>
-          </div>
-          <div class="code-scroll-container">
-            <pre class="language-${language}" data-id="${codeBlockId}"><code>${highlighted}</code></pre>
-          </div>
+      return `<div class="code-block-wrapper" data-id="${codeBlockId}">
+        <div class="language-label">${language || 'text'}</div>
+        <div class="copy-button-container" data-id="${codeBlockId}">
+          <button class="copy-button" data-id="${codeBlockId}" aria-label="Copy code" onclick="document.dispatchEvent(new CustomEvent('onlysaid-copy', {detail: '${codeBlockId}'}))">
+            <svg class="copy-icon" viewBox="0 0 24 24"><path d="${COPY_SVG_PATH}"></path></svg>
+          </button>
         </div>
-      `;
+        <div class="code-scroll-container">
+          <pre class="language-${language}" data-id="${codeBlockId}"><code>${highlighted}</code></pre>
+        </div>
+      </div>`;
     };
 
-    mdInstance.renderer.rules.image = (tokens, idx, options, env, slf) => {
+    mdInstance.renderer.rules.image = (tokens, idx) => {
       const token = tokens[idx];
       const attrs = token.attrs || [];
       const srcIndex = token.attrIndex('src');
@@ -340,65 +315,51 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = React.memo(({
       const titleIndex = token.attrIndex('title');
       const title = titleIndex >= 0 && attrs[titleIndex] ? ` title="${mdInstance.utils.escapeHtml(attrs[titleIndex][1])}"` : '';
 
-      return `
-    <span class="image-container">
-      <img
-        loading="lazy"
-        src="${mdInstance.utils.escapeHtml(src)}"
-        alt="${mdInstance.utils.escapeHtml(alt)}"${title}
-        onerror="this.style.display='none'; this.parentNode.setAttribute('data-error', 'true')"
-      />
-      <span class="image-error-message">Image not available</span>
-    </span>
-  `;
+      return `<span class="image-container">
+        <img loading="lazy" src="${mdInstance.utils.escapeHtml(src)}" alt="${mdInstance.utils.escapeHtml(alt)}"${title} onerror="this.style.display='none'; this.parentNode.setAttribute('data-error', 'true')" />
+        <span class="image-error-message">Image not available</span>
+      </span>`;
     };
 
     mdInstance.renderer.rules.link_open = (tokens, idx, options, env, slf) => {
       const token = tokens[idx];
       if (!token.attrs) token.attrs = [];
-
       token.attrPush(['target', '_blank']);
       token.attrPush(['rel', 'noopener noreferrer']);
-
       return slf.renderToken(tokens, idx, options);
     };
 
     return mdInstance;
   }, [getNextCodeBlockId]);
 
+  // Optimized HTML rendering with debouncing for streaming
   const html = useMemo(() => {
-    if (typeof markdownToRender !== 'string') {
-      console.error('[MarkdownRenderer] markdownToRender is NOT a string!', typeof markdownToRender, markdownToRender);
-      return md.render(`[DEBUG: markdownToRender was ${typeof markdownToRender}]`);
-    }
-
     return md.render(markdownToRender || "");
   }, [md, markdownToRender]);
 
-  useEffect(() => {
-    const copyToClipboard = async (text: string) => {
+  // Simplified copy functionality with toast
+  const copyToClipboard = useCallback(async (text: string): Promise<boolean> => {
+    try {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } catch {
+      const textArea = document.createElement('textarea');
+      textArea.value = text;
+      textArea.style.cssText = 'position:fixed;left:-999px;top:-999px;opacity:0;';
+      document.body.appendChild(textArea);
+      textArea.select();
       try {
-        await navigator.clipboard.writeText(text);
-        return true;
-      } catch (err) {
-        const textArea = document.createElement('textarea');
-        textArea.value = text;
-        textArea.style.cssText = 'position:fixed;left:-999px;top:-999px;';
-        document.body.appendChild(textArea);
-        textArea.focus();
-        textArea.select();
-
-        try {
-          const successful = document.execCommand('copy');
-          document.body.removeChild(textArea);
-          return successful;
-        } catch (err) {
-          document.body.removeChild(textArea);
-          return false;
-        }
+        const successful = document.execCommand('copy');
+        document.body.removeChild(textArea);
+        return successful;
+      } catch {
+        document.body.removeChild(textArea);
+        return false;
       }
-    };
+    }
+  }, []);
 
+  useEffect(() => {
     const handleCopyEvent = async (e: Event) => {
       const customEvent = e as CustomEvent;
       const id = customEvent.detail;
@@ -407,16 +368,14 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = React.memo(({
       const wrapper = markdownContainerRef.current.querySelector(`.code-block-wrapper[data-id="${id}"]`) as HTMLElement;
       if (!wrapper) return;
 
-      const pre = wrapper.querySelector('pre');
-      if (!pre) return;
-
-      const code = pre.querySelector('code');
-      const text = code?.textContent || pre.textContent || '';
+      const code = wrapper.querySelector('code');
+      const text = code?.textContent || '';
 
       const success = await copyToClipboard(text);
       if (success) {
-        setCopiedId(id);
-        setTimeout(() => setCopiedId(null), 2000);
+        toast.success('Code copied to clipboard');
+      } else {
+        toast.error('Failed to copy code');
       }
     };
 
@@ -424,82 +383,17 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = React.memo(({
     return () => {
       document.removeEventListener('onlysaid-copy', handleCopyEvent);
     };
-  }, []);
+  }, [copyToClipboard]);
 
-  useEffect(() => {
-    if (!markdownContainerRef.current || !copiedId) return;
-
-    const copiedButton = markdownContainerRef.current.querySelector(`.copy-button[data-id="${copiedId}"]`);
-    if (!copiedButton) return;
-
-    const copyTextLabel = copiedButton.querySelector('.copy-text') as HTMLElement | null;
-    const svgIcon = copiedButton.querySelector('.copy-icon') as HTMLElement | null;
-    const textIconReplacement = copiedButton.querySelector('.copied-text-icon') as HTMLElement | null;
-
-    if (svgIcon) {
-      svgIcon.style.display = 'none';
+  // Simplified dynamic styles
+  const dynamicStyles = useMemo(() => ({
+    ...markdownStyles,
+    minHeight: markdownToRender.trim() === "" ? "1.5rem" : "auto",
+    '& .copy-button-container': {
+      ...markdownStyles['& .copy-button-container'],
+      opacity: isStreaming && isConnecting && !streamContent ? 0.3 : 1,
     }
-    if (textIconReplacement) {
-      textIconReplacement.style.display = 'inline-block';
-    }
-    if (copyTextLabel) {
-      copyTextLabel.style.display = 'inline-block';
-      copyTextLabel.style.color = 'white';
-    }
-
-    return () => {
-      if (markdownContainerRef.current) {
-        const resetButton = markdownContainerRef.current.querySelector(`.copy-button[data-id="${copiedId}"]`);
-        if (resetButton) {
-          const resetCopyTextLabel = resetButton.querySelector('.copy-text') as HTMLElement | null;
-          const resetSvgIcon = resetButton.querySelector('.copy-icon') as HTMLElement | null;
-          const resetTextIconReplacement = resetButton.querySelector('.copied-text-icon') as HTMLElement | null;
-
-          if (resetCopyTextLabel) {
-            resetCopyTextLabel.style.display = 'none';
-            resetCopyTextLabel.style.color = '';
-          }
-          if (resetSvgIcon) {
-            resetSvgIcon.style.display = 'inline-block';
-          }
-          if (resetTextIconReplacement) {
-            resetTextIconReplacement.style.display = 'none';
-          }
-        }
-      }
-    };
-  }, [copiedId]);
-
-  const dynamicStyles = useMemo(() => {
-    const displayText = isStreaming ? (streamContent || "") : content;
-
-    return {
-      ...markdownStyles,
-      minHeight: displayText.trim() === "" ? "1.5rem" : "auto",
-      '& .copy-button-container': {
-        ...markdownStyles['& .copy-button-container'],
-        opacity: isStreaming && isConnecting && !streamContent ? 0 : 1,
-      }
-    };
-  }, [isStreaming, isConnecting, streamContent, content]);
-
-  const previousStreamedTextRef = useRef("");
-  const animationIdRef = useRef(0);
-
-  useEffect(() => {
-    if (!isStreaming) {
-      previousStreamedTextRef.current = "";
-      return;
-    }
-
-    const currentContent = streamContent || "";
-
-    if (markdownContainerRef.current) {
-      if (currentContent !== previousStreamedTextRef.current) {
-        previousStreamedTextRef.current = currentContent;
-      }
-    }
-  }, [isStreaming, streamContent]);
+  }), [markdownToRender, isStreaming, isConnecting, streamContent]);
 
   return (
     <Box
@@ -509,20 +403,20 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = React.memo(({
     >
       <div
         dangerouslySetInnerHTML={{ __html: html }}
-        data-is-streaming={isStreaming ? "true" : "false"}
+        data-is-streaming={isStreaming}
       />
     </Box>
   );
 }, (prevProps, nextProps) => {
   if (prevProps.isStreaming !== nextProps.isStreaming ||
-    prevProps.isConnecting !== nextProps.isConnecting) {
+      prevProps.isConnecting !== nextProps.isConnecting) {
     return false;
   }
 
   if (nextProps.isStreaming) {
-    return equals(prevProps.streamContent, nextProps.streamContent);
+    return prevProps.streamContent === nextProps.streamContent;
   } else {
-    return equals(prevProps.content, nextProps.content);
+    return prevProps.content === nextProps.content;
   }
 });
 

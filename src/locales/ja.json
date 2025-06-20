@@ -709,5 +709,20 @@
   "settings.connectedDevicesDescription": "アカウントに接続されているデバイスを管理します。最大4台のデバイスを接続できます。",
   "settings.currentDevice": "現在のデバイス",
   "settings.deviceId": "デバイスID：{id}",
-  "settings.lastSeen": "最終使用：{time}"
+  "settings.lastSeen": "最終使用：{time}",
+
+  "guest.subtitle": "チームの協力方法を変革するAI駆動のコラボレーションプラットフォーム。",
+  "guest.description": "無料クォータでローカルAIサービスを探索するか、ログインしてワークスペースコラボレーション機能をアンロックしてください。",
+  "guest.signInButton": "ワークスペース機能のためにログイン",
+  "guest.signInMessage": "チームワークスペース、共有プロジェクト、高度なコラボレーションツールにアクセスするためにログインしてください。",
+  "guest.localAI.title": "ローカルAIサービス",
+  "guest.localAI.description": "無料クォータでローカルでAI機能をお試しください - アカウント不要で開始できます",
+  "guest.teamWorkspaces.title": "チームワークスペース",
+  "guest.teamWorkspaces.description": "ログインして共有ワークスペース、チームコラボレーション、プロジェクト管理にアクセス",
+  "guest.enterpriseFeatures.title": "エンタープライズ機能",
+  "guest.enterpriseFeatures.description": "高度なセキュリティ、無制限の使用量、チーム向けプレミアムコラボレーションツール",
+  "chat.noChat.description.guest": "ローカルAIアシスタントとの会話を開始するために新しいチャットを作成してください",
+  "chat.noChat.description.agent": "AIエージェントとの会話を開始するために新しいチャットを作成してください",
+  "chat.noChat.createNewAgent": "AIチャットを開始",
+  "chat.noChat.guestNote": "ゲストモードです - チャットはローカルに保存されます"
 }

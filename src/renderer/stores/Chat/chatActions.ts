@@ -62,7 +62,7 @@ export const createChatActions = (set: any, get: () => ChatState) => ({
       const newChat = NewChat(userId, type, workspaceId);
       const chatId = uuidv4();
 
-      if (!userId && (!workspaceId || workspaceId === 'undefined')) {
+      if (!workspaceId || workspaceId === 'undefined') {
         await window.electron.db.query({
           query: `
             insert into ${DBTABLES.CHATROOM}

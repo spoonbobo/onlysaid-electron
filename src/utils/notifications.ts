@@ -45,7 +45,7 @@ export const markNotificationAsRead = (notificationId: string) => {
 };
 
 export const clearAllNotifications = () => {
-  return getNotificationStore().resetAllNotifications();
+  return getNotificationStore().clearAllNotifications();
 };
 
 // Home notification functions
@@ -251,19 +251,6 @@ export const markHomeAsRead = async () => {
   getNotificationStore().markAllAsRead();
 };
 
-// Mock notification functions (for development)
-export const enableMockNotifications = (enabled: boolean) => {
-  getNotificationStore().setMockNotifications(enabled);
-};
-
-export const addDummyHomeNotification = (section?: string, context?: string) => {
-  getNotificationStore().addDummyHomeNotification(section, context);
-};
-
-export const addDummyWorkspaceNotification = (workspaceId: string, section?: string, context?: string) => {
-  getNotificationStore().addDummyWorkspaceNotification(workspaceId, section, context);
-};
-
 // Batch operations
 export const clearNotificationsForWorkspace = (workspaceId: string) => {
   getNotificationStore().clearAllNotifications(workspaceId);
@@ -319,10 +306,6 @@ export const getNotificationsForContext = (workspaceId?: string, section?: strin
 };
 
 // Status functions
-export const isMockNotificationsEnabled = () => {
-  return getNotificationStore().enableMockNotifications;
-};
-
 export const getTotalNotificationCount = () => {
   return getAllNotifications().filter(n => !n.read).length;
 };

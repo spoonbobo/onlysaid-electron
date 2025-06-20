@@ -6,10 +6,53 @@ import { useTopicStore } from "@/renderer/stores/Topic/TopicStore";
 import { useLLMConfigurationStore } from "@/renderer/stores/LLM/LLMConfiguration";
 import { useUserStore } from "@/renderer/stores/User/UserStore";
 import { useMCPClientStore } from '@/renderer/stores/MCP/MCPClient';
+import { IUser } from "@/../../types/User/User";
 
-// Get agent from store
+// Helper function to create guest agent data
+const createGuestAgentData = (): IUser => ({
+  id: "guest-agent",
+  username: "Guest Agent",
+  email: "guest-agent@local",
+  avatar: null,
+  settings: {
+    general: {
+      theme: "system",
+      language: "en"
+    }
+  },
+  level: 1,
+  xp: 0,
+  is_human: false,
+  agent_id: null,
+});
+
+// Get agent from store - ensure guest agent exists if no agent is available
 export const getAgentFromStore = () => {
-  return useAgentStore.getState().agent;
+  const agent = useAgentStore.getState().agent;
+  
+  // If no agent exists and no user is logged in, create guest agent
+  if (!agent) {
+    const user = useUserStore.getState().user;
+    if (!user) {
+      const { createGuestAgent } = useAgentStore.getState();
+      createGuestAgent();
+      return useAgentStore.getState().agent || createGuestAgentData();
+    }
+  }
+  
+  return agent;
+};
+
+// Helper function to check if current agent is guest
+export const isGuestAgent = () => {
+  const agent = useAgentStore.getState().agent;
+  return !agent || agent.id === "guest-agent";
+};
+
+// Helper function to get the actual agent (null if guest)
+export const getRealAgentFromStore = () => {
+  const agent = useAgentStore.getState().agent;
+  return agent?.id === "guest-agent" ? null : agent;
 };
 
 // Get agent processing state

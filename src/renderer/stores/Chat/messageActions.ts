@@ -1,6 +1,6 @@
 import { v4 as uuidv4 } from 'uuid';
 import * as R from 'ramda';
-import { getUserTokenFromStore, getUserFromStore } from "@/utils/user";
+import { getUserTokenFromStore, getUserFromStore, isGuestUser } from "@/utils/user";
 import { getCurrentWorkspace } from "@/utils/workspace";
 import { IChatMessage, IReaction, IEncryptedMessage } from "@/../../types/Chat/Message";
 import { IChatMessageToolCall } from '@/../../types/Chat/Message';
@@ -22,13 +22,17 @@ export const createMessageActions = (set: any, get: () => ChatState) => ({
     set({ isLoading: true, error: null });
     try {
       const messageId = uuidv4();
-      const status = workspaceId ? "pending" : "sent"
-      const sent_at = workspaceId ? null : messageData.sent_at || new Date().toISOString()
+      const currentUser = getUserFromStore();
+      const isGuest = isGuestUser();
+      
+      // For guest users, always set status as "sent" and don't use workspace features
+      const status = (workspaceId && !isGuest) ? "pending" : "sent";
+      const sent_at = (workspaceId && !isGuest) ? null : messageData.sent_at || new Date().toISOString();
 
       let files: IFile[] | undefined = undefined;
 
-      // If we have file_ids, fetch the file metadata immediately
-      if (messageData.file_ids) {
+      // Skip file metadata fetching for guest users since they don't have workspace access
+      if (messageData.file_ids && !isGuest) {
         try {
           const fileIds = JSON.parse(messageData.file_ids);
           if (Array.isArray(fileIds) && fileIds.length > 0) {
@@ -57,7 +61,7 @@ export const createMessageActions = (set: any, get: () => ChatState) => ({
       const message: IChatMessage = {
         id: messageId,
         chat_id: chatId,
-        sender: getUserFromStore()?.id || "",
+        sender: currentUser?.id || "guest-user",
         text: messageData.text || "",
         created_at: messageData.created_at || new Date().toISOString(),
         reply_to: messageData.reply_to || undefined,
@@ -68,35 +72,40 @@ export const createMessageActions = (set: any, get: () => ChatState) => ({
         workspace_id: workspaceId
       };
 
-      // Try to encrypt the message if crypto is available
+      // Try to encrypt the message if crypto is available and not a guest user
       let encryptedMessage: IEncryptedMessage | undefined;
       let isEncrypted = false;
       
-      // Get fresh crypto store state
-      const cryptoStore = useCryptoStore.getState();
-      console.log('🔐 Crypto store state:', {
-        isUnlocked: cryptoStore.isUnlocked,
-        hasEncryptMessage: typeof cryptoStore.encryptMessage === 'function',
-        messageText: message.text,
-        chatId: chatId
-      });
-      
-      if (cryptoStore.isUnlocked && message.text) {
-        try {
-          console.log('🔑 Attempting to encrypt message...');
-          encryptedMessage = await cryptoStore.encryptMessage(message.text, chatId);
-          isEncrypted = true;
-          console.log('✅ Message encrypted successfully');
-        } catch (error) {
-          console.warn('⚠️ Failed to encrypt message, sending as plaintext:', error);
-          // Continue with plaintext if encryption fails
+      if (!isGuest) {
+        // Get fresh crypto store state
+        const cryptoStore = useCryptoStore.getState();
+        console.log('🔐 Crypto store state:', {
+          isUnlocked: cryptoStore.isUnlocked,
+          hasEncryptMessage: typeof cryptoStore.encryptMessage === 'function',
+          messageText: message.text,
+          chatId: chatId,
+          isGuest
+        });
+        
+        if (cryptoStore.isUnlocked && message.text) {
+          try {
+            console.log('🔑 Attempting to encrypt message...');
+            encryptedMessage = await cryptoStore.encryptMessage(message.text, chatId);
+            isEncrypted = true;
+            console.log('✅ Message encrypted successfully');
+          } catch (error) {
+            console.warn('⚠️ Failed to encrypt message, sending as plaintext:', error);
+            // Continue with plaintext if encryption fails
+          }
+        } else {
+          console.log('🔓 Encryption skipped:', {
+            isUnlocked: cryptoStore.isUnlocked,
+            hasText: !!message.text,
+            reason: !cryptoStore.isUnlocked ? 'Crypto not unlocked' : 'No message text'
+          });
         }
       } else {
-        console.log('🔓 Encryption skipped:', {
-          isUnlocked: cryptoStore.isUnlocked,
-          hasText: !!message.text,
-          reason: !cryptoStore.isUnlocked ? 'Crypto not unlocked' : 'No message text'
-        });
+        console.log('🔓 Encryption skipped for guest user');
       }
 
       // Prepare database parameters - convert boolean to integer for SQLite
@@ -149,7 +158,8 @@ export const createMessageActions = (set: any, get: () => ChatState) => ({
       // Add to local state immediately with files populated
       get().appendMessage(chatId, message);
 
-      if (workspaceId) {
+      // Only send to socket if not a guest user and workspace is specified
+      if (workspaceId && !isGuest) {
         // Create a network-safe version of the message for transmission
         const networkMessage: IChatMessage = {
           ...message,
@@ -581,8 +591,9 @@ export const createMessageActions = (set: any, get: () => ChatState) => ({
         readAt: isFromCurrentUser ? new Date().toISOString() : undefined
       };
 
-      // Handle encrypted messages immediately
-      if (message.is_encrypted && message.encrypted_text) {
+      // Handle encrypted messages immediately (skip for guest users)
+      const isGuest = isGuestUser();
+      if (message.is_encrypted && message.encrypted_text && !isGuest) {
         const { isUnlocked, decryptMessage } = useCryptoStore.getState();
         
         if (isUnlocked) {
@@ -649,12 +660,14 @@ export const createMessageActions = (set: any, get: () => ChatState) => ({
     });
 
     // Database save - but ONLY save after we have proper text
+    // Skip encryption handling for guest users
     (async () => {
       try {
+        const isGuest = isGuestUser();
         let textToSave: string | null = message.text ?? null;
         
         // For encrypted messages, if we don't have decrypted text, try to decrypt but don't overwrite existing data
-        if (message.is_encrypted && message.encrypted_text && (!textToSave || textToSave.trim() === '')) {
+        if (message.is_encrypted && message.encrypted_text && (!textToSave || textToSave.trim() === '') && !isGuest) {
           const { isUnlocked, decryptMessage } = useCryptoStore.getState();
           if (isUnlocked) {
             try {
@@ -688,7 +701,7 @@ export const createMessageActions = (set: any, get: () => ChatState) => ({
           const messageExists = result && result[0] && result[0].count > 0;
 
           // CRITICAL FIX: If message exists and is encrypted, check if it already has text
-          if (messageExists && message.is_encrypted) {
+          if (messageExists && message.is_encrypted && !isGuest) {
             const existingMessage = await window.electron.db.query({
               query: 'SELECT text FROM messages WHERE id = ? AND chat_id = ?',
               params: [message.id, chatId]
@@ -717,11 +730,11 @@ export const createMessageActions = (set: any, get: () => ChatState) => ({
               poll: message.poll || null,
               contact: message.contact || null,
               gif: message.gif || null,
-              is_encrypted: message.is_encrypted ? 1 : 0,
-              encrypted_text: message.encrypted_text ? JSON.stringify(message.encrypted_text) : null,
-              encryption_iv: message.encrypted_text?.iv || null,
-              encryption_key_version: message.encrypted_text?.keyVersion || null,
-              encryption_algorithm: message.encrypted_text?.algorithm || null
+              is_encrypted: (message.is_encrypted && !isGuest) ? 1 : 0,
+              encrypted_text: (message.encrypted_text && !isGuest) ? JSON.stringify(message.encrypted_text) : null,
+              encryption_iv: (message.encrypted_text?.iv && !isGuest) || null,
+              encryption_key_version: (message.encrypted_text?.keyVersion && !isGuest) || null,
+              encryption_algorithm: (message.encrypted_text?.algorithm && !isGuest) || null
             };
 
             await window.electron.db.query({

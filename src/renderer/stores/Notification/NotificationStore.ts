@@ -5,7 +5,6 @@ import { INotificationData, INotificationCounts } from "@/../../types/Notificati
 interface NotificationStore {
   notifications: INotificationData[];
   counts: INotificationCounts;
-  enableMockNotifications: boolean; // Flag to enable/disable mock notifications
 
   // Core methods
   addNotification: (notification: Omit<INotificationData, 'id' | 'timestamp' | 'read'>) => void;
@@ -26,14 +25,6 @@ interface NotificationStore {
   hasHomeContextNotifications: (section: string, context: string) => boolean;
   hasWorkspaceContextNotifications: (workspaceId: string, section: string, context: string) => boolean;
   updateCounts: () => void;
-
-  // Mock control
-  setMockNotifications: (enabled: boolean) => void;
-
-  // Dummy methods for development
-  addDummyHomeNotification: (section?: string, context?: string) => void;
-  addDummyWorkspaceNotification: (workspaceId: string, section?: string, context?: string) => void;
-  resetAllNotifications: () => void;
 }
 
 // Add a flag to prevent recursive count updates
@@ -131,13 +122,12 @@ export const useNotificationStore = create<NotificationStore>()(
         workspaceSections: {},
         workspaceContexts: {}
       },
-      enableMockNotifications: false,
 
       addNotification: (notificationData) => {
         const notification: INotificationData = {
           ...notificationData,
           id: `notification_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-          timestamp: Date.now(),
+          timestamp: Date.now().toString(),
           read: false
         };
 
@@ -316,108 +306,6 @@ export const useNotificationStore = create<NotificationStore>()(
         
         set(state => ({ counts: newCounts }));
         isUpdatingCounts = false;
-      },
-
-      setMockNotifications: (enabled) => {
-        set({ enableMockNotifications: enabled });
-      },
-
-      // Dummy methods for development
-      addDummyHomeNotification: (section, context) => {
-        if (!get().enableMockNotifications) return;
-
-        const sections = section ? [section] : ['homepage', 'friends', 'agents'];
-        const targetSection = sections[Math.floor(Math.random() * sections.length)];
-
-        const dummyMessages = {
-          homepage: [
-            { title: "Welcome", content: "Welcome to your dashboard" },
-            { title: "System Update", content: "New features are available" }
-          ],
-          friends: [
-            { title: "Friend Request", content: "John Doe wants to be your friend" },
-            { title: "Friend Online", content: "Sarah is now online" }
-          ],
-          agents: [
-            { title: "Agent Update", content: "Your AI agent has new capabilities" },
-            { title: "New Chat", content: "Start chatting with your agent" }
-          ]
-        };
-
-        const messages = dummyMessages[targetSection as keyof typeof dummyMessages] || dummyMessages.homepage;
-        const randomMessage = messages[Math.floor(Math.random() * messages.length)];
-
-        // Generate context if not provided and section supports it
-        let targetContext = context;
-        if (!targetContext && (targetSection === 'agents' || targetSection === 'friends')) {
-          targetContext = `chat_${Math.random().toString(36).substr(2, 8)}`;
-        }
-
-        get().addNotification({
-          type: Math.random() > 0.5 ? 'message' : 'system',
-          title: randomMessage.title,
-          content: randomMessage.content,
-          homeSection: targetSection,
-          homeContext: targetContext
-        });
-      },
-
-      addDummyWorkspaceNotification: (workspaceId, section, context) => {
-        if (!get().enableMockNotifications) return;
-
-        const sections = section ? [section] : ['chatroom', 'members', 'knowledgeBase'];
-        const targetSection = sections[Math.floor(Math.random() * sections.length)];
-
-        const dummyMessages = {
-          chatroom: [
-            { title: "New Message", content: "Someone mentioned you in chat" },
-            { title: "Active Discussion", content: "Team discussion is ongoing" }
-          ],
-          members: [
-            { title: "New Member", content: "Someone joined the workspace" },
-            { title: "Member Update", content: "Member role has been updated" }
-          ],
-          knowledgeBase: [
-            { title: "New Document", content: "A document was uploaded to KB" },
-            { title: "KB Updated", content: "Knowledge base has been updated" }
-          ]
-        };
-
-        const messages = dummyMessages[targetSection as keyof typeof dummyMessages] || dummyMessages.chatroom;
-        const randomMessage = messages[Math.floor(Math.random() * messages.length)];
-
-        // Generate context if not provided and section supports it
-        let targetContext = context;
-        if (!targetContext) {
-          if (targetSection === 'chatroom') {
-            targetContext = `chat_${Math.random().toString(36).substr(2, 8)}`;
-          } else if (targetSection === 'knowledgeBase') {
-            targetContext = `doc_${Math.random().toString(36).substr(2, 8)}`;
-          }
-        }
-
-        get().addNotification({
-          type: Math.random() > 0.5 ? 'message' : 'mention',
-          title: randomMessage.title,
-          content: randomMessage.content,
-          workspaceId,
-          workspaceSection: targetSection,
-          workspaceContext: targetContext
-        });
-      },
-
-      resetAllNotifications: () => {
-        set({
-          notifications: [],
-          counts: {
-            home: 0,
-            homeSections: {},
-            homeContexts: {},
-            workspaces: {},
-            workspaceSections: {},
-            workspaceContexts: {}
-          }
-        });
       }
     }),
     {
@@ -425,10 +313,9 @@ export const useNotificationStore = create<NotificationStore>()(
       storage: createJSONStorage(() => localStorage),
       partialize: (state) => ({
         notifications: state.notifications,
-        counts: state.counts,
-        enableMockNotifications: state.enableMockNotifications
+        counts: state.counts
       }),
-      version: 5 // Increment version to reset persisted state with new structure
+      version: 6 // Increment version to reset persisted state after removing mock features
     }
   )
 );

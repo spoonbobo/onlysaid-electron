@@ -24,6 +24,9 @@ function SettingsMenuItems({ handleClose }: SettingsMenuItemsProps) {
     handleClose();
   };
 
+  // Check if we're in development mode
+  const isDevelopment = process.env.NODE_ENV === 'development';
+
   return (
     <>
       <ListSubheader sx={{ fontSize: 13, fontWeight: 700, color: "text.secondary", bgcolor: "background.paper", lineHeight: 2, px: 2 }}>
@@ -50,10 +53,13 @@ function SettingsMenuItems({ handleClose }: SettingsMenuItemsProps) {
         <FormattedMessage id="settings.tools" />
       </MenuItem>
 
-      <MenuItem onClick={() => handleNavigateToSection('developer')} sx={{ minHeight: 36, fontSize: 14 }}>
-        <CodeIcon fontSize="small" sx={{ mr: 1.5, color: "text.secondary" }} />
-        <FormattedMessage id="settings.developer" />
-      </MenuItem>
+      {/* Only show developer section in development mode */}
+      {isDevelopment && (
+        <MenuItem onClick={() => handleNavigateToSection('developer')} sx={{ minHeight: 36, fontSize: 14 }}>
+          <CodeIcon fontSize="small" sx={{ mr: 1.5, color: "text.secondary" }} />
+          <FormattedMessage id="settings.developer" />
+        </MenuItem>
+      )}
 
       {/* <Divider sx={{ my: 1 }} />
 

@@ -4,7 +4,7 @@ import ChatHeader from "./ChatHeader";
 import ChatUI from "./ChatUI";
 import ChatInput from "./ChatInput";
 import { IChatMessage } from "@/../../types/Chat/Message";
-import { getUserFromStore } from "@/utils/user";
+import { getUserFromStore, isGuestUser } from "@/utils/user";
 import { IUser } from "@/../../types/User/User";
 import { v4 as uuidv4 } from 'uuid';
 import { Typography } from "@mui/material";
@@ -17,6 +17,7 @@ import { useWorkspaceStore } from "@/renderer/stores/Workspace/WorkspaceStore";
 import { useLLMConfigurationStore } from "@/renderer/stores/LLM/LLMConfiguration";
 import { toast } from "@/utils/toast";
 import { IChatRoom } from "@/../../types/Chat/Chatroom";
+import ChatUIWithNoChat from "./ChatUIWithNoChat";
 
 function Chat() {
   const {
@@ -55,7 +56,8 @@ function Chat() {
   const {
     agent,
     isProcessingResponse,
-    processAgentResponse
+    processAgentResponse,
+    createGuestAgent
   } = useAgentStore();
   const isLocal = currentUser?.id ? false : true;
   let workspaceId = '';
@@ -65,6 +67,8 @@ function Chat() {
 
   const { getUsersByWorkspace } = useWorkspaceStore();
   const [workspaceUsers, setWorkspaceUsers] = useState<any[]>([]);
+
+  const isGuest = isGuestUser();
 
   useEffect(() => {
     if (workspaceId) {
@@ -338,6 +342,14 @@ function Chat() {
     }));
   }, [messages, workspaceUsers]);
 
+  // Ensure guest agent exists when no user is logged in
+  useEffect(() => {
+    if (isGuest && !agent) {
+      createGuestAgent();
+      console.log('[Chat] Guest user detected, creating guest agent');
+    }
+  }, [isGuest, agent, createGuestAgent]);
+
   return (
     <Box
       key={chatInstanceId}
@@ -360,98 +372,105 @@ function Chat() {
           position: "relative"
         }}
       >
-        {(() => {
-          try {
-            return (
-              <>
-                <ChatUI
-                  messages={messagesWithRoles}
-                  onReply={handleReply}
-                  streamingMessageId={
-                    streamingState.chatId === activeChatId
-                      ? streamingState.messageId
-                      : null
-                  }
-                  streamContentForBubble={
-                    streamingState.chatId === activeChatId
-                      ? currentStreamContent
-                      : ""
-                  }
-                  isConnectingForBubble={
-                    streamingState.chatId === activeChatId
-                      ? isCurrentlyConnectingForUI
-                      : false
-                  }
-                />
+        {!activeChatId ? (
+          // Show no chat UI when no chat is selected - now handles guest users properly
+          <ChatUIWithNoChat />
+        ) : (
+          (() => {
+            try {
+              return (
+                <>
+                  <ChatUI
+                    messages={messagesWithRoles}
+                    onReply={handleReply}
+                    streamingMessageId={
+                      streamingState.chatId === activeChatId
+                        ? streamingState.messageId
+                        : null
+                    }
+                    streamContentForBubble={
+                      streamingState.chatId === activeChatId
+                        ? currentStreamContent
+                        : ""
+                    }
+                    isConnectingForBubble={
+                      streamingState.chatId === activeChatId
+                        ? isCurrentlyConnectingForUI
+                        : false
+                    }
+                  />
 
-                {streamingState.messageId && isCurrentlyConnectingForUI && streamingState.chatId === activeChatId && (
-                  <Box
-                    sx={{
-                      position: 'absolute',
-                      bottom: 16,
-                      left: '50%',
-                      transform: 'translateX(-50%)',
-                      zIndex: 1000,
-                      bgcolor: 'background.paper',
-                      boxShadow: 3,
-                      padding: '6px 12px',
-                      borderRadius: 2,
-                      display: 'flex',
-                      alignItems: 'center',
-                    }}
-                  >
-                    <CircularProgress
-                      size={16}
-                      thickness={4}
+                  {streamingState.messageId && isCurrentlyConnectingForUI && streamingState.chatId === activeChatId && (
+                    <Box
                       sx={{
-                        color: 'text.secondary',
-                        mr: 1.5
-                      }}
-                    />
-                    <Typography
-                      color="text.secondary"
-                      sx={{
-                        mr: 2,
-                        fontSize: '0.85rem',
-                        fontWeight: 500
+                        position: 'absolute',
+                        bottom: 16,
+                        left: '50%',
+                        transform: 'translateX(-50%)',
+                        zIndex: 1000,
+                        bgcolor: 'background.paper',
+                        boxShadow: 3,
+                        padding: '6px 12px',
+                        borderRadius: 2,
+                        display: 'flex',
+                        alignItems: 'center',
                       }}
                     >
-                      Generating...
-                    </Typography>
-                    <Typography
-                      onClick={handleStopGeneration}
-                      color="error"
-                      variant="button"
-                      sx={{
-                        cursor: 'pointer',
-                        '&:hover': { textDecoration: 'underline' },
-                        mr: 1,
-                        fontSize: '0.75rem',
-                        fontWeight: 'medium',
-                      }}
-                    >
-                      Stop
-                    </Typography>
-                    <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem' }}>
-                      ({tokenRate} t/s)
-                    </Typography>
-                  </Box>
-                )}
-              </>
-            );
-          } catch (e) {
-            console.error("Error rendering ChatUI:", e);
-            return <Box p={2}>Error loading messages</Box>;
-          }
-        })()}
+                      <CircularProgress
+                        size={16}
+                        thickness={4}
+                        sx={{
+                          color: 'text.secondary',
+                          mr: 1.5
+                        }}
+                      />
+                      <Typography
+                        color="text.secondary"
+                        sx={{
+                          mr: 2,
+                          fontSize: '0.85rem',
+                          fontWeight: 500
+                        }}
+                      >
+                        Generating...
+                      </Typography>
+                      <Typography
+                        onClick={handleStopGeneration}
+                        color="error"
+                        variant="button"
+                        sx={{
+                          cursor: 'pointer',
+                          '&:hover': { textDecoration: 'underline' },
+                          mr: 1,
+                          fontSize: '0.75rem',
+                          fontWeight: 'medium',
+                        }}
+                      >
+                        Stop
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem' }}>
+                        ({tokenRate} t/s)
+                      </Typography>
+                    </Box>
+                  )}
+                </>
+              );
+            } catch (e) {
+              console.error("Error rendering ChatUI:", e);
+              return <Box p={2}>Error loading messages</Box>;
+            }
+          })()
+        )}
       </Box>
-      <ChatInput
-        input={input}
-        setInput={handleInputChange}
-        handleSend={handleSend}
-        replyingTo={replyingToMessage}
-        onCancelReply={handleCancelReply}
-      />
+      {activeChatId && (
+        <ChatInput
+          input={input}
+          setInput={handleInputChange}
+          handleSend={handleSend}
+          replyingTo={replyingToMessage}
+          onCancelReply={handleCancelReply}
+        />
+      )}
     </Box>
   );
 }

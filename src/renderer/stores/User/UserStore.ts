@@ -52,7 +52,16 @@ export const useUserStore = create<UserStore>()(
       timeoutId: null,
       hasUpdatedLastSeenOnStartup: false,
 
-      setUser: (user) => set({ user: user ? { ...user } : null }),
+      setUser: (user) => {
+        set({ user: user ? { ...user } : null });
+        
+        // Initialize guest agent when user is null (offline mode)
+        if (!user) {
+          const { createGuestAgent } = useAgentStore.getState();
+          createGuestAgent();
+          console.log('[UserStore] User set to null, initializing guest agent');
+        }
+      },
 
       signIn: () => {
         const { setSignInError, setSigningIn } = useUserTokenStore.getState();
@@ -334,7 +343,7 @@ export const useUserStore = create<UserStore>()(
 
       logout: () => {
         const { clearToken } = useUserTokenStore.getState();
-        const { clearAgent } = useAgentStore.getState();
+        const { createGuestAgent } = useAgentStore.getState(); // Changed from clearAgent
         const { close } = useSocketStore.getState();
         const { lockCrypto } = useCryptoStore.getState();
 
@@ -345,9 +354,11 @@ export const useUserStore = create<UserStore>()(
           hasUpdatedLastSeenOnStartup: false,
         });
         clearToken();
-        clearAgent();
-        lockCrypto(); // Lock crypto on logout
+        createGuestAgent(); // Create guest agent instead of clearing
+        lockCrypto();
         close();
+        
+        console.log('[UserStore] User logged out, guest agent initialized');
       },
 
       updateUser: (user: IUser) => {

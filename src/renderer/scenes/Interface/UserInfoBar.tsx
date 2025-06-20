@@ -16,7 +16,7 @@ export default function UserInfoBar() {
   const agent: IUser | null = useAgentStore((state) => state.agent);
   const setSelectedContext = useTopicStore((state) => state.setSelectedContext);
 
-  const displayName = user?.username || "Guest";
+  const displayName = user?.username || "Guest User";
   const status = user === null ? "offline" : "online";
   const userAvatarSrc = user?.avatar || "";
   const isOffline = status === "offline";

@@ -12,7 +12,8 @@ function ChatHeader() {
     Object.keys(selectedTopics).find(section => selectedTopics[section]);
   const selectedTopic = selectedGroup ? selectedTopics[selectedGroup] : null;
 
-  const chat = chats.find(chat => chat.id === selectedTopic);
+  // Only find chat if selectedTopic exists and is not empty
+  const chat = selectedTopic ? chats.find(chat => chat.id === selectedTopic) : null;
   const chatName = chat?.name || selectedTopic;
   const intl = useIntl();
 
@@ -25,7 +26,7 @@ function ChatHeader() {
         alignItems: "flex-start"
       }}
     >
-      {selectedContext && selectedGroup && selectedTopic ? (
+      {selectedContext && selectedGroup && selectedTopic && chat ? (
         <Stack direction="column" spacing={0.5}>
           <Typography variant="caption" sx={{ color: "text.secondary" }}>
             {intl.formatMessage({ id: `${selectedContext.type}.${selectedGroup}`, defaultMessage: selectedContext.type })}

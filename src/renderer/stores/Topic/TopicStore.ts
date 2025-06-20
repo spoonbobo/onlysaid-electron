@@ -84,6 +84,12 @@ interface TopicStore {
 
   calendarViewMode: CalendarViewMode;
   setCalendarViewMode: (mode: CalendarViewMode) => void;
+
+  // NEW: Add workspace chat selection persistence
+  workspaceSelectedChats: Record<string, string | null>;
+  setWorkspaceSelectedChat: (workspaceId: string, chatId: string | null) => void;
+  getWorkspaceSelectedChat: (workspaceId: string) => string | null;
+  clearWorkspaceSelectedChat: (workspaceId: string) => void;
 }
 
 export type CalendarViewMode = "month" | "week" | "day";
@@ -443,6 +449,31 @@ export const useTopicStore = create<TopicStore>()(
 
       calendarViewMode: "month",
       setCalendarViewMode: (mode) => set({ calendarViewMode: mode }),
+
+      // NEW: Initialize workspace chat selections
+      workspaceSelectedChats: {},
+
+      // NEW: Methods for workspace chat selection persistence
+      setWorkspaceSelectedChat: (workspaceId: string, chatId: string | null) =>
+        set((state) => ({
+          workspaceSelectedChats: {
+            ...state.workspaceSelectedChats,
+            [workspaceId]: chatId
+          }
+        })),
+
+      getWorkspaceSelectedChat: (workspaceId: string) => {
+        return get().workspaceSelectedChats[workspaceId] || null;
+      },
+
+      clearWorkspaceSelectedChat: (workspaceId: string) =>
+        set((state) => {
+          const updatedSelections = { ...state.workspaceSelectedChats };
+          delete updatedSelections[workspaceId];
+          return {
+            workspaceSelectedChats: updatedSelections
+          };
+        }),
     }),
     {
       name: "topic-store",
@@ -454,8 +485,9 @@ export const useTopicStore = create<TopicStore>()(
         contexts: state.contexts,
         scrollPositions: state.scrollPositions,
         navigationHistory: state.navigationHistory,
+        workspaceSelectedChats: state.workspaceSelectedChats,
       }),
-      version: 10, // Increment version due to new navigationHistory field
+      version: 11, // Increment version due to new workspaceSelectedChats field
     }
   )
 );

@@ -6,6 +6,7 @@ import PeopleIcon from "@mui/icons-material/People";
 import HomeIcon from "@mui/icons-material/Home";
 import { useTopicStore } from "@/renderer/stores/Topic/TopicStore";
 import { useNotificationStore } from "@/renderer/stores/Notification/NotificationStore";
+import { useUserStore } from "@/renderer/stores/User/UserStore";
 
 type HomeMenuItemsProps = {
   handleClose: () => void;
@@ -21,6 +22,7 @@ function HomeMenuItems({
 }: HomeMenuItemsProps) {
   const setSelectedContext = useTopicStore((state) => state.setSelectedContext);
   const { getHomeSectionNotificationCount } = useNotificationStore();
+  const user = useUserStore((state) => state.user);
 
   const handleCategoryClick = (category: string) => {
     try {
@@ -81,31 +83,36 @@ function HomeMenuItems({
       }}>
         <FormattedMessage id="home.messaging" />
       </ListSubheader>
-      <MenuItem
-        onClick={() => handleCategoryClick('friends')}
-        sx={{ minHeight: 36, fontSize: 14 }}
-      >
-        <PeopleIcon fontSize="small" sx={{ mr: 1.5, color: "text.secondary" }} />
-        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
-          <FormattedMessage id="menu.home.friends" />
-          {friendsCount > 0 && (
-            <Badge
-              badgeContent={friendsCount}
-              color="error"
-              max={99}
-              sx={{
-                '& .MuiBadge-badge': {
-                  fontSize: '0.6rem',
-                  height: 16,
-                  minWidth: 16
-                }
-              }}
-            >
-              <Box sx={{ width: 8 }} />
-            </Badge>
-          )}
-        </Box>
-      </MenuItem>
+      
+      {/* Only show friends tab if user is logged in */}
+      {user && (
+        <MenuItem
+          onClick={() => handleCategoryClick('friends')}
+          sx={{ minHeight: 36, fontSize: 14 }}
+        >
+          <PeopleIcon fontSize="small" sx={{ mr: 1.5, color: "text.secondary" }} />
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+            <FormattedMessage id="menu.home.friends" />
+            {friendsCount > 0 && (
+              <Badge
+                badgeContent={friendsCount}
+                color="error"
+                max={99}
+                sx={{
+                  '& .MuiBadge-badge': {
+                    fontSize: '0.6rem',
+                    height: 16,
+                    minWidth: 16
+                  }
+                }}
+              >
+                <Box sx={{ width: 8 }} />
+              </Badge>
+            )}
+          </Box>
+        </MenuItem>
+      )}
+      
       <MenuItem
         onClick={() => handleCategoryClick('agents')}
         sx={{ minHeight: 36, fontSize: 14 }}

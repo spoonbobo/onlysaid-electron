@@ -21,11 +21,7 @@ function SidebarTabs() {
   const { workspaces, getWorkspace, exitWorkspace, isLoading, setWorkspaceCreatedCallback } = useWorkspaceStore();
   const {
     hasHomeNotifications,
-    hasWorkspaceNotifications,
-    addDummyHomeNotification,
-    addDummyWorkspaceNotification,
-    resetAllNotifications,
-    enableMockNotifications
+    hasWorkspaceNotifications
   } = useNotificationStore();
   const user = useUserStore(state => state.user);
   const [showAddTeamDialog, setShowAddTeamDialog] = useState(false);
@@ -46,33 +42,6 @@ function SidebarTabs() {
     const foundContext = contexts.find(context => context.name === "home" && context.type === "home");
     return foundContext || { name: "home", type: "home" };
   }, [contexts]);
-
-  // Get notification counts
-
-  // Development helper functions (can be removed in production)
-  useEffect(() => {
-    if (process.env.NODE_ENV === 'development' && enableMockNotifications) {
-      // Add some dummy notifications for testing
-      const addTestNotifications = () => {
-        // Add some dummy home notifications randomly
-        if (Math.random() > 0.7) {
-          addDummyHomeNotification();
-        }
-
-        // Add some dummy workspace notifications with sections
-        workspaces.forEach(workspace => {
-          if (Math.random() > 0.8) {
-            addDummyWorkspaceNotification(workspace.id);
-          }
-        });
-      };
-
-      // Add test notifications periodically in development
-      const interval = setInterval(addTestNotifications, 30000); // Every 30 seconds
-
-      return () => clearInterval(interval);
-    }
-  }, [workspaces, addDummyHomeNotification, addDummyWorkspaceNotification, enableMockNotifications]);
 
   useEffect(() => {
     const previousUser = previousUserRef.current;
@@ -285,30 +254,6 @@ function SidebarTabs() {
       section: "calendar"
     });
   };
-
-  // useEffect(() => {
-  //   console.log('SidebarTabs debug:', {
-  //     selectedContext,
-  //     homeContext,
-  //     user: !!user,
-  //     workspacesLength: workspaces.length,
-  //     contextsLength: contexts.length
-  //   });
-  // }, [selectedContext, homeContext, user, workspaces.length, contexts.length]);
-
-  // useEffect(() => {
-  //   if (process.env.NODE_ENV === 'development') {
-  //     console.log('📊 [DEBUG] SidebarTabs state:', {
-  //       selectedContextName: selectedContext?.name,
-  //       selectedContextType: selectedContext?.type,
-  //       selectedContextId: selectedContext?.id,
-  //       homeContextName: homeContext?.name,
-  //       homeContextType: homeContext?.type,
-  //       isHomeSelected: selectedContext?.name === "home" && selectedContext?.type === "home",
-  //       contextsLength: contexts.length
-  //     });
-  //   }
-  // }, [selectedContext, homeContext, contexts.length]);
 
   useEffect(() => {
     if (process.env.NODE_ENV === 'development') {

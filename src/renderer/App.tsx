@@ -4,6 +4,7 @@ import LoadingScreen from '@/renderer/components/LoadingScreen';
 import { useTopicStore } from '@/renderer/stores/Topic/TopicStore';
 import { useUserStore, setupDeeplinkAuthListener } from '@/renderer/stores/User/UserStore';
 import { useUserTokenStore } from '@/renderer/stores/User/UserToken';
+import { useAgentStore } from '@/renderer/stores/Agent/AgentStore';
 import { useMCPStore } from '@/renderer/stores/MCP/MCPStore';
 import { useToastStore } from '@/renderer/stores/Notification/ToastStore';
 import { useSocketStore } from '@/renderer/stores/Socket/SocketStore';
@@ -18,6 +19,7 @@ function App() {
   const [initToastId, setInitToastId] = useState<string | null>(null);
   const [googleServicesReady, setGoogleServicesReady] = useState(false);
   const { user } = useUserStore();
+  const { agent, createGuestAgent } = useAgentStore();
   const { initialize: initializeSocket, close: closeSocket } = useSocketStore();
   const { initializeGoogleCalendarListeners, initializeMicrosoftCalendarListeners } = useUserTokenStore();
   const { preloadAssets } = useAppAssets();
@@ -202,6 +204,14 @@ function App() {
       return () => clearTimeout(timer);
     }
   }, [user]);
+
+  // Initialize guest agent when no user is logged in
+  useEffect(() => {
+    if (!user && !agent) {
+      console.log('[App] No user logged in, creating guest agent');
+      createGuestAgent();
+    }
+  }, [user, agent, createGuestAgent]);
 
   // Skip LoadingScreen entirely
   if (!initializationComplete) {

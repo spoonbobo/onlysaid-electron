@@ -27,6 +27,17 @@
   "app.title": "OnlySaid",
   "app.welcome": "歡迎使用 OnlySaid",
 
+  "guest.subtitle": "AI 驅動的協作平台，改變團隊合作方式。",
+  "guest.description": "免費體驗本地 AI 服務，或登入解鎖工作空間協作功能。",
+  "guest.signInButton": "登入使用工作空間功能",
+  "guest.signInMessage": "登入以存取團隊工作空間、共享專案和進階協作工具。",
+  "guest.localAI.title": "本地 AI 服務",
+  "guest.localAI.description": "免費試用本地 AI 功能 - 無需註冊即可開始",
+  "guest.teamWorkspaces.title": "團隊工作空間",
+  "guest.teamWorkspaces.description": "登入以存取共享工作空間、團隊協作和專案管理",
+  "guest.enterpriseFeatures.title": "企業功能",
+  "guest.enterpriseFeatures.description": "進階安全性、無限使用量和團隊專業協作工具",
+
   "toast.welcome": "歡迎回來，{name}！",
   "toast.preferenceSaved": "成功儲存偏好設定",
   "toast.loggedOut": "您已登出",
@@ -648,5 +659,14 @@
   "tasks.summary": "{total} 個任務中已完成 {completed} 個",
   "tasks.noTasks": "沒有預定任務",
   "tasks.emptyStateDescription": "使用任務和提醒保持井然有序",
-  "tasks.addFirst": "新增您的第一個任務"
+  "tasks.addFirst": "新增您的第一個任務",
+
+  "chat.noChat.title": "未選擇聊天",
+  "chat.noChat.description": "從側邊欄選擇聊天或建立新聊天來開始",
+  "chat.noChat.createNew": "建立新聊天",
+  "chat.unreadMessages": "未讀訊息",
+  "chat.noChat.description.guest": "創建新聊天以開始與本地AI助手的對話",
+  "chat.noChat.description.agent": "創建新聊天以開始與AI代理的對話",
+  "chat.noChat.createNewAgent": "開始AI聊天",
+  "chat.noChat.guestNote": "您處於訪客模式 - 聊天記錄保存在本地"
 }

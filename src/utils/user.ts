@@ -1,19 +1,46 @@
 import { useUserTokenStore } from "@/renderer/stores/User/UserToken";
 import { useUserStore } from "@/renderer/stores/User/UserStore";
+import { useAgentStore } from "@/renderer/stores/Agent/AgentStore";
 import { useWorkspaceStore } from "@/renderer/stores/Workspace/WorkspaceStore";
 import { useTopicStore } from "@/renderer/stores/Topic/TopicStore";
+import { IUser } from "@/../../types/User/User";
 
 export const getUserTokenFromStore = () => {
   return useUserTokenStore.getState().getToken();
 };
 
+// Helper function to create guest user data
+const createGuestUserData = (): IUser => ({
+  id: "guest-user",
+  username: "Guest",
+  email: "guest@local",
+  avatar: null,
+  settings: {
+    general: {
+      theme: "system",
+      language: "en"
+    }
+  },
+  level: 1,
+  xp: 0,
+  is_human: true,
+  agent_id: null,
+});
+
 export const getUserFromStore = () => {
-  return useUserStore.getState().user;
+  const user = useUserStore.getState().user;
+  
+  // Return guest user if no user is logged in
+  if (!user) {
+    return createGuestUserData();
+  }
+  
+  return user;
 };
 
 export const getCurrentUserRoleInWorkspace = async (workspaceId?: string) => {
   const currentUser = getUserFromStore();
-  if (!currentUser?.id) {
+  if (!currentUser?.id || currentUser.id === "guest-user") {
     return null;
   }
 
@@ -32,4 +59,15 @@ export const getCurrentUserRoleInWorkspace = async (workspaceId?: string) => {
   const userInWorkspace = await getUserInWorkspace(targetWorkspaceId, currentUser.id);
 
   return userInWorkspace?.role || null;
+};
+
+// Helper function to check if current user is guest
+export const isGuestUser = () => {
+  const user = useUserStore.getState().user;
+  return !user || user.id === "guest-user";
+};
+
+// Helper function to get the actual user (null if guest)
+export const getRealUserFromStore = () => {
+  return useUserStore.getState().user;
 };

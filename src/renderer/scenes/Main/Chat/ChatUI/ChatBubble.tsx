@@ -19,6 +19,7 @@ import ToolDisplay from "@/renderer/scenes/Main/Chat/ChatUI/ToolDisplay";
 import FileDisplay from "./FileDisplay";
 import LockIcon from '@mui/icons-material/Lock';
 import LockOpenIcon from '@mui/icons-material/LockOpen';
+import { IReaction } from "@/../../types/Chat/Message";
 
 interface ChatBubbleProps {
   message: IChatMessage;
@@ -191,10 +192,10 @@ const ChatBubble = memo(({
           width: 36,
           minWidth: 36,
           mr: 1.5,
-          position: "relative",
-          height: "100%",
           display: "flex",
-          alignItems: "center"
+          alignItems: "flex-start",
+          justifyContent: "center",
+          pt: 0.3,
         }}>
           {isHovered && (
             <Typography
@@ -203,8 +204,9 @@ const ChatBubble = memo(({
                 fontSize: "0.65rem",
                 color: "text.secondary",
                 opacity: 0.7,
-                width: "100%",
-                textAlign: "center"
+                textAlign: "center",
+                lineHeight: 1.5,
+                mt: 0.3,
               }}
             >
               {getTimeString()}
@@ -249,8 +251,13 @@ const ChatBubble = memo(({
             <Typography component="span" sx={{ color: "text.secondary", fontWeight: 400, fontSize: "0.8rem", ml: 1 }}>
               {msg.created_at || msg.sent_at ? (() => {
                 const timestamp = msg.created_at || msg.sent_at;
-                const date = new Date(timestamp);
+                if (!timestamp) {
+                  return msg.sender_object?.is_human !== false ? (
+                    <FormattedMessage id="chat.sending" defaultMessage="Sending..." />
+                  ) : null;
+                }
 
+                const date = new Date(timestamp);
                 if (isNaN(date.getTime())) {
                   return msg.sender_object?.is_human !== false ? (
                     <FormattedMessage id="chat.sending" defaultMessage="Sending..." />
@@ -331,7 +338,7 @@ const ChatBubble = memo(({
                 </Typography>
               ) : (
                 <MarkdownRenderer
-                  content={msg.text}
+                  content={msg.text || ""}
                   isStreaming={isStreaming}
                   isConnecting={isConnecting}
                   streamContent={streamContent}
@@ -356,7 +363,7 @@ const ChatBubble = memo(({
             minHeight: 22
           }}>
             {Object.entries(
-              R.groupBy(reaction => reaction.reaction, msg.reactions)
+              R.groupBy(reaction => reaction.reaction, msg.reactions as IReaction[])
             ).map(([emoji, reactions]) => (
               <Box
                 key={emoji}

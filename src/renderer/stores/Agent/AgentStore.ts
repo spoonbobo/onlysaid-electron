@@ -40,8 +40,9 @@ interface AgentState {
   setAgent: (agent: IUser | null) => void;
   clearAgent: () => void;
   fetchAgent: (agentId: string, token: string) => Promise<void>;
-  gainExperience: (amount: number) => Promise<void>; // New
-  levelUp: (addedXP: number) => Promise<void>; // New
+  createGuestAgent: () => void; // New method for guest agent
+  gainExperience: (amount: number) => Promise<void>;
+  levelUp: (addedXP: number) => Promise<void>;
 
   // New agent response methods
   processAgentResponse: (params: AgentResponseParams) => Promise<{ success: boolean; assistantMessageId?: string; error?: any }>;
@@ -76,6 +77,24 @@ interface AgentState {
   }) => Promise<{ success: boolean; responseText?: string; assistantMessageId?: string; error?: any }>;
 }
 
+// Helper function to create guest agent
+const createGuestAgentData = (): IUser => ({
+  id: "guest-agent",
+  username: "Local AI Assistant",
+  email: "guest@local",
+  avatar: null,
+  settings: {
+    general: {
+      theme: "system",
+      language: "en"
+    }
+  },
+  level: 1,
+  xp: 0,
+  is_human: false,
+  agent_id: null,
+});
+
 export const useAgentStore = create<AgentState>()(
   persist(
     (set, get) => ({
@@ -85,6 +104,13 @@ export const useAgentStore = create<AgentState>()(
       isProcessingResponse: false,
       setAgent: (agent) => set({ agent, isLoading: false, error: null }),
       clearAgent: () => set({ agent: null, isLoading: false, error: null }),
+      
+      createGuestAgent: () => {
+        const guestAgent = createGuestAgentData();
+        console.log('[AgentStore] Creating guest agent for offline mode');
+        set({ agent: guestAgent, isLoading: false, error: null });
+      },
+
       fetchAgent: async (agentId: string, token: string) => {
         if (!agentId || !token) {
           set({ agent: null, isLoading: false, error: "Agent ID or token not provided." });
@@ -123,10 +149,40 @@ export const useAgentStore = create<AgentState>()(
         const currentAgent = get().agent;
         if (!currentAgent) {
           console.warn("[AgentStore] gainExperience called without an agent. Skipping.");
-          toast.error("No agent active to gain experience.");
           return;
         }
 
+        // Check if this is a guest agent (offline mode)
+        const isGuestAgent = currentAgent.id === "guest-agent";
+        
+        if (isGuestAgent) {
+          // For guest agents, just update local state without backend calls
+          const currentXP = currentAgent.xp ?? 0;
+          const currentLevel = currentAgent.level ?? 0;
+
+          let newExperience = currentXP + amount;
+          let newLevel = currentLevel;
+          let experienceToReachNext = calculateExperienceForLevel(newLevel === 0 ? 1 : newLevel + 1);
+
+          while (newExperience >= experienceToReachNext && experienceToReachNext > 0) {
+            newExperience -= experienceToReachNext;
+            newLevel++;
+            experienceToReachNext = calculateExperienceForLevel(newLevel + 1);
+            toast.success(`Local Agent leveled up! Now level ${newLevel}!`);
+          }
+
+          const updatedAgentObject: IUser = {
+            ...currentAgent,
+            level: newLevel,
+            xp: newExperience,
+          };
+
+          set({ agent: updatedAgentObject });
+          console.log(`[AgentStore] Guest agent gained ${amount} XP (local only)`);
+          return;
+        }
+
+        // Original online agent XP logic
         const currentXP = currentAgent.xp ?? 0;
         const currentLevel = currentAgent.level ?? 0;
 
@@ -186,9 +242,30 @@ export const useAgentStore = create<AgentState>()(
         const currentAgent = get().agent;
         if (!currentAgent) {
           console.warn("[AgentStore] levelUp called without an agent. Skipping.");
-          toast.error("No agent active to level up.");
           return;
         }
+
+        // Check if this is a guest agent (offline mode)
+        const isGuestAgent = currentAgent.id === "guest-agent";
+        
+        if (isGuestAgent) {
+          // For guest agents, just update local state
+          const currentLevel = currentAgent.level ?? 0;
+          const newLevel = currentLevel + 1;
+
+          const updatedAgentObject: IUser = {
+            ...currentAgent,
+            level: newLevel,
+            xp: addedXP,
+          };
+
+          set({ agent: updatedAgentObject });
+          toast.success(`Local Agent leveled up! Now level ${newLevel}!`);
+          console.log(`[AgentStore] Guest agent leveled up to ${newLevel} (local only)`);
+          return;
+        }
+
+        // Original online agent level up logic
         const currentLevel = currentAgent.level ?? 0;
         const newLevel = currentLevel + 1;
 
@@ -231,6 +308,14 @@ export const useAgentStore = create<AgentState>()(
       setProcessingResponse: (isProcessing) => set({ isProcessingResponse: isProcessing }),
 
       logAgentUsage: async (modelId: string, mode: "ask" | "query" | "agent", success: boolean, responseLength: number = 0) => {
+        const currentAgent = get().agent;
+        
+        // Skip usage logging for guest agents
+        if (currentAgent?.id === "guest-agent") {
+          console.log(`[AgentStore] Skipping usage logging for guest agent - Mode: ${mode}, Model: ${modelId}`);
+          return;
+        }
+
         try {
           const { token } = useUserTokenStore.getState();
           if (!token) {
@@ -515,9 +600,9 @@ export const useAgentStore = create<AgentState>()(
       },
     }),
     {
-      name: "agent-storage", // Updated persistence key name
+      name: "agent-storage",
       partialize: (state) => ({
-        agent: state.agent, // Only persist the agent object
+        agent: state.agent,
       }),
     }
   )
