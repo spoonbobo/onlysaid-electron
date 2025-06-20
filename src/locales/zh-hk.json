@@ -380,6 +380,8 @@
   "toolDisplay.result": "結果",
   "toolDisplay.execute": "執行",
   "toolDisplay.executing": "執行中",
+  "toolDisplay.summarize": "總結結果",
+  "toolDisplay.summarizing": "總結中...",
 
   "dialog.file.download": "下載",
   "dialog.file.downloading": "下載中...",

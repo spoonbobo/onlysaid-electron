@@ -13,10 +13,13 @@ import { useChatStore } from "@/renderer/stores/Chat/ChatStore";
 import { useMCPClientStore } from "@/renderer/stores/MCP/MCPClient";
 import { useMCPStore } from "@/renderer/stores/MCP/MCPStore";
 import ToolResultDialog from "@/renderer/components/Dialog/MCP/ToolResult";
-import { summarizeToolResults } from "@/utils/agent";
 import { useAgentStore } from "@/renderer/stores/Agent/AgentStore";
 import { toast } from "@/utils/toast";
 import { extractUrls, formatUrlForDisplay, extractDomain } from "@/utils/url";
+import { useLLMConfigurationStore } from "@/renderer/stores/LLM/LLMConfiguration";
+import { useUserStore } from "@/renderer/stores/User/UserStore";
+import { useStreamStore } from "@/renderer/stores/Stream/StreamStore";
+import { useTopicStore } from "@/renderer/stores/Topic/TopicStore";
 
 interface ToolDisplayProps {
   toolCalls: IChatMessageToolCall[];
@@ -40,6 +43,7 @@ const ToolDisplay = memo(({ toolCalls, chatId, messageId }: ToolDisplayProps) =>
   const [resultDialogOpen, setResultDialogOpen] = useState(false);
   const [selectedToolCall, setSelectedToolCall] = useState<IChatMessageToolCall | null>(null);
   const [autoApprovedTools, setAutoApprovedTools] = useState<Set<string>>(new Set());
+  const [isSummarizing, setIsSummarizing] = useState(false);
 
   // Helper function to format MCP name for display
   const formatMCPName = useCallback((key: string): string => {
@@ -262,39 +266,80 @@ const ToolDisplay = memo(({ toolCalls, chatId, messageId }: ToolDisplayProps) =>
     return `${id.substring(0, length)}...`;
   };
 
-  // Check if all tools are completed and trigger summarization
-  useEffect(() => {
+  // Add summarize handler
+  const handleSummarize = useCallback(async () => {
     const completedTools = toolCalls.filter(tool =>
       tool.status === 'executed' || tool.status === 'error'
     );
 
-    // Only summarize if all tools are completed and we haven't summarized yet
-    if (completedTools.length === toolCalls.length && toolCalls.length > 0) {
-      const hasResults = completedTools.some(tool => tool.result);
-
-      if (hasResults) {
-        // Check if we already have a summary message after this tool message
-        const messages = useChatStore.getState().messages[chatId] || [];
-        const currentMessageIndex = messages.findIndex(msg => msg.id === messageId);
-        const nextMessage = messages[currentMessageIndex + 1];
-
-        // Only summarize if there's no next message or the next message is not from assistant
-        if (!nextMessage || nextMessage.sender_object?.username !== useAgentStore.getState().agent?.username) {
-          const toolResults = completedTools.map(tool => ({
-            toolName: tool.function.name,
-            result: tool.result,
-            executionTime: tool.execution_time_seconds,
-            status: tool.status || 'unknown'
-          }));
-
-          // Trigger summarization
-          summarizeToolResults(chatId, toolResults).catch(error => {
-            console.error("Failed to summarize tool results:", error);
-          });
-        }
-      }
+    if (completedTools.length === 0) {
+      toast.error('No completed tools to summarize');
+      return;
     }
-  }, [toolCalls, chatId, messageId]);
+
+    const hasResults = completedTools.some(tool => tool.result);
+    if (!hasResults) {
+      toast.error('No tool results to summarize');
+      return;
+    }
+
+    setIsSummarizing(true);
+
+    try {
+      // Get required stores and data
+      const { summarizeToolCallResults } = useAgentStore.getState();
+      const { appendMessage, updateMessage } = useChatStore.getState();
+      const { streamChatCompletion } = useStreamStore.getState();
+      const { setStreamingState, markStreamAsCompleted } = useTopicStore.getState();
+      const { modelId, provider } = useLLMConfigurationStore.getState();
+      const { user: currentUser } = useUserStore.getState();
+      const { agent } = useAgentStore.getState();
+
+      if (!modelId) {
+        toast.error('No model selected for summarization');
+        return;
+      }
+
+      // Get existing messages for context
+      const messages = useChatStore.getState().messages[chatId] || [];
+
+      // Prepare tool results data
+      const toolResults = completedTools.map(tool => ({
+        toolName: tool.function.name,
+        result: tool.result,
+        executionTime: tool.execution_time_seconds,
+        status: tool.status || 'unknown'
+      }));
+
+      // Call the summarizeToolCallResults method from AgentStore
+      const result = await summarizeToolCallResults({
+        activeChatId: chatId,
+        toolCallResults: toolResults,
+        modelId,
+        provider: provider || "openai",
+        agent,
+        currentUser,
+        existingMessages: messages,
+        appendMessage,
+        updateMessage,
+        setStreamingState,
+        markStreamAsCompleted,
+        streamChatCompletion,
+      });
+
+      if (result.success) {
+        toast.success('Tool results summarized successfully');
+      } else {
+        toast.error(`Failed to summarize: ${result.error}`);
+      }
+
+    } catch (error: any) {
+      console.error('Error summarizing tool results:', error);
+      toast.error(`Error summarizing tool results: ${error.message}`);
+    } finally {
+      setIsSummarizing(false);
+    }
+  }, [toolCalls, chatId]);
 
   // Helper function to get all URLs from completed tool calls
   const getAllReferencesFromTools = useCallback(() => {
@@ -313,6 +358,19 @@ const ToolDisplay = memo(({ toolCalls, chatId, messageId }: ToolDisplayProps) =>
 
   const allReferences = getAllReferencesFromTools();
 
+  // Check if we should show the summarize option for this specific tool call
+  const shouldShowSummarizeForTool = useCallback((toolCall: IChatMessageToolCall) => {
+    // Only show summarize on the last completed tool call when all tools are done
+    const completedTools = toolCalls.filter(tool =>
+      tool.status === 'executed' || tool.status === 'error'
+    );
+    const allToolsCompleted = completedTools.length === toolCalls.length && toolCalls.length > 0;
+    const hasResults = completedTools.some(tool => tool.result);
+    const isLastCompletedTool = toolCall === completedTools[completedTools.length - 1];
+    
+    return allToolsCompleted && hasResults && isLastCompletedTool;
+  }, [toolCalls]);
+
   if (!toolCalls || toolCalls.length === 0) {
     return null;
   }
@@ -329,9 +387,9 @@ const ToolDisplay = memo(({ toolCalls, chatId, messageId }: ToolDisplayProps) =>
           const isExecuting = executingToolIds.has(toolCall.id);
           const currentStatus = toolCall.status;
           const isAutoApproved = autoApprovedTools.has(toolCall.id);
-          // Use persisted execution time if available, otherwise use local state
           const duration = toolCall.execution_time_seconds || executionDurations.get(toolCall.id);
           const isCompleted = currentStatus === 'executed' || currentStatus === 'error';
+          const showSummarize = shouldShowSummarizeForTool(toolCall);
 
           let statusDisplayKey;
           if (currentStatus === 'approved') {
@@ -429,37 +487,85 @@ const ToolDisplay = memo(({ toolCalls, chatId, messageId }: ToolDisplayProps) =>
                       {intl.formatMessage({ id: 'toolDisplay.denied' })}
                     </Typography>
                   ) : currentStatus === 'executed' ? (
-                    <Typography
-                      variant="caption"
-                      component="span"
-                      onClick={() => handleViewResult(toolCall)}
-                      sx={{
-                        cursor: 'pointer',
-                        color: 'success.main',
-                        textDecoration: 'underline',
-                        '&:hover': {
-                          color: 'success.dark',
-                        }
-                      }}
-                    >
-                      View Result {duration && `(${duration}s)`}
-                    </Typography>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <Typography
+                        variant="caption"
+                        component="span"
+                        onClick={() => handleViewResult(toolCall)}
+                        sx={{
+                          cursor: 'pointer',
+                          color: 'success.main',
+                          textDecoration: 'underline',
+                          '&:hover': {
+                            color: 'success.dark',
+                          }
+                        }}
+                      >
+                        View Result {duration && `(${duration}s)`}
+                      </Typography>
+                      
+                      {/* Add summarize link inline with View Result */}
+                      {showSummarize && (
+                        <Typography
+                          variant="caption"
+                          component="span"
+                          onClick={isSummarizing ? undefined : handleSummarize}
+                          sx={{
+                            cursor: isSummarizing ? 'default' : 'pointer',
+                            color: isSummarizing ? 'text.disabled' : 'primary.main',
+                            textDecoration: isSummarizing ? 'none' : 'underline',
+                            '&:hover': {
+                              color: isSummarizing ? 'text.disabled' : 'primary.dark',
+                            }
+                          }}
+                        >
+                          {isSummarizing 
+                            ? intl.formatMessage({ id: 'toolDisplay.summarizing' })
+                            : intl.formatMessage({ id: 'toolDisplay.summarize' })
+                          }
+                        </Typography>
+                      )}
+                    </Box>
                   ) : currentStatus === 'error' ? (
-                    <Typography
-                      variant="caption"
-                      component="span"
-                      onClick={() => handleViewResult(toolCall)}
-                      sx={{
-                        cursor: 'pointer',
-                        color: 'error.main',
-                        textDecoration: 'underline',
-                        '&:hover': {
-                          color: 'error.dark',
-                        }
-                      }}
-                    >
-                      View Error {duration && `(${duration}s)`}
-                    </Typography>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <Typography
+                        variant="caption"
+                        component="span"
+                        onClick={() => handleViewResult(toolCall)}
+                        sx={{
+                          cursor: 'pointer',
+                          color: 'error.main',
+                          textDecoration: 'underline',
+                          '&:hover': {
+                            color: 'error.dark',
+                          }
+                        }}
+                      >
+                        View Error {duration && `(${duration}s)`}
+                      </Typography>
+                      
+                      {/* Add summarize link inline with View Error too */}
+                      {showSummarize && (
+                        <Typography
+                          variant="caption"
+                          component="span"
+                          onClick={isSummarizing ? undefined : handleSummarize}
+                          sx={{
+                            cursor: isSummarizing ? 'default' : 'pointer',
+                            color: isSummarizing ? 'text.disabled' : 'primary.main',
+                            textDecoration: isSummarizing ? 'none' : 'underline',
+                            '&:hover': {
+                              color: isSummarizing ? 'text.disabled' : 'primary.dark',
+                            }
+                          }}
+                        >
+                          {isSummarizing 
+                            ? intl.formatMessage({ id: 'toolDisplay.summarizing' })
+                            : intl.formatMessage({ id: 'toolDisplay.summarize' })
+                          }
+                        </Typography>
+                      )}
+                    </Box>
                   ) : null}
                 </Box>
 
