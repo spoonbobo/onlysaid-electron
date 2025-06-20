@@ -1,7 +1,9 @@
-import { Typography, Box, Slider, Button, TextField } from "@mui/material";
+import { Typography, Box, Slider, Button, TextField, Accordion, AccordionSummary, AccordionDetails } from "@mui/material";
+import { ExpandMore } from "@mui/icons-material";
 import SettingsSection from "@/renderer/components/Settings/SettingsSection";
 import SettingsFormField from "@/renderer/components/Settings/SettingsFormField";
 import SettingsActionBar from "@/renderer/components/Settings/SettingsActionBar";
+import RulesManagement from "@/renderer/components/Settings/RulesManagement";
 import { useLLMConfigurationStore } from "@/renderer/stores/LLM/LLMConfiguration";
 import { LLMService, LLMModel } from "@/service/ai";
 import { useEffect, useState } from "react";
@@ -14,6 +16,12 @@ function LLMSettings() {
   const {
     temperature,
     setTemperature,
+    askModeSystemPrompt,
+    queryModeSystemPrompt,
+    agentModeSystemPrompt,
+    setAskModeSystemPrompt,
+    setQueryModeSystemPrompt,
+    setAgentModeSystemPrompt,
     resetToDefaults,
     ollamaBaseURL,
     setOllamaBaseURL,
@@ -60,6 +68,9 @@ function LLMSettings() {
       const llmService = new LLMService();
       await llmService.UpdateConfiguration({
         temperature,
+        askModeSystemPrompt,
+        queryModeSystemPrompt,
+        agentModeSystemPrompt,
         ollamaBaseURL
       });
       toast.success(intl.formatMessage({ id: "settings.saveSuccess" }));
@@ -101,6 +112,64 @@ function LLMSettings() {
           </Box>
           <Typography variant="caption" color="text.secondary">
             {intl.formatMessage({ id: "settings.temperatureDescription" })}
+          </Typography>
+        </SettingsFormField>
+      </SettingsSection>
+
+      <SettingsSection title={intl.formatMessage({ id: "settings.llmSettings.rules" })} sx={{ mb: 3 }}>
+        <RulesManagement />
+      </SettingsSection>
+
+      <SettingsSection title={intl.formatMessage({ id: "settings.llmSettings.systemPrompts" })} sx={{ mb: 3 }}>
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+          {intl.formatMessage({ id: "settings.llmSettings.systemPromptsDescription" })}
+        </Typography>
+
+        <SettingsFormField label={intl.formatMessage({ id: "settings.llmSettings.askModePrompt" })}>
+          <TextField
+            fullWidth
+            multiline
+            rows={6}
+            value={askModeSystemPrompt}
+            onChange={(e) => setAskModeSystemPrompt(e.target.value)}
+            placeholder={intl.formatMessage({ id: "settings.llmSettings.askModePromptPlaceholder" })}
+            variant="outlined"
+            size="small"
+          />
+          <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
+            {intl.formatMessage({ id: "settings.llmSettings.askModePromptDescription" })}
+          </Typography>
+        </SettingsFormField>
+
+        <SettingsFormField label={intl.formatMessage({ id: "settings.llmSettings.queryModePrompt" })}>
+          <TextField
+            fullWidth
+            multiline
+            rows={6}
+            value={queryModeSystemPrompt}
+            onChange={(e) => setQueryModeSystemPrompt(e.target.value)}
+            placeholder={intl.formatMessage({ id: "settings.llmSettings.queryModePromptPlaceholder" })}
+            variant="outlined"
+            size="small"
+          />
+          <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
+            {intl.formatMessage({ id: "settings.llmSettings.queryModePromptDescription" })}
+          </Typography>
+        </SettingsFormField>
+
+        <SettingsFormField label={intl.formatMessage({ id: "settings.llmSettings.agentModePrompt" })}>
+          <TextField
+            fullWidth
+            multiline
+            rows={6}
+            value={agentModeSystemPrompt}
+            onChange={(e) => setAgentModeSystemPrompt(e.target.value)}
+            placeholder={intl.formatMessage({ id: "settings.llmSettings.agentModePromptPlaceholder" })}
+            variant="outlined"
+            size="small"
+          />
+          <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
+            {intl.formatMessage({ id: "settings.llmSettings.agentModePromptDescription" })}
           </Typography>
         </SettingsFormField>
       </SettingsSection>

@@ -18,6 +18,7 @@ import {
   IUserDeviceUpdateArgs,
   IUserDeviceRemoveArgs
 } from '@/../../types/User/UserDevice';
+import type { N8nTestConnectionArgs, N8nTestConnectionResult } from './n8n';
 
 // namespace
 type AuthChannels = 'auth:sign-in' | 'auth:signed-in' | 'auth:cancel';
@@ -143,6 +144,9 @@ type CryptoChannels =
   | 'crypto:derive-chat-key'
   | 'crypto:derive-workspace-key';
 
+// Add health check channels
+type HealthCheckChannels = 'health:start-periodic-check' | 'health:stop-periodic-check' | 'health:check' | 'health:check-failed' | 'health:is-running';
+
 export type Channels =
   | AuthChannels
   | GoogleAuthChannels
@@ -164,7 +168,8 @@ export type Channels =
   | AIChannels
   | OneasiaChannels
   | AppChannels
-  | CryptoChannels;
+  | CryptoChannels
+  | HealthCheckChannels;
 
 const electronHandler = {
   ipcRenderer: {
@@ -419,6 +424,25 @@ const electronHandler = {
       ipcRenderer.invoke('crypto:derive-chat-key', chatId, workspaceId),
     deriveWorkspaceKey: (workspaceId: string, context?: string) => 
       ipcRenderer.invoke('crypto:derive-workspace-key', workspaceId, context),
+  },
+  n8nApi: {
+    testConnection: (args: { apiUrl: string; apiKey: string }) => 
+      ipcRenderer.invoke('n8n:test-connection', args),
+    getWorkflows: (args: { apiUrl: string; apiKey: string }) => 
+      ipcRenderer.invoke('n8n:get-workflows', args),
+    toggleWorkflow: (args: { apiUrl: string; apiKey: string; workflowId: string; active: boolean }) => 
+      ipcRenderer.invoke('n8n:toggle-workflow', args),
+  },
+  // Add health check handler
+  healthCheck: {
+    startPeriodicCheck: (token: string) => ipcRenderer.invoke('health:start-periodic-check', token),
+    stopPeriodicCheck: () => ipcRenderer.invoke('health:stop-periodic-check'),
+    checkHealth: (token: string) => ipcRenderer.invoke('health:check', token),
+    isRunning: () => ipcRenderer.invoke('health:is-running'),
+    onHealthCheckFailed: (callback: (event: IpcRendererEvent) => void) => {
+      ipcRenderer.on('health:check-failed', callback);
+      return () => ipcRenderer.removeListener('health:check-failed', callback);
+    },
   },
 };
 

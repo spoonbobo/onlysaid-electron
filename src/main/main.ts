@@ -36,6 +36,8 @@ import { setupOneasiaHandlers } from './oneasia';
 import { setupMenuBarHandlers, unregisterMenuAccelerators } from './menubar';
 import { setupAppHandlers } from './app';
 import { setupCryptoHandlers } from './crypto/cryptoHandlers';
+import { setupN8nHandlers } from './n8n';
+import { setupHealthCheckHandlers, cleanupHealthCheck } from './healthcheck';
 // Load environment variables
 dotenv.config();
 
@@ -55,6 +57,8 @@ setupFileHandlers();
 setupStorageHandlers();
 setupAppHandlers();
 setupCryptoHandlers();
+setupN8nHandlers();
+setupHealthCheckHandlers();
 // Initialize authentication modules
 initAuth(process.env.ONLYSAID_API_URL || '', process.env.ONLYSAID_DOMAIN || '');
 
@@ -342,6 +346,10 @@ app.on('will-quit', (event) => {
     // Unregister global shortcuts
     unregisterMenuAccelerators();
     console.log('Global shortcuts unregistered');
+
+    // Clean up health check
+    cleanupHealthCheck();
+    console.log('Health check cleaned up');
 
     // Close database
     closeDatabase();

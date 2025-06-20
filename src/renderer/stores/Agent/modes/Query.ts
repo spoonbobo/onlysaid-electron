@@ -2,8 +2,10 @@ import { v4 as uuidv4 } from 'uuid';
 import { IChatMessage } from '@/../../types/Chat/Message';
 import { IUser } from '@/../../types/User/User';
 import { useKBSettingsStore } from '@/renderer/stores/KB/KBSettingStore';
+import { useLLMConfigurationStore } from '@/renderer/stores/LLM/LLMConfiguration';
 import { OpenAIMessage, OpenAIStreamOptions } from '@/renderer/stores/Stream/StreamStore';
 import { getAgentFromStore } from '@/utils/agent';
+import { appendRulesToSystemPrompt } from '@/utils/rules';
 
 // System prompt for Query Mode
 export const queryModeSystemPrompt = (
@@ -35,6 +37,35 @@ export const queryModeSystemPrompt = (
   `;
 };
 
+// Helper function to get system prompt with fallback and rules
+const getSystemPrompt = (
+  user: IUser,
+  agent: IUser,
+  kbIds: string[],
+  queryEngine: string,
+  embeddingModel: string
+): string => {
+  const { queryModeSystemPrompt: customPrompt } = useLLMConfigurationStore.getState();
+  
+  let systemPrompt = '';
+  if (customPrompt && customPrompt.trim()) {
+    // Replace placeholders in custom prompt
+    systemPrompt = customPrompt
+      .replace(/\{agent\.username\}/g, agent.username)
+      .replace(/\{user\.username\}/g, user.username)
+      .replace(/\{agent_username\}/g, agent.username)
+      .replace(/\{user_username\}/g, user.username)
+      .replace(/\{kbIds\}/g, kbIds.join(', '))
+      .replace(/\{queryEngine\}/g, queryEngine)
+      .replace(/\{embeddingModel\}/g, embeddingModel);
+  } else {
+    // Fallback to default prompt
+    systemPrompt = queryModeSystemPrompt(user, agent, kbIds, queryEngine, embeddingModel);
+  }
+  
+  // Append rules for query mode
+  return appendRulesToSystemPrompt(systemPrompt, 'query');
+};
 
 interface ProcessQueryModeAIResponseParams {
   activeChatId: string;
@@ -108,10 +139,30 @@ export async function processQueryModeAIResponse({
       return { role: role, content: msg.text || "" };
     });
 
-    const messagesArgumentForStream: OpenAIMessage[] = [
-      ...conversationHistoryForPayload,
-      { role: "user", content: userMessageText }
-    ];
+    // Get system prompt with custom prompt support
+    let systemPromptText = "";
+    if (currentUser && assistantSender) {
+      systemPromptText = getSystemPrompt(
+        currentUser,
+        assistantSender,
+        selectedKbIds,
+        queryEngineLLM || "",
+        embeddingEngine || ""
+      );
+    }
+
+    const messagesArgumentForStream: OpenAIMessage[] = [];
+    
+    // Add system prompt if available
+    if (systemPromptText) {
+      messagesArgumentForStream.push({ role: "system", content: systemPromptText });
+    }
+
+    // Add conversation history
+    messagesArgumentForStream.push(...conversationHistoryForPayload);
+    
+    // Add current user message
+    messagesArgumentForStream.push({ role: "user", content: userMessageText });
 
     const effectiveModelId = queryEngineLLM || modelId;
 

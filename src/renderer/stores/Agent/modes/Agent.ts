@@ -5,10 +5,12 @@ import { OpenAIMessage } from '@/renderer/stores/Stream/StreamStore';
 import { useMCPSettingsStore } from '@/renderer/stores/MCP/MCPSettingsStore';
 import { useMCPStore } from '@/renderer/stores/MCP/MCPStore';
 import { useLLMStore } from '@/renderer/stores/LLM/LLMStore';
+import { useLLMConfigurationStore } from '@/renderer/stores/LLM/LLMConfiguration';
 import { getAgentFromStore } from '@/utils/agent';
 import { getServiceTools, formatMCPName } from '@/utils/mcp';
 import { formatMessagesForContext } from '@/utils/message';
 import type OpenAI from 'openai';
+import { appendRulesToSystemPrompt } from '@/utils/rules';
 
 export const agentModeSystemPrompt = (user: IUser, agent: IUser) => {
   return `
@@ -18,6 +20,27 @@ You have access to a set of tools. Your available tools will be provided to you 
 Based on messages in this chat, select and use tools that are most relevant to the conversation and briefly explain why you are using them.
 If no tools are relevant, you can ignore the messages and do nothing.
   `.trim();
+};
+
+// Helper function to get system prompt with fallback and rules
+const getSystemPrompt = (user: IUser, agent: IUser): string => {
+  const { agentModeSystemPrompt: customPrompt } = useLLMConfigurationStore.getState();
+  
+  let systemPrompt = '';
+  if (customPrompt && customPrompt.trim()) {
+    // Replace placeholders in custom prompt
+    systemPrompt = customPrompt
+      .replace(/\{agent\.username\}/g, agent.username)
+      .replace(/\{user\.username\}/g, user.username)
+      .replace(/\{agent_username\}/g, agent.username)
+      .replace(/\{user_username\}/g, user.username);
+  } else {
+    // Fallback to default prompt
+    systemPrompt = agentModeSystemPrompt(user, agent);
+  }
+  
+  // Append rules for agent mode
+  return appendRulesToSystemPrompt(systemPrompt, 'agent');
 };
 
 interface ProcessAgentModeAIResponseParams {
@@ -130,7 +153,7 @@ export async function processAgentModeAIResponse({
 
   let systemPromptText = "";
   if (currentUser && assistantSender) {
-    systemPromptText = agentModeSystemPrompt(currentUser, assistantSender);
+    systemPromptText = getSystemPrompt(currentUser, assistantSender);
   }
 
   const assistantMessage: IChatMessage = {

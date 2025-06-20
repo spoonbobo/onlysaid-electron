@@ -345,14 +345,15 @@ function UserPreferences() {
                           </Box>
                         }
                         secondary={
-                          <Box>
-                            <Typography variant="caption" color="text.secondary">
+                          <>
+                            <Typography variant="caption" color="text.secondary" component="span">
                               <FormattedMessage 
                                 id="settings.deviceId" 
                                 values={{ id: device.device_id }}
                               />
                             </Typography>
-                            <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                            <br />
+                            <Typography variant="caption" color="text.secondary" component="span">
                               <FormattedMessage 
                                 id="settings.lastSeen" 
                                 values={{ 
@@ -360,7 +361,7 @@ function UserPreferences() {
                                 }}
                               />
                             </Typography>
-                          </Box>
+                          </>
                         }
                       />
                     </ListItem>

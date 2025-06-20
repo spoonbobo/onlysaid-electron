@@ -31,6 +31,12 @@ import AboutDialog from "@/renderer/components/Dialog/AboutDialog";
 import { useWorkspaceIcons } from '@/renderer/hooks/useWorkspaceIcons';
 import { useAppAssets } from '@/renderer/hooks/useAppAssets';
 import { useUserStore } from '@/renderer/stores/User/UserStore';
+import DisclaimerDialog from "@/renderer/components/Dialog/DisclaimerDialog";
+import { useAgentStore } from '@/renderer/stores/Agent/AgentStore';
+import { useUserTokenStore } from '@/renderer/stores/User/UserToken';
+import { useCryptoStore } from '@/renderer/stores/Crypto/CryptoStore';
+import { toast } from '@/utils/toast';
+import { createNotificationsForUnreadMessages } from '@/utils/notifications';
 
 const TitleBar = () => {
   const intl = useIntl();
@@ -38,6 +44,7 @@ const TitleBar = () => {
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
   const [showNotifications, setShowNotifications] = useState(false);
   const [showAbout, setShowAbout] = useState(false);
+  const [showDisclaimer, setShowDisclaimer] = useState(false);
   const [appIcon, setAppIcon] = useState<string | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
 
@@ -63,6 +70,10 @@ const TitleBar = () => {
 
   // Add app assets hook
   const { getAsset } = useAppAssets();
+
+  // Get user and disclaimer state
+  const showDisclaimerFromStore = useUserStore((state) => state.showDisclaimer);
+  const setShowDisclaimerInStore = useUserStore((state) => state.setShowDisclaimer);
 
   // Define available contexts for search with sections
   const availableContexts = useMemo(() => {
@@ -218,6 +229,8 @@ const TitleBar = () => {
   const handleMenuAction = (action: string) => {
     if (action === 'help:about') {
       setShowAbout(true);
+    } else if (action === 'help:disclaimer') {
+      setShowDisclaimer(true);
     } else {
       window.electron.ipcRenderer.invoke('menu-action', action);
     }
@@ -238,6 +251,55 @@ const TitleBar = () => {
 
   const handleCloseAbout = () => {
     setShowAbout(false);
+  };
+
+  const handleDisclaimerAccept = () => {
+    setShowDisclaimerInStore(false);
+    setShowDisclaimer(false);
+    
+    // Continue with normal login flow after disclaimer acceptance
+    if (user) {
+      const { fetchAgent, clearAgent } = useAgentStore.getState();
+      const { token } = useUserTokenStore.getState();
+      
+      // Fetch agent
+      if (user.agent_id && token) {
+        fetchAgent(user.agent_id, token);
+        console.log('[TitleBar] Fetching agent after disclaimer acceptance');
+      } else {
+        clearAgent();
+      }
+
+      // Auto-unlock encryption
+      const { unlockForUser } = useCryptoStore.getState();
+      if (user.id && token) {
+        unlockForUser(user.id, token).then((success) => {
+          if (success) {
+            console.log('[TitleBar] Encryption unlocked after disclaimer acceptance');
+            // Create notifications
+            setTimeout(() => {
+              createNotificationsForUnreadMessages();
+            }, 2000);
+          }
+        });
+      }
+
+      // Navigate to home
+      setSelectedContext({ name: "home", type: "home", section: "homepage" });
+      
+      const userName = user.username || 'User';
+      toast.success(intl.formatMessage({ id: 'toast.welcome' }, { name: userName }));
+    }
+  };
+
+  const handleDisclaimerDecline = () => {
+    setShowDisclaimerInStore(false);
+    setShowDisclaimer(false);
+    
+    // Log out user if they decline
+    const { logout } = useUserStore.getState();
+    logout();
+    toast.info(intl.formatMessage({ id: 'disclaimer.declined' }));
   };
 
   const handleGoBack = () => {
@@ -848,6 +910,11 @@ const TitleBar = () => {
             </Typography>
           </MenuItem>
           <Divider />
+          <MenuItem onClick={() => handleMenuAction('help:disclaimer')}>
+            <Typography variant="body2">
+              {intl.formatMessage({ id: 'titleBar.help.disclaimer' })}
+            </Typography>
+          </MenuItem>
           <MenuItem onClick={() => handleMenuAction('help:about')}>
             <Typography variant="body2">
               {intl.formatMessage({ id: 'titleBar.help.about' })}
@@ -864,6 +931,12 @@ const TitleBar = () => {
       <AboutDialog
         open={showAbout}
         onClose={handleCloseAbout}
+      />
+
+      <DisclaimerDialog
+        open={showDisclaimerFromStore || showDisclaimer}
+        onAccept={handleDisclaimerAccept}
+        onDecline={handleDisclaimerDecline}
       />
     </>
   );

@@ -2,7 +2,9 @@ import { v4 as uuidv4 } from 'uuid';
 import { IChatMessage } from '@/../../types/Chat/Message';
 import { IUser } from '@/../../types/User/User';
 import { OpenAIMessage } from '@/renderer/stores/Stream/StreamStore';
+import { useLLMConfigurationStore } from '@/renderer/stores/LLM/LLMConfiguration';
 import { getAgentFromStore } from '@/utils/agent';
+import { appendRulesToSystemPrompt } from '@/utils/rules';
 
 export const askModeSystemPrompt = (user: IUser, agent: IUser) => {
   return `
@@ -14,6 +16,27 @@ export const askModeSystemPrompt = (user: IUser, agent: IUser) => {
 
   You will be provided a list of messages in a chat with timestamps as contexts for your references.
   `;
+};
+
+// Helper function to get system prompt with fallback and rules
+const getSystemPrompt = (user: IUser, agent: IUser): string => {
+  const { askModeSystemPrompt: customPrompt } = useLLMConfigurationStore.getState();
+  
+  let systemPrompt = '';
+  if (customPrompt && customPrompt.trim()) {
+    // Replace placeholders in custom prompt
+    systemPrompt = customPrompt
+      .replace(/\{agent\.username\}/g, agent.username)
+      .replace(/\{user\.username\}/g, user.username)
+      .replace(/\{agent_username\}/g, agent.username)
+      .replace(/\{user_username\}/g, user.username);
+  } else {
+    // Fallback to default prompt
+    systemPrompt = askModeSystemPrompt(user, agent);
+  }
+  
+  // Append rules for ask mode
+  return appendRulesToSystemPrompt(systemPrompt, 'ask');
 };
 
 interface ProcessAskModeAIResponseParams {
@@ -58,7 +81,7 @@ export async function processAskModeAIResponse({
 
   let systemPrompt = "";
   if (currentUser && assistantSender) {
-    systemPrompt = askModeSystemPrompt(currentUser, assistantSender);
+    systemPrompt = getSystemPrompt(currentUser, assistantSender);
   }
 
   const assistantMessage: IChatMessage = {

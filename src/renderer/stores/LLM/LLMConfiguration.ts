@@ -3,6 +3,13 @@ import { persist } from "zustand/middleware";
 
 type AIMode = "none" | "ask" | "query" | "agent";
 
+interface Rule {
+  id: string;
+  content: string;
+  modes: AIMode[];
+  enabled: boolean;
+}
+
 interface LLMConfigurationState {
   // General settings
   temperature: number;
@@ -18,6 +25,14 @@ interface LLMConfigurationState {
   savedProvider: "openai" | "deepseek" | "ollama" | "oneasia" | null;
   savedModelId: string | null;
   savedModelName: string | null;
+
+  // Rules for different modes
+  rules: Rule[];
+
+  // System prompts for different modes
+  askModeSystemPrompt: string;
+  queryModeSystemPrompt: string;
+  agentModeSystemPrompt: string;
 
   // Public LLM settings
   openAIKey: string;
@@ -43,6 +58,17 @@ interface LLMConfigurationState {
   setSelectedModel: (provider: "openai" | "deepseek" | "ollama" | "oneasia" | null, modelId: string | null, modelName: string | null) => void;
   setSavedModel: (provider: "openai" | "deepseek" | "ollama" | "oneasia" | null, modelId: string | null, modelName: string | null) => void;
   resetSelection: () => void;
+  
+  // Rules management
+  addRule: (content: string, modes: AIMode[]) => void;
+  updateRule: (id: string, updates: Partial<Rule>) => void;
+  deleteRule: (id: string) => void;
+  toggleRuleEnabled: (id: string) => void;
+  getRulesForMode: (mode: AIMode) => Rule[];
+
+  setAskModeSystemPrompt: (prompt: string) => void;
+  setQueryModeSystemPrompt: (prompt: string) => void;
+  setAgentModeSystemPrompt: (prompt: string) => void;
   setOpenAIKey: (key: string) => void;
   setDeepSeekKey: (key: string) => void;
   setOneasiaKey: (key: string) => void;
@@ -72,6 +98,12 @@ const DEFAULT_CONFIG = {
   savedProvider: null,
   savedModelId: null,
   savedModelName: null,
+  // Rules defaults
+  rules: [] as Rule[],
+  // System prompt defaults (empty means use built-in defaults)
+  askModeSystemPrompt: "",
+  queryModeSystemPrompt: "",
+  agentModeSystemPrompt: "",
   openAIKey: "",
   deepSeekKey: "",
   oneasiaKey: "",
@@ -102,6 +134,50 @@ export const useLLMConfigurationStore = create<LLMConfigurationState>()(
         set({ savedProvider: provider, savedModelId: modelId, savedModelName: modelName }),
       resetSelection: () =>
         set({ provider: null, modelId: null, modelName: null }),
+
+      // Rules management
+      addRule: (content, modes) => {
+        const newRule: Rule = {
+          id: `rule-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+          content,
+          modes,
+          enabled: true,
+        };
+        set(state => ({ rules: [...state.rules, newRule] }));
+      },
+
+      updateRule: (id, updates) => {
+        set(state => ({
+          rules: state.rules.map(rule => 
+            rule.id === id ? { ...rule, ...updates } : rule
+          )
+        }));
+      },
+
+      deleteRule: (id) => {
+        set(state => ({
+          rules: state.rules.filter(rule => rule.id !== id)
+        }));
+      },
+
+      toggleRuleEnabled: (id) => {
+        set(state => ({
+          rules: state.rules.map(rule => 
+            rule.id === id ? { ...rule, enabled: !rule.enabled } : rule
+          )
+        }));
+      },
+
+      getRulesForMode: (mode) => {
+        const state = get();
+        return state.rules.filter(rule => 
+          rule.enabled && rule.modes.includes(mode)
+        );
+      },
+
+      setAskModeSystemPrompt: (prompt) => set({ askModeSystemPrompt: prompt }),
+      setQueryModeSystemPrompt: (prompt) => set({ queryModeSystemPrompt: prompt }),
+      setAgentModeSystemPrompt: (prompt) => set({ agentModeSystemPrompt: prompt }),
       setAIMode: (aiMode) => {
         const state = get();
 
@@ -173,3 +249,6 @@ export const useLLMConfigurationStore = create<LLMConfigurationState>()(
 
 // Export the store as the selected model store as well for backward compatibility
 export const useSelectedModelStore = useLLMConfigurationStore;
+
+// Export the Rule type for use in other components
+export type { Rule, AIMode };

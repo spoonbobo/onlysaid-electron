@@ -12,14 +12,55 @@ import {
 import { useIntl } from 'react-intl';
 import { Login, AutoAwesome, Groups, WorkspacePremium } from '@mui/icons-material';
 import { useUserStore } from '@/renderer/stores/User/UserStore';
+import { useTopicStore } from '@/renderer/stores/Topic/TopicStore';
+import { useChatStore } from '@/renderer/stores/Chat/ChatStore';
+import { useAgentStore } from '@/renderer/stores/Agent/AgentStore';
 
 const GuestHomePage = () => {
   const intl = useIntl();
   const theme = useTheme();
   const { signIn, isLoading } = useUserStore();
+  const { setSelectedContext } = useTopicStore();
+  const { createGuestAgent } = useAgentStore();
+  const { getChat, setActiveChat } = useChatStore();
 
   const handleSignIn = () => {
     signIn();
+  };
+
+  const handleTryLocal = async () => {
+    try {
+      // Initialize guest agent
+      createGuestAgent();
+      
+      // Navigate to home agents section
+      setSelectedContext({ 
+        name: "home", 
+        type: "home", 
+        section: "agents" 
+      });
+
+      // Create or get a guest chat
+      const guestUserId = "guest";
+      await getChat(guestUserId, 'agent');
+      
+      // Get the first available agent chat and set it as active
+      setTimeout(() => {
+        const currentChats = useChatStore.getState().chats;
+        const agentChats = currentChats.filter(chat => chat.type === 'agent');
+        
+        if (agentChats.length > 0) {
+          const firstAgentChat = agentChats[0];
+          const homeContextId = "home:home";
+          
+          useTopicStore.getState().setSelectedTopic('agents', firstAgentChat.id);
+          setActiveChat(firstAgentChat.id, homeContextId);
+        }
+      }, 100);
+      
+    } catch (error) {
+      console.error('[GuestHomePage] Error starting local chat:', error);
+    }
   };
 
   return (
@@ -79,45 +120,83 @@ const GuestHomePage = () => {
               </Typography>
             </Stack>
 
-            {/* Sign In Button */}
-            <Button
-              variant="contained"
-              size="large"
-              onClick={handleSignIn}
-              disabled={isLoading}
-              startIcon={<Login />}
-              sx={{
-                px: 4,
-                py: 1.5,
-                borderRadius: 2,
-                fontSize: '1.1rem',
-                fontWeight: 'bold',
-                textTransform: 'none',
-                boxShadow: `0 4px 20px ${alpha(theme.palette.primary.main, 0.3)}`,
-                '&:hover': {
-                  boxShadow: `0 6px 24px ${alpha(theme.palette.primary.main, 0.4)}`,
-                  transform: 'translateY(-2px)'
-                },
-                '&:disabled': {
-                  opacity: 0.7
-                },
-                transition: 'all 0.2s ease-in-out'
-              }}
-            >
-              {isLoading 
-                ? intl.formatMessage({ id: 'settings.signingIn' })
-                : intl.formatMessage({ id: 'guest.signInButton' })
-              }
-            </Button>
+            {/* Action Buttons */}
+            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={3} alignItems="center">
+              {/* Try Local Button */}
+              <Button
+                variant="outlined"
+                size="large"
+                onClick={handleTryLocal}
+                startIcon={<AutoAwesome />}
+                sx={{
+                  px: 4,
+                  py: 1.5,
+                  borderRadius: 2,
+                  fontSize: '1.1rem',
+                  fontWeight: 'bold',
+                  textTransform: 'none',
+                  borderColor: theme.palette.primary.main,
+                  color: theme.palette.primary.main,
+                  '&:hover': {
+                    borderColor: theme.palette.primary.dark,
+                    backgroundColor: alpha(theme.palette.primary.main, 0.05),
+                    transform: 'translateY(-2px)'
+                  },
+                  transition: 'all 0.2s ease-in-out'
+                }}
+              >
+                {intl.formatMessage({ id: 'guest.tryLocalButton' })}
+              </Button>
 
-            {/* Sign In Message */}
-            <Typography
-              variant="body2"
-              color="text.secondary"
-              sx={{ maxWidth: 500, fontSize: '0.9rem' }}
-            >
-              {intl.formatMessage({ id: 'guest.signInMessage' })}
-            </Typography>
+              {/* Sign In Button */}
+              <Button
+                variant="contained"
+                size="large"
+                onClick={handleSignIn}
+                disabled={isLoading}
+                startIcon={<Login />}
+                sx={{
+                  px: 4,
+                  py: 1.5,
+                  borderRadius: 2,
+                  fontSize: '1.1rem',
+                  fontWeight: 'bold',
+                  textTransform: 'none',
+                  boxShadow: `0 4px 20px ${alpha(theme.palette.primary.main, 0.3)}`,
+                  '&:hover': {
+                    boxShadow: `0 6px 24px ${alpha(theme.palette.primary.main, 0.4)}`,
+                    transform: 'translateY(-2px)'
+                  },
+                  '&:disabled': {
+                    opacity: 0.7
+                  },
+                  transition: 'all 0.2s ease-in-out'
+                }}
+              >
+                {isLoading 
+                  ? intl.formatMessage({ id: 'settings.signingIn' })
+                  : intl.formatMessage({ id: 'guest.signInButton' })
+                }
+              </Button>
+            </Stack>
+
+            {/* Action Messages */}
+            <Stack spacing={1} alignItems="center">
+              <Typography
+                variant="body2"
+                color="text.secondary"
+                sx={{ maxWidth: 500, fontSize: '0.9rem' }}
+              >
+                {intl.formatMessage({ id: 'guest.tryLocalMessage' })}
+              </Typography>
+              <Typography
+                variant="body2"
+                color="text.secondary"
+                sx={{ maxWidth: 500, fontSize: '0.9rem' }}
+              >
+                {intl.formatMessage({ id: 'guest.signInMessage' })}
+              </Typography>
+            </Stack>
           </Stack>
         </Paper>
 

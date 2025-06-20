@@ -19,6 +19,8 @@ interface UserStore {
   devicesError: string | null;
   timeoutId: NodeJS.Timeout | null;
   hasUpdatedLastSeenOnStartup: boolean;
+  showDisclaimer: boolean;
+  healthCheckCleanup: (() => void) | null;
   
   setUser: (user: IUser | null) => void;
   updateUser: (user: IUser) => void;
@@ -28,6 +30,8 @@ interface UserStore {
   handleAuthentication: (input: { response?: any; token?: string; cookieName?: string | null }, intl?: any) => Promise<void>;
   clearAuthTimeout: () => void;
   ensureCryptoUnlocked: () => Promise<void>;
+  setShowDisclaimer: (show: boolean) => void;
+  isFirstLogin: (user: IUser) => boolean;
   
   // Device management actions
   fetchDevices: () => Promise<void>;
@@ -38,6 +42,12 @@ interface UserStore {
   clearDevices: () => void;
   updateDeviceLastSeenOnStartup: (deviceId: string) => Promise<void>;
   autoRegisterDeviceOnConnect: () => Promise<void>;
+  startHealthCheck: () => void;
+  stopHealthCheck: () => void;
+  handleHealthCheckFailure: () => void;
+  checkHealthStatus: () => Promise<void>;
+  testHealthCheck: () => Promise<void>;
+  startHealthCheckIfLoggedIn: () => void;
 }
 
 export const useUserStore = create<UserStore>()(
@@ -51,16 +61,42 @@ export const useUserStore = create<UserStore>()(
       devicesError: null,
       timeoutId: null,
       hasUpdatedLastSeenOnStartup: false,
+      showDisclaimer: false,
+      healthCheckCleanup: null,
 
       setUser: (user) => {
         set({ user: user ? { ...user } : null });
         
-        // Initialize guest agent when user is null (offline mode)
         if (!user) {
+          // Stop health check when user is null
+          get().stopHealthCheck();
+          
           const { createGuestAgent } = useAgentStore.getState();
           createGuestAgent();
-          console.log('[UserStore] User set to null, initializing guest agent');
+          console.log('[UserStore] User set to null, stopping health check, initializing guest agent');
+        } else {
+          // Start health check when user is set
+          console.log('[UserStore] User set, will start health check');
+          setTimeout(() => {
+            get().startHealthCheckIfLoggedIn();
+          }, 1000);
         }
+      },
+
+      isFirstLogin: (user: IUser) => {
+        if (!user.created_at || !user.last_login) {
+          return false;
+        }
+        
+        const createdAt = new Date(user.created_at);
+        const lastLogin = new Date(user.last_login);
+        const diffInMinutes = (lastLogin.getTime() - createdAt.getTime()) / (1000 * 60);
+        
+        return diffInMinutes < 1;
+      },
+
+      setShowDisclaimer: (show: boolean) => {
+        set({ showDisclaimer: show });
       },
 
       signIn: () => {
@@ -159,9 +195,24 @@ export const useUserStore = create<UserStore>()(
             console.log('[UserStore] User payload:', userPayload);
 
             if (userPayload) {
-              set({ user: { ...userPayload }, error: null, isLoading: false });
+              // Check if this is a first login
+              const isFirstLogin = get().isFirstLogin(userPayload);
+              
+              set({ 
+                user: { ...userPayload }, 
+                error: null, 
+                isLoading: false,
+                showDisclaimer: isFirstLogin
+              });
               setSignInError(null);
               
+              // If first login, show disclaimer and return early
+              if (isFirstLogin) {
+                console.log('[UserStore] First login detected, showing disclaimer');
+                return;
+              }
+              
+              // Continue with normal login flow
               // Fetch agent
               const { fetchAgent, clearAgent } = useAgentStore.getState();
               if (userPayload.agent_id && currentActiveToken) {
@@ -179,7 +230,6 @@ export const useUserStore = create<UserStore>()(
               
               if (cryptoSuccess) {
                 console.log('[UserStore] ✅ Encryption unlocked');
-                toast.success('🔐 End-to-end encryption enabled');
 
                 // Add this after the encryption unlock and before navigation
                 console.log('[UserStore] 🔔 Creating notifications for unread messages...');
@@ -194,8 +244,15 @@ export const useUserStore = create<UserStore>()(
 
                 const userName = userPayload.username || 'User';
                 const successMsg = intl ? intl.formatMessage({ id: 'toast.welcome' }, { name: userName }) : `Welcome, ${userName}!`;
-                toast.success(successMsg);
+                // toast.success(successMsg);
                 console.log('[UserStore] Authentication successful for:', userName);
+
+                // Start health check after successful login
+                setTimeout(() => {
+                  console.log('[UserStore] 🔍 Starting health check after successful authentication...');
+                  get().startHealthCheckIfLoggedIn();
+                }, 2000);
+
                 return;
               } else {
                 console.warn('[UserStore] ⚠️ Encryption failed to unlock');
@@ -208,7 +265,7 @@ export const useUserStore = create<UserStore>()(
 
               const userName = userPayload.username || 'User';
               const successMsg = intl ? intl.formatMessage({ id: 'toast.welcome' }, { name: userName }) : `Welcome, ${userName}!`;
-              toast.success(successMsg);
+              // toast.success(successMsg);
               console.log('[UserStore] Authentication successful for:', userName);
               return;
             }
@@ -254,7 +311,6 @@ export const useUserStore = create<UserStore>()(
                   
                   if (cryptoSuccess) {
                     console.log('[UserStore] ✅ Encryption unlocked (response path)');
-                    toast.success('🔐 End-to-end encryption enabled');
 
                     // Add this after the encryption unlock and before navigation
                     console.log('[UserStore] 🔔 Creating notifications for unread messages (response path)...');
@@ -275,6 +331,13 @@ export const useUserStore = create<UserStore>()(
                       ));
                     }
                     console.log('[UserStore] Authentication successful for (response path):', userName);
+
+                    // Start health check after successful login
+                    setTimeout(() => {
+                      console.log('[UserStore] 🔍 Starting health check after successful authentication...');
+                      get().startHealthCheckIfLoggedIn();
+                    }, 2000);
+
                     return;
                   } else {
                     console.warn('[UserStore] ⚠️ Encryption failed to unlock (response path)');
@@ -343,22 +406,26 @@ export const useUserStore = create<UserStore>()(
 
       logout: () => {
         const { clearToken } = useUserTokenStore.getState();
-        const { createGuestAgent } = useAgentStore.getState(); // Changed from clearAgent
+        const { createGuestAgent } = useAgentStore.getState();
         const { close } = useSocketStore.getState();
         const { lockCrypto } = useCryptoStore.getState();
+
+        // Stop health check first
+        get().stopHealthCheck();
 
         set({ 
           user: null,
           devices: [],
           devicesError: null,
           hasUpdatedLastSeenOnStartup: false,
+          healthCheckCleanup: null,
         });
         clearToken();
-        createGuestAgent(); // Create guest agent instead of clearing
+        createGuestAgent();
         lockCrypto();
         close();
         
-        console.log('[UserStore] User logged out, guest agent initialized');
+        console.log('[UserStore] User logged out, health check stopped, guest agent initialized');
       },
 
       updateUser: (user: IUser) => {
@@ -604,7 +671,6 @@ export const useUserStore = create<UserStore>()(
             const success = await unlockForUser(user.id, token);
             if (success) {
               console.log('[UserStore] ✅ Crypto auto-unlocked for existing user');
-              toast.success('🔐 End-to-end encryption enabled');
             } else {
               console.warn('[UserStore] ⚠️ Failed to auto-unlock crypto for existing user');
             }
@@ -617,6 +683,120 @@ export const useUserStore = create<UserStore>()(
           console.log('[UserStore] ⚠️ Cannot unlock crypto:', { hasUser: !!user?.id, hasToken: !!token, isUnlocked });
         }
       },
+
+      startHealthCheck: () => {
+        const { user } = get();
+        const { token } = useUserTokenStore.getState();
+        
+        if (!user || !token) {
+          console.warn('[UserStore] Cannot start health check - no user or token');
+          return;
+        }
+
+        console.log('[UserStore] Starting health check for user:', user.username);
+        console.log('[UserStore] Token preview:', token.substring(0, 10) + '...');
+        
+        // Start periodic health check
+        window.electron.healthCheck.startPeriodicCheck(token);
+        
+        // Set up health check failure listener
+        const cleanup = window.electron.healthCheck.onHealthCheckFailed(() => {
+          console.warn('[UserStore] 🚨 Health check failed event received!');
+          get().handleHealthCheckFailure();
+        });
+        
+        set({ healthCheckCleanup: cleanup });
+        
+        // Check status after starting
+        setTimeout(() => {
+          get().checkHealthStatus();
+        }, 1000);
+      },
+
+      stopHealthCheck: () => {
+        const { healthCheckCleanup } = get();
+        
+        console.log('[UserStore] Stopping health check');
+        
+        // Stop periodic health check
+        window.electron.healthCheck.stopPeriodicCheck();
+        
+        // Clean up listener
+        if (healthCheckCleanup) {
+          healthCheckCleanup();
+          set({ healthCheckCleanup: null });
+        }
+      },
+
+      handleHealthCheckFailure: () => {
+        const { user } = get();
+        
+        console.log('[UserStore] 🚨 handleHealthCheckFailure called');
+        console.log('[UserStore] Current user:', user?.username || 'none');
+        
+        // Only handle logout if user is actually logged in
+        if (!user) {
+          console.log('[UserStore] Health check failed but no user logged in, ignoring');
+          return;
+        }
+        
+        console.warn('[UserStore] 🚨 Health check failed - user session is invalid');
+        
+        // Show notification to user
+        toast.error('Your session has expired. Please sign in again.');
+        
+        // Log out the user
+        get().logout();
+        
+        // Navigate to home screen
+        const { setSelectedContext } = useTopicStore.getState();
+        setSelectedContext({ name: "home", type: "home", section: "homepage" });
+      },
+
+      checkHealthStatus: async () => {
+        try {
+          const status = await window.electron.healthCheck.isRunning();
+          console.log('[UserStore] Health check status:', status);
+          
+          const { user } = get();
+          const { token } = useUserTokenStore.getState();
+          console.log('[UserStore] Current user:', user?.username || 'none');
+          console.log('[UserStore] Has token:', !!token);
+        } catch (error) {
+          console.error('[UserStore] Error checking health status:', error);
+        }
+      },
+
+      testHealthCheck: async () => {
+        const { user } = get();
+        const { token } = useUserTokenStore.getState();
+        
+        if (!user || !token) {
+          console.warn('[UserStore] Cannot test health check - no user or token');
+          return;
+        }
+        
+        console.log('[UserStore] Testing health check manually...');
+        try {
+          const result = await window.electron.healthCheck.checkHealth(token);
+          console.log('[UserStore] Manual health check result:', result);
+        } catch (error) {
+          console.error('[UserStore] Manual health check error:', error);
+        }
+      },
+
+      startHealthCheckIfLoggedIn: () => {
+        const { user } = get();
+        const { token } = useUserTokenStore.getState();
+        
+        if (!user || !token) {
+          console.log('[UserStore] No user logged in, skipping health check');
+          return;
+        }
+        
+        console.log('[UserStore] User is logged in, starting health check');
+        get().startHealthCheck();
+      },
     }),
     {
       name: "user-storage",
@@ -624,6 +804,16 @@ export const useUserStore = create<UserStore>()(
         user: state.user,
         devices: state.devices,
       }),
+      onRehydrateStorage: (state) => {
+        return (state, error) => {
+          if (!error && state?.user) {
+            console.log('[UserStore] Rehydrated with user, starting health check');
+            setTimeout(() => {
+              state.startHealthCheckIfLoggedIn();
+            }, 2000); // Give time for token store to rehydrate
+          }
+        };
+      },
     }
   )
 );

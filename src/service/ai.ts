@@ -12,12 +12,19 @@ export interface LLMModel {
 
 export interface LLMConfiguration {
   temperature: number;
+  // System prompts
+  askModeSystemPrompt?: string;
+  queryModeSystemPrompt?: string;
+  agentModeSystemPrompt?: string;
+  // API keys
   openAIKey: string;
   deepSeekKey: string;
   oneasiaKey: string;
+  // Enable flags
   openAIEnabled: boolean;
   deepSeekEnabled: boolean;
   oneasiaEnabled: boolean;
+  // Ollama settings
   ollamaBaseURL: string;
   ollamaModel: string;
   ollamaEnabled: boolean;
@@ -156,6 +163,19 @@ export class LLMService {
 
     if (config.temperature !== undefined) {
       store.setTemperature(config.temperature);
+    }
+
+    // Handle system prompts
+    if (config.askModeSystemPrompt !== undefined) {
+      store.setAskModeSystemPrompt(config.askModeSystemPrompt);
+    }
+
+    if (config.queryModeSystemPrompt !== undefined) {
+      store.setQueryModeSystemPrompt(config.queryModeSystemPrompt);
+    }
+
+    if (config.agentModeSystemPrompt !== undefined) {
+      store.setAgentModeSystemPrompt(config.agentModeSystemPrompt);
     }
 
     if (config.openAIKey !== undefined) {
