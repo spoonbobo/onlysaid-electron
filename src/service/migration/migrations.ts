@@ -564,6 +564,178 @@ export const featureMigrations: IMigration[] = [
       DROP TABLE messages;
       ALTER TABLE messages_temp RENAME TO messages;
     `
+  },
+  {
+    id: 'feature_020',
+    version: '2.4.0',
+    name: 'create_osswarm_tables',
+    description: 'Create OSSwarm execution tracking tables',
+    category: 'feature',
+    dependencies: ['feature_019'],
+    createdAt: '2024-01-16T00:00:00Z',
+    up: `
+      -- OSSwarm execution sessions
+      CREATE TABLE IF NOT EXISTS osswarm_executions (
+        id TEXT PRIMARY KEY,
+        task_description TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'pending', -- pending, running, completed, failed
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        started_at TIMESTAMP,
+        completed_at TIMESTAMP,
+        result TEXT,
+        error TEXT,
+        user_id TEXT,
+        chat_id TEXT,
+        workspace_id TEXT,
+        config_snapshot TEXT, -- JSON of the configuration used
+        total_agents INTEGER DEFAULT 0,
+        total_tasks INTEGER DEFAULT 0,
+        total_tool_executions INTEGER DEFAULT 0
+      );
+
+      -- Individual agents in a swarm execution
+      CREATE TABLE IF NOT EXISTS osswarm_agents (
+        id TEXT PRIMARY KEY,
+        execution_id TEXT NOT NULL,
+        agent_id TEXT NOT NULL, -- from OSSwarm core
+        role TEXT NOT NULL,
+        expertise TEXT, -- JSON array
+        status TEXT NOT NULL DEFAULT 'idle', -- idle, busy, completed, failed
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        started_at TIMESTAMP,
+        completed_at TIMESTAMP,
+        current_task TEXT,
+        FOREIGN KEY (execution_id) REFERENCES osswarm_executions(id) ON DELETE CASCADE
+      );
+
+      -- Tasks assigned to agents
+      CREATE TABLE IF NOT EXISTS osswarm_tasks (
+        id TEXT PRIMARY KEY,
+        execution_id TEXT NOT NULL,
+        agent_id TEXT NOT NULL,
+        task_description TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'pending', -- pending, running, completed, failed
+        priority INTEGER DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        started_at TIMESTAMP,
+        completed_at TIMESTAMP,
+        result TEXT,
+        error TEXT,
+        iterations INTEGER DEFAULT 0,
+        max_iterations INTEGER DEFAULT 20,
+        FOREIGN KEY (execution_id) REFERENCES osswarm_executions(id) ON DELETE CASCADE,
+        FOREIGN KEY (agent_id) REFERENCES osswarm_agents(id) ON DELETE CASCADE
+      );
+
+      -- Tool executions by agents
+      CREATE TABLE IF NOT EXISTS osswarm_tool_executions (
+        id TEXT PRIMARY KEY,
+        execution_id TEXT NOT NULL,
+        agent_id TEXT NOT NULL,
+        task_id TEXT,
+        tool_name TEXT NOT NULL,
+        tool_arguments TEXT, -- JSON
+        approval_id TEXT,
+        status TEXT NOT NULL DEFAULT 'pending', -- pending, approved, denied, executing, completed, failed
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        approved_at TIMESTAMP,
+        started_at TIMESTAMP,
+        completed_at TIMESTAMP,
+        execution_time INTEGER, -- in seconds
+        result TEXT,
+        error TEXT,
+        mcp_server TEXT,
+        human_approved BOOLEAN DEFAULT FALSE,
+        FOREIGN KEY (execution_id) REFERENCES osswarm_executions(id) ON DELETE CASCADE,
+        FOREIGN KEY (agent_id) REFERENCES osswarm_agents(id) ON DELETE CASCADE,
+        FOREIGN KEY (task_id) REFERENCES osswarm_tasks(id) ON DELETE CASCADE
+      );
+
+      -- Execution logs and updates
+      CREATE TABLE IF NOT EXISTS osswarm_logs (
+        id TEXT PRIMARY KEY,
+        execution_id TEXT NOT NULL,
+        agent_id TEXT,
+        task_id TEXT,
+        tool_execution_id TEXT,
+        log_type TEXT NOT NULL, -- info, warning, error, status_update, tool_request, tool_result
+        message TEXT NOT NULL,
+        metadata TEXT, -- JSON for additional data
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (execution_id) REFERENCES osswarm_executions(id) ON DELETE CASCADE,
+        FOREIGN KEY (agent_id) REFERENCES osswarm_agents(id) ON DELETE CASCADE,
+        FOREIGN KEY (task_id) REFERENCES osswarm_tasks(id) ON DELETE CASCADE,
+        FOREIGN KEY (tool_execution_id) REFERENCES osswarm_tool_executions(id) ON DELETE CASCADE
+      );
+
+      -- Create indexes for performance
+      CREATE INDEX IF NOT EXISTS idx_osswarm_executions_user_id ON osswarm_executions(user_id);
+      CREATE INDEX IF NOT EXISTS idx_osswarm_executions_chat_id ON osswarm_executions(chat_id);
+      CREATE INDEX IF NOT EXISTS idx_osswarm_executions_workspace_id ON osswarm_executions(workspace_id);
+      CREATE INDEX IF NOT EXISTS idx_osswarm_executions_status ON osswarm_executions(status);
+      CREATE INDEX IF NOT EXISTS idx_osswarm_executions_created_at ON osswarm_executions(created_at);
+      
+      CREATE INDEX IF NOT EXISTS idx_osswarm_agents_execution_id ON osswarm_agents(execution_id);
+      CREATE INDEX IF NOT EXISTS idx_osswarm_agents_status ON osswarm_agents(status);
+      
+      CREATE INDEX IF NOT EXISTS idx_osswarm_tasks_execution_id ON osswarm_tasks(execution_id);
+      CREATE INDEX IF NOT EXISTS idx_osswarm_tasks_agent_id ON osswarm_tasks(agent_id);
+      CREATE INDEX IF NOT EXISTS idx_osswarm_tasks_status ON osswarm_tasks(status);
+      
+      CREATE INDEX IF NOT EXISTS idx_osswarm_tool_executions_execution_id ON osswarm_tool_executions(execution_id);
+      CREATE INDEX IF NOT EXISTS idx_osswarm_tool_executions_agent_id ON osswarm_tool_executions(agent_id);
+      CREATE INDEX IF NOT EXISTS idx_osswarm_tool_executions_status ON osswarm_tool_executions(status);
+      CREATE INDEX IF NOT EXISTS idx_osswarm_tool_executions_approval_id ON osswarm_tool_executions(approval_id);
+      
+      CREATE INDEX IF NOT EXISTS idx_osswarm_logs_execution_id ON osswarm_logs(execution_id);
+      CREATE INDEX IF NOT EXISTS idx_osswarm_logs_log_type ON osswarm_logs(log_type);
+      CREATE INDEX IF NOT EXISTS idx_osswarm_logs_created_at ON osswarm_logs(created_at);
+    `,
+    down: `
+      DROP INDEX IF EXISTS idx_osswarm_logs_created_at;
+      DROP INDEX IF EXISTS idx_osswarm_logs_log_type;
+      DROP INDEX IF EXISTS idx_osswarm_logs_execution_id;
+      DROP INDEX IF EXISTS idx_osswarm_tool_executions_approval_id;
+      DROP INDEX IF EXISTS idx_osswarm_tool_executions_status;
+      DROP INDEX IF EXISTS idx_osswarm_tool_executions_agent_id;
+      DROP INDEX IF EXISTS idx_osswarm_tool_executions_execution_id;
+      DROP INDEX IF EXISTS idx_osswarm_tasks_status;
+      DROP INDEX IF EXISTS idx_osswarm_tasks_agent_id;
+      DROP INDEX IF EXISTS idx_osswarm_tasks_execution_id;
+      DROP INDEX IF EXISTS idx_osswarm_agents_status;
+      DROP INDEX IF EXISTS idx_osswarm_agents_execution_id;
+      DROP INDEX IF EXISTS idx_osswarm_executions_created_at;
+      DROP INDEX IF EXISTS idx_osswarm_executions_status;
+      DROP INDEX IF EXISTS idx_osswarm_executions_workspace_id;
+      DROP INDEX IF EXISTS idx_osswarm_executions_chat_id;
+      DROP INDEX IF EXISTS idx_osswarm_executions_user_id;
+      
+      DROP TABLE IF EXISTS osswarm_logs;
+      DROP TABLE IF EXISTS osswarm_tool_executions;
+      DROP TABLE IF EXISTS osswarm_tasks;
+      DROP TABLE IF EXISTS osswarm_agents;
+      DROP TABLE IF EXISTS osswarm_executions;
+    `
+  },
+  {
+    id: 'feature_021',
+    version: '2.4.1',
+    name: 'fix_osswarm_boolean_columns',
+    description: 'Fix OSSwarm boolean columns for SQLite compatibility',
+    category: 'feature',
+    dependencies: ['feature_020'],
+    createdAt: '2024-01-16T01:00:00Z',
+    up: `
+      -- Update any existing boolean values to integers
+      UPDATE osswarm_tool_executions SET human_approved = 0 WHERE human_approved = 'false' OR human_approved = 'FALSE';
+      UPDATE osswarm_tool_executions SET human_approved = 1 WHERE human_approved = 'true' OR human_approved = 'TRUE';
+      
+      -- Ensure the column is treated as INTEGER
+      -- SQLite will automatically handle BOOLEAN as INTEGER, but this ensures consistency
+    `,
+    down: `
+      -- No rollback needed as this is a data consistency fix
+    `
   }
 ];
 

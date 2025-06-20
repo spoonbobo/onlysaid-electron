@@ -40,13 +40,16 @@ export class OSSwarmService {
 
   async executeTask(
     task: string,
-    streamCallback?: (update: string) => void
+    streamCallback?: (update: string) => void,
+    chatId?: string, // ✅ Add chat context
+    workspaceId?: string // ✅ Add workspace context
   ): Promise<{ success: boolean; result?: string; error?: string }> {
     if (!this.swarmCore) {
       throw new Error('OSSwarm not initialized. Call initializeSwarm first.');
     }
 
-    return this.swarmCore.processTask(task, streamCallback);
+    // ✅ Pass context to processTask
+    return this.swarmCore.processTask(task, streamCallback, chatId, workspaceId);
   }
 
   // Add method to handle approval responses
@@ -76,5 +79,14 @@ export class OSSwarmService {
 
   isInitialized(): boolean {
     return this.swarmCore !== null;
+  }
+
+  // ✅ Add abort method
+  abortExecution(): { success: boolean; message: string } {
+    if (!this.swarmCore) {
+      return { success: false, message: 'No swarm core available to abort' };
+    }
+
+    return this.swarmCore.abortExecution();
   }
 } 

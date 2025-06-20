@@ -75,7 +75,7 @@ export async function processAgentModeAIResponse({
   updateMessage,
   setStreamingState,
   markStreamAsCompleted,
-}: ProcessAgentModeAIResponseParams): Promise<{ success: boolean; responseText?: string; assistantMessageId?: string; error?: any; toolCalls?: OpenAI.Chat.Completions.ChatCompletionMessageToolCall[] }> {
+}: ProcessAgentModeAIResponseParams): Promise<{ success: boolean; responseText?: string; assistantMessageId?: string; error?: any; toolCalls?: OpenAI.Chat.Completions.ChatCompletionMessageToolCall[]; aborted?: boolean }> {
   // Use provided agent or get from store
   const assistantSender = agent || getAgentFromStore();
   const assistantSenderId = assistantSender?.id || "osswarm-master";
@@ -199,7 +199,6 @@ export async function processAgentModeAIResponse({
   console.log("[AgentMode DEBUG] - Full swarmOptions:", swarmOptions);
 
   try {
-    // Use the existing executeOSSwarmTask function - no need to pass limits
     console.log('[AgentMode] Calling executeOSSwarmTask with:', {
       taskLength: taskDescription.length,
       toolsCount: swarmOptions.tools?.length || 0,
@@ -209,7 +208,9 @@ export async function processAgentModeAIResponse({
 
     const result = await executeOSSwarmTask(
       taskDescription,
-      swarmOptions
+      swarmOptions,
+      activeChatId,
+      undefined
     );
 
     console.log('[AgentMode] executeOSSwarmTask result:', {
@@ -219,6 +220,11 @@ export async function processAgentModeAIResponse({
       resultType: typeof result.result,
       errorMessage: result.error
     });
+
+    if (result.error && result.error.includes('aborted')) {
+      console.log("[AgentMode] OSSwarm task was aborted by user");
+      return { success: false, error: result.error, aborted: true };
+    }
 
     if (result.success && result.result) {
       // Create assistant message using OSSwarm result
@@ -255,6 +261,10 @@ export async function processAgentModeAIResponse({
     }
 
   } catch (error: any) {
+    if (error.message && error.message.includes('aborted')) {
+      return { success: false, error: error.message, aborted: true };
+    }
+    
     console.error("[AgentMode] Critical error in OSSwarm AgentMode processing:", {
       message: error.message,
       stack: error.stack,

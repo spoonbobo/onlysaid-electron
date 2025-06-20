@@ -7,12 +7,14 @@ export function setupOSSwarmHandlers() {
   console.log('[OSSwarm] Setting up IPC handlers...');
 
   // Execute OSSwarm task with human-in-the-loop
-  ipcMain.handle('osswarm:execute_task', async (event, { task, options, limits }) => {
+  ipcMain.handle('osswarm:execute_task', async (event, { task, options, limits, chatId, workspaceId }) => {
     console.log('[OSSwarm] osswarm:execute_task received:', {
       task: task?.substring(0, 100) + '...',
       provider: options?.provider,
       model: options?.model,
-      toolsCount: options?.tools?.length || 0
+      toolsCount: options?.tools?.length || 0,
+      chatId,
+      workspaceId
     });
 
     try {
@@ -26,22 +28,26 @@ export function setupOSSwarmHandlers() {
       (global as any).osswarmWebContents = event.sender;
       console.log('[OSSwarm] Stored webContents for tool execution');
 
+      const { chatId, workspaceId, ...restOptions } = options;
+
       const langChainOptions: LangChainAgentOptions = {
-        model: options.model,
-        temperature: options.temperature || 0.7,
-        maxTokens: options.maxTokens,
-        provider: options.provider,
-        apiKeys: options.apiKeys || {},
-        ollamaConfig: options.ollamaConfig,
-        tools: options.tools,
-        systemPrompt: options.systemPrompt,
+        model: restOptions.model,
+        temperature: restOptions.temperature || 0.7,
+        maxTokens: restOptions.maxTokens,
+        provider: restOptions.provider,
+        apiKeys: restOptions.apiKeys || {},
+        ollamaConfig: restOptions.ollamaConfig,
+        tools: restOptions.tools,
+        systemPrompt: restOptions.systemPrompt,
       };
 
       console.log('[OSSwarm] Creating swarm with options:', {
         model: langChainOptions.model,
         provider: langChainOptions.provider,
         toolsCount: langChainOptions.tools?.length || 0,
-        hasSystemPrompt: !!langChainOptions.systemPrompt
+        hasSystemPrompt: !!langChainOptions.systemPrompt,
+        chatId,
+        workspaceId
       });
 
       const swarmLimits: Partial<OSSwarmLimits> = limits || {};
@@ -50,12 +56,12 @@ export function setupOSSwarmHandlers() {
       const swarm = await OSSwarmFactory.createSwarm(langChainOptions, swarmLimits, true);
       console.log('[OSSwarm] Swarm created successfully');
 
-      // Execute task with streaming updates
+      // ✅ Execute task with streaming updates and context
       console.log('[OSSwarm] Starting task execution...');
       const result = await swarm.executeTask(task, (update: string) => {
         console.log('[OSSwarm] Stream update:', update);
         event.sender.send('osswarm:stream_update', { update });
-      });
+      }, chatId, workspaceId); // ✅ Pass context to executeTask
 
       console.log('[OSSwarm] Task execution completed:', {
         success: result.success,
@@ -122,10 +128,94 @@ export function setupOSSwarmHandlers() {
     }
   });
 
+  // ✅ Handle MCP tool execution requests from OSSwarm
+  ipcMain.on('osswarm:execute_mcp_tool', async (event, { executionId, serverName, toolName, arguments: toolArgs, responseChannel }) => {
+    console.log('[OSSwarm] 🔧 Received MCP tool execution request:', {
+      executionId,
+      serverName,
+      toolName,
+      responseChannel
+    });
+
+    try {
+      // ✅ Use ipcMain.handle to call the renderer's MCP handler
+      const result: any = await new Promise((resolve, reject) => {
+        const tempChannel = `mcp:execute_tool:${executionId}`;
+        
+        // Set up one-time listener for the response
+        ipcMain.once(tempChannel, (responseEvent, result) => {
+          resolve(result);
+        });
+        
+        // Send request to renderer
+        event.sender.send('mcp:execute_tool_request', {
+          serverName,
+          toolName,
+          arguments: toolArgs,
+          responseChannel: tempChannel
+        });
+        
+        // Timeout after 30 seconds
+        setTimeout(() => {
+          ipcMain.removeAllListeners(tempChannel);
+          reject(new Error('MCP tool execution timeout'));
+        }, 30000);
+      });
+
+      console.log('[OSSwarm] 🔧 MCP tool execution result:', {
+        executionId,
+        success: (result as any)?.success,
+        hasData: !!(result as any)?.data
+      });
+
+      // Send result back through the response channel
+      event.sender.send(responseChannel, result);
+    } catch (error: any) {
+      console.error('[OSSwarm] 🔧 Error executing MCP tool:', error);
+      
+      // Send error back through the response channel
+      event.sender.send(responseChannel, {
+        success: false,
+        error: error.message
+      });
+    }
+  });
+
+  // ✅ Get execution history
+  ipcMain.handle('osswarm:get_execution_history', async (event, { limit = 50 }) => {
+    try {
+      // This would be handled by the renderer process AgentTaskStore
+      // We'll just return success here as the store handles the actual DB queries
+      return { success: true };
+    } catch (error: any) {
+      console.error('[OSSwarm] Error getting execution history:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  // ✅ Get execution graph
+  ipcMain.handle('osswarm:get_execution_graph', async (event, { executionId }) => {
+    try {
+      // This would be handled by the renderer process AgentTaskStore
+      // We'll just return success here as the store handles the actual DB queries
+      return { success: true };
+    } catch (error: any) {
+      console.error('[OSSwarm] Error getting execution graph:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
   // Get swarm status
   ipcMain.handle('osswarm:get_status', async () => {
     try {
-      return { success: true, cacheSize: OSSwarmFactory.getCacheSize() };
+      const swarm = OSSwarmFactory.getCurrentSwarm();
+      const swarmStatus = swarm?.getSwarmStatus?.() || null;
+      
+      return { 
+        success: true, 
+        cacheSize: OSSwarmFactory.getCacheSize(),
+        swarmStatus
+      };
     } catch (error: any) {
       console.error('[OSSwarm] Error getting status:', error);
       return { success: false, error: error.message };
@@ -144,6 +234,30 @@ export function setupOSSwarmHandlers() {
       return { success: false, error: error.message };
     }
   });
+
+  // ✅ Add abort handler
+  ipcMain.handle('osswarm:abort_task', async (event, { taskId = 'current' }) => {
+    console.log('[OSSwarm] Abort task requested:', taskId);
+    
+    try {
+      const swarm = OSSwarmFactory.getCurrentSwarm();
+      
+      if (swarm && swarm.isInitialized()) {
+        // Call abort on the swarm
+        const result = swarm.abortExecution?.() || { success: true };
+        
+        console.log('[OSSwarm] Task aborted successfully:', taskId);
+        return { success: true, taskId };
+      } else {
+        console.warn('[OSSwarm] No active swarm to abort');
+        return { success: false, error: 'No active swarm found', taskId };
+      }
+    } catch (error: any) {
+      console.error('[OSSwarm] Error aborting task:', error);
+      return { success: false, error: error.message, taskId };
+    }
+  });
+
 
   console.log('[OSSwarm] IPC handlers set up successfully');
 } 

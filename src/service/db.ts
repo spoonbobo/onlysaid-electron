@@ -78,6 +78,20 @@ export const closeDatabase = (): void => {
   }
 };
 
+const convertBooleanParams = (params: Record<string, any>): Record<string, any> => {
+  const converted: Record<string, any> = {};
+  
+  for (const [key, value] of Object.entries(params)) {
+    if (typeof value === 'boolean') {
+      converted[key] = value ? 1 : 0;
+    } else {
+      converted[key] = value;
+    }
+  }
+  
+  return converted;
+};
+
 export const executeQuery = <T = any>(
   query: string,
   params: Record<string, any> = {}
@@ -90,13 +104,15 @@ export const executeQuery = <T = any>(
   }
 
   try {
+    const convertedParams = convertBooleanParams(params);
+    
     const statement = dbInstance.prepare(query);
 
     const lowerQuery = query.trim().toLowerCase();
     if (lowerQuery.startsWith('select') || lowerQuery.startsWith('pragma')) {
-      return statement.all(params) as T[];
+      return statement.all(convertedParams) as T[];
     } else {
-      const runInfo = statement.run(params);
+      const runInfo = statement.run(convertedParams);
       return [runInfo] as T[];
     }
   } catch (error) {
