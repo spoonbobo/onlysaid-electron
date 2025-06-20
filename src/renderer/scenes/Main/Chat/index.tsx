@@ -18,6 +18,7 @@ import { useLLMConfigurationStore } from "@/renderer/stores/LLM/LLMConfiguration
 import { toast } from "@/utils/toast";
 import { IChatRoom } from "@/../../types/Chat/Chatroom";
 import ChatUIWithNoChat from "./ChatUIWithNoChat";
+import AgentWorkOverlay from "./AgentWorkOverlay";
 
 function Chat() {
   const {
@@ -103,8 +104,6 @@ function Chat() {
   const input = getInput(activeChatId || '', contextId);
 
   const fetchMessagesTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-
-  const [isOSSwarmActive, setIsOSSwarmActive] = useState(false);
 
   useEffect(() => {
     if (fetchMessagesTimeoutRef.current) {
@@ -268,96 +267,29 @@ function Chat() {
             setTokenRate(0);
 
             try {
-              if (aiMode === "agent") {
-                // Use OSSwarm for agent mode
-                setIsOSSwarmActive(true);
-                
-                const swarmOptions = {
-                  model: modelId,
-                  provider: provider || "openai",
-                  temperature: 0.7,
-                  apiKeys: {
-                    openAI: useLLMConfigurationStore.getState().openAIKey,
-                    deepSeek: useLLMConfigurationStore.getState().deepSeekKey,
-                    oneasia: useLLMConfigurationStore.getState().oneasiaKey,
-                  },
-                  ollamaConfig: {
-                    baseUrl: useLLMConfigurationStore.getState().ollamaBaseURL,
-                  },
-                  tools: [], // Tools will be populated from MCP settings
-                  systemPrompt: "You are the Master Agent of OSSwarm coordinating specialized agents to solve complex tasks.",
-                };
+              const result = await processAgentResponse({
+                activeChatId,
+                userMessageText: messageData.text,
+                modelId,
+                provider: provider || "openai",
+                currentUser,
+                existingMessages: messages,
+                workspaceId: aiMode === "query" ? selectedContext?.id : undefined,
+                aiMode,
+                appendMessage,
+                updateMessage,
+                setStreamingState,
+                markStreamAsCompleted,
+                streamChatCompletion,
+              });
 
-                const swarmLimits = {
-                  maxIterations: 15,
-                  maxParallelAgents: 8,
-                  maxSwarmSize: 4,
-                  maxActiveSwarms: 2,
-                  maxConversationLength: 50,
-                };
-
-                const result = await executeOSSwarmTask(
-                  messageData.text,
-                  swarmOptions,
-                  swarmLimits
-                );
-
-                if (result.success && result.result) {
-                  // Create OSSwarm response message
-                  const swarmMessage: IChatMessage = {
-                    id: uuidv4(),
-                    chat_id: activeChatId,
-                    sender: agent?.id || "osswarm-master",
-                    sender_object: agent || {
-                      id: "osswarm-master",
-                      username: "OSSwarm Master",
-                      email: "osswarm@local",
-                      avatar: null,
-                      is_human: false,
-                      agent_id: null,
-                    } as IUser,
-                    text: result.result,
-                    created_at: new Date().toISOString(),
-                    sent_at: new Date().toISOString(),
-                    status: "completed",
-                  };
-
-                  appendMessage(activeChatId, swarmMessage);
-                  toast.success("OSSwarm task completed successfully");
-                } else {
-                  toast.error(`OSSwarm failed: ${result.error}`);
-                }
-              } else {
-                // Use existing logic for "ask" and "query" modes
-                const result = await processAgentResponse({
-                  activeChatId,
-                  userMessageText: messageData.text,
-                  modelId,
-                  provider: provider || "openai",
-                  currentUser,
-                  existingMessages: messages,
-                  workspaceId: aiMode === "query" ? selectedContext?.id : undefined,
-                  aiMode,
-                  appendMessage,
-                  updateMessage,
-                  setStreamingState,
-                  markStreamAsCompleted,
-                  streamChatCompletion,
-                });
-
-                if (!result.success) {
-                  console.error(`${aiMode} mode AI response failed:`, result.error);
-                  toast.error(`Failed to process ${aiMode} response`);
-                }
+              if (!result.success) {
+                console.error(`${aiMode} mode AI response failed:`, result.error);
+                toast.error(`Failed to process ${aiMode} response`);
               }
             } catch (e) {
               console.error(`Critical error processing ${aiMode} mode AI response:`, e);
               toast.error(`Critical error in ${aiMode} mode`);
-            } finally {
-              setIsOSSwarmActive(false);
-              if (aiMode === "agent") {
-                setStreamingState(null, null);
-              }
             }
           }
         }
@@ -417,9 +349,6 @@ function Chat() {
     }
   }, [isGuest, agent, createGuestAgent]);
 
-  // Get current OSSwarm updates
-  const currentTaskUpdates = osswarmUpdates['current'] || [];
-
   return (
     <Box
       key={chatInstanceId}
@@ -470,63 +399,11 @@ function Chat() {
                     }
                   />
 
-                  {/* OSSwarm Status Overlay */}
-                  {isOSSwarmActive && (
-                    <Box
-                      sx={{
-                        position: 'absolute',
-                        top: 16,
-                        right: 16,
-                        zIndex: 1000,
-                        bgcolor: 'background.paper',
-                        boxShadow: 3,
-                        padding: 2,
-                        borderRadius: 2,
-                        maxWidth: 350,
-                        maxHeight: 300,
-                        overflow: 'auto',
-                        border: '1px solid',
-                        borderColor: 'primary.main',
-                      }}
-                    >
-                      <Typography 
-                        variant="h6" 
-                        sx={{ 
-                          mb: 1, 
-                          color: 'primary.main',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: 1
-                        }}
-                      >
-                        <CircularProgress size={16} />
-                        OSSwarm Active
-                      </Typography>
-                      <Box sx={{ maxHeight: 200, overflow: 'auto' }}>
-                        {currentTaskUpdates.map((update, index) => (
-                          <Typography
-                            key={index}
-                            variant="caption"
-                            sx={{ 
-                              display: 'block', 
-                              mb: 0.5, 
-                              fontSize: '0.75rem',
-                              color: 'text.secondary',
-                              borderLeft: '2px solid',
-                              borderColor: 'primary.light',
-                              pl: 1,
-                              py: 0.25,
-                            }}
-                          >
-                            {update}
-                          </Typography>
-                        ))}
-                      </Box>
-                    </Box>
-                  )}
+                  {/* Agent Work Overlay */}
+                  <AgentWorkOverlay />
 
                   {/* Existing streaming indicator for non-agent modes */}
-                  {streamingState.messageId && isCurrentlyConnectingForUI && streamingState.chatId === activeChatId && !isOSSwarmActive && (
+                  {streamingState.messageId && isCurrentlyConnectingForUI && streamingState.chatId === activeChatId && aiMode !== "agent" && (
                     <Box
                       sx={{
                         position: 'absolute',

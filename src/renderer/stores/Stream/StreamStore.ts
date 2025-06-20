@@ -351,8 +351,22 @@ export const useStreamStore = create<StreamState>((set, get) => {
           limits
         });
 
+        // ✅ Clear updates when task completes (success or failure)
+        setTimeout(() => {
+          set(state => ({
+            osswarmUpdates: { ...state.osswarmUpdates, [taskId]: [] }
+          }));
+        }, 1000); // Small delay to show completion message briefly
+
         return result;
       } catch (error: any) {
+        // ✅ Clear updates on error too
+        setTimeout(() => {
+          set(state => ({
+            osswarmUpdates: { ...state.osswarmUpdates, [taskId]: [] }
+          }));
+        }, 1000);
+        
         return { success: false, error: error.message };
       }
     },
