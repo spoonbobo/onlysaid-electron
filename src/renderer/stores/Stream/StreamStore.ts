@@ -30,6 +30,13 @@ interface StreamState {
     options: OpenAIStreamOptions
   ) => Promise<string>;
 
+  // OSSwarm streaming
+  osswarmUpdates: Record<string, string[]>;
+  executeOSSwarmTask: (
+    task: string,
+    options: any,
+    limits?: any
+  ) => Promise<{ success: boolean; result?: string; error?: string }>;
 }
 
 export interface OpenAIMessage {
@@ -144,6 +151,19 @@ export const useStreamStore = create<StreamState>((set, get) => {
           batchedChunks[streamId] = [];
         }
       }, BATCH_INTERVAL);
+    });
+
+    window.electron.ipcRenderer.on('osswarm:stream_update', (...args) => {
+      const payload = args[1] as { update?: string };
+      if (payload?.update) {
+        const taskId = 'current';
+        set(state => ({
+          osswarmUpdates: {
+            ...state.osswarmUpdates,
+            [taskId]: [...(state.osswarmUpdates[taskId] || []), payload.update!]
+          }
+        }));
+      }
     });
   }
 
@@ -314,6 +334,28 @@ export const useStreamStore = create<StreamState>((set, get) => {
       }
     },
 
+    osswarmUpdates: {},
+
+    executeOSSwarmTask: async (task: string, options: any, limits?: any) => {
+      const taskId = 'current';
+      
+      // Clear previous updates
+      set(state => ({
+        osswarmUpdates: { ...state.osswarmUpdates, [taskId]: [] }
+      }));
+
+      try {
+        const result = await window.electron.osswarm.executeTask({
+          task,
+          options,
+          limits
+        });
+
+        return result;
+      } catch (error: any) {
+        return { success: false, error: error.message };
+      }
+    },
 
   };
 });

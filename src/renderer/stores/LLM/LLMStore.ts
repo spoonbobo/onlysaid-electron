@@ -33,6 +33,12 @@ export interface LLMStoreState {
     tools?: OpenAI.Chat.Completions.ChatCompletionTool[],
     toolChoice?: OpenAI.Chat.Completions.ChatCompletionToolChoiceOption
   ) => Promise<OpenAI.Chat.Completions.ChatCompletion | null>;
+  getLangChainCompletion: (
+    messages: OpenAIMessage[],
+    tools?: OpenAI.Chat.Completions.ChatCompletionTool[],
+    toolChoice?: OpenAI.Chat.Completions.ChatCompletionToolChoiceOption,
+    systemPrompt?: string
+  ) => Promise<OpenAI.Chat.Completions.ChatCompletion | null>;
   createToolCalls: (messageId: string, toolCalls: IChatMessageToolCall[]) => Promise<void>;
   getToolCallsByMessageId: (messageId: string) => Promise<IChatMessageToolCall[]>;
   updateToolCallStatus: (toolCallId: string, status: string) => Promise<void>;
@@ -123,6 +129,96 @@ export const useLLMStore = create<LLMStoreState>((set, get) => ({
     } catch (e: any) {
       const errMsg = e.message || "An unexpected error occurred while getting completion.";
       console.error("[LLMStore] Error invoking ai:get_completion:", e);
+      set({ isLoadingCompletion: false, error: errMsg });
+      return null;
+    }
+  },
+  getLangChainCompletion: async (messages, tools, toolChoice, systemPrompt) => {
+    set({ isLoadingCompletion: true, error: null });
+
+    const {
+      provider,
+      modelId,
+      openAIKey,
+      deepSeekKey,
+      oneasiaKey,
+      ollamaBaseURL,
+      temperature: configTemperature,
+    } = useLLMConfigurationStore.getState();
+
+    if (!provider || !modelId) {
+      const errMsg = "No model or provider selected.";
+      console.error(`[LLMStore] ${errMsg}`);
+      set({ isLoadingCompletion: false, error: errMsg });
+      return null;
+    }
+
+    const apiKeys = {
+      openAI: openAIKey,
+      deepSeek: deepSeekKey,
+      oneasia: oneasiaKey,
+    };
+
+    const ollamaConfig = {
+      baseUrl: ollamaBaseURL,
+    };
+
+    // Prepare options for the LangChain IPC call
+    const ipcOptions: any = {
+      model: modelId,
+      provider: provider,
+      apiKeys: apiKeys,
+      temperature: configTemperature,
+      tools: tools,
+      systemPrompt: systemPrompt,
+    };
+
+    if (provider === 'ollama') {
+      ipcOptions.ollamaConfig = ollamaConfig;
+    }
+
+    // Validate required configurations
+    if (provider === 'openai' && !apiKeys.openAI) {
+      const errMsg = "OpenAI provider selected, but API key is missing.";
+      console.error(`[LLMStore] ${errMsg}`);
+      set({ isLoadingCompletion: false, error: errMsg });
+      return null;
+    }
+    if (provider === 'deepseek' && !apiKeys.deepSeek) {
+      const errMsg = "DeepSeek provider selected, but API key is missing.";
+      console.error(`[LLMStore] ${errMsg}`);
+      set({ isLoadingCompletion: false, error: errMsg });
+      return null;
+    }
+    if (provider === 'oneasia' && !apiKeys.oneasia) {
+      const errMsg = "Oneasia provider selected, but API key is missing.";
+      console.error(`[LLMStore] ${errMsg}`);
+      set({ isLoadingCompletion: false, error: errMsg });
+      return null;
+    }
+    if (provider === 'ollama' && (!ollamaConfig.baseUrl || ollamaConfig.baseUrl === '')) {
+      const errMsg = "Ollama provider selected, but Base URL is missing or empty.";
+      console.error(`[LLMStore] ${errMsg}`);
+      set({ isLoadingCompletion: false, error: errMsg });
+      return null;
+    }
+
+    try {
+      console.log("[LLMStore] Calling IPC ai:get_completion_langchain with messages:", messages, "options:", ipcOptions);
+      const result = await window.electron.ai.getCompletionLangChain({ messages, options: ipcOptions });
+
+      if (result.success && result.completion) {
+        set({ isLoadingCompletion: false, error: null });
+        return result.completion as OpenAI.Chat.Completions.ChatCompletion;
+      } else {
+        const errMsg = result.error || "Failed to get LangChain completion for an unknown reason.";
+        console.error("[LLMStore] Failed to get LangChain completion:", errMsg);
+        set({ isLoadingCompletion: false, error: errMsg });
+        return null;
+      }
+    } catch (e: any) {
+      const errMsg = e.message || "An unexpected error occurred while getting LangChain completion.";
+      console.error("[LLMStore] Error invoking ai:get_completion_langchain:", e);
       set({ isLoadingCompletion: false, error: errMsg });
       return null;
     }

@@ -38,6 +38,7 @@ import { setupAppHandlers } from './app';
 import { setupCryptoHandlers } from './crypto/cryptoHandlers';
 import { setupN8nHandlers } from './n8n';
 import { setupHealthCheckHandlers, cleanupHealthCheck } from './healthcheck';
+import { setupLangChainHandlers, setupOSSwarmHandlers } from '../service/langchain';
 // Load environment variables
 dotenv.config();
 
@@ -59,6 +60,8 @@ setupAppHandlers();
 setupCryptoHandlers();
 setupN8nHandlers();
 setupHealthCheckHandlers();
+setupLangChainHandlers();
+setupOSSwarmHandlers();
 // Initialize authentication modules
 initAuth(process.env.ONLYSAID_API_URL || '', process.env.ONLYSAID_DOMAIN || '');
 

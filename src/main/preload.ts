@@ -147,6 +147,9 @@ type CryptoChannels =
 // Add health check channels
 type HealthCheckChannels = 'health:start-periodic-check' | 'health:stop-periodic-check' | 'health:check' | 'health:check-failed' | 'health:is-running';
 
+// Add this new type around line 91 with other channel types:
+type OSSwarmChannels = 'osswarm:execute_task' | 'osswarm:get_status' | 'osswarm:clear_cache' | 'osswarm:stream_update';
+
 export type Channels =
   | AuthChannels
   | GoogleAuthChannels
@@ -169,7 +172,8 @@ export type Channels =
   | OneasiaChannels
   | AppChannels
   | CryptoChannels
-  | HealthCheckChannels;
+  | HealthCheckChannels
+  | OSSwarmChannels;
 
 const electronHandler = {
   ipcRenderer: {
@@ -359,6 +363,12 @@ const electronHandler = {
   },
   ai: {
     getCompletion: (args: { messages: any[], options: any }) => ipcRenderer.invoke('ai:get_completion', args),
+    getCompletionLangChain: (params: { messages: any[], options: any }) => 
+      ipcRenderer.invoke('ai:get_completion_langchain', params),
+    clearLangChainCache: () =>
+      ipcRenderer.invoke('langchain:clear_cache'),
+    getLangChainCacheInfo: () =>
+      ipcRenderer.invoke('langchain:get_cache_info'),
   },
   shell: {
     openExternal: (url: string) => shell.openExternal(url),
@@ -443,6 +453,14 @@ const electronHandler = {
       ipcRenderer.on('health:check-failed', callback);
       return () => ipcRenderer.removeListener('health:check-failed', callback);
     },
+  },
+  osswarm: {
+    executeTask: (params: { task: string; options: any; limits?: any }) =>
+      ipcRenderer.invoke('osswarm:execute_task', params),
+    getStatus: () =>
+      ipcRenderer.invoke('osswarm:get_status'),
+    clearCache: () =>
+      ipcRenderer.invoke('osswarm:clear_cache'),
   },
 };
 

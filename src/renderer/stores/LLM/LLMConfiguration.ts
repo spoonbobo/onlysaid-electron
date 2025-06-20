@@ -252,3 +252,11 @@ export const useSelectedModelStore = useLLMConfigurationStore;
 
 // Export the Rule type for use in other components
 export type { Rule, AIMode };
+
+// Add OSSwarm mode description
+const aiModeDescriptions = {
+  none: "No AI assistance",
+  ask: "Single AI assistant response",
+  query: "Knowledge base query with AI synthesis", 
+  agent: "OSSwarm multi-agent coordination", // Updated description
+};

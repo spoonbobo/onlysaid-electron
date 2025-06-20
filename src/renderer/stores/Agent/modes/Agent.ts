@@ -76,7 +76,7 @@ export async function processAgentModeAIResponse({
 
   const { selectedMcpServerIds } = useMCPSettingsStore.getState();
   const mcpStore = useMCPStore.getState();
-  const getOpenAICompletion = useLLMStore.getState().getOpenAICompletion;
+  const getLangChainCompletion = useLLMStore.getState().getLangChainCompletion;
   let allSelectedToolsFromMCPs: OpenAI.Chat.Completions.ChatCompletionTool[] = [];
 
   // Create mapping from tool name to MCP server
@@ -195,15 +195,17 @@ export async function processAgentModeAIResponse({
       content: `${currentUserName} (User) [${new Date().toISOString()}]: ${userMessageText}`
     });
 
-    const completionResponse = await getOpenAICompletion(
+    // Use LangChain completion instead of direct OpenAI
+    const completionResponse = await getLangChainCompletion(
       lastMessages,
       allSelectedToolsFromMCPs.length > 0 ? allSelectedToolsFromMCPs : undefined,
-      allSelectedToolsFromMCPs.length > 0 ? "auto" : undefined
+      allSelectedToolsFromMCPs.length > 0 ? "auto" : undefined,
+      systemPromptText // Pass system prompt separately for LangChain
     );
 
     if (!completionResponse) {
-      const errorMsg = useLLMStore.getState().error || "LLM completion failed without specific error.";
-      console.error("[AgentMode] LLM completion failed:", errorMsg);
+      const errorMsg = useLLMStore.getState().error || "LangChain completion failed without specific error.";
+      console.error("[AgentMode] LangChain completion failed:", errorMsg);
       await updateMessage(activeChatId, assistantMessage.id, {
         text: `Error: ${errorMsg}`,
         status: "failed"
@@ -214,7 +216,26 @@ export async function processAgentModeAIResponse({
 
     const responseMessage = completionResponse.choices[0]?.message;
     let finalResponseText = responseMessage?.content || "";
-    const rawToolCalls = responseMessage?.tool_calls;
+
+    // Extract tool calls from LangChain response - they might be in different format
+    let rawToolCalls = responseMessage?.tool_calls;
+
+    // If no tool calls in standard format, check if LangChain stored them differently
+    if (!rawToolCalls && completionResponse.choices[0]?.message) {
+      // Try to extract from additional_kwargs or other LangChain-specific fields
+      const additionalKwargs = (completionResponse.choices[0].message as any)?.additional_kwargs;
+      if (additionalKwargs?.tool_calls) {
+        rawToolCalls = additionalKwargs.tool_calls.map((tc: any) => ({
+          id: tc.id,
+          type: tc.type,
+          function: {
+            name: tc.function.name,
+            arguments: tc.function.arguments
+          }
+        }));
+      }
+    }
+
     console.log("rawToolCalls", rawToolCalls);
     const openAIToolCalls: OpenAI.Chat.Completions.ChatCompletionMessageToolCall[] | undefined = rawToolCalls ? JSON.parse(JSON.stringify(rawToolCalls)) : undefined;
 
@@ -288,12 +309,12 @@ export async function processAgentModeAIResponse({
     };
 
   } catch (error: any) {
-    console.error("[AgentMode] Error in AgentMode processing:", error);
+    console.error("[AgentMode] Error in LangChain AgentMode processing:", error);
     await updateMessage(activeChatId, assistantMessage.id, {
-      text: "Error generating response in Agent Mode. Please try again.",
+      text: "Error generating response in Agent Mode with LangChain. Please try again.",
       status: "failed"
     });
-    markStreamAsCompleted(activeChatId, "Error generating response in Agent Mode.", assistantMessage.id);
+    markStreamAsCompleted(activeChatId, "Error generating response in Agent Mode with LangChain.", assistantMessage.id);
     return { success: false, error: error.message || error, assistantMessageId: assistantMessage.id };
   }
 }

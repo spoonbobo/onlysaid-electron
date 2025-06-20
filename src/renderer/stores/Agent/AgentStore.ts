@@ -15,6 +15,7 @@ import { useLLMConfigurationStore } from "@/renderer/stores/LLM/LLMConfiguration
 import { useUserStore } from "@/renderer/stores/User/UserStore";
 import { calculateExperienceForLevel } from "@/utils/agent";
 import { summarizeToolCallResults } from "@/renderer/stores/Agent/modes/Ask";
+import { v4 as uuidv4 } from 'uuid';
 
 interface AgentResponseParams {
   activeChatId: string;
@@ -75,6 +76,9 @@ interface AgentState {
     markStreamAsCompleted: (chatId: string, messageText: string) => void;
     streamChatCompletion: any;
   }) => Promise<{ success: boolean; responseText?: string; assistantMessageId?: string; error?: any }>;
+
+  // OSSwarm methods
+  processOSSwarmResponse: (params: AgentResponseParams) => Promise<{ success: boolean; assistantMessageId?: string; error?: any }>;
 }
 
 // Helper function to create guest agent
@@ -594,6 +598,94 @@ export const useAgentStore = create<AgentState>()(
           // Log failed usage attempt
           await get().logAgentUsage(params.modelId, "agent", false, 0);
 
+          set({ isProcessingResponse: false, error: error.message });
+          return { success: false, error };
+        }
+      },
+
+      processOSSwarmResponse: async (params: AgentResponseParams) => {
+        const {
+          activeChatId,
+          userMessageText,
+          modelId,
+          provider,
+          currentUser,
+          existingMessages,
+          appendMessage,
+          updateMessage,
+          setStreamingState,
+          markStreamAsCompleted,
+        } = params;
+
+        const currentAgent = get().agent;
+        if (!currentAgent) {
+          console.error("[AgentStore] No agent available for OSSwarm processing");
+          return { success: false, error: "No agent available" };
+        }
+
+        set({ isProcessingResponse: true, error: null });
+
+        try {
+          // Use OSSwarm instead of single agent
+          const { executeOSSwarmTask } = useStreamStore.getState();
+
+          const swarmOptions = {
+            model: modelId,
+            provider,
+            temperature: 0.7,
+            apiKeys: {
+              openAI: useLLMConfigurationStore.getState().openAIKey,
+              deepSeek: useLLMConfigurationStore.getState().deepSeekKey,
+              oneasia: useLLMConfigurationStore.getState().oneasiaKey,
+            },
+            ollamaConfig: {
+              baseUrl: useLLMConfigurationStore.getState().ollamaBaseURL,
+            },
+            tools: [], // Will be populated from MCP
+            systemPrompt: "You are coordinating a swarm of AI agents to solve complex tasks efficiently.",
+          };
+
+          const swarmLimits = {
+            maxIterations: 15,
+            maxParallelAgents: 8,
+            maxSwarmSize: 4,
+          };
+
+          const result = await executeOSSwarmTask(
+            userMessageText,
+            swarmOptions,
+            swarmLimits
+          );
+
+          if (result.success && result.result) {
+            // Create assistant message
+            const assistantMessage: IChatMessage = {
+              id: uuidv4(),
+              chat_id: activeChatId,
+              sender: currentAgent.id || "osswarm-master",
+              sender_object: currentAgent,
+              text: result.result,
+              created_at: new Date().toISOString(),
+              sent_at: new Date().toISOString(),
+              status: "completed",
+            };
+
+            appendMessage(activeChatId, assistantMessage);
+
+            // Award experience for OSSwarm completion
+            const earnedXP = Math.floor(result.result.length / 5); // More XP for complex swarm tasks
+            if (earnedXP > 0) {
+              await get().gainExperience(earnedXP);
+            }
+
+            set({ isProcessingResponse: false });
+            return { success: true, assistantMessageId: assistantMessage.id };
+          } else {
+            throw new Error(result.error || "OSSwarm execution failed");
+          }
+
+        } catch (error: any) {
+          console.error("[AgentStore] Error in OSSwarm processing:", error);
           set({ isProcessingResponse: false, error: error.message });
           return { success: false, error };
         }
