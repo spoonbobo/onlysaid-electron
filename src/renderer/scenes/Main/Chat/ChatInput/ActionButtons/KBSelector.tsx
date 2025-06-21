@@ -26,27 +26,29 @@ export default function KBSelector({ disabled = false }: KBSelectorProps) {
 
   const [initialSelectAllDone, setInitialSelectAllDone] = useState(false);
 
+  // Check if we're in a mode that supports KB selection
+  const isKBSupportedMode = aiMode === "query" || aiMode === "agent";
+
   useEffect(() => {
-    if (aiMode === "query" && workspaceId) {
+    if (isKBSupportedMode && workspaceId) {
       loadKBs();
     } else {
       setAvailableKBs([]);
       clearSelectedKBs();
       setInitialSelectAllDone(false);
     }
-  }, [workspaceId, aiMode]);
+  }, [workspaceId, aiMode, isKBSupportedMode]);
 
   useEffect(() => {
-    if (aiMode === "query" && availableKBs.length > 0) {
+    if (isKBSupportedMode && availableKBs.length > 0) {
       const currentSelected = selectedKbIds.filter(id => availableKBs.some(kb => kb.id === id));
       if (currentSelected.length !== selectedKbIds.length) {
         setSelectedKBs(currentSelected);
       }
-    } else if (aiMode === "query" && availableKBs.length === 0 && selectedKbIds.length > 0) {
+    } else if (isKBSupportedMode && availableKBs.length === 0 && selectedKbIds.length > 0) {
       clearSelectedKBs();
     }
-  }, [availableKBs, aiMode, selectedKbIds, setSelectedKBs, clearSelectedKBs]);
-
+  }, [availableKBs, aiMode, selectedKbIds, setSelectedKBs, clearSelectedKBs, isKBSupportedMode]);
 
   const loadKBs = async () => {
     if (!workspaceId) return;
@@ -113,8 +115,12 @@ export default function KBSelector({ disabled = false }: KBSelectorProps) {
     return intl.formatMessage({ id: "chat.multipleKBsSelected" }, { count: selectedKbIds.length }) || `${selectedKbIds.length} KBs Selected`;
   }, [selectedKbIds, availableKBs, intl]);
 
-
   const isAllSelected = availableKBs.length > 0 && selectedKbIds.length === availableKBs.length;
+
+  // Don't render if not in a supported mode
+  if (!isKBSupportedMode) {
+    return null;
+  }
 
   return (
     <>

@@ -16,6 +16,7 @@ import { useUserStore } from "@/renderer/stores/User/UserStore";
 import { calculateExperienceForLevel } from "@/utils/agent";
 import { summarizeToolCallResults } from "@/renderer/stores/Agent/modes/Ask";
 import { v4 as uuidv4 } from 'uuid';
+import { getCurrentWorkspaceId } from "@/utils/workspace";
 
 interface AgentResponseParams {
   activeChatId: string;
@@ -427,6 +428,7 @@ export const useAgentStore = create<AgentState>()(
 
               result = await processAgentModeAIResponse({
                 activeChatId,
+                workspaceId,
                 userMessageText,
                 agent: currentAgent,
                 currentUser,
@@ -495,6 +497,16 @@ export const useAgentStore = create<AgentState>()(
             return { success: false, error: "No model selected" };
           }
 
+          // ✅ Debug: Let's see what we're getting
+          const workspaceId = getCurrentWorkspaceId();
+          const selectedContext = useTopicStore.getState().selectedContext;
+          
+          console.log("[AgentStore DEBUG] sendAgentMessage debugging:");
+          console.log("[AgentStore DEBUG] - selectedContext:", selectedContext);
+          console.log("[AgentStore DEBUG] - workspaceId from getCurrentWorkspaceId():", workspaceId);
+          console.log("[AgentStore DEBUG] - selectedContext?.id:", selectedContext?.id);
+          console.log("[AgentStore DEBUG] - mode:", mode);
+
           // Get existing messages
           const messages = useChatStore.getState().messages[chatId] || [];
 
@@ -505,6 +517,7 @@ export const useAgentStore = create<AgentState>()(
             provider: provider || "openai",
             currentUser,
             existingMessages: messages,
+            workspaceId, // ✅ Now properly passed
             aiMode: mode,
             appendMessage,
             updateMessage,

@@ -94,7 +94,7 @@ const convertBooleanParams = (params: Record<string, any>): Record<string, any> 
 
 export const executeQuery = <T = any>(
   query: string,
-  params: Record<string, any> = {}
+  params: Record<string, any> | any[] = {}
 ): T[] => {
   if (!dbInstance) {
     initializeDatabase();
@@ -104,17 +104,36 @@ export const executeQuery = <T = any>(
   }
 
   try {
-    const convertedParams = convertBooleanParams(params);
+    let processedParams: any;
+    
+    // Handle both array and object parameters
+    if (Array.isArray(params)) {
+      processedParams = params.map(param => 
+        typeof param === 'boolean' ? (param ? 1 : 0) : param
+      );
+    } else {
+      processedParams = convertBooleanParams(params);
+    }
     
     const statement = dbInstance.prepare(query);
 
     const lowerQuery = query.trim().toLowerCase();
-    if (lowerQuery.startsWith('select') || lowerQuery.startsWith('pragma')) {
-      return statement.all(convertedParams) as T[];
-    } else {
-      const runInfo = statement.run(convertedParams);
-      return [runInfo] as T[];
+
+    /* ----------------  decide read vs write  ---------------- */
+    const isSelect   = lowerQuery.startsWith('select');
+    const isPragma   = lowerQuery.startsWith('pragma');
+    // pragma that **reads** looks like  `pragma foreign_keys`  
+    // pragma that **writes** contains '=' or '(' (e.g.  pragma foreign_keys = on)
+    const isPragmaRead = isPragma && !/=|\(/.test(lowerQuery);
+
+    if (isSelect || isPragmaRead) {
+      /* read-type statement – return rows */
+      return statement.all(processedParams) as T[];
     }
+
+    /* write-type statement – return run-info */
+    const runInfo = statement.run(processedParams);
+    return [runInfo] as T[];
   } catch (error) {
     console.error('Error executing query:', query, params, error);
     throw error;

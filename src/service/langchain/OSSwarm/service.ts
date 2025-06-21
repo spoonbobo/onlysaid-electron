@@ -7,8 +7,24 @@ export class OSSwarmService {
   async initializeSwarm(
     agentOptions: LangChainAgentOptions,
     limits?: Partial<OSSwarmLimits>,
-    humanInTheLoop: boolean = true // Enable human-in-the-loop by default
+    humanInTheLoop: boolean = true,
+    knowledgeBases?: {
+      enabled: boolean;
+      selectedKbIds: string[];
+      workspaceId?: string;
+    }
   ): Promise<void> {
+    console.log('[OSSwarm Service] initializeSwarm called with agentOptions:', {
+      provider: agentOptions.provider,
+      model: agentOptions.model,
+      toolsCount: agentOptions.tools?.length || 0,
+      toolsList: agentOptions.tools?.map((t: any) => ({
+        name: t.function?.name,
+        mcpServer: t.mcpServer
+      })) || [],
+      hasKnowledgeBases: !!knowledgeBases?.enabled
+    });
+
     const defaultLimits: OSSwarmLimits = {
       maxConversationLength: 100,
       maxParallelAgents: 10,
@@ -20,10 +36,24 @@ export class OSSwarmService {
 
     const swarmLimits = { ...defaultLimits, ...limits };
 
+    const enhancedAgentOptions = {
+      ...agentOptions,
+      knowledgeBases
+    };
+
+    console.log('[OSSwarm Service] enhancedAgentOptions created:', {
+      toolsCount: enhancedAgentOptions.tools?.length || 0,
+      toolsList: enhancedAgentOptions.tools?.map((t: any) => ({
+        name: t.function?.name,
+        mcpServer: t.mcpServer
+      })) || [],
+      hasKnowledgeBases: !!enhancedAgentOptions.knowledgeBases?.enabled
+    });
+
     const config: OSSwarmConfig = {
       limits: swarmLimits,
-      agentOptions,
-      humanInTheLoop, // Add human-in-the-loop configuration
+      agentOptions: enhancedAgentOptions,
+      humanInTheLoop,
       swarmPrompts: {
         research: "You are a Research Agent in OSSwarm with human oversight. All tool usage requires human approval. Gather information, verify facts, and provide detailed analysis.",
         analysis: "You are an Analysis Agent in OSSwarm with human oversight. All tool usage requires human approval. Break down problems, analyze data, and provide logical insights.",
@@ -31,11 +61,20 @@ export class OSSwarmService {
         technical: "You are a Technical Agent in OSSwarm with human oversight. All tool usage requires human approval. Provide technical implementations, code solutions, and system designs.",
         communication: "You are a Communication Agent in OSSwarm with human oversight. All tool usage requires human approval. Create clear, well-structured content and presentations.",
         validation: "You are a Validation Agent in OSSwarm with human oversight. All tool usage requires human approval. Test, verify, and ensure quality of outputs.",
+        rag: "You are a RAG (Retrieval-Augmented Generation) Agent in OSSwarm with human oversight and access to knowledge bases. You can retrieve relevant information from knowledge bases to enhance your responses. All tool usage requires human approval. Provide accurate, well-sourced answers based on retrieved knowledge and your reasoning capabilities.",
       },
     };
 
+    console.log('[OSSwarm Service] Final config.agentOptions:', {
+      toolsCount: config.agentOptions.tools?.length || 0,
+      toolsList: config.agentOptions.tools?.map((t: any) => ({
+        name: t.function?.name,
+        mcpServer: t.mcpServer
+      })) || []
+    });
+
     this.swarmCore = new OSSwarmCore(config);
-    console.log('[OSSwarm Service] Swarm initialized with human-in-the-loop:', humanInTheLoop);
+    console.log('[OSSwarm Service] Swarm initialized with human-in-the-loop:', humanInTheLoop, 'and KB support:', !!knowledgeBases?.enabled);
   }
 
   async executeTask(

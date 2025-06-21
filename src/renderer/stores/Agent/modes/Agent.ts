@@ -1,11 +1,9 @@
 import { v4 as uuidv4 } from 'uuid';
 import { IChatMessage, IChatMessageToolCall } from '@/../../types/Chat/Message';
 import { IUser } from '@/../../types/User/User';
-import { OpenAIMessage } from '@/renderer/stores/Stream/StreamStore';
 import { useMCPSettingsStore } from '@/renderer/stores/MCP/MCPSettingsStore';
-import { useMCPStore } from '@/renderer/stores/MCP/MCPStore';
-import { useLLMStore } from '@/renderer/stores/LLM/LLMStore';
 import { useLLMConfigurationStore } from '@/renderer/stores/LLM/LLMConfiguration';
+import { useKBSettingsStore } from '@/renderer/stores/KB/KBSettingStore';
 import { getAgentFromStore } from '@/utils/agent';
 import { getServiceTools, formatMCPName } from '@/utils/mcp';
 import { formatMessagesForContext } from '@/utils/message';
@@ -13,12 +11,17 @@ import type OpenAI from 'openai';
 import { appendRulesToSystemPrompt } from '@/utils/rules';
 import { useStreamStore } from '@/renderer/stores/Stream/StreamStore';
 
-export const agentModeSystemPrompt = (user: IUser, agent: IUser) => {
+export const agentModeSystemPrompt = (user: IUser, agent: IUser, kbIds?: string[]) => {
+  let kbInfo = "";
+  if (kbIds && kbIds.length > 0) {
+    kbInfo = `\n\nYou have access to the following Knowledge Base(s): [${kbIds.join(', ')}]. Use them when relevant to provide more accurate and contextual responses.`;
+  }
+
   return `
 You are ${agent.username}, the Master Agent of OSSwarm coordinating specialized AI agents to solve complex tasks.
 You are in a chat with your companion, ${user.username}.
 
-You have access to a distributed swarm of specialized agents and tools. Your available tools will be provided to you separately.
+You have access to a distributed swarm of specialized agents and tools. Your available tools will be provided to you separately.${kbInfo}
 
 Your role:
 1. Analyze complex requests from ${user.username}
@@ -26,6 +29,7 @@ Your role:
 3. Decompose tasks into subtasks for agent specialization
 4. Synthesize agent results into comprehensive responses
 5. Use available tools when needed for enhanced capabilities
+6. Leverage Knowledge Bases when they contain relevant information
 
 Based on messages in this chat, coordinate your agent swarm and use tools that are most relevant to efficiently solve the user's request.
 If no tools or agent coordination is needed, provide a direct response.
@@ -33,7 +37,7 @@ If no tools or agent coordination is needed, provide a direct response.
 };
 
 // Helper function to get system prompt with fallback and rules
-const getSystemPrompt = (user: IUser, agent: IUser): string => {
+const getSystemPrompt = (user: IUser, agent: IUser, kbIds?: string[]): string => {
   const { agentModeSystemPrompt: customPrompt } = useLLMConfigurationStore.getState();
   
   let systemPrompt = '';
@@ -44,9 +48,14 @@ const getSystemPrompt = (user: IUser, agent: IUser): string => {
       .replace(/\{user\.username\}/g, user.username)
       .replace(/\{agent_username\}/g, agent.username)
       .replace(/\{user_username\}/g, user.username);
+      
+    // Add KB info if available
+    if (kbIds && kbIds.length > 0) {
+      systemPrompt += `\n\nYou have access to the following Knowledge Base(s): [${kbIds.join(', ')}]. Use them when relevant to provide more accurate and contextual responses.`;
+    }
   } else {
     // Fallback to default prompt
-    systemPrompt = agentModeSystemPrompt(user, agent);
+    systemPrompt = agentModeSystemPrompt(user, agent, kbIds);
   }
   
   // Append rules for agent mode
@@ -55,6 +64,7 @@ const getSystemPrompt = (user: IUser, agent: IUser): string => {
 
 interface ProcessAgentModeAIResponseParams {
   activeChatId: string;
+  workspaceId?: string; // Add workspaceId parameter
   userMessageText: string;
   agent?: IUser | null;
   currentUser: IUser | null;
@@ -67,6 +77,7 @@ interface ProcessAgentModeAIResponseParams {
 
 export async function processAgentModeAIResponse({
   activeChatId,
+  workspaceId, // Add workspaceId parameter
   userMessageText,
   agent,
   currentUser,
@@ -90,6 +101,7 @@ export async function processAgentModeAIResponse({
   // Get the executeOSSwarmTask function from StreamStore (reusing existing logic)
   const { executeOSSwarmTask } = useStreamStore.getState();
   const { selectedMcpServerIds } = useMCPSettingsStore.getState();
+  const { selectedKbIds } = useKBSettingsStore.getState();
   
   // Get LLM configuration
   const {
@@ -156,10 +168,10 @@ export async function processAgentModeAIResponse({
     }
   }
 
-  // Get system prompt
+  // Get system prompt with KB integration
   let systemPromptText = "";
   if (currentUser && assistantSender) {
-    systemPromptText = getSystemPrompt(currentUser, assistantSender);
+    systemPromptText = getSystemPrompt(currentUser, assistantSender, selectedKbIds.length > 0 ? selectedKbIds : undefined);
   }
 
   // Format conversation context
@@ -171,7 +183,12 @@ export async function processAgentModeAIResponse({
     taskDescription = `Context: ${formattedMessagesContext}\n\nCurrent request: ${userMessageText}`;
   }
 
-  // Prepare OSSwarm options with explicit tool logging
+  // Add KB context if available
+  if (selectedKbIds.length > 0) {
+    taskDescription += `\n\nNote: You have access to Knowledge Base(s): [${selectedKbIds.join(', ')}]. Consider using them if they contain relevant information for this request.`;
+  }
+
+  // Prepare OSSwarm options with explicit tool logging and KB integration
   const swarmOptions = {
     model: modelId,
     provider: provider,
@@ -184,13 +201,20 @@ export async function processAgentModeAIResponse({
     ollamaConfig: {
       baseUrl: ollamaBaseURL,
     },
-    tools: allSelectedToolsFromMCPs, // Pass the MCP tools to OSSwarm
-    systemPrompt: systemPromptText, // Use agent mode system prompt
-    humanInTheLoop: true, // Enable human-in-the-loop
+    tools: allSelectedToolsFromMCPs,
+    systemPrompt: systemPromptText,
+    humanInTheLoop: true,
+    knowledgeBases: selectedKbIds.length > 0 ? {
+      enabled: true,
+      selectedKbIds: selectedKbIds,
+      workspaceId: workspaceId,
+    } : undefined,
   };
 
   console.log("[AgentMode DEBUG] OSSwarm configuration:");
   console.log("[AgentMode DEBUG] - Tools count:", swarmOptions.tools?.length || 0);
+  console.log("[AgentMode DEBUG] - Knowledge Bases:", selectedKbIds.length > 0 ? selectedKbIds : "None selected");
+  console.log("[AgentMode DEBUG] - Workspace ID:", workspaceId || "Not provided");
   console.log("[AgentMode DEBUG] - Tools details:", swarmOptions.tools?.map(t => ({
     name: t.function?.name,
     hasParams: !!t.function?.parameters,
@@ -202,6 +226,8 @@ export async function processAgentModeAIResponse({
     console.log('[AgentMode] Calling executeOSSwarmTask with:', {
       taskLength: taskDescription.length,
       toolsCount: swarmOptions.tools?.length || 0,
+      kbCount: selectedKbIds.length,
+      workspaceId: workspaceId,
       provider: swarmOptions.provider,
       model: swarmOptions.model
     });
@@ -210,7 +236,7 @@ export async function processAgentModeAIResponse({
       taskDescription,
       swarmOptions,
       activeChatId,
-      undefined
+      workspaceId // Pass workspaceId to executeOSSwarmTask
     );
 
     console.log('[AgentMode] executeOSSwarmTask result:', {
@@ -242,7 +268,7 @@ export async function processAgentModeAIResponse({
       appendMessage(activeChatId, assistantMessage);
       markStreamAsCompleted(activeChatId, result.result, assistantMessage.id);
 
-      console.log("[AgentMode DEBUG] OSSwarm task completed successfully via existing infrastructure");
+      console.log("[AgentMode DEBUG] OSSwarm task completed successfully via existing infrastructure with KB integration");
 
       return {
         success: true,

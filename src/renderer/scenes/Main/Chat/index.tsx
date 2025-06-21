@@ -18,9 +18,10 @@ import { useLLMConfigurationStore } from "@/renderer/stores/LLM/LLMConfiguration
 import { toast } from "@/utils/toast";
 import { IChatRoom } from "@/../../types/Chat/Chatroom";
 import ChatUIWithNoChat from "./ChatUIWithNoChat";
-import AgentWorkOverlay from "./AgentWorkOverlay";
+import AgentWorkOverlay from "../../../components/OSSwarm/AgentWorkOverlay";
 import { useMCPClientStore } from "@/renderer/stores/MCP/MCPClient";
 import { useLLMStore } from "@/renderer/stores/LLM/LLMStore";
+import { useAgentTaskStore } from "@/renderer/stores/Agent/AgentTaskStore";
 
 function Chat() {
   const {
@@ -276,7 +277,7 @@ function Chat() {
                 provider: provider || "openai",
                 currentUser,
                 existingMessages: messages,
-                workspaceId: aiMode === "query" ? selectedContext?.id : undefined,
+                workspaceId: selectedContext?.id,
                 aiMode,
                 appendMessage,
                 updateMessage,
@@ -357,9 +358,262 @@ function Chat() {
     messageId: string;
   }>>(new Map());
 
+  const agentTaskStore = useAgentTaskStore();
+
   useEffect(() => {
-    console.log('[Chat] Setting up OSSwarm tool listeners...');
+    console.log('[Chat] Setting up OSSwarm listeners...');
     
+    // ✅ Handle database operations from OSSwarm Core
+    const handleCreateExecution = async (event: any, data: any) => {
+      try {
+        const { taskDescription, chatId, workspaceId, responseChannel } = data;
+        
+        console.log('[Chat] Creating OSSwarm execution via AgentTaskStore:', {
+          taskDescription: taskDescription?.substring(0, 50) + '...',
+          chatId,
+          workspaceId
+        });
+        
+        const createdId = await agentTaskStore.createExecution(taskDescription, chatId, workspaceId);
+        
+        window.electron.ipcRenderer.send(responseChannel, {
+          success: true,
+          data: { executionId: createdId }
+        });
+      } catch (error: any) {
+        console.error('[Chat] Error creating OSSwarm execution:', error);
+        window.electron.ipcRenderer.send(data.responseChannel, {
+          success: false,
+          error: error.message
+        });
+      }
+    };
+
+    const handleCreateAgent = async (event: any, data: any) => {
+      try {
+        const { executionId, agentId, role, expertise, responseChannel } = data;
+        
+        console.log('[Chat] Creating OSSwarm agent via AgentTaskStore:', {
+          executionId,
+          agentId,
+          role
+        });
+        
+        const dbAgentId = await agentTaskStore.createAgent(executionId, agentId, role, expertise);
+        
+        window.electron.ipcRenderer.send(responseChannel, {
+          success: true,
+          data: { dbAgentId }
+        });
+      } catch (error: any) {
+        console.error('[Chat] Error creating OSSwarm agent:', error);
+        window.electron.ipcRenderer.send(data.responseChannel, {
+          success: false,
+          error: error.message
+        });
+      }
+    };
+
+    const handleCreateTask = async (event: any, data: any) => {
+      try {
+        const { executionId, agentId, taskDescription, priority, responseChannel } = data;
+        
+        console.log('[Chat] Creating OSSwarm task via AgentTaskStore:', {
+          executionId,
+          agentId,
+          taskDescription: taskDescription?.substring(0, 50) + '...'
+        });
+        
+        const taskId = await agentTaskStore.createTask(executionId, agentId, taskDescription, priority);
+        
+        window.electron.ipcRenderer.send(responseChannel, {
+          success: true,
+          data: { taskId }
+        });
+      } catch (error: any) {
+        console.error('[Chat] Error creating OSSwarm task:', error);
+        window.electron.ipcRenderer.send(data.responseChannel, {
+          success: false,
+          error: error.message
+        });
+      }
+    };
+
+    const handleCreateToolExecution = async (event: any, data: any) => {
+      try {
+        const { executionId, agentId, toolName, toolArguments, approvalId, mcpServer, taskId, responseChannel } = data;
+        
+        console.log('[Chat] Creating OSSwarm tool execution via AgentTaskStore:', {
+          executionId,
+          agentId,
+          toolName,
+          approvalId
+        });
+        
+        const toolExecutionId = await agentTaskStore.createToolExecution(
+          executionId,
+          agentId,
+          toolName,
+          toolArguments,
+          approvalId,
+          taskId,
+          mcpServer
+        );
+        
+        window.electron.ipcRenderer.send(responseChannel, {
+          success: true,
+          data: { toolExecutionId }
+        });
+      } catch (error: any) {
+        console.error('[Chat] Error creating OSSwarm tool execution:', error);
+        window.electron.ipcRenderer.send(data.responseChannel, {
+          success: false,
+          error: error.message
+        });
+      }
+    };
+
+    const handleUpdateExecutionStatus = async (event: any, data: any) => {
+      try {
+        const { executionId, status, result, error, responseChannel } = data;
+        
+        console.log('[Chat] Updating OSSwarm execution status via AgentTaskStore:', {
+          executionId,
+          status
+        });
+        
+        await agentTaskStore.updateExecutionStatus(executionId, status, result, error);
+        
+        if (responseChannel) {
+          window.electron.ipcRenderer.send(responseChannel, {
+            success: true,
+            data: {}
+          });
+        }
+      } catch (error: any) {
+        console.error('[Chat] Error updating OSSwarm execution status:', error);
+        if (data.responseChannel) {
+          window.electron.ipcRenderer.send(data.responseChannel, {
+            success: false,
+            error: error.message
+          });
+        }
+      }
+    };
+
+    const handleUpdateAgentStatus = async (event: any, data: any) => {
+      try {
+        const { agentId, status, currentTask, responseChannel } = data;
+        
+        console.log('[Chat] Updating OSSwarm agent status via AgentTaskStore:', {
+          agentId,
+          status
+        });
+        
+        await agentTaskStore.updateAgentStatus(agentId, status, currentTask);
+        
+        if (responseChannel) {
+          window.electron.ipcRenderer.send(responseChannel, {
+            success: true,
+            data: {}
+          });
+        }
+      } catch (error: any) {
+        console.error('[Chat] Error updating OSSwarm agent status:', error);
+        if (data.responseChannel) {
+          window.electron.ipcRenderer.send(data.responseChannel, {
+            success: false,
+            error: error.message
+          });
+        }
+      }
+    };
+
+    const handleUpdateTaskStatus = async (event: any, data: any) => {
+      try {
+        const { taskId, status, result, error, responseChannel } = data;
+        
+        console.log('[Chat] Updating OSSwarm task status via AgentTaskStore:', {
+          taskId,
+          status
+        });
+        
+        await agentTaskStore.updateTaskStatus(taskId, status, result, error);
+        
+        if (responseChannel) {
+          window.electron.ipcRenderer.send(responseChannel, {
+            success: true,
+            data: {}
+          });
+        }
+      } catch (error: any) {
+        console.error('[Chat] Error updating OSSwarm task status:', error);
+        if (data.responseChannel) {
+          window.electron.ipcRenderer.send(data.responseChannel, {
+            success: false,
+            error: error.message
+          });
+        }
+      }
+    };
+
+    const handleUpdateToolExecutionStatus = async (event: any, data: any) => {
+      try {
+        const { toolExecutionId, status, result, error, executionTime, responseChannel } = data;
+        
+        console.log('[Chat] Updating OSSwarm tool execution status via AgentTaskStore:', {
+          toolExecutionId,
+          status
+        });
+        
+        await agentTaskStore.updateToolExecutionStatus(toolExecutionId, status, result, error, executionTime);
+        
+        if (responseChannel) {
+          window.electron.ipcRenderer.send(responseChannel, {
+            success: true,
+            data: {}
+          });
+        }
+      } catch (error: any) {
+        console.error('[Chat] Error updating OSSwarm tool execution status:', error);
+        if (data.responseChannel) {
+          window.electron.ipcRenderer.send(data.responseChannel, {
+            success: false,
+            error: error.message
+          });
+        }
+      }
+    };
+
+    const handleUpdateToolExecutionByApproval = async (event: any, data: any) => {
+      try {
+        const { approvalId, status, result, error, executionTime, responseChannel } = data;
+        
+        console.log('[Chat] Updating OSSwarm tool execution by approval via AgentTaskStore:', {
+          approvalId,
+          status
+        });
+        
+        await agentTaskStore.updateToolExecutionByApprovalId(approvalId, status, result, error, executionTime);
+        
+        if (responseChannel) {
+          window.electron.ipcRenderer.send(responseChannel, {
+            success: true,
+            data: {}
+          });
+        }
+      } catch (error: any) {
+        console.error('[Chat] Error updating OSSwarm tool execution by approval:', error);
+        if (data.responseChannel) {
+          window.electron.ipcRenderer.send(data.responseChannel, {
+            success: false,
+            error: error.message
+          });
+        }
+      }
+    };
+
+    // Keep existing handlers...
     const handleToolApprovalRequest = async (event: any, data: { approvalId: string; request: any }) => {
       console.log('[Chat] Received OSSwarm tool approval request:', data);
       
@@ -455,7 +709,6 @@ function Chat() {
       console.log('[Chat] OSSwarm tool request tracked, total requests:', osswarmToolRequests.size + 1);
     };
 
-    // ✅ Handle tool execution start - get fresh store functions
     const handleToolExecutionStart = async (event: any, ...args: unknown[]) => {
       const data = args[0] as { executionId: string; toolName: string; agentId: string; agentRole: string };
       console.log('[Chat] OSSwarm tool execution started:', data);
@@ -485,7 +738,6 @@ function Chat() {
       }
     };
 
-    // ✅ Handle tool execution completion - simplified
     const handleToolExecutionComplete = async (event: any, ...args: unknown[]) => {
       const data = args[0] as { 
         executionId: string; 
@@ -571,7 +823,6 @@ function Chat() {
       }
     };
 
-    // ✅ Move MCP tool execution handler inside this useEffect
     const handleMCPToolExecution = async (event: any, ...args: unknown[]) => {
       const data = args[0] as {
         executionId: string;
@@ -643,23 +894,107 @@ function Chat() {
     };
 
     // Register all listeners
+    window.electron.ipcRenderer.removeAllListeners('osswarm:create_execution');
+    window.electron.ipcRenderer.removeAllListeners('osswarm:create_agent');
+    window.electron.ipcRenderer.removeAllListeners('osswarm:create_task');
+    window.electron.ipcRenderer.removeAllListeners('osswarm:create_tool_execution');
+    window.electron.ipcRenderer.removeAllListeners('osswarm:update_execution_status');
+    window.electron.ipcRenderer.removeAllListeners('osswarm:update_agent_status');
+    window.electron.ipcRenderer.removeAllListeners('osswarm:update_task_status');
+    window.electron.ipcRenderer.removeAllListeners('osswarm:update_tool_execution_status');
+
+    window.electron.ipcRenderer.on('osswarm:create_execution', handleCreateExecution);
+    window.electron.ipcRenderer.on('osswarm:create_agent', handleCreateAgent);
+    window.electron.ipcRenderer.on('osswarm:create_task', handleCreateTask);
+    window.electron.ipcRenderer.on('osswarm:create_tool_execution', handleCreateToolExecution);
+    window.electron.ipcRenderer.on('osswarm:update_execution_status', handleUpdateExecutionStatus);
+    window.electron.ipcRenderer.on('osswarm:update_agent_status', handleUpdateAgentStatus);
+    window.electron.ipcRenderer.on('osswarm:update_task_status', handleUpdateTaskStatus);
+    window.electron.ipcRenderer.on('osswarm:update_tool_execution_status', handleUpdateToolExecutionStatus);
+    window.electron.ipcRenderer.on('osswarm:update_tool_execution_by_approval', handleUpdateToolExecutionByApproval);
+
     const unsubscribeApproval = window.electron?.osswarm?.onToolApprovalRequest?.(handleToolApprovalRequest);
     const unsubscribeStart = window.electron?.ipcRenderer?.on?.('osswarm:tool_execution_start', handleToolExecutionStart);
     const unsubscribeComplete = window.electron?.ipcRenderer?.on?.('osswarm:tool_execution_complete', handleToolExecutionComplete);
     const unsubscribeMCPExecution = window.electron?.ipcRenderer?.on?.('osswarm:execute_mcp_tool', handleMCPToolExecution);
     
     return () => {
-      console.log('[Chat] Cleaning up OSSwarm tool listeners');
+      console.log('[Chat] Cleaning up OSSwarm listeners');
+      window.electron.ipcRenderer.removeAllListeners('osswarm:create_execution');
+      window.electron.ipcRenderer.removeAllListeners('osswarm:create_agent');
+      window.electron.ipcRenderer.removeAllListeners('osswarm:create_task');
+      window.electron.ipcRenderer.removeAllListeners('osswarm:create_tool_execution');
+      window.electron.ipcRenderer.removeAllListeners('osswarm:update_execution_status');
+      window.electron.ipcRenderer.removeAllListeners('osswarm:update_agent_status');
+      window.electron.ipcRenderer.removeAllListeners('osswarm:update_task_status');
+      window.electron.ipcRenderer.removeAllListeners('osswarm:update_tool_execution_status');
+      window.electron.ipcRenderer.removeAllListeners('osswarm:update_tool_execution_by_approval');
       unsubscribeApproval?.();
       unsubscribeStart?.();
       unsubscribeComplete?.();
       unsubscribeMCPExecution?.();
     };
-  }, [activeChatId, appendMessage, updateMessage]);
+  }, [activeChatId, appendMessage, updateMessage, agentTaskStore]);
+
+  // ✅ ADD: OSSwarm real-time update listeners
+  useEffect(() => {
+    console.log('[Chat] Setting up OSSwarm real-time update listeners...');
+    
+    const handleExecutionUpdate = (event: any, data: any) => {
+      console.log('[Chat] Received execution update:', data);
+      agentTaskStore.handleExecutionUpdate(data);
+    };
+
+    const handleAgentUpdate = (event: any, data: any) => {
+      console.log('[Chat] Received agent update:', data);
+      agentTaskStore.handleAgentUpdate(data);
+    };
+
+    const handleTaskUpdate = (event: any, data: any) => {
+      console.log('[Chat] Received task update:', data);
+      agentTaskStore.handleTaskUpdate(data);
+    };
+
+    const handleToolExecutionUpdate = (event: any, data: any) => {
+      console.log('[Chat] Received tool execution update:', data);
+      agentTaskStore.handleToolExecutionUpdate(data);
+    };
+
+    // ✅ Register IPC listeners for real-time updates
+    window.electron.ipcRenderer.on('osswarm:execution_updated', handleExecutionUpdate);
+    window.electron.ipcRenderer.on('osswarm:agent_updated', handleAgentUpdate);
+    window.electron.ipcRenderer.on('osswarm:task_updated', handleTaskUpdate);
+    window.electron.ipcRenderer.on('osswarm:tool_execution_updated', handleToolExecutionUpdate);
+
+    return () => {
+      console.log('[Chat] Cleaning up OSSwarm real-time update listeners');
+      window.electron.ipcRenderer.removeListener('osswarm:execution_updated', handleExecutionUpdate);
+      window.electron.ipcRenderer.removeListener('osswarm:agent_updated', handleAgentUpdate);
+      window.electron.ipcRenderer.removeListener('osswarm:task_updated', handleTaskUpdate);
+      window.electron.ipcRenderer.removeListener('osswarm:tool_execution_updated', handleToolExecutionUpdate);
+    };
+  }, [agentTaskStore]);
+
+  // ✅ Add ref for the chat container to constrain fullscreen
+  const chatContainerRef = useRef<HTMLDivElement>(null);
+  
+  // ✅ Add overlay visibility state
+  const [showAgentOverlay, setShowAgentOverlay] = useState(false);
+
+  // ✅ Handle OSSwarm toggle - updated to track state properly
+  const handleOSSwarmToggle = useCallback((show: boolean) => {
+    setShowAgentOverlay(show);
+  }, []);
+
+  // ✅ Handle overlay close - notify the toggle
+  const handleOverlayClose = useCallback(() => {
+    setShowAgentOverlay(false);
+  }, []);
 
   return (
     <Box
       key={chatInstanceId}
+      ref={chatContainerRef}
       sx={{
         height: "calc(100% - 5px)",
         display: "flex",
@@ -707,8 +1042,14 @@ function Chat() {
                     }
                   />
 
-                  {/* Agent Work Overlay */}
-                  <AgentWorkOverlay />
+                  {/* ✅ Enhanced Agent Work Overlay with proper close handling */}
+                  <AgentWorkOverlay 
+                    visible={showAgentOverlay}
+                    onClose={handleOverlayClose}
+                    containerRef={chatContainerRef}
+                    respectParentBounds={true}
+                    fullscreenMargin={20}
+                  />
 
                   {/* Existing streaming indicator for non-agent modes */}
                   {streamingState.messageId && isCurrentlyConnectingForUI && streamingState.chatId === activeChatId && aiMode !== "agent" && (
@@ -780,6 +1121,9 @@ function Chat() {
           handleSend={handleSend}
           replyingTo={replyingToMessage}
           onCancelReply={handleCancelReply}
+          onOSSwarmToggle={handleOSSwarmToggle}
+          // ✅ Pass the overlay state to ChatInput
+          osswarmOverlayVisible={showAgentOverlay}
         />
       )}
     </Box>

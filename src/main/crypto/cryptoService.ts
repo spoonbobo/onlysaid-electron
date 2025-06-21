@@ -171,11 +171,11 @@ export class CryptoService implements ICryptoService {
     const salt = this.generateKeySalt();
     const masterKey = await this.deriveMasterKey(password, salt);
 
-    // Store salt in database
+    // Store salt in database - use named parameters
     await executeQuery(
-      `INSERT OR REPLACE INTO user_crypto_keys (user_id, master_key_salt, updated_at) 
-       VALUES (?, ?, CURRENT_TIMESTAMP)`,
-      [userId, salt]
+      `INSERT OR REPLACE INTO user_crypto_keys (user_id, master_key_salt) 
+       VALUES (@userId, @salt)`,
+      { userId, salt }
     );
 
     return {
@@ -190,8 +190,8 @@ export class CryptoService implements ICryptoService {
    */
   async getUserCryptoKeys(userId: string): Promise<IUserCryptoKeys | null> {
     const result = await executeQuery(
-      'SELECT user_id, master_key_salt FROM user_crypto_keys WHERE user_id = ?',
-      [userId]
+      'SELECT user_id, master_key_salt FROM user_crypto_keys WHERE user_id = @userId',
+      { userId }
     );
 
     if (result.length === 0) return null;
@@ -210,8 +210,8 @@ export class CryptoService implements ICryptoService {
     
     // Check if chat key already exists in chat_keys table
     const existingKey = await executeQuery(
-      'SELECT id, key_data FROM chat_keys WHERE chat_id = ? AND key_version = ?',
-      [chatId, 1]
+      'SELECT id, key_data FROM chat_keys WHERE chat_id = @chatId AND key_version = @keyVersion',
+      { chatId, keyVersion: 1 }
     );
 
     let chatKeyData: string;
@@ -229,10 +229,11 @@ export class CryptoService implements ICryptoService {
       console.log(`🔑 [createChatKey] Generated new chat key:`, chatKeyData ? 'YES' : 'NO');
 
       // Store chat key in chat_keys table
+      const keyId = crypto.randomUUID();
       await executeQuery(
         `INSERT INTO chat_keys (id, chat_id, key_data, key_version, created_by) 
-         VALUES (?, ?, ?, ?, ?)`,
-        [crypto.randomUUID(), chatId, chatKeyData, 1, createdBy]
+         VALUES (@id, @chatId, @keyData, @keyVersion, @createdBy)`,
+        { id: keyId, chatId, keyData: chatKeyData, keyVersion: 1, createdBy }
       );
 
       console.log(`✅ [createChatKey] Stored new chat key in chat_keys table`);
@@ -250,8 +251,8 @@ export class CryptoService implements ICryptoService {
 
       // Check if user already has access to this key
       const existingUserKey = await executeQuery(
-        'SELECT id FROM user_chat_keys WHERE user_id = ? AND chat_id = ? AND key_version = ?',
-        [userId, chatId, 1]
+        'SELECT id FROM user_chat_keys WHERE user_id = @userId AND chat_id = @chatId AND key_version = @keyVersion',
+        { userId, chatId, keyVersion: 1 }
       );
 
       if (existingUserKey.length > 0) {
@@ -264,18 +265,27 @@ export class CryptoService implements ICryptoService {
       console.log(`🔐 [createChatKey] Encrypted key length:`, encryptedChatKey.length);
       
       // ✅ FIX: Explicitly set has_access = 1 (SQLite boolean)
+      const userKeyId = crypto.randomUUID();
       await executeQuery(
         `INSERT INTO user_chat_keys (id, user_id, chat_id, encrypted_chat_key, key_version, granted_by, has_access)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`,
-        [crypto.randomUUID(), userId, chatId, encryptedChatKey, 1, createdBy, 1]
+         VALUES (@id, @userId, @chatId, @encryptedChatKey, @keyVersion, @grantedBy, @hasAccess)`,
+        { 
+          id: userKeyId, 
+          userId, 
+          chatId, 
+          encryptedChatKey, 
+          keyVersion: 1, 
+          grantedBy: createdBy, 
+          hasAccess: 1 
+        }
       );
 
       console.log(`✅ [createChatKey] Stored encrypted key for user ${userId}`);
       
       // ✅ ADD: Verify the record was inserted correctly
       const verifyInsert = await executeQuery(
-        'SELECT id, has_access FROM user_chat_keys WHERE user_id = ? AND chat_id = ? AND key_version = ?',
-        [userId, chatId, 1]
+        'SELECT id, has_access FROM user_chat_keys WHERE user_id = @userId AND chat_id = @chatId AND key_version = @keyVersion',
+        { userId, chatId, keyVersion: 1 }
       );
       console.log(`🔍 [createChatKey] Verification query result:`, verifyInsert);
     }

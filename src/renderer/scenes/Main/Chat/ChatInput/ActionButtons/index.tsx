@@ -8,6 +8,7 @@ import ModelSelector from "./ModelSelector";
 import AIMode from "./AIMode";
 import KBSelector from "./KBSelector";
 import MCPSelector from "./MCPSelector";
+import OSSwarmToggle from "./OSSwarmToggle";
 
 interface ActionButtonsProps {
   input: string;
@@ -16,6 +17,8 @@ interface ActionButtonsProps {
   disabled?: boolean;
   isSending?: boolean;
   hasAttachments?: boolean;
+  onOSSwarmToggle?: (show: boolean) => void;
+  osswarmOverlayVisible?: boolean;
 }
 
 export default function ActionButtons({
@@ -24,7 +27,9 @@ export default function ActionButtons({
   onAttachment,
   disabled = false,
   isSending = false,
-  hasAttachments = false
+  hasAttachments = false,
+  onOSSwarmToggle,
+  osswarmOverlayVisible = false
 }: ActionButtonsProps) {
   const { modelId, provider, aiMode } = useLLMConfigurationStore();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -70,8 +75,17 @@ export default function ActionButtons({
       <Box sx={{ display: "flex", gap: 0.5, alignItems: "center", flexWrap: "nowrap", overflowX: "auto" }}>
         <AIMode disabled={disabled} />
         <ModelSelector disabled={disabled} />
-        {aiMode === "query" && <KBSelector disabled={disabled} />}
-        {aiMode === "agent" && <MCPSelector disabled={disabled} />}
+        {(aiMode === "query" || aiMode === "agent") && <KBSelector disabled={disabled} />}
+        {aiMode === "agent" && (
+          <>
+            <MCPSelector disabled={disabled} />
+            <OSSwarmToggle 
+              disabled={disabled} 
+              onToggle={onOSSwarmToggle}
+              isOverlayVisible={osswarmOverlayVisible}
+            />
+          </>
+        )}
       </Box>
 
       <Box sx={{ display: "flex", gap: 0.5 }}>

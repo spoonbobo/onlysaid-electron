@@ -254,6 +254,7 @@ export function setupMCPHandlers() {
         serverName,
         toolName,
         toolArgs,
+        toolArgsType: typeof toolArgs,
         hasClient: !!activeClients[serverName] || !!Object.values(activeClients)[0]
       });
 
@@ -267,11 +268,50 @@ export function setupMCPHandlers() {
         return { success: false, error };
       }
 
+      // ✅ ENHANCED VALIDATION AND SANITIZATION
+      let validatedArgs = {};
+      
+      if (toolArgs === null || toolArgs === undefined) {
+        validatedArgs = {};
+      } else if (typeof toolArgs === 'string') {
+        try {
+          const parsed = JSON.parse(toolArgs);
+          // Ensure it's a plain object, not an array
+          validatedArgs = (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) ? parsed : {};
+        } catch (parseError) {
+          console.warn(`🔧 [MCP Main] Failed to parse string arguments, using empty object:`, parseError);
+          validatedArgs = {};
+        }
+      } else if (typeof toolArgs === 'object' && !Array.isArray(toolArgs)) {
+        // Only accept plain objects, not arrays
+        validatedArgs = toolArgs;
+      } else if (Array.isArray(toolArgs)) {
+        console.warn(`🔧 [MCP Main] Received array instead of object, converting to empty object`);
+        validatedArgs = {};
+      } else {
+        console.warn(`🔧 [MCP Main] Invalid argument type ${typeof toolArgs}, using empty object`);
+        validatedArgs = {};
+      }
+
+      // ✅ Additional safety: Remove any functions or undefined values
+      try {
+        validatedArgs = JSON.parse(JSON.stringify(validatedArgs));
+      } catch (serializationError) {
+        console.warn(`🔧 [MCP Main] Failed to serialize arguments, using empty object:`, serializationError);
+        validatedArgs = {};
+      }
+
+      console.log(`🔧 [MCP Main] Validated arguments:`, {
+        original: toolArgs,
+        validated: validatedArgs,
+        validatedType: typeof validatedArgs
+      });
+
       console.log(`🔧 [MCP Main] Found client for ${serverName}, executing tool...`);
 
       const result = await client.callTool({
         name: toolName,
-        arguments: toolArgs || {}
+        arguments: validatedArgs // ✅ Always an object now
       });
 
       console.log(`🔧 [MCP Main] Tool ${toolName} execution completed:`, {
@@ -289,7 +329,8 @@ export function setupMCPHandlers() {
     } catch (error: any) {
       console.error(`🔧 [MCP Main] Error executing tool ${params?.toolName} on ${params?.serverName}:`, {
         message: error.message,
-        stack: error.stack
+        stack: error.stack,
+        originalParams: params
       });
       return {
         success: false,

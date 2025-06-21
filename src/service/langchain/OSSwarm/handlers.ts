@@ -13,8 +13,20 @@ export function setupOSSwarmHandlers() {
       provider: options?.provider,
       model: options?.model,
       toolsCount: options?.tools?.length || 0,
+      hasKnowledgeBases: !!options?.knowledgeBases,
       chatId,
       workspaceId
+    });
+
+    // ✅ ADD DETAILED TOOL DEBUGGING
+    console.log('[OSSwarm Handlers] Raw options.tools received:', {
+      toolsCount: options?.tools?.length || 0,
+      toolsList: options?.tools?.map((t: any) => ({
+        name: t.function?.name,
+        mcpServer: t.mcpServer,
+        hasFunction: !!t.function,
+        hasParameters: !!t.function?.parameters
+      })) || []
     });
 
     try {
@@ -28,7 +40,17 @@ export function setupOSSwarmHandlers() {
       (global as any).osswarmWebContents = event.sender;
       console.log('[OSSwarm] Stored webContents for tool execution');
 
-      const { chatId, workspaceId, ...restOptions } = options;
+      // ✅ Extract KB configuration from options
+      const { chatId, workspaceId, knowledgeBases, ...restOptions } = options;
+
+      // ✅ ADD MORE DETAILED DEBUGGING BEFORE CREATING LANGCHAIN OPTIONS
+      console.log('[OSSwarm Handlers] restOptions.tools after destructuring:', {
+        toolsCount: restOptions.tools?.length || 0,
+        toolsList: restOptions.tools?.map((t: any) => ({
+          name: t.function?.name,
+          mcpServer: t.mcpServer
+        })) || []
+      });
 
       const langChainOptions: LangChainAgentOptions = {
         model: restOptions.model,
@@ -41,27 +63,47 @@ export function setupOSSwarmHandlers() {
         systemPrompt: restOptions.systemPrompt,
       };
 
+      // ✅ VERIFY LANGCHAIN OPTIONS TOOLS
+      console.log('[OSSwarm Handlers] Final langChainOptions.tools:', {
+        toolsCount: langChainOptions.tools?.length || 0,
+        toolsList: langChainOptions.tools?.map((t: any) => ({
+          name: t.function?.name,
+          mcpServer: t.mcpServer
+        })) || []
+      });
+
       console.log('[OSSwarm] Creating swarm with options:', {
         model: langChainOptions.model,
         provider: langChainOptions.provider,
         toolsCount: langChainOptions.tools?.length || 0,
         hasSystemPrompt: !!langChainOptions.systemPrompt,
+        hasKnowledgeBases: !!knowledgeBases?.enabled,
+        kbCount: knowledgeBases?.selectedKbIds?.length || 0,
         chatId,
         workspaceId
       });
 
       const swarmLimits: Partial<OSSwarmLimits> = limits || {};
 
-      // Create swarm with human-in-the-loop enabled
-      const swarm = await OSSwarmFactory.createSwarm(langChainOptions, swarmLimits, true);
-      console.log('[OSSwarm] Swarm created successfully');
+      // ✅ Create swarm with KB configuration
+      const swarm = await OSSwarmFactory.createSwarm(
+        langChainOptions, 
+        swarmLimits, 
+        true, // human-in-the-loop
+        knowledgeBases?.enabled ? {
+          enabled: true,
+          selectedKbIds: knowledgeBases.selectedKbIds || [],
+          workspaceId: workspaceId
+        } : undefined
+      );
+      console.log('[OSSwarm] Swarm created successfully with RAG support:', !!knowledgeBases?.enabled);
 
       // ✅ Execute task with streaming updates and context
       console.log('[OSSwarm] Starting task execution...');
       const result = await swarm.executeTask(task, (update: string) => {
         console.log('[OSSwarm] Stream update:', update);
         event.sender.send('osswarm:stream_update', { update });
-      }, chatId, workspaceId); // ✅ Pass context to executeTask
+      }, chatId, workspaceId);
 
       console.log('[OSSwarm] Task execution completed:', {
         success: result.success,

@@ -28,6 +28,12 @@ export interface QueryKnowledgeBaseParams {
   messageId?: string; // Added
 }
 
+// Add this interface for non-streaming results
+export interface KnowledgeBaseNonStreamingResult {
+  status: string;
+  results: any; // The complete answer from the KB
+}
+
 export class OnylsaidKBService {
   private readonly baseURL: string;
   private readonly instance: AxiosInstance;
@@ -118,5 +124,77 @@ export class OnylsaidKBService {
       }
     );
     return response;
+  }
+
+  /**
+   * Query knowledge base in non-streaming mode (get complete response at once)
+   * @param params Parameters for the query
+   * @returns Complete result object
+   */
+  async queryKnowledgeBaseNonStreaming(params: QueryKnowledgeBaseParams): Promise<KnowledgeBaseNonStreamingResult> {
+    // Format conversation history for the backend
+    const formattedConversationHistory = params.conversationHistory?.map(
+      msg => `${msg.role}: ${msg.content}`
+    ) || [];
+
+    const payload: QueryKnowledgeBasePayload = {
+      workspace_id: params.workspaceId,
+      knowledge_bases: params.kbIds,
+      query: params.queryText,
+      conversation_history: formattedConversationHistory,
+      streaming: false, // ✅ Non-streaming mode
+      model: params.model,
+      top_k: params.topK || 5,
+      preferred_language: params.preferredLanguage || "en",
+      message_id: params.messageId,
+    };
+
+    console.log("queryKnowledgeBaseNonStreaming payload:", payload);
+
+    const response = await this.instance.post(
+      `${this.baseURL}/query`,
+      payload,
+      {
+        responseType: 'json' // ✅ JSON response for non-streaming
+      }
+    );
+
+    return response.data as KnowledgeBaseNonStreamingResult;
+  }
+
+  /**
+   * Retrieve documents from knowledge base (pure retrieval without generation)
+   * @param params Parameters for retrieval
+   * @returns Retrieved documents with scores
+   */
+  async retrieveFromKnowledgeBase(params: {
+    workspaceId: string;
+    queryText: string;
+    kbIds?: string[];
+    topK?: number;
+  }): Promise<{
+    status: string;
+    results: Array<{
+      source: string;
+      text: string;
+      score: number;
+      metadata: any;
+    }>;
+  }> {
+    const payload = {
+      workspace_id: params.workspaceId,
+      query: params.queryText,
+      knowledge_bases: params.kbIds,
+      top_k: params.topK || 5,
+    };
+
+    console.log("retrieveFromKnowledgeBase payload:", payload);
+
+    const response = await this.instance.post(
+      `${this.baseURL}/retrieve`,
+      payload
+    );
+
+    return response.data;
   }
 }

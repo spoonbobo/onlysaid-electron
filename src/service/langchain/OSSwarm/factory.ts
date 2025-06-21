@@ -9,17 +9,35 @@ export class OSSwarmFactory {
   static async createSwarm(
     options: LangChainAgentOptions,
     limits?: Partial<OSSwarmLimits>,
-    humanInTheLoop: boolean = true
+    humanInTheLoop: boolean = true,
+    knowledgeBases?: {
+      enabled: boolean;
+      selectedKbIds: string[];
+      workspaceId?: string;
+    }
   ): Promise<OSSwarmService> {
+    console.log('[OSSwarm Factory] createSwarm called with options:', {
+      provider: options.provider,
+      model: options.model,
+      toolsCount: options.tools?.length || 0,
+      toolsList: options.tools?.map((t: any) => ({
+        name: t.function?.name,
+        mcpServer: t.mcpServer
+      })) || [],
+      hasKnowledgeBases: !!knowledgeBases?.enabled
+    });
+
     const key = this.generateKey(options);
     
     let instance = this.instances.get(key);
     
     if (!instance) {
-      console.log(`[OSSwarm Factory] Creating new swarm for ${options.provider}:${options.model} with human-in-the-loop: ${humanInTheLoop}`);
+      console.log(`[OSSwarm Factory] Creating new swarm for ${options.provider}:${options.model} with human-in-the-loop: ${humanInTheLoop} and KB: ${!!knowledgeBases?.enabled}`);
       instance = new OSSwarmService();
-      await instance.initializeSwarm(options, limits, humanInTheLoop);
+      await instance.initializeSwarm(options, limits, humanInTheLoop, knowledgeBases);
       this.instances.set(key, instance);
+    } else {
+      console.log(`[OSSwarm Factory] Using cached swarm instance`);
     }
 
     this.currentSwarm = instance;

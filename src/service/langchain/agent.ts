@@ -25,6 +25,11 @@ export interface LangChainAgentOptions {
   };
   tools?: OpenAI.Chat.Completions.ChatCompletionTool[];
   systemPrompt?: string;
+  knowledgeBases?: {
+    enabled: boolean;
+    selectedKbIds: string[];
+    workspaceId?: string;
+  };
 }
 
 export interface OpenAIMessage {
@@ -73,7 +78,7 @@ export class LangChainAgentService {
             maxTokens,
             openAIApiKey: apiKeys.deepSeek,
             configuration: {
-              baseURL: 'https://api.deepseek.com',
+              baseURL: 'https://api.deepseek.com/v1',
             },
           });
           break;

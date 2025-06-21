@@ -251,4 +251,86 @@ export function initializeKnowledgeBaseHandlers(): void {
       );
     }
   });
+
+  // ✅ Non-streaming KB query
+  ipcMain.handle('kb:queryNonStreaming', async (event, args: {
+    workspaceId: string;
+    queryText: string;
+    kbIds?: string[];
+    model?: string;
+    conversationHistory?: any[];
+    topK?: number;
+    preferredLanguage?: string;
+    messageId?: string;
+  }) => {
+    const { workspaceId, queryText, kbIds, model, conversationHistory, topK, preferredLanguage, messageId } = args;
+    
+    console.log(`kb:queryNonStreaming called for workspace ${workspaceId}:`, {
+      queryText: queryText?.substring(0, 50) + '...',
+      kbIds,
+      topK
+    });
+
+    try {
+      const result = await kbService.queryKnowledgeBaseNonStreaming({
+        workspaceId,
+        queryText,
+        kbIds,
+        model,
+        conversationHistory,
+        topK,
+        preferredLanguage,
+        messageId,
+      });
+      
+      console.log(`KB non-streaming query successful for workspace ${workspaceId}`);
+      return result;
+    } catch (error) {
+      const attemptedUrl = `${KB_BASE_URL}query`;
+      throw handleAxiosError(
+        error,
+        `querying knowledge base (non-streaming) for workspace ${workspaceId}`,
+        'POST',
+        attemptedUrl,
+        args
+      );
+    }
+  });
+
+  // ✅ KB document retrieval
+  ipcMain.handle('kb:retrieve', async (event, args: {
+    workspaceId: string;
+    queryText: string;
+    kbIds?: string[];
+    topK?: number;
+  }) => {
+    const { workspaceId, queryText, kbIds, topK } = args;
+    
+    console.log(`kb:retrieve called for workspace ${workspaceId}:`, {
+      queryText: queryText?.substring(0, 50) + '...',
+      kbIds,
+      topK
+    });
+
+    try {
+      const result = await kbService.retrieveFromKnowledgeBase({
+        workspaceId,
+        queryText,
+        kbIds,
+        topK,
+      });
+      
+      console.log(`KB retrieval successful for workspace ${workspaceId}:`, result.results?.length || 0, 'documents');
+      return result;
+    } catch (error) {
+      const attemptedUrl = `${KB_BASE_URL}retrieve`;
+      throw handleAxiosError(
+        error,
+        `retrieving from knowledge base for workspace ${workspaceId}`,
+        'POST',
+        attemptedUrl,
+        args
+      );
+    }
+  });
 }

@@ -50,6 +50,8 @@ type DialogChannels = 'dialog:showSaveDialog';
 type KnowledgeBaseChannels =
   | 'kb:list'
   | 'kb:query'
+  | 'kb:queryNonStreaming'
+  | 'kb:retrieve'
   | 'kb:create'
   | 'kb:get'
   | 'kb:update'
@@ -148,7 +150,34 @@ type CryptoChannels =
 type HealthCheckChannels = 'health:start-periodic-check' | 'health:stop-periodic-check' | 'health:check' | 'health:check-failed' | 'health:is-running';
 
 // Add this new type around line 91 with other channel types:
-type OSSwarmChannels = 'osswarm:execute_task' | 'osswarm:get_status' | 'osswarm:clear_cache' | 'osswarm:stream_update' | 'osswarm:approve_tool' | 'osswarm:tool_approval_request' | 'osswarm:tool_execution_start' | 'osswarm:tool_execution_complete' | 'osswarm:execute_mcp_tool' | 'osswarm:abort_task' | 'osswarm:execution_created' | 'osswarm:agent_created' | 'osswarm:agent_updated' | 'osswarm:execution_updated' | 'osswarm:task_created' | 'osswarm:tool_execution_created';
+type OSSwarmChannels = 
+  | 'osswarm:execute_task' 
+  | 'osswarm:get_status' 
+  | 'osswarm:clear_cache' 
+  | 'osswarm:stream_update' 
+  | 'osswarm:approve_tool' 
+  | 'osswarm:tool_approval_request' 
+  | 'osswarm:tool_execution_start' 
+  | 'osswarm:tool_execution_complete' 
+  | 'osswarm:execute_mcp_tool' 
+  | 'osswarm:abort_task' 
+  | 'osswarm:execution_created' 
+  | 'osswarm:agent_created' 
+  | 'osswarm:agent_updated' 
+  | 'osswarm:execution_updated'
+  | 'osswarm:task_created'
+  | 'osswarm:task_updated'
+  | 'osswarm:tool_execution_created'
+  | 'osswarm:tool_execution_updated'
+  | 'osswarm:create_execution'
+  | 'osswarm:create_agent'
+  | 'osswarm:create_task'
+  | 'osswarm:create_tool_execution'
+  | 'osswarm:update_execution_status'
+  | 'osswarm:update_agent_status'
+  | 'osswarm:update_task_status'
+  | 'osswarm:update_tool_execution_status'
+  | 'osswarm:update_tool_execution_by_approval';
 
 export type Channels =
   | AuthChannels
@@ -187,6 +216,7 @@ const electronHandler = {
     invoke: (channel: Channels, ...args: unknown[]) => ipcRenderer.invoke(channel, ...args),
     send: (channel: Channels, ...args: unknown[]) => ipcRenderer.send(channel, ...args),
     removeListener: (channel: Channels, func: (...args: unknown[]) => void) => ipcRenderer.removeListener(channel, func),
+    removeAllListeners: (channel: Channels) => ipcRenderer.removeAllListeners(channel),
   },
   auth: {
     signIn: (...args: unknown[]) => ipcRenderer.invoke('auth:sign-in', ...args),
@@ -360,6 +390,22 @@ const electronHandler = {
     getKBStatus: (...args: unknown[]) => ipcRenderer.invoke('kb:getStatus', ...args),
     synchronizeKB: (...args: unknown[]) => ipcRenderer.invoke('kb:synchronize', ...args),
     fullUpdateKB: (...args: unknown[]) => ipcRenderer.invoke('kb:fullUpdate', ...args),
+    queryNonStreaming: (args: {
+      workspaceId: string;
+      queryText: string;
+      kbIds?: string[];
+      model?: string;
+      conversationHistory?: any[];
+      topK?: number;
+      preferredLanguage?: string;
+      messageId?: string;
+    }) => ipcRenderer.invoke('kb:queryNonStreaming', args),
+    retrieve: (args: {
+      workspaceId: string;
+      queryText: string;
+      kbIds?: string[];
+      topK?: number;
+    }) => ipcRenderer.invoke('kb:retrieve', args),
   },
   ai: {
     getCompletion: (args: { messages: any[], options: any }) => ipcRenderer.invoke('ai:get_completion', args),

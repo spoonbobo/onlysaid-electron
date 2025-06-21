@@ -5,6 +5,7 @@ import { DBTABLES } from '@/../../constants/db';
 import { useAgentTaskStore } from '@/renderer/stores/Agent/AgentTaskStore';
 import { v4 as uuidv4 } from 'uuid';
 import { executeQuery, executeTransaction } from '../../db';
+import { OnylsaidKBService } from '@/service/knowledge_base/onlysaid_kb';
 
 export interface OSSwarmLimits {
   maxConversationLength: number;    // e.g., 100 messages
@@ -70,9 +71,23 @@ export class OSSwarmCore {
   private agentTaskStore: any = null;
   private dbAgentIds: Map<string, string> = new Map();
   private isAborted: boolean = false;
+  private kbService: OnylsaidKBService;
 
   constructor(private config: OSSwarmConfig) {
+    // ✅ ADD DEBUG LOGGING IN CONSTRUCTOR
+    console.log('[OSSwarm Core] Constructor called with config:', {
+      toolsCount: this.config.agentOptions.tools?.length || 0,
+      toolsList: this.config.agentOptions.tools?.map((t: any) => ({
+        name: t.function?.name,
+        mcpServer: t.mcpServer
+      })) || [],
+      humanInTheLoop: this.config.humanInTheLoop,
+      hasKnowledgeBases: !!this.config.agentOptions.knowledgeBases?.enabled
+    });
+
     this.initializeMasterAgent();
+    const KB_BASE_URL = process.env.KB_BASE_URL || 'http://onlysaid-dev.com/api/kb/';
+    this.kbService = new OnylsaidKBService(KB_BASE_URL);
   }
 
   private async initializeMasterAgent(): Promise<void> {
@@ -106,6 +121,178 @@ When processing requests:
 6. Synthesize final results
 
 All tool usage requires human approval.`;
+  }
+
+  private async sendToRenderer(event: string, data: any): Promise<any> {
+    return new Promise((resolve, reject) => {
+      const webContents = (global as any).osswarmWebContents;
+      if (!webContents || webContents.isDestroyed()) {
+        reject(new Error('No webContents available'));
+        return;
+      }
+
+      const responseId = uuidv4();
+      const responseChannel = `${event}_response_${responseId}`;
+      
+      const { ipcMain } = require('electron');
+      
+      const responseHandler = (event: any, result: any) => {
+        ipcMain.removeListener(responseChannel, responseHandler);
+        if (result.success) {
+          resolve(result.data || result);
+        } else {
+          reject(new Error(result.error || 'Unknown error'));
+        }
+      };
+      
+      ipcMain.once(responseChannel, responseHandler);
+      
+      webContents.send(event, { ...data, responseChannel });
+      
+      setTimeout(() => {
+        ipcMain.removeListener(responseChannel, responseHandler);
+        reject(new Error(`Timeout for ${event}`));
+      }, 10000);
+    });
+  }
+
+  private async createExecutionInStore(taskDescription: string, chatId?: string, workspaceId?: string): Promise<string> {
+    const result = await this.sendToRenderer('osswarm:create_execution', {
+      taskDescription,
+      chatId,
+      workspaceId
+    });
+    return result.executionId;
+  }
+
+  private async createAgentInStore(executionId: string, agentId: string, role: string, expertise: string[]): Promise<string> {
+    const result = await this.sendToRenderer('osswarm:create_agent', {
+      executionId,
+      agentId,
+      role,
+      expertise
+    });
+    return result.dbAgentId;
+  }
+
+  private async createTaskInStore(executionId: string, agentId: string, taskDescription: string, priority: number = 0): Promise<string> {
+    const result = await this.sendToRenderer('osswarm:create_task', {
+      executionId,
+      agentId,
+      taskDescription,
+      priority
+    });
+    return result.taskId;
+  }
+
+  private async createToolExecutionInStore(executionId: string, agentId: string, toolName: string, toolArguments: any, approvalId: string, mcpServer: string, taskId?: string): Promise<string> {
+    const result = await this.sendToRenderer('osswarm:create_tool_execution', {
+      executionId,
+      agentId,
+      toolName,
+      toolArguments,
+      approvalId,
+      mcpServer,
+      taskId
+    });
+    return result.toolExecutionId;
+  }
+
+  private async updateExecutionStatus(status: string, result?: string, error?: string): Promise<void> {
+    if (!this.currentExecutionId) return;
+    
+    console.log(`[OSSwarm Core] Updating execution ${this.currentExecutionId} status to: ${status}`);
+    
+    try {
+      await this.sendToRenderer('osswarm:update_execution_status', {
+        executionId: this.currentExecutionId,
+        status,
+        result,
+        error
+      });
+      
+      console.log(`[OSSwarm Core] Execution status update sent successfully: ${status}`);
+      
+      // ✅ Also send a direct notification to refresh the UI
+      const webContents = (global as any).osswarmWebContents;
+      if (webContents && !webContents.isDestroyed()) {
+        webContents.send('osswarm:execution_updated', {
+          executionId: this.currentExecutionId,
+          status,
+          result,
+          error
+        });
+        console.log(`[OSSwarm Core] Direct execution update notification sent`);
+      }
+    } catch (error) {
+      console.error(`[OSSwarm Core] Failed to update execution status:`, error);
+    }
+  }
+
+  private async updateAgentStatus(agentId: string, status: string, currentTask?: string): Promise<void> {
+    const dbAgentId = this.dbAgentIds.get(agentId);
+    if (!dbAgentId) return;
+    
+    await this.sendToRenderer('osswarm:update_agent_status', {
+      agentId: dbAgentId,
+      status,
+      currentTask
+    });
+
+    // ✅ ADD: Send update notification to refresh UI
+    const webContents = (global as any).osswarmWebContents;
+    if (webContents && !webContents.isDestroyed()) {
+      webContents.send('osswarm:agent_updated', {
+        agentId: dbAgentId,
+        status,
+        currentTask,
+        executionId: this.currentExecutionId
+      });
+    }
+  }
+
+  private async updateTaskStatus(taskId: string, status: string, result?: string, error?: string): Promise<void> {
+    await this.sendToRenderer('osswarm:update_task_status', {
+      taskId,
+      status,
+      result,
+      error
+    });
+
+    // ✅ ADD: Send update notification to refresh UI
+    const webContents = (global as any).osswarmWebContents;
+    if (webContents && !webContents.isDestroyed()) {
+      webContents.send('osswarm:task_updated', {
+        taskId,
+        status,
+        result,
+        error,
+        executionId: this.currentExecutionId
+      });
+    }
+  }
+
+  private async updateToolExecutionStatus(toolExecutionId: string, status: string, result?: string, error?: string, executionTime?: number): Promise<void> {
+    await this.sendToRenderer('osswarm:update_tool_execution_status', {
+      toolExecutionId,
+      status,
+      result,
+      error,
+      executionTime
+    });
+
+    // ✅ ADD: Send update notification to refresh UI
+    const webContents = (global as any).osswarmWebContents;
+    if (webContents && !webContents.isDestroyed()) {
+      webContents.send('osswarm:tool_execution_updated', {
+        toolExecutionId,
+        status,
+        result,
+        error,
+        executionTime,
+        executionId: this.currentExecutionId
+      });
+    }
   }
 
   private async requestHumanApproval(
@@ -194,29 +381,18 @@ All tool usage requires human approval.`;
   }
 
   public handleApprovalResponse(approvalId: string, approved: boolean): void {
-    console.log(`[OSSwarm Core] 🔧 handleApprovalResponse called at ${Date.now()}:`, {
-      approvalId,
-      approved,
-      hasPendingApproval: this.pendingApprovals.has(approvalId),
-      hasCallback: this.approvalCallbacks.has(approvalId),
-      totalPendingApprovals: this.pendingApprovals.size,
-      totalCallbacks: this.approvalCallbacks.size
-    });
+    console.log(`[OSSwarm Core] handleApprovalResponse called:`, { approvalId, approved });
     
     const callback = this.approvalCallbacks.get(approvalId);
     if (callback) {
-      console.log(`[OSSwarm Core] 🔧 Found callback for ${approvalId}, executing...`);
       try {
         callback(approved);
-        console.log(`[OSSwarm Core] 🔧 Callback executed successfully for ${approvalId}`);
+        console.log(`[OSSwarm Core] Callback executed successfully for ${approvalId}`);
       } catch (error: any) {
-        console.error(`[OSSwarm Core] 🔧 Error executing callback for ${approvalId}:`, error);
+        console.error(`[OSSwarm Core] Error executing callback for ${approvalId}:`, error);
       }
     } else {
-      console.error(`[OSSwarm Core] 🔧 No callback found for approval ${approvalId}`, {
-        availableCallbacks: Array.from(this.approvalCallbacks.keys()),
-        timestamp: Date.now()
-      });
+      console.error(`[OSSwarm Core] No callback found for approval ${approvalId}`);
     }
   }
 
@@ -250,12 +426,42 @@ All tool usage requires human approval.`;
 
     const agentId = `agent-${role}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     
+    // ✅ Add debug logging for tool configuration
+    console.log(`[OSSwarm Core] Creating agent ${agentId} (${role}) with configuration:`, {
+      toolsCount: this.config.agentOptions.tools?.length || 0,
+      toolsList: this.config.agentOptions.tools?.map(t => ({
+        name: t.function?.name,
+        mcpServer: (t as any).mcpServer
+      })) || [],
+      hasKnowledgeBases: !!this.config.agentOptions.knowledgeBases?.enabled,
+      kbCount: this.config.agentOptions.knowledgeBases?.selectedKbIds?.length || 0
+    });
+    
     const agentOptions = {
       ...this.config.agentOptions,
       systemPrompt: this.config.swarmPrompts[role] || this.getDefaultAgentPrompt(role),
     };
 
+    console.log(`[OSSwarm Core] Final agent options for ${agentId}:`, {
+      provider: agentOptions.provider,
+      model: agentOptions.model,
+      toolsCount: agentOptions.tools?.length || 0,
+      hasSystemPrompt: !!agentOptions.systemPrompt,
+      temperature: agentOptions.temperature
+    });
+
     const agentService = LangChainServiceFactory.createAgent(agentOptions);
+    
+    // ✅ Verify the agent service has the correct tools
+    const agentConfig = agentService.getConfig();
+    console.log(`[OSSwarm Core] Agent ${agentId} service created with tools:`, {
+      configToolsCount: agentConfig.tools?.length || 0,
+      configToolsList: agentConfig.tools?.map(t => ({
+        name: t.function?.name,
+        mcpServer: (t as any).mcpServer
+      })) || []
+    });
+    
     const expertise = this.getAgentExpertise(role);
 
     const agent: SwarmAgent = {
@@ -268,9 +474,17 @@ All tool usage requires human approval.`;
 
     this.agents.set(agentId, agent);
     
-    await this.createAgentInDB(agentId, role, expertise);
+    if (this.currentExecutionId) {
+      try {
+        const dbAgentId = await this.createAgentInStore(this.currentExecutionId, agentId, role, expertise);
+        this.dbAgentIds.set(agentId, dbAgentId);
+        console.log(`[OSSwarm] Created agent in store: ${agentId} -> ${dbAgentId}`);
+      } catch (error) {
+        console.error(`[OSSwarm] Failed to create agent in store:`, error);
+      }
+    }
     
-    console.log(`[OSSwarm] Created agent ${agentId} with role ${role}`);
+    console.log(`[OSSwarm] Created agent ${agentId} with role ${role} and ${agentConfig.tools?.length || 0} tools`);
     return agentId;
   }
 
@@ -282,6 +496,7 @@ All tool usage requires human approval.`;
       technical: ['programming', 'system_design', 'implementation'],
       communication: ['writing', 'presentation', 'synthesis'],
       validation: ['testing', 'quality_assurance', 'verification'],
+      rag: ['knowledge_retrieval', 'contextual_search', 'information_synthesis', 'document_analysis'],
     };
 
     return expertiseMap[role.toLowerCase()] || ['general'];
@@ -295,6 +510,7 @@ All tool usage requires human approval.`;
       technical: "You are a Technical Agent specializing in implementation and system design. All tool usage requires human approval. Provide technical solutions and code.",
       communication: "You are a Communication Agent specializing in clear writing and synthesis. All tool usage requires human approval. Create well-structured, understandable content.",
       validation: "You are a Validation Agent specializing in quality assurance and testing. All tool usage requires human approval. Verify accuracy and completeness.",
+      rag: "You are a RAG (Retrieval-Augmented Generation) Agent specializing in knowledge retrieval and contextual responses. You have access to knowledge bases and can retrieve relevant information to enhance your responses. All tool usage requires human approval. Provide accurate, well-sourced answers based on retrieved knowledge.",
     };
 
     return prompts[role.toLowerCase()] || "You are a specialized AI agent with human oversight. All tool usage requires human approval. Follow instructions carefully and provide helpful responses.";
@@ -309,69 +525,25 @@ All tool usage requires human approval.`;
     this.iterationCount = 0;
     this.isAborted = false;
     
+    // Check if KB configuration is available
+    const hasKnowledgeBases = this.config.agentOptions.knowledgeBases?.enabled && 
+                              this.config.agentOptions.knowledgeBases?.selectedKbIds?.length > 0;
+    
     try {
-      // ✅ Create execution directly in database using executeQuery
-      const executionId = uuidv4();
-      const now = new Date().toISOString();
+      this.currentExecutionId = await this.createExecutionInStore(taskDescription, chatId, workspaceId);
+      console.log('[OSSwarm Core] Created execution via store:', this.currentExecutionId);
       
-      // Create execution record
-      await executeQuery(`
-        INSERT INTO ${DBTABLES.OSSWARM_EXECUTIONS}
-        (id, task_description, status, created_at, chat_id, workspace_id, total_agents, total_tasks, total_tool_executions)
-        VALUES (@id, @task_description, @status, @created_at, @chat_id, @workspace_id, @total_agents, @total_tasks, @total_tool_executions)
-      `, {
-        id: executionId,
-        task_description: taskDescription,
-        status: 'pending',
-        created_at: now,
-        chat_id: chatId || null,
-        workspace_id: workspaceId || null,
-        total_agents: 0,
-        total_tasks: 0,
-        total_tool_executions: 0
-      });
+      await this.updateExecutionStatus('running');
       
-      this.currentExecutionId = executionId;
-      console.log('[OSSwarm Core] Created execution record:', executionId);
-      
-      // Update status to running
-      await executeQuery(`
-        UPDATE ${DBTABLES.OSSWARM_EXECUTIONS} 
-        SET status = @status, started_at = @started_at 
-        WHERE id = @id
-      `, {
-        status: 'running',
-        started_at: now,
-        id: executionId
-      });
-      
-      // ✅ Notify renderer to load the graph
-      const webContents = (global as any).osswarmWebContents;
-      if (webContents && !webContents.isDestroyed()) {
-        webContents.send('osswarm:execution_created', {
-          executionId,
-          taskDescription,
-          chatId,
-          workspaceId
-        });
-      }
     } catch (error) {
-      console.error('[OSSwarm Core] Error creating execution record:', error);
+      console.error('[OSSwarm Core] Error creating execution:', error);
+      return { success: false, error: 'Failed to create execution record' };
     }
-
-    console.log('[OSSwarm Core] Starting processTask with:', {
-      taskLength: taskDescription.length,
-      iterationCount: this.iterationCount,
-      maxIterations: this.config.limits.maxIterations,
-      hasMasterAgent: !!this.masterAgent,
-      hasTools: this.config.agentOptions.tools?.length || 0,
-      humanInTheLoop: this.config.humanInTheLoop,
-      executionId: this.currentExecutionId
-    });
 
     if (!this.masterAgent) {
       const error = 'Master agent not initialized';
       console.error('[OSSwarm Core]', error);
+      await this.updateExecutionStatus('failed', undefined, error);
       return { success: false, error };
     }
 
@@ -384,6 +556,7 @@ All tool usage requires human approval.`;
       if (this.iterationCount > this.config.limits.maxIterations) {
         const error = `Maximum iterations (${this.config.limits.maxIterations}) reached`;
         console.error('[OSSwarm Core]', error);
+        await this.updateExecutionStatus('failed', undefined, error);
         return { success: false, error };
       }
 
@@ -397,13 +570,31 @@ All tool usage requires human approval.`;
       const decomposition = decompositionResult.choices[0]?.message?.content || '';
       streamCallback?.(`[OSSwarm] Task decomposition complete`);
 
-      const swarmAgents = await this.createSwarm('research', 2);
-      streamCallback?.(`[OSSwarm] Created research swarm with ${swarmAgents.length} agents`);
+      // ✅ Create swarm with RAG agent if KB is available
+      let swarmAgents: string[] = [];
+      
+      if (hasKnowledgeBases && workspaceId) {
+        // Create a mixed swarm with RAG agent
+        const ragAgentId = await this.createRAGAgent(
+          'knowledge-swarm', 
+          workspaceId, 
+          this.config.agentOptions.knowledgeBases?.selectedKbIds
+        );
+        const researchAgents = await this.createSwarm('research', 1);
+        
+        swarmAgents = [ragAgentId, ...researchAgents];
+        streamCallback?.(`[OSSwarm] Created knowledge-enhanced swarm with RAG agent and ${researchAgents.length} research agents`);
+      } else {
+        // Fallback to regular research swarm
+        swarmAgents = await this.createSwarm('research', 2);
+        streamCallback?.(`[OSSwarm] Created research swarm with ${swarmAgents.length} agents`);
+      }
 
       const results: string[] = [];
       for (const agentId of swarmAgents) {
         if (this.isAborted) {
           streamCallback?.(`[OSSwarm] Execution aborted by user`);
+          await this.updateExecutionStatus('failed', undefined, 'Execution aborted by user');
           return { success: false, error: 'Execution aborted by user' };
         }
 
@@ -411,300 +602,70 @@ All tool usage requires human approval.`;
         if (agent) {
           streamCallback?.(`[OSSwarm] Agent ${agent.role} processing subtask...`);
           
-          // ✅ Create task in database
           const dbAgentId = this.dbAgentIds.get(agentId);
-          if (dbAgentId) {
-            const taskId = await this.createTaskInDB(dbAgentId, taskDescription, 1);
-            
-            // Update task status to running
-            if (taskId) {
-              await executeQuery(`
-                UPDATE ${DBTABLES.OSSWARM_TASKS} 
-                SET status = @status, started_at = @started_at 
-                WHERE id = @id
-              `, {
-                status: 'running',
-                started_at: new Date().toISOString(),
-                id: taskId
-              });
+          if (dbAgentId && this.currentExecutionId) {
+            try {
+              const taskId = await this.createTaskInStore(this.currentExecutionId, dbAgentId, taskDescription, 1);
+              await this.updateTaskStatus(taskId, 'running');
+            } catch (error) {
+              console.error('[OSSwarm] Failed to create task in store:', error);
             }
           }
           
           agent.status = 'busy';
-          await this.updateAgentStatusInDB(agentId, 'busy', taskDescription);
+          await this.updateAgentStatus(agentId, 'busy', taskDescription);
 
-          if (this.config.humanInTheLoop && this.config.agentOptions.tools && this.config.agentOptions.tools.length > 0) {
-            const availableTools = this.config.agentOptions.tools;
-            console.log(`[OSSwarm] Agent ${agent.role} has ${availableTools.length} tools available:`, availableTools.map(t => t.function?.name));
+          // ✅ Special handling for RAG agent
+          if (agent.role === 'rag') {
+            const ragWorkspaceId = (agent as any).workspaceId;
+            const ragKbIds = (agent as any).kbIds;
             
-            const selectedTool = availableTools.find(tool => 
-              tool.function?.name?.toLowerCase().includes('search') || 
-              tool.function?.name?.toLowerCase().includes('research') ||
-              tool.function?.name?.toLowerCase().includes('tavily')
-            ) || availableTools[0];
-            
-            if (this.isAborted) {
-              streamCallback?.(`[OSSwarm] Execution aborted by user`);
-              return { success: false, error: 'Execution aborted by user' };
-            }
-            
-            if (selectedTool && selectedTool.function) {
-              console.log(`[OSSwarm] Agent ${agent.role} selected tool: ${selectedTool.function.name}`);
+            if (ragWorkspaceId && ragKbIds) {
+              streamCallback?.(`[OSSwarm] RAG Agent retrieving knowledge from ${ragKbIds.length} knowledge bases...`);
               
-              const originalMCPServer = (selectedTool as any).mcpServer || 'unknown';
-              console.log(`[OSSwarm] Tool ${selectedTool.function.name} originates from MCP server: ${originalMCPServer}`);
+              const ragResult = await this.performRAGQuery(agentId, taskDescription, ragWorkspaceId, ragKbIds);
               
-              let toolArguments = {};
-              if (selectedTool.function.parameters && selectedTool.function.parameters.properties) {
-                const props = selectedTool.function.parameters.properties as Record<string, any>;
-                
-                if (props.query) {
-                  toolArguments = { query: taskDescription };
-                } else if (props.q) {
-                  toolArguments = { q: taskDescription };
-                } else if (props.search_query) {
-                  toolArguments = { search_query: taskDescription };
-                } else {
-                  const firstParam = Object.keys(props)[0];
-                  if (firstParam) {
-                    toolArguments = { [firstParam]: taskDescription };
-                  }
-                }
-              }
-              
-              const toolCall = {
-                function: {
-                  name: selectedTool.function.name,
-                  description: selectedTool.function.description || 'Tool for research and information gathering',
-                  arguments: toolArguments
-                },
-                originalMCPServer
-              };
+              if (ragResult.success && ragResult.result) {
+                // Use the RAG result to generate a more informed response
+                const ragEnhancedPrompt = `As a RAG agent, I have retrieved the following relevant information from the knowledge bases:
 
-              console.log(`[OSSwarm] Agent ${agent.role} requesting approval for tool:`, toolCall);
+Retrieved Knowledge:
+${ragResult.result}
 
-              if (this.isAborted) {
-                streamCallback?.(`[OSSwarm] Execution aborted by user`);
-                return { success: false, error: 'Execution aborted by user' };
-              }
+Based on this retrieved knowledge and the original task: "${taskDescription}"
 
-              const approvalResult = await this.requestHumanApproval(
-                agentId,
-                agent.role,
-                toolCall,
-                `Agent ${agent.role} wants to use ${selectedTool.function.name} for: ${taskDescription}`,
-                streamCallback
-              );
-
-              if (this.isAborted) {
-                streamCallback?.(`[OSSwarm] Execution aborted by user`);
-                return { success: false, error: 'Execution aborted by user' };
-              }
-
-              if (!approvalResult) {
-                streamCallback?.(`[OSSwarm] Agent ${agent.role} tool usage denied by human`);
-                agent.status = 'failed';
-                continue;
-              }
-
-              const approvalId = approvalResult;
-              console.log('[OSSwarm] 🔧 Using approval ID for execution tracking:', approvalId);
-
-              // ✅ Create tool execution in database
-              const dbAgentId = this.dbAgentIds.get(agentId);
-              if (dbAgentId) {
-                const toolExecutionId = await this.createToolExecutionInDB(
-                  dbAgentId,
-                  selectedTool.function.name,
-                  toolArguments,
-                  approvalId,
-                  originalMCPServer
-                );
-                
-                // Update tool execution status to approved
-                if (toolExecutionId) {
-                  await executeQuery(`
-                    UPDATE ${DBTABLES.OSSWARM_TOOL_EXECUTIONS} 
-                    SET status = @status, human_approved = @human_approved, approved_at = @approved_at 
-                    WHERE id = @id
-                  `, {
-                    status: 'approved',
-                    human_approved: 1,
-                    approved_at: new Date().toISOString(),
-                    id: toolExecutionId
-                  });
-                }
-              }
-
-              streamCallback?.(`[OSSwarm] Agent ${agent.role} tool usage approved by human`);
-
-              const webContents = (global as any).osswarmWebContents;
-              console.log('[OSSwarm] 🔧 WebContents available:', {
-                hasWebContents: !!webContents,
-                isDestroyed: webContents?.isDestroyed?.()
-              });
-
-              const executionId = `execution-${approvalId.split('-').slice(1).join('-')}`;
-              console.log('[OSSwarm] 🔧 Generated execution ID from approval ID:', executionId);
-
-              const executionStartTime = Date.now();
-              this.executionStartTimes.set(approvalId, executionStartTime);
-
-              try {
-                console.log(`[OSSwarm] 🔧 Agent ${agent.role} executing tool: ${selectedTool.function.name}`);
-                
-                if (webContents && !webContents.isDestroyed()) {
-                  console.log('[OSSwarm] 🔧 Sending tool execution start notification');
-                  webContents.send('osswarm:tool_execution_start', {
-                    executionId,
-                    toolName: selectedTool.function.name,
-                    agentId,
-                    agentRole: agent.role
-                  });
-                }
-                
-                const mcpServer = (selectedTool as any).mcpServer || 'unknown';
-                console.log(`[OSSwarm] 🔧 Executing MCP tool on server:`, {
-                  toolName: selectedTool.function.name,
-                  mcpServer,
-                  arguments: toolArguments,
-                  executionId
-                });
-                
-                const toolResult = await new Promise((resolve, reject) => {
-                  const responseChannel = `osswarm:tool_result:${executionId}`;
-                  console.log('[OSSwarm] 🔧 Setting up response channel:', responseChannel);
-                  
-                  const { ipcMain } = require('electron');
-                  
-                  const resultHandler = (event: any, result: any) => {
-                    console.log('[OSSwarm] 🔧 Received tool result via IPC:', {
-                      executionId,
-                      resultType: typeof result,
-                      hasSuccess: 'success' in result,
-                      success: result?.success,
-                      hasData: !!result?.data,
-                      hasError: !!result?.error,
-                      fullResult: result
-                    });
-                    
-                    ipcMain.removeListener(responseChannel, resultHandler);
-                    resolve(result);
-                  };
-                  
-                  ipcMain.once(responseChannel, resultHandler);
-                  
-                  if (webContents && !webContents.isDestroyed()) {
-                    console.log('[OSSwarm] 🔧 Sending MCP tool execution request to renderer:', {
-                      executionId,
-                      serverName: mcpServer,
-                      toolName: selectedTool.function.name,
-                      arguments: toolArguments,
-                      responseChannel
-                    });
-                    
-                    webContents.send('osswarm:execute_mcp_tool', {
-                      executionId,
-                      serverName: mcpServer,
-                      toolName: selectedTool.function.name,
-                      arguments: toolArguments,
-                      responseChannel
-                    });
-                  } else {
-                    console.error('[OSSwarm] 🔧 No valid webContents for tool execution');
-                    reject(new Error('No valid webContents for tool execution'));
-                  }
-                  
-                  setTimeout(() => {
-                    console.log('[OSSwarm] 🔧 Tool execution timeout for:', executionId);
-                    ipcMain.removeListener(responseChannel, resultHandler);
-                    reject(new Error('Tool execution timeout'));
-                  }, 30000);
-                });
-
-                console.log(`[OSSwarm] 🔧 Tool ${selectedTool.function.name} execution completed:`, {
-                  executionId,
-                  resultType: typeof toolResult,
-                  toolResult
-                });
-
-                const agentPrompt = `As a ${agent.role} agent, help with this task: ${taskDescription}. 
-
-Tool execution results:
-Tool: ${selectedTool.function.name}
-Result: ${JSON.stringify(toolResult, null, 2)}
-
-Based on these tool results, provide a comprehensive response.`;
-
-                console.log('[OSSwarm] 🔧 Sending prompt to agent:', {
-                  agentRole: agent.role,
-                  promptLength: agentPrompt.length,
-                  hasToolResult: !!toolResult
-                });
+Please provide a comprehensive, well-informed response that incorporates the retrieved information.`;
 
                 const agentResult = await agent.agentService.getCompletion([
                   {
                     role: 'user',
-                    content: agentPrompt
+                    content: ragEnhancedPrompt
                   }
                 ]);
 
                 const agentResponse = agentResult.choices[0]?.message?.content || '';
-                console.log('[OSSwarm] 🔧 Agent response received:', {
-                  responseLength: agentResponse.length,
-                  hasResponse: !!agentResponse
-                });
-                
-                const startTime = this.executionStartTimes.get(approvalId) || Date.now();
-                const actualExecutionTime = Math.floor((Date.now() - startTime) / 1000);
-                
-                this.executionStartTimes.delete(approvalId);
-
-                if (webContents && !webContents.isDestroyed()) {
-                  console.log('[OSSwarm] 🔧 Sending tool execution completion notification');
-                  
-                  webContents.send('osswarm:tool_execution_complete', {
-                    executionId,
-                    toolName: selectedTool.function.name,
-                    agentId,
-                    agentRole: agent.role,
-                    result: JSON.stringify(toolResult),
-                    agentResponse,
-                    success: true,
-                    executionTime: actualExecutionTime,
-                    approvalId: approvalId
-                  });
-                }
-
-                results.push(`${agent.role}: ${agentResponse}`);
+                results.push(`${agent.role} (with knowledge retrieval): ${agentResponse}`);
                 agent.status = 'completed';
+                await this.updateAgentStatus(agentId, 'completed');
                 
-                streamCallback?.(`[OSSwarm] Agent ${agent.role} completed subtask with tool execution`);
-              } catch (toolError: any) {
-                console.error(`[OSSwarm] 🔧 Agent ${agent.role} tool execution failed:`, {
-                  message: toolError.message,
-                  stack: toolError.stack,
-                  executionId,
-                  toolName: selectedTool.function.name
-                });
-                
-                if (webContents && !webContents.isDestroyed()) {
-                  webContents.send('osswarm:tool_execution_complete', {
-                    executionId,
-                    toolName: selectedTool.function.name,
-                    agentId,
-                    agentRole: agent.role,
-                    error: toolError.message,
-                    success: false,
-                    approvalId: approvalId
-                  });
-                }
-                
-                streamCallback?.(`[OSSwarm] Agent ${agent.role} tool execution failed: ${toolError.message}`);
-                agent.status = 'failed';
+                streamCallback?.(`[OSSwarm] RAG Agent completed subtask with knowledge base integration`);
+              } else {
+                streamCallback?.(`[OSSwarm] RAG Agent knowledge retrieval failed: ${ragResult.error}`);
+                // Fallback to regular agent processing
+                const agentResult = await agent.agentService.getCompletion([
+                  {
+                    role: 'user',
+                    content: `As a ${agent.role} agent, help with this task: ${taskDescription}`
+                  }
+                ]);
+
+                const agentResponse = agentResult.choices[0]?.message?.content || '';
+                results.push(`${agent.role} (fallback): ${agentResponse}`);
+                agent.status = 'completed';
+                await this.updateAgentStatus(agentId, 'completed');
               }
             } else {
-              console.warn(`[OSSwarm] Agent ${agent.role} has no suitable tools available`);
+              // No KB context available, process normally
               const agentResult = await agent.agentService.getCompletion([
                 {
                   role: 'user',
@@ -715,8 +676,283 @@ Based on these tool results, provide a comprehensive response.`;
               const agentResponse = agentResult.choices[0]?.message?.content || '';
               results.push(`${agent.role}: ${agentResponse}`);
               agent.status = 'completed';
+              await this.updateAgentStatus(agentId, 'completed');
+            }
+          } else {
+            // Regular agent processing with proper tool execution
+            if (this.config.humanInTheLoop && this.config.agentOptions.tools && this.config.agentOptions.tools.length > 0) {
+              console.log(`[OSSwarm Core] Agent ${agent.role} processing with ${this.config.agentOptions.tools.length} available tools`);
               
-              streamCallback?.(`[OSSwarm] Agent ${agent.role} completed subtask without tools`);
+              // Let the LangChain agent decide which tools to use
+              const agentResult = await agent.agentService.getCompletion([
+                {
+                  role: 'user',
+                  content: `As a ${agent.role} agent, help with this task: ${taskDescription}
+
+Available tools: ${this.config.agentOptions.tools?.map(t => 
+  `- ${t.function?.name}: ${t.function?.description || 'No description'}`
+).join('\n') || 'None'}
+
+Choose the most appropriate tool(s) for this task, or respond directly if no tools are needed.`
+                }
+              ]);
+
+              // Check if the agent made tool calls
+              const toolCalls = agentResult.choices[0]?.message?.tool_calls;
+              
+              if (toolCalls && toolCalls.length > 0) {
+                console.log(`[OSSwarm Core] Agent ${agent.role} intelligently selected ${toolCalls.length} tools:`, 
+                  toolCalls.map(tc => tc.function?.name));
+                
+                // Process each tool call the agent requested
+                for (const toolCall of toolCalls) {
+                  // Find the corresponding tool definition
+                  const selectedTool = this.config.agentOptions.tools?.find(tool => 
+                    tool.function?.name === toolCall.function?.name
+                  );
+                  
+                  if (selectedTool) {
+                    console.log(`[OSSwarm Core] Processing intelligent tool selection:`, {
+                      selectedTool: toolCall.function?.name,
+                      mcpServer: (selectedTool as any).mcpServer,
+                      arguments: toolCall.function?.arguments
+                    });
+                    
+                    const originalMCPServer = (selectedTool as any).mcpServer || 'mcp-server';
+                    
+                    const enhancedToolCall = {
+                      function: {
+                        name: toolCall.function?.name,
+                        description: selectedTool.function?.description || `Tool from ${originalMCPServer}`,
+                        arguments: toolCall.function?.arguments
+                      },
+                      originalMCPServer
+                    };
+
+                    // Request human approval for this specific tool
+                    const approvalResult = await this.requestHumanApproval(
+                      agentId,
+                      agent.role,
+                      enhancedToolCall,
+                      `Agent ${agent.role} intelligently selected ${toolCall.function?.name} from ${originalMCPServer} for: ${taskDescription}`,
+                      streamCallback
+                    );
+
+                    if (!approvalResult) {
+                      streamCallback?.(`[OSSwarm] Agent ${agent.role} tool usage denied by human`);
+                      continue; // Skip this tool, try next one or continue without tools
+                    }
+
+                    const approvalId = approvalResult;
+
+                    // ✅ CREATE TOOL EXECUTION RECORD
+                    const dbAgentId = this.dbAgentIds.get(agentId);
+                    if (dbAgentId && this.currentExecutionId) {
+                      try {
+                        const toolExecutionId = await this.createToolExecutionInStore(
+                          this.currentExecutionId,
+                          dbAgentId,
+                          toolCall.function?.name || 'unknown',
+                          toolCall.function?.arguments,
+                          approvalId,
+                          originalMCPServer
+                        );
+                        
+                        await this.updateToolExecutionStatus(toolExecutionId, 'approved');
+                      } catch (error) {
+                        console.error('[OSSwarm] Failed to create tool execution in store:', error);
+                      }
+                    }
+
+                    streamCallback?.(`[OSSwarm] Agent ${agent.role} tool usage approved by human`);
+
+                    // ✅ EXECUTE THE TOOL
+                    try {
+                      const webContents = (global as any).osswarmWebContents;
+                      const executionId = `execution-${approvalId.split('-').slice(1).join('-')}`;
+                      const executionStartTime = Date.now();
+                      this.executionStartTimes.set(approvalId, executionStartTime);
+
+                      if (webContents && !webContents.isDestroyed()) {
+                        webContents.send('osswarm:tool_execution_start', {
+                          executionId,
+                          toolName: toolCall.function?.name,
+                          agentId,
+                          agentRole: agent.role
+                        });
+                      }
+                      
+                      // ✅ EXECUTE THE TOOL VIA MCP
+                      const toolResult = await new Promise((resolve, reject) => {
+                        const responseChannel = `osswarm:tool_result:${executionId}`;
+                        
+                        const { ipcMain } = require('electron');
+                        
+                        const resultHandler = (event: any, result: any) => {
+                          ipcMain.removeListener(responseChannel, resultHandler);
+                          resolve(result);
+                        };
+                        
+                        ipcMain.once(responseChannel, resultHandler);
+                        
+                        if (webContents && !webContents.isDestroyed()) {
+                          // ✅ FIX: Ensure arguments are properly parsed as object
+                          let parsedArguments = {};
+                          
+                          try {
+                            // If arguments is a string, try to parse it as JSON
+                            if (typeof toolCall.function?.arguments === 'string') {
+                              parsedArguments = JSON.parse(toolCall.function.arguments);
+                            } else if (typeof toolCall.function?.arguments === 'object' && toolCall.function.arguments !== null) {
+                              parsedArguments = toolCall.function.arguments;
+                            } else {
+                              // Fallback: create a basic query object
+                              parsedArguments = { query: taskDescription };
+                            }
+                          } catch (parseError) {
+                            console.warn(`[OSSwarm] Failed to parse tool arguments, using fallback:`, parseError);
+                            parsedArguments = { query: taskDescription };
+                          }
+                          
+                          console.log(`[OSSwarm Core] Sending tool execution with parsed arguments:`, {
+                            executionId,
+                            serverName: originalMCPServer,
+                            toolName: toolCall.function?.name,
+                            originalArguments: toolCall.function?.arguments,
+                            parsedArguments,
+                            argumentsType: typeof parsedArguments
+                          });
+                          
+                          webContents.send('osswarm:execute_mcp_tool', {
+                            executionId,
+                            serverName: originalMCPServer,
+                            toolName: toolCall.function?.name,
+                            arguments: parsedArguments, // ✅ Now guaranteed to be an object
+                            responseChannel
+                          });
+                        } else {
+                          reject(new Error('No valid webContents for tool execution'));
+                        }
+                        
+                        setTimeout(() => {
+                          ipcMain.removeListener(responseChannel, resultHandler);
+                          reject(new Error('Tool execution timeout'));
+                        }, 30000);
+                      });
+
+                      // ✅ USE TOOL RESULTS TO ENHANCE AGENT RESPONSE
+                      const agentPrompt = `As a ${agent.role} agent, help with this task: ${taskDescription}. 
+
+Tool execution results:
+Tool: ${toolCall.function?.name}
+Result: ${JSON.stringify(toolResult, null, 2)}
+
+Based on these tool results, provide a comprehensive response.`;
+
+                      const enhancedAgentResult = await agent.agentService.getCompletion([
+                        {
+                          role: 'user',
+                          content: agentPrompt
+                        }
+                      ]);
+
+                      const agentResponse = enhancedAgentResult.choices[0]?.message?.content || '';
+                      
+                      const startTime = this.executionStartTimes.get(approvalId) || Date.now();
+                      const actualExecutionTime = Math.floor((Date.now() - startTime) / 1000);
+                      
+                      this.executionStartTimes.delete(approvalId);
+
+                      // ✅ UPDATE TOOL EXECUTION STATUS
+                      try {
+                        await this.sendToRenderer('osswarm:update_tool_execution_by_approval', {
+                          approvalId,
+                          status: 'completed',
+                          result: JSON.stringify(toolResult),
+                          executionTime: actualExecutionTime
+                        });
+                      } catch (error) {
+                        console.error('[OSSwarm] Failed to update tool execution status:', error);
+                      }
+
+                      // ✅ NOTIFY UI OF COMPLETION
+                      if (webContents && !webContents.isDestroyed()) {
+                        webContents.send('osswarm:tool_execution_complete', {
+                          executionId,
+                          toolName: toolCall.function?.name,
+                          agentId,
+                          agentRole: agent.role,
+                          result: JSON.stringify(toolResult),
+                          agentResponse,
+                          success: true,
+                          executionTime: actualExecutionTime,
+                          approvalId: approvalId
+                        });
+                      }
+
+                      results.push(`${agent.role}: ${agentResponse}`);
+                      agent.status = 'completed';
+                      await this.updateAgentStatus(agentId, 'completed');
+                      
+                      streamCallback?.(`[OSSwarm] Agent ${agent.role} completed subtask with tool execution`);
+                      
+                      // ✅ BREAK AFTER FIRST SUCCESSFUL TOOL EXECUTION
+                      break;
+                      
+                    } catch (toolError: any) {
+                      console.error(`[OSSwarm] Agent ${agent.role} tool execution failed:`, toolError);
+                      
+                      try {
+                        await this.sendToRenderer('osswarm:update_tool_execution_by_approval', {
+                          approvalId,
+                          status: 'failed',
+                          error: toolError.message
+                        });
+                      } catch (error) {
+                        console.error('[OSSwarm] Failed to update failed tool execution status:', error);
+                      }
+                      
+                      streamCallback?.(`[OSSwarm] Agent ${agent.role} tool execution failed: ${toolError.message}`);
+                      // Continue to next tool or fallback to no-tool response
+                    }
+                  } else {
+                    console.error(`[OSSwarm Core] Tool ${toolCall.function?.name} not found in available tools`);
+                  }
+                }
+                
+                // ✅ IF NO TOOLS WERE SUCCESSFULLY EXECUTED, USE ORIGINAL RESPONSE
+                if (agent.status !== 'completed') {
+                  const agentResponse = agentResult.choices[0]?.message?.content || '';
+                  results.push(`${agent.role}: ${agentResponse}`);
+                  agent.status = 'completed';
+                  await this.updateAgentStatus(agentId, 'completed');
+                  
+                  streamCallback?.(`[OSSwarm] Agent ${agent.role} completed subtask without successful tool execution`);
+                }
+              } else {
+                // Agent chose not to use tools, just use the response
+                const agentResponse = agentResult.choices[0]?.message?.content || '';
+                results.push(`${agent.role}: ${agentResponse}`);
+                agent.status = 'completed';
+                await this.updateAgentStatus(agentId, 'completed');
+                
+                streamCallback?.(`[OSSwarm] Agent ${agent.role} completed subtask without using tools`);
+              }
+            } else {
+              // ✅ FALLBACK: NO TOOLS AVAILABLE OR HUMAN-IN-THE-LOOP DISABLED
+              const agentResult = await agent.agentService.getCompletion([
+                {
+                  role: 'user',
+                  content: `As a ${agent.role} agent, help with this task: ${taskDescription}`
+                }
+              ]);
+
+              const agentResponse = agentResult.choices[0]?.message?.content || '';
+              results.push(`${agent.role}: ${agentResponse}`);
+              agent.status = 'completed';
+              await this.updateAgentStatus(agentId, 'completed');
+              
+              streamCallback?.(`[OSSwarm] Agent ${agent.role} completed subtask without tools (no tools available)`);
             }
           }
         }
@@ -724,6 +960,7 @@ Based on these tool results, provide a comprehensive response.`;
 
       if (this.isAborted) {
         streamCallback?.(`[OSSwarm] Execution aborted by user`);
+        await this.updateExecutionStatus('failed', undefined, 'Execution aborted by user');
         return { success: false, error: 'Execution aborted by user' };
       }
 
@@ -737,38 +974,20 @@ Based on these tool results, provide a comprehensive response.`;
       ]);
 
       const finalResult = synthesisResult.choices[0]?.message?.content || '';
-      streamCallback?.(`[OSSwarm] Task completed successfully`);
+      streamCallback?.(`[OSSwarm] Task completed successfully with ${hasKnowledgeBases ? 'knowledge base integration' : 'standard processing'}`);
 
+      console.log('[OSSwarm Core] Updating execution status to completed...');
+      await this.updateExecutionStatus('completed', finalResult);
+      console.log('[OSSwarm Core] Execution status updated successfully');
+      
       this.cleanup();
-
-      if (this.currentExecutionId) {
-        const webContents = (global as any).osswarmWebContents;
-        if (webContents && !webContents.isDestroyed()) {
-          webContents.send('osswarm:update_execution_status', {
-            executionId: this.currentExecutionId,
-            status: 'completed',
-            result: finalResult
-          });
-        }
-      }
-
-      await this.updateExecutionStatusInDB('completed', finalResult);
 
       return { success: true, result: finalResult };
 
     } catch (error: any) {
       console.error('[OSSwarm Core] Error in processTask:', error);
       
-      if (this.currentExecutionId) {
-        const webContents = (global as any).osswarmWebContents;
-        if (webContents && !webContents.isDestroyed()) {
-          webContents.send('osswarm:update_execution_status', {
-            executionId: this.currentExecutionId,
-            status: 'failed',
-            error: error.message
-          });
-        }
-      }
+      await this.updateExecutionStatus('failed', undefined, error.message);
       
       streamCallback?.(`[OSSwarm] Error: ${error.message}`);
       this.cleanup();
@@ -794,7 +1013,6 @@ Based on these tool results, provide a comprehensive response.`;
     this.isAborted = true;
     
     for (const [approvalId, callback] of this.approvalCallbacks.entries()) {
-      console.log(`[OSSwarm Core] Cancelling pending approval: ${approvalId}`);
       try {
         callback(false);
       } catch (error) {
@@ -804,18 +1022,12 @@ Based on these tool results, provide a comprehensive response.`;
     
     for (const [agentId, agent] of this.agents.entries()) {
       if (agent.status === 'busy') {
-        console.log(`[OSSwarm Core] Setting agent ${agentId} status to failed due to abort`);
         agent.status = 'failed';
       }
     }
     
-    if (this.currentExecutionId && this.agentTaskStore) {
-      this.agentTaskStore.updateExecutionStatus(
-        this.currentExecutionId,
-        'failed',
-        undefined,
-        'Execution aborted by user'
-      ).catch((error: any) => {
+    if (this.currentExecutionId) {
+      this.updateExecutionStatus('failed', undefined, 'Execution aborted by user').catch((error: any) => {
         console.error('[OSSwarm Core] Error updating execution status on abort:', error);
       });
     }
@@ -841,236 +1053,54 @@ Based on these tool results, provide a comprehensive response.`;
     };
   }
 
-  private async createAgentInDB(agentId: string, role: string, expertise: string[]): Promise<void> {
-    if (!this.currentExecutionId) return;
+  private async createRAGAgent(swarmId: string, workspaceId?: string, kbIds?: string[]): Promise<string> {
+    const agentId = await this.createAgent('rag', swarmId);
     
-    try {
-      const dbAgentId = uuidv4();
-      const now = new Date().toISOString();
-      
-      await executeQuery(`
-        INSERT INTO ${DBTABLES.OSSWARM_AGENTS}
-        (id, execution_id, agent_id, role, expertise, status, created_at)
-        VALUES (@id, @execution_id, @agent_id, @role, @expertise, @status, @created_at)
-      `, {
-        id: dbAgentId,
-        execution_id: this.currentExecutionId,
-        agent_id: agentId,
-        role: role,
-        expertise: JSON.stringify(expertise),
-        status: 'idle',
-        created_at: now
-      });
-      
-      // Update total agents count
-      await executeQuery(`
-        UPDATE ${DBTABLES.OSSWARM_EXECUTIONS} 
-        SET total_agents = total_agents + 1 
-        WHERE id = @id
-      `, {
-        id: this.currentExecutionId
-      });
-      
-      this.dbAgentIds.set(agentId, dbAgentId);
-      
-      // Notify renderer
-      const webContents = (global as any).osswarmWebContents;
-      if (webContents && !webContents.isDestroyed()) {
-        webContents.send('osswarm:agent_created', {
-          executionId: this.currentExecutionId,
-          agentId: dbAgentId,
-          role,
-          expertise
-        });
-      }
-      
-      console.log('[OSSwarm Core] Created agent in DB:', { agentId, dbAgentId, role });
-    } catch (error) {
-      console.error('[OSSwarm Core] Error creating agent in DB:', error);
+    // Store KB context for this RAG agent
+    const agent = this.agents.get(agentId);
+    if (agent && workspaceId && kbIds) {
+      (agent as any).workspaceId = workspaceId;
+      (agent as any).kbIds = kbIds;
+      console.log(`[OSSwarm] RAG Agent ${agentId} configured with workspace ${workspaceId} and KBs:`, kbIds);
     }
+    
+    return agentId;
   }
 
-  private async updateAgentStatusInDB(agentId: string, status: string, currentTask?: string): Promise<void> {
-    const dbAgentId = this.dbAgentIds.get(agentId);
-    if (!dbAgentId) return;
-    
-    try {
-      const now = new Date().toISOString();
-      const updates: any = { status };
-      
-      if (currentTask) updates.current_task = currentTask;
-      if (status === 'busy') updates.started_at = now;
-      if (status === 'completed' || status === 'failed') updates.completed_at = now;
-      
-      // Build dynamic query
-      const setClause = Object.keys(updates).map(key => `${key} = @${key}`).join(', ');
-      
-      await executeQuery(`
-        UPDATE ${DBTABLES.OSSWARM_AGENTS} 
-        SET ${setClause} 
-        WHERE id = @id
-      `, {
-        ...updates,
-        id: dbAgentId
-      });
-      
-      // Notify renderer
-      const webContents = (global as any).osswarmWebContents;
-      if (webContents && !webContents.isDestroyed()) {
-        webContents.send('osswarm:agent_updated', {
-          executionId: this.currentExecutionId,
-          agentId: dbAgentId,
-          status,
-          currentTask
-        });
-      }
-    } catch (error) {
-      console.error('[OSSwarm Core] Error updating agent status:', error);
+  private async performRAGQuery(
+    agentId: string, 
+    query: string, 
+    workspaceId?: string, 
+    kbIds?: string[]
+  ): Promise<{ success: boolean; result?: string; error?: string }> {
+    if (!workspaceId || !kbIds || kbIds.length === 0) {
+      return { success: false, error: 'No workspace or knowledge bases available for RAG query' };
     }
-  }
 
-  private async updateExecutionStatusInDB(status: string, result?: string, error?: string): Promise<void> {
-    if (!this.currentExecutionId) return;
-    
     try {
-      const now = new Date().toISOString();
-      const updates: any = { status };
-      
-      if (status === 'completed' || status === 'failed') {
-        updates.completed_at = now;
-      }
-      if (result) updates.result = result;
-      if (error) updates.error = error;
-      
-      const setClause = Object.keys(updates).map(key => `${key} = @${key}`).join(', ');
-      
-      await executeQuery(`
-        UPDATE ${DBTABLES.OSSWARM_EXECUTIONS} 
-        SET ${setClause} 
-        WHERE id = @id
-      `, {
-        ...updates,
-        id: this.currentExecutionId
+      console.log(`[OSSwarm] RAG Agent ${agentId} performing knowledge base query:`, {
+        workspaceId,
+        kbIds,
+        queryLength: query.length
       });
-      
-      // Notify renderer
-      const webContents = (global as any).osswarmWebContents;
-      if (webContents && !webContents.isDestroyed()) {
-        webContents.send('osswarm:execution_updated', {
-          executionId: this.currentExecutionId,
-          status,
-          result,
-          error
-        });
-      }
-    } catch (error) {
-      console.error('[OSSwarm Core] Error updating execution status:', error);
-    }
-  }
 
-  private async createTaskInDB(agentId: string, taskDescription: string, priority: number = 0): Promise<string> {
-    if (!this.currentExecutionId) return '';
-    
-    try {
-      const taskId = uuidv4();
-      const now = new Date().toISOString();
-      
-      await executeQuery(`
-        INSERT INTO ${DBTABLES.OSSWARM_TASKS}
-        (id, execution_id, agent_id, task_description, status, priority, created_at, iterations, max_iterations)
-        VALUES (@id, @execution_id, @agent_id, @task_description, @status, @priority, @created_at, @iterations, @max_iterations)
-      `, {
-        id: taskId,
-        execution_id: this.currentExecutionId,
-        agent_id: agentId,
-        task_description: taskDescription,
-        status: 'pending',
-        priority,
-        created_at: now,
-        iterations: 0,
-        max_iterations: this.config.limits.maxIterations
+      const ragResult = await this.kbService.queryKnowledgeBaseNonStreaming({
+        workspaceId,
+        queryText: query,
+        kbIds,
+        topK: 5,
+        preferredLanguage: 'en'
       });
-      
-      // Update total tasks count
-      await executeQuery(`
-        UPDATE ${DBTABLES.OSSWARM_EXECUTIONS} 
-        SET total_tasks = total_tasks + 1 
-        WHERE id = @id
-      `, {
-        id: this.currentExecutionId
-      });
-      
-      // Notify renderer
-      const webContents = (global as any).osswarmWebContents;
-      if (webContents && !webContents.isDestroyed()) {
-        webContents.send('osswarm:task_created', {
-          executionId: this.currentExecutionId,
-          taskId,
-          agentId,
-          taskDescription,
-          priority
-        });
-      }
-      
-      console.log('[OSSwarm Core] Created task in DB:', { taskId, agentId, taskDescription });
-      return taskId;
-    } catch (error) {
-      console.error('[OSSwarm Core] Error creating task in DB:', error);
-      return '';
-    }
-  }
 
-  private async createToolExecutionInDB(agentId: string, toolName: string, toolArguments: any, approvalId: string, mcpServer: string, taskId?: string): Promise<string> {
-    if (!this.currentExecutionId) return '';
-    
-    try {
-      const toolExecutionId = uuidv4();
-      const now = new Date().toISOString();
-      
-      await executeQuery(`
-        INSERT INTO ${DBTABLES.OSSWARM_TOOL_EXECUTIONS}
-        (id, execution_id, agent_id, task_id, tool_name, tool_arguments, approval_id, status, created_at, mcp_server, human_approved)
-        VALUES (@id, @execution_id, @agent_id, @task_id, @tool_name, @tool_arguments, @approval_id, @status, @created_at, @mcp_server, @human_approved)
-      `, {
-        id: toolExecutionId,
-        execution_id: this.currentExecutionId,
-        agent_id: agentId,
-        task_id: taskId || null,
-        tool_name: toolName,
-        tool_arguments: JSON.stringify(toolArguments),
-        approval_id: approvalId,
-        status: 'pending',
-        created_at: now,
-        mcp_server: mcpServer,
-        human_approved: 0
-      });
-      
-      // Update total tool executions count
-      await executeQuery(`
-        UPDATE ${DBTABLES.OSSWARM_EXECUTIONS} 
-        SET total_tool_executions = total_tool_executions + 1 
-        WHERE id = @id
-      `, {
-        id: this.currentExecutionId
-      });
-      
-      // Notify renderer
-      const webContents = (global as any).osswarmWebContents;
-      if (webContents && !webContents.isDestroyed()) {
-        webContents.send('osswarm:tool_execution_created', {
-          executionId: this.currentExecutionId,
-          toolExecutionId,
-          agentId,
-          toolName,
-          approvalId
-        });
+      if (ragResult.status === 'success' && ragResult.results) {
+        console.log(`[OSSwarm] RAG Agent ${agentId} retrieved knowledge successfully`);
+        return { success: true, result: ragResult.results };
+      } else {
+        return { success: false, error: 'No results from knowledge base' };
       }
-      
-      console.log('[OSSwarm Core] Created tool execution in DB:', { toolExecutionId, agentId, toolName });
-      return toolExecutionId;
-    } catch (error) {
-      console.error('[OSSwarm Core] Error creating tool execution in DB:', error);
-      return '';
+    } catch (error: any) {
+      console.error(`[OSSwarm] RAG Agent ${agentId} query failed:`, error);
+      return { success: false, error: error.message || 'RAG query failed' };
     }
   }
 } 

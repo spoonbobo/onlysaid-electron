@@ -888,7 +888,7 @@ export const createMessageActions = (set: any, get: () => ChatState) => ({
 
         const updatedMessages = R.update(
           messageIndex,
-          { ...message, reactions: JSON.stringify(updatedReactions) },
+          { ...message, reactions: updatedReactions },
           messages
         );
 
