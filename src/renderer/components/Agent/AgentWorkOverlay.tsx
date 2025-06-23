@@ -40,7 +40,6 @@ import {
 import { useIntl } from "react-intl";
 import { alpha } from "@mui/material/styles";
 import { toast } from "@/utils/toast";
-import { useHistoryStore } from '@/renderer/stores/Agent/task/HistoryStore';   // top of file
 
 // Import sub-components
 import { StatusHeader } from './StatusHeader';

@@ -736,6 +736,23 @@ export const featureMigrations: IMigration[] = [
     down: `
       -- No rollback needed as this is a data consistency fix
     `
+  },
+  {
+    id: 'feature_022',
+    version: '2.4.2',
+    name: 'fix_osswarm_execution_creation',
+    description: 'Fix OSSwarm execution creation to handle proper ID assignment and foreign key constraints',
+    category: 'feature',
+    dependencies: ['feature_021'],
+    createdAt: '2024-01-16T02:00:00Z',
+    up: `
+      -- Ensure foreign key constraints are properly configured
+      -- This migration ensures the application layer properly handles execution creation
+      PRAGMA foreign_keys = ON;
+    `,
+    down: `
+      -- No rollback needed as this is an application-level fix
+    `
   }
 ];
 

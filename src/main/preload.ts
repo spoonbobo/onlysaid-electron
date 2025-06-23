@@ -165,7 +165,13 @@ type AgentChannels =
   | 'agent:get_pending_interactions'
   | 'agent:result_synthesized'
   | 'agent:agent_updated'
-  | 'agent:execution_updated';
+  | 'agent:execution_updated'
+  | 'agent:save_agent_to_db'
+  | 'agent:save_task_to_db'
+  | 'agent:save_tool_execution_to_db'
+  | 'agent:update_execution_status'
+  | 'agent:add_log_to_db'
+  | 'agent:create_execution_record';
 
 export type Channels =
   | AuthChannels

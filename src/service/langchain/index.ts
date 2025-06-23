@@ -1,4 +1,4 @@
-export { LangChainServiceFactory } from './factory';
+export { LangChainServiceFactory } from './factory/factory';
 export { LangChainAgentService } from './agent';
 export { setupLangChainHandlers } from './ipc_handlers';
 
@@ -6,11 +6,11 @@ export { setupLangChainHandlers } from './ipc_handlers';
 export { 
   LangGraphOSSwarmFactory, 
   LangGraphOSSwarmWorkflow
-} from './OSSwarm';
+} from './agent';
 
 // Re-export types
 export type { LangChainAgentOptions, OpenAIMessage } from './agent';
-export type { LangGraphOSSwarmState } from './OSSwarm';
+export type { LangGraphOSSwarmState } from './agent';
 
 // Re-export commonly used LangChain types
 export type { BaseMessage } from '@langchain/core/messages';

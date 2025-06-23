@@ -16,7 +16,8 @@ import {
   Paper,
   Chip,
   useTheme,
-  alpha
+  alpha,
+  Skeleton
 } from '@mui/material';
 import {
   Search,
@@ -251,7 +252,13 @@ export const AgentCards: React.FC<AgentCardsProps> = ({
       </Stack>
 
       {/* Agents Grid/List */}
-      {filteredAgents.length === 0 ? (
+      {loading ? (
+        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 3 }}>
+          {Array.from({ length: 6 }).map((_, index) => (
+            <Skeleton key={index} variant="rectangular" width={300} height={200} />
+          ))}
+        </Box>
+      ) : filteredAgents.length === 0 ? (
         <Paper sx={{ p: 4, textAlign: 'center' }}>
           <Typography variant="h6" color="text.secondary">
             {intl.formatMessage({ id: 'agents.noAgents' })}

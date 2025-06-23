@@ -1,10 +1,9 @@
 import { ipcMain } from 'electron';
-import { LangChainServiceFactory } from './factory';
+import { LangChainServiceFactory } from './factory/factory';
 import { LangChainAgentOptions, OpenAIMessage } from './agent';
 import { v4 as uuidv4 } from 'uuid';
-import { LangGraphOSSwarmFactory } from './OSSwarm/langgraph-factory';
-import { LangGraphOSSwarmState } from './OSSwarm/langgraph-state';
-import { LangGraphOSSwarmWorkflow } from './OSSwarm/langgraph-workflow';
+import { LangGraphOSSwarmFactory } from './factory/factory';
+import { LangGraphOSSwarmWorkflow } from './agent/workflow';
 import { getMainHumanInTheLoopManager, HumanInteractionResponse } from '@/service/langchain/human_in_the_loop/ipc/human_in_the_loop';
 
 // Track active tool executions and workflows
@@ -348,6 +347,104 @@ export function setupLangChainHandlers() {
       return { success: true, clearedInstances: cacheSize };
     } catch (error: any) {
       console.error('[LangGraph Agent] Error clearing cache:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  // ✅ ADD: Database operation handlers
+  ipcMain.handle('agent:save_agent_to_db', async (event, { executionId, agentId, role, expertise }) => {
+    console.log('[IPC-DB] Saving agent to database:', { executionId, agentId, role });
+    
+    try {
+      // Send to renderer to save to database
+      event.sender.send('agent:save_agent_to_db', {
+        executionId,
+        agentId,
+        role,
+        expertise
+      });
+      
+      return { success: true };
+    } catch (error: any) {
+      console.error('[IPC-DB] Error saving agent:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  ipcMain.handle('agent:save_task_to_db', async (event, { executionId, agentId, taskDescription, priority }) => {
+    console.log('[IPC-DB] Saving task to database:', { executionId, agentId, taskDescription });
+    
+    try {
+      event.sender.send('agent:save_task_to_db', {
+        executionId,
+        agentId,
+        taskDescription,
+        priority
+      });
+      
+      return { success: true };
+    } catch (error: any) {
+      console.error('[IPC-DB] Error saving task:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  ipcMain.handle('agent:save_tool_execution_to_db', async (event, { executionId, agentId, toolName, toolArguments, approvalId, taskId, mcpServer }) => {
+    console.log('[IPC-DB] Saving tool execution to database:', { executionId, agentId, toolName });
+    
+    try {
+      event.sender.send('agent:save_tool_execution_to_db', {
+        executionId,
+        agentId,
+        toolName,
+        toolArguments,
+        approvalId,
+        taskId,
+        mcpServer
+      });
+      
+      return { success: true };
+    } catch (error: any) {
+      console.error('[IPC-DB] Error saving tool execution:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  ipcMain.handle('agent:update_execution_status', async (event, { executionId, status, result, error }) => {
+    console.log('[IPC-DB] Updating execution status:', { executionId, status });
+    
+    try {
+      event.sender.send('agent:update_execution_status', {
+        executionId,
+        status,
+        result,
+        error
+      });
+      
+      return { success: true };
+    } catch (error: any) {
+      console.error('[IPC-DB] Error updating execution status:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  ipcMain.handle('agent:add_log_to_db', async (event, { executionId, logType, message, agentId, taskId, toolExecutionId, metadata }) => {
+    console.log('[IPC-DB] Adding log to database:', { executionId, logType, message });
+    
+    try {
+      event.sender.send('agent:add_log_to_db', {
+        executionId,
+        logType,
+        message,
+        agentId,
+        taskId,
+        toolExecutionId,
+        metadata
+      });
+      
+      return { success: true };
+    } catch (error: any) {
+      console.error('[IPC-DB] Error adding log:', error);
       return { success: false, error: error.message };
     }
   });

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import {
   Box,
   Typography,
@@ -6,10 +6,45 @@ import {
   Stack,
   Chip,
   CircularProgress,
-  Divider
+  Divider,
+  IconButton,
+  useTheme,
+  alpha,
+  TextField,
+  InputAdornment,
+  ToggleButton,
+  ToggleButtonGroup,
+  Tooltip,
+  Badge,
+  Collapse,
+  Button,
+  Menu,
+  MenuItem,
+  ListItemIcon,
+  ListItemText
 } from '@mui/material';
-import { BugReport, Analytics, Timeline } from '@mui/icons-material';
+import { 
+  Timeline, 
+  Analytics, 
+  Refresh, 
+  Search,
+  FilterList,
+  ExpandMore,
+  ExpandLess,
+  Clear,
+  Download,
+  Visibility,
+  VisibilityOff,
+  ErrorOutline,
+  Warning,
+  Info,
+  CheckCircle,
+  Psychology,
+  Build,
+  AutoAwesome
+} from '@mui/icons-material';
 import { useIntl } from 'react-intl';
+import { useLogStore } from '@/renderer/stores/Agent/task/LogStore';
 
 interface LangGraphLog {
   id: string;
@@ -23,8 +58,8 @@ interface LangGraphLog {
 }
 
 interface LogsPanelProps {
-  // LangGraph execution data
   currentExecution: {
+    id?: string;
     executionId?: string;
     status?: string;
     currentPhase?: string;
@@ -38,6 +73,8 @@ interface LogsPanelProps {
   isFullscreen: boolean;
 }
 
+type LogLevel = 'all' | 'error' | 'warning' | 'info' | 'agent_execution' | 'tool_request' | 'tool_result' | 'synthesis' | 'status_update';
+
 export const LogsPanel: React.FC<LogsPanelProps> = ({
   currentExecution,
   isTaskRunning,
@@ -45,10 +82,57 @@ export const LogsPanel: React.FC<LogsPanelProps> = ({
   isFullscreen
 }) => {
   const intl = useIntl();
+  const theme = useTheme();
+  
+  const { addLog, loadLogsByExecution, getFormattedLogs } = useLogStore();
+  
   const [logs, setLogs] = useState<LangGraphLog[]>([]);
   const [streamUpdates, setStreamUpdates] = useState<string[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedLogLevel, setSelectedLogLevel] = useState<LogLevel>('all');
+  const [isCompactView, setIsCompactView] = useState(false);
+  const [autoScroll, setAutoScroll] = useState(true);
+  const [filterMenuAnchor, setFilterMenuAnchor] = useState<null | HTMLElement>(null);
+  const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set(['live', 'historical']));
 
-  // Listen for LangGraph stream updates
+  const executionId = currentExecution?.id || currentExecution?.executionId;
+
+  useEffect(() => {
+    if (executionId) {
+      console.log('[LogsPanel] Loading logs for execution:', executionId);
+      loadLogsByExecution(executionId).catch(error => {
+        console.error('[LogsPanel] Failed to load logs:', error);
+      });
+    }
+  }, [executionId, loadLogsByExecution]);
+
+  const persistLiveLog = useCallback(async (log: LangGraphLog) => {
+    if (!executionId) {
+      console.warn('[LogsPanel] Cannot persist log - no execution ID');
+      return;
+    }
+
+    try {
+      await addLog(
+        executionId,
+        log.type as any,
+        log.message,
+        undefined,
+        undefined,
+        undefined,
+        {
+          isLive: log.isLive,
+          agentRole: log.agentRole,
+          toolName: log.toolName,
+          originalTimestamp: log.timestamp
+        }
+      );
+      console.log('[LogsPanel] ✅ Persisted live log to database:', log.message.substring(0, 50));
+    } catch (error) {
+      console.error('[LogsPanel] ❌ Failed to persist live log:', error);
+    }
+  }, [executionId, addLog]);
+
   useEffect(() => {
     console.log('[LogsPanel] Setting up LangGraph stream listeners...');
     
@@ -57,6 +141,16 @@ export const LogsPanel: React.FC<LogsPanelProps> = ({
       console.log('[LogsPanel] 📡 Received stream update:', data.update.substring(0, 100) + '...');
       
       setStreamUpdates(prev => [...prev, data.update]);
+      
+      const streamLog: LangGraphLog = {
+        id: `stream-${Date.now()}-${Math.random()}`,
+        message: data.update,
+        timestamp: new Date().toLocaleTimeString(),
+        type: 'info',
+        isLive: true,
+        executionId
+      };
+      persistLiveLog(streamLog);
     };
 
     const handleAgentUpdated = (event: any, ...args: unknown[]) => {
@@ -70,10 +164,12 @@ export const LogsPanel: React.FC<LogsPanelProps> = ({
         type: 'agent_execution',
         isLive: true,
         agentRole: data.agentCard.role,
-        executionId: data.executionId
+        executionId: data.executionId || executionId
       };
       
       setLogs(prev => [...prev, logEntry]);
+      
+      persistLiveLog(logEntry);
     };
 
     const handleExecutionUpdated = (event: any, ...args: unknown[]) => {
@@ -90,6 +186,8 @@ export const LogsPanel: React.FC<LogsPanelProps> = ({
       };
       
       setLogs(prev => [...prev, logEntry]);
+      
+      persistLiveLog(logEntry);
     };
 
     const handleResultSynthesized = (event: any, ...args: unknown[]) => {
@@ -106,9 +204,10 @@ export const LogsPanel: React.FC<LogsPanelProps> = ({
       };
       
       setLogs(prev => [...prev, logEntry]);
+      
+      persistLiveLog(logEntry);
     };
 
-    // Set up listeners
     const unsubscribeStream = window.electron?.ipcRenderer?.on?.('agent:stream_update', handleStreamUpdate);
     const unsubscribeAgent = window.electron?.ipcRenderer?.on?.('agent:agent_updated', handleAgentUpdated);
     const unsubscribeExecution = window.electron?.ipcRenderer?.on?.('agent:execution_updated', handleExecutionUpdated);
@@ -121,38 +220,35 @@ export const LogsPanel: React.FC<LogsPanelProps> = ({
       unsubscribeExecution?.();
       unsubscribeSynthesis?.();
     };
-  }, []);
+  }, [executionId, persistLiveLog]);
 
-  // Process execution data into historical logs
-  const historicalLogs: LangGraphLog[] = React.useMemo(() => {
+  const historicalLogs: LangGraphLog[] = useMemo(() => {
     if (!currentExecution) return [];
 
     const logs: LangGraphLog[] = [];
     const baseTimestamp = currentExecution.created_at || new Date().toISOString();
+    const execId = currentExecution.id || currentExecution.executionId;
 
-    // Add execution start log
     logs.push({
-      id: `start-${currentExecution.executionId}`,
-      message: `Agent execution started (ID: ${currentExecution.executionId})`,
+      id: `start-${execId}`,
+      message: `Agent execution started (ID: ${execId || 'unknown'})`,
       timestamp: new Date(baseTimestamp).toLocaleTimeString(),
       type: 'info',
       isLive: false,
-      executionId: currentExecution.executionId
+      executionId: execId
     });
 
-    // Add current phase log
     if (currentExecution.currentPhase) {
       logs.push({
-        id: `phase-${currentExecution.executionId}`,
+        id: `phase-${execId}`,
         message: `Current phase: ${currentExecution.currentPhase}`,
         timestamp: new Date().toLocaleTimeString(),
         type: 'status_update',
         isLive: false,
-        executionId: currentExecution.executionId
+        executionId: execId
       });
     }
 
-    // Add agent logs
     if (currentExecution.activeAgentCards) {
       Object.values(currentExecution.activeAgentCards).forEach((agentCard: any, index) => {
         logs.push({
@@ -162,12 +258,11 @@ export const LogsPanel: React.FC<LogsPanelProps> = ({
           type: 'agent_execution',
           isLive: false,
           agentRole: agentCard.role,
-          executionId: currentExecution.executionId
+          executionId: execId
         });
       });
     }
 
-    // Add error logs
     if (currentExecution.errors?.length) {
       currentExecution.errors.forEach((error, index) => {
         logs.push({
@@ -176,7 +271,7 @@ export const LogsPanel: React.FC<LogsPanelProps> = ({
           timestamp: new Date(Date.now() + 2000 + index * 1000).toLocaleTimeString(),
           type: 'error',
           isLive: false,
-          executionId: currentExecution.executionId
+          executionId: execId
         });
       });
     }
@@ -184,34 +279,174 @@ export const LogsPanel: React.FC<LogsPanelProps> = ({
     return logs;
   }, [currentExecution]);
 
-  // Process stream updates into live logs
-  const liveStreamLogs: LangGraphLog[] = React.useMemo(() => {
+  const databaseLogs: LangGraphLog[] = useMemo(() => {
+    if (!executionId) return [];
+    
+    const formattedLogs = getFormattedLogs(executionId);
+    return formattedLogs.map(log => ({
+      id: log.id,
+      message: log.message,
+      timestamp: log.timestamp,
+      type: log.log_type as any,
+      isLive: false,
+      agentRole: log.agent_role,
+      toolName: log.tool_name,
+      executionId: log.execution_id
+    }));
+  }, [executionId, getFormattedLogs]);
+
+  const liveStreamLogs: LangGraphLog[] = useMemo(() => {
     return streamUpdates.map((update, index) => ({
       id: `stream-${index}`,
       message: update,
       timestamp: new Date().toLocaleTimeString(),
       type: 'info' as const,
-      isLive: true
+      isLive: true,
+      executionId
     }));
-  }, [streamUpdates]);
+  }, [streamUpdates, executionId]);
 
-  // Combine all logs
-  const allLogs = [...historicalLogs, ...logs, ...liveStreamLogs]
-    .sort((a, b) => {
-      // Sort live logs after historical logs, but maintain chronological order within each group
+  const filteredLogs = useMemo(() => {
+    let allLogs = [...databaseLogs, ...historicalLogs, ...logs, ...liveStreamLogs];
+    
+    allLogs = allLogs.filter((log, index, self) => 
+      index === self.findIndex(l => l.message === log.message && l.timestamp === log.timestamp)
+    );
+    
+    if (selectedLogLevel !== 'all') {
+      allLogs = allLogs.filter(log => log.type === selectedLogLevel);
+    }
+    
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      allLogs = allLogs.filter(log => 
+        log.message.toLowerCase().includes(query) ||
+        log.agentRole?.toLowerCase().includes(query) ||
+        log.toolName?.toLowerCase().includes(query)
+      );
+    }
+    
+    return allLogs.sort((a, b) => {
       if (a.isLive && !b.isLive) return 1;
       if (!a.isLive && b.isLive) return -1;
       return a.timestamp.localeCompare(b.timestamp);
     });
+  }, [databaseLogs, historicalLogs, logs, liveStreamLogs, selectedLogLevel, searchQuery]);
 
-  // Get log type counts for chips
-  const logTypeCounts = React.useMemo(() => {
+  const logTypeCounts = useMemo(() => {
     const counts: Record<string, number> = {};
-    allLogs.forEach(log => {
+    filteredLogs.forEach(log => {
       counts[log.type] = (counts[log.type] || 0) + 1;
     });
     return counts;
-  }, [allLogs]);
+  }, [filteredLogs]);
+
+  const handleRefresh = useCallback(() => {
+    setLogs([]);
+    setStreamUpdates([]);
+    if (executionId) {
+      loadLogsByExecution(executionId);
+    }
+  }, [executionId, loadLogsByExecution]);
+
+  const handleClearSearch = useCallback(() => {
+    setSearchQuery('');
+  }, []);
+
+  const handleExportLogs = useCallback(() => {
+    const logData = filteredLogs.map(log => ({
+      timestamp: log.timestamp,
+      type: log.type,
+      message: log.message,
+      agentRole: log.agentRole,
+      toolName: log.toolName,
+      isLive: log.isLive,
+      executionId: log.executionId
+    }));
+    
+    const blob = new Blob([JSON.stringify(logData, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `agent-logs-${executionId || 'unknown'}-${new Date().toISOString().split('T')[0]}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }, [filteredLogs, executionId]);
+
+  const toggleSection = useCallback((section: string) => {
+    const newExpanded = new Set(expandedSections);
+    if (newExpanded.has(section)) {
+      newExpanded.delete(section);
+    } else {
+      newExpanded.add(section);
+    }
+    setExpandedSections(newExpanded);
+  }, [expandedSections]);
+
+  const getTranslatedAgentRole = useCallback((role?: string) => {
+    if (!role) return null;
+    
+    try {
+      return intl.formatMessage({ id: `agent.role.${role.toLowerCase()}` });
+    } catch {
+      return role;
+    }
+  }, [intl]);
+
+  const getLogTypeProps = useCallback((type: string) => {
+    switch (type) {
+      case 'error':
+        return { 
+          color: 'error' as const, 
+          icon: <ErrorOutline fontSize="small" />, 
+          label: intl.formatMessage({ id: 'agent.logs.type.error', defaultMessage: 'Error' }) 
+        };
+      case 'warning':
+        return { 
+          color: 'warning' as const, 
+          icon: <Warning fontSize="small" />, 
+          label: intl.formatMessage({ id: 'agent.logs.type.warning', defaultMessage: 'Warning' }) 
+        };
+      case 'tool_request':
+        return { 
+          color: 'info' as const, 
+          icon: <Build fontSize="small" />, 
+          label: intl.formatMessage({ id: 'agent.logs.type.tool_request', defaultMessage: 'Tool Request' }) 
+        };
+      case 'tool_result':
+        return { 
+          color: 'success' as const, 
+          icon: <CheckCircle fontSize="small" />, 
+          label: intl.formatMessage({ id: 'agent.logs.type.tool_result', defaultMessage: 'Tool Result' }) 
+        };
+      case 'agent_execution':
+        return { 
+          color: 'secondary' as const, 
+          icon: <Psychology fontSize="small" />, 
+          label: intl.formatMessage({ id: 'agent.logs.type.agent_execution', defaultMessage: 'Agent Execution' }) 
+        };
+      case 'synthesis':
+        return { 
+          color: 'primary' as const, 
+          icon: <AutoAwesome fontSize="small" />, 
+          label: intl.formatMessage({ id: 'agent.logs.type.synthesis', defaultMessage: 'Synthesis' }) 
+        };
+      case 'status_update':
+        return { 
+          color: 'default' as const, 
+          icon: <Info fontSize="small" />, 
+          label: intl.formatMessage({ id: 'agent.logs.type.status_update', defaultMessage: 'Status Update' }) 
+        };
+      default:
+        return { 
+          color: 'default' as const, 
+          icon: <Info fontSize="small" />, 
+          label: intl.formatMessage({ id: 'agent.logs.type.info', defaultMessage: 'Info' }) 
+        };
+    }
+  }, [intl]);
 
   return (
     <Box
@@ -222,125 +457,368 @@ export const LogsPanel: React.FC<LogsPanelProps> = ({
         overflow: 'hidden'
       }}
     >
-      {allLogs.length > 0 ? (
+      {filteredLogs.length > 0 || searchQuery || selectedLogLevel !== 'all' ? (
         <Stack spacing={2} sx={{ height: '100%', overflow: 'hidden' }}>
-          {/* Header */}
           <Paper 
-            elevation={1} 
+            elevation={2}
             sx={{ 
               p: 2, 
-              flexShrink: 0
+              flexShrink: 0,
+              bgcolor: 'background.paper',
+              borderRadius: 2
             }}
           >
-            <Stack direction="row" alignItems="center" justifyContent="space-between">
-              <Stack direction="row" alignItems="center" spacing={1}>
-                <Timeline color="primary" />
-                <Typography variant="subtitle2">
-                  {intl.formatMessage({ id: 'agent.logs.total' }, { count: allLogs.length })}
-                </Typography>
-                <Typography variant="caption" color="text.secondary">
-                  ({historicalLogs.length} historical, {logs.length + liveStreamLogs.length} live)
-                </Typography>
+            <Stack spacing={2}>
+              <Stack direction="row" alignItems="center" justifyContent="space-between">
+                <Stack direction="row" alignItems="center" spacing={2}>
+                  <Box
+                    sx={{
+                      p: 1.5,
+                      borderRadius: 2,
+                      bgcolor: alpha(theme.palette.primary.main, 0.1),
+                      color: 'primary.main',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center'
+                    }}
+                  >
+                    <Timeline />
+                  </Box>
+                  <Box>
+                    <Typography variant="h6" fontWeight="600" sx={{ lineHeight: 1.2 }}>
+                      {intl.formatMessage({ id: 'agent.logs.title', defaultMessage: 'Execution Logs' })}
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      {intl.formatMessage(
+                        { id: 'agent.logs.summary', defaultMessage: '{total} logs ({database} database, {historical} historical, {live} live)' }, 
+                        { 
+                          total: filteredLogs.length,
+                          database: databaseLogs.length,
+                          historical: historicalLogs.filter(log => selectedLogLevel === 'all' || log.type === selectedLogLevel).length, 
+                          live: (logs.length + liveStreamLogs.length) 
+                        }
+                      )}
+                    </Typography>
+                  </Box>
+                </Stack>
+                
+                <Stack direction="row" spacing={1}>
+                  <Tooltip title={intl.formatMessage({ id: 'agent.logs.export', defaultMessage: 'Export Logs' })}>
+                    <IconButton size="small" onClick={handleExportLogs} disabled={filteredLogs.length === 0}>
+                      <Download fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
+                  
+                  <Tooltip title={intl.formatMessage({ id: 'agent.logs.refresh', defaultMessage: 'Refresh Logs' })}>
+                    <IconButton size="small" onClick={handleRefresh}>
+                      <Refresh fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
+                  
+                  <Tooltip title={autoScroll ? 'Disable Auto-scroll' : 'Enable Auto-scroll'}>
+                    <IconButton 
+                      size="small" 
+                      onClick={() => setAutoScroll(!autoScroll)}
+                      color={autoScroll ? 'primary' : 'default'}
+                    >
+                      {autoScroll ? <Visibility fontSize="small" /> : <VisibilityOff fontSize="small" />}
+                    </IconButton>
+                  </Tooltip>
+                </Stack>
               </Stack>
-              
-              {/* Log type chips */}
-              <Stack direction="row" spacing={0.5} flexWrap="wrap">
-                {Object.entries(logTypeCounts).map(([logType, count]) => {
-                  if (count === 0) return null;
-                  
-                  const getChipProps = (type: string) => {
-                    switch (type) {
-                      case 'error':
-                        return { color: 'error' as const, icon: '❌' };
-                      case 'warning':
-                        return { color: 'warning' as const, icon: '⚠️' };
-                      case 'tool_request':
-                        return { color: 'info' as const, icon: '🔧' };
-                      case 'tool_result':
-                        return { color: 'success' as const, icon: '✅' };
-                      case 'agent_execution':
-                        return { color: 'secondary' as const, icon: '🤖' };
-                      case 'synthesis':
-                        return { color: 'primary' as const, icon: '🔮' };
-                      case 'status_update':
-                        return { color: 'default' as const, icon: '📊' };
-                      default:
-                        return { color: 'default' as const, icon: 'ℹ️' };
-                    }
-                  };
-                  
-                  const chipProps = getChipProps(logType);
-                  
-                  return (
-                    <Chip
-                      key={logType}
-                      label={`${chipProps.icon} ${logType} (${count})`}
-                      size="small"
-                      variant="outlined"
-                      color={chipProps.color}
-                    />
-                  );
-                })}
+
+              <Stack direction="row" spacing={2} alignItems="center">
+                <TextField
+                  size="small"
+                  placeholder={intl.formatMessage({ id: 'agent.logs.searchPlaceholder', defaultMessage: 'Search logs...' })}
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  InputProps={{
+                    startAdornment: (
+                      <InputAdornment position="start">
+                        <Search fontSize="small" />
+                      </InputAdornment>
+                    ),
+                    endAdornment: searchQuery && (
+                      <InputAdornment position="end">
+                        <IconButton size="small" onClick={handleClearSearch}>
+                          <Clear fontSize="small" />
+                        </IconButton>
+                      </InputAdornment>
+                    ),
+                  }}
+                  sx={{ minWidth: 200, flexGrow: 1 }}
+                />
+                
+                <Button
+                  size="small"
+                  startIcon={<FilterList />}
+                  onClick={(e) => setFilterMenuAnchor(e.currentTarget)}
+                  variant={selectedLogLevel !== 'all' ? 'contained' : 'outlined'}
+                  sx={{ minWidth: 120 }}
+                >
+                  {selectedLogLevel === 'all' 
+                    ? intl.formatMessage({ id: 'agent.logs.filter.all', defaultMessage: 'All Logs' })
+                    : getLogTypeProps(selectedLogLevel).label
+                  }
+                </Button>
+                
+                <ToggleButtonGroup
+                  size="small"
+                  value={isCompactView}
+                  exclusive
+                  onChange={(_, value) => setIsCompactView(value)}
+                >
+                  <ToggleButton value={false}>
+                    <Tooltip title="Detailed View">
+                      <ExpandMore fontSize="small" />
+                    </Tooltip>
+                  </ToggleButton>
+                  <ToggleButton value={true}>
+                    <Tooltip title="Compact View">
+                      <ExpandLess fontSize="small" />
+                    </Tooltip>
+                  </ToggleButton>
+                </ToggleButtonGroup>
               </Stack>
+
+              {Object.keys(logTypeCounts).length > 0 && (
+                <Stack direction="row" spacing={1} flexWrap="wrap">
+                  {Object.entries(logTypeCounts).map(([logType, count]) => {
+                    if (count === 0) return null;
+                    const chipProps = getLogTypeProps(logType);
+                    
+                    return (
+                      <Chip
+                        key={logType}
+                        icon={chipProps.icon}
+                        label={`${chipProps.label} (${count})`}
+                        size="small"
+                        variant={selectedLogLevel === logType ? 'filled' : 'outlined'}
+                        color={chipProps.color}
+                        clickable
+                        onClick={() => setSelectedLogLevel(selectedLogLevel === logType ? 'all' : logType as LogLevel)}
+                        sx={{ 
+                          fontSize: '0.75rem',
+                          fontWeight: 500,
+                          '& .MuiChip-icon': { fontSize: '1rem' }
+                        }}
+                      />
+                    );
+                  })}
+                </Stack>
+              )}
             </Stack>
           </Paper>
           
-          {/* Scrollable logs container */}
           <Box
             sx={{
               flexGrow: 1,
               overflow: 'auto',
-              maxHeight: isFullscreen ? 'calc(100vh - 350px)' : '400px',
+              maxHeight: isFullscreen ? 'calc(100vh - 280px)' : '600px',
+              '&::-webkit-scrollbar': { width: 8 },
+              '&::-webkit-scrollbar-track': { backgroundColor: alpha(theme.palette.action.hover, 0.1) },
+              '&::-webkit-scrollbar-thumb': { 
+                backgroundColor: alpha(theme.palette.action.hover, 0.3),
+                borderRadius: 4,
+                '&:hover': { backgroundColor: alpha(theme.palette.action.hover, 0.5) }
+              },
             }}
           >
             <Stack spacing={1}>
-              {allLogs.map((log, index) => {
-                const isFirst = index === 0;
-                const isNewSection = index > 0 && allLogs[index - 1].isLive !== log.isLive;
+              {['database', 'live'].map(section => {
+                const sectionLogs = filteredLogs.filter(log => {
+                  if (section === 'live') {
+                    return log.isLive;
+                  } else {
+                    return !log.isLive;
+                  }
+                });
+                
+                if (sectionLogs.length === 0) return null;
+                
+                const isExpanded = expandedSections.has(section);
+                const sectionTitle = section === 'live' 
+                  ? intl.formatMessage({ id: 'agent.logs.liveUpdates', defaultMessage: 'Live Updates' })
+                  : intl.formatMessage({ id: 'agent.logs.historicalLogs', defaultMessage: 'Historical Logs' });
                 
                 return (
-                  <Box key={log.id}>
-                    {/* Section divider */}
-                    {(isFirst || isNewSection) && (
-                      <Box sx={{ my: 1 }}>
-                        <Divider>
-                          <Typography variant="caption" color="text.secondary">
-                            {log.isLive ? 'Live Updates' : 'Historical Logs'}
-                          </Typography>
-                        </Divider>
-                      </Box>
-                    )}
+                  <Box key={section}>
+                    <Divider sx={{ my: 2 }}>
+                      <Chip
+                        icon={isExpanded ? <ExpandLess /> : <ExpandMore />}
+                        label={`${sectionTitle} (${sectionLogs.length})`}
+                        size="small"
+                        color={section === 'live' ? 'success' : 'primary'}
+                        variant={section === 'live' ? 'filled' : 'outlined'}
+                        clickable
+                        onClick={() => toggleSection(section)}
+                        sx={{ 
+                          fontSize: '0.75rem',
+                          fontWeight: 600,
+                          textTransform: 'uppercase',
+                          letterSpacing: 0.5
+                        }}
+                      />
+                    </Divider>
                     
-                    <Paper
-                      variant="outlined"
-                      sx={{ 
-                        p: 2,
-                        backgroundColor: log.isLive ? 'action.hover' : 'background.paper'
-                      }}
-                    >
-                      <Stack direction="row" spacing={2} alignItems="flex-start">
-                        <Stack direction="row" alignItems="center" spacing={1} sx={{ minWidth: 120 }}>
-                          <Typography variant="caption" color="text.secondary">
-                            {log.timestamp}
-                          </Typography>
-                          {log.isLive && (
-                            <Chip label="LIVE" size="small" color="success" variant="filled" />
-                          )}
-                          {log.agentRole && (
-                            <Chip label={log.agentRole} size="small" variant="outlined" />
-                          )}
-                        </Stack>
-                        <Typography
-                          variant="body2"
-                          sx={{ 
-                            wordBreak: 'break-word',
-                            flexGrow: 1
-                          }}
-                        >
-                          {log.message}
-                        </Typography>
+                    <Collapse in={isExpanded}>
+                      <Stack spacing={1}>
+                        {sectionLogs.map((log) => {
+                          const logTypeProps = getLogTypeProps(log.type);
+                          
+                          return (
+                            <Paper
+                              key={log.id}
+                              variant="outlined"
+                              sx={{ 
+                                p: 0,
+                                backgroundColor: log.isLive 
+                                  ? alpha(theme.palette.success.main, 0.03) 
+                                  : 'background.paper',
+                                borderColor: log.isLive 
+                                  ? alpha(theme.palette.success.main, 0.2) 
+                                  : 'divider',
+                                borderRadius: 2,
+                                transition: 'all 0.2s ease',
+                                '&:hover': {
+                                  backgroundColor: log.isLive 
+                                    ? alpha(theme.palette.success.main, 0.08) 
+                                    : alpha(theme.palette.action.hover, 0.04),
+                                  borderColor: log.isLive 
+                                    ? alpha(theme.palette.success.main, 0.3) 
+                                    : alpha(theme.palette.action.hover, 0.2),
+                                  transform: 'translateY(-1px)',
+                                  boxShadow: theme.shadows[2]
+                                }
+                              }}
+                            >
+                              <Box sx={{ display: 'flex', width: '100%' }}>
+                                <Box 
+                                  sx={{ 
+                                    width: isCompactView ? 120 : 180,
+                                    flexShrink: 0,
+                                    p: isCompactView ? 1 : 1.5,
+                                    borderRight: 1,
+                                    borderColor: 'divider',
+                                    bgcolor: alpha(theme.palette.background.default, 0.3)
+                                  }}
+                                >
+                                  <Stack spacing={0.5} alignItems="flex-start">
+                                    <Typography 
+                                      variant="caption" 
+                                      sx={{ 
+                                        fontSize: isCompactView ? '0.65rem' : '0.7rem',
+                                        fontFamily: 'monospace',
+                                        color: 'text.secondary',
+                                        fontWeight: 500,
+                                        bgcolor: alpha(theme.palette.background.paper, 0.8),
+                                        px: 0.5,
+                                        py: 0.25,
+                                        borderRadius: 0.5
+                                      }}
+                                    >
+                                      {log.timestamp}
+                                    </Typography>
+                                    
+                                    <Chip 
+                                      icon={logTypeProps.icon}
+                                      label={logTypeProps.label} 
+                                      size="small" 
+                                      color={logTypeProps.color}
+                                      variant="outlined"
+                                      sx={{ 
+                                        fontSize: isCompactView ? '0.6rem' : '0.65rem',
+                                        height: isCompactView ? 16 : 20,
+                                        '& .MuiChip-label': { px: 0.5 },
+                                        '& .MuiChip-icon': { fontSize: '0.8rem' }
+                                      }} 
+                                    />
+                                    
+                                    {log.isLive && (
+                                      <Badge 
+                                        color="success" 
+                                        variant="dot" 
+                                        sx={{ 
+                                          '& .MuiBadge-badge': { 
+                                            animation: 'pulse 2s infinite',
+                                            '@keyframes pulse': {
+                                              '0%': { opacity: 1 },
+                                              '50%': { opacity: 0.5 },
+                                              '100%': { opacity: 1 }
+                                            }
+                                          }
+                                        }}
+                                      >
+                                        <Chip 
+                                          label={intl.formatMessage({ id: 'agent.logs.live', defaultMessage: 'Live' })} 
+                                          size="small" 
+                                          color="success" 
+                                          variant="filled" 
+                                          sx={{ 
+                                            fontSize: '0.6rem', 
+                                            height: 16, 
+                                            fontWeight: 'bold',
+                                            '& .MuiChip-label': { px: 0.5 }
+                                          }} 
+                                        />
+                                      </Badge>
+                                    )}
+                                    
+                                    {log.agentRole && !isCompactView && (
+                                      <Chip 
+                                        label={getTranslatedAgentRole(log.agentRole) || log.agentRole} 
+                                        size="small" 
+                                        variant="outlined" 
+                                        color="secondary"
+                                        sx={{ 
+                                          fontSize: '0.6rem', 
+                                          height: 18,
+                                          maxWidth: '100%',
+                                          '& .MuiChip-label': { 
+                                            px: 0.5,
+                                            overflow: 'hidden',
+                                            textOverflow: 'ellipsis'
+                                          }
+                                        }} 
+                                      />
+                                    )}
+                                  </Stack>
+                                </Box>
+                                
+                                <Box sx={{ flexGrow: 1, p: isCompactView ? 1 : 1.5 }}>
+                                  <Typography
+                                    variant="body2"
+                                    sx={{ 
+                                      wordBreak: 'break-word',
+                                      lineHeight: isCompactView ? 1.3 : 1.5,
+                                      fontSize: isCompactView ? '0.8rem' : '0.875rem',
+                                      color: 'text.primary'
+                                    }}
+                                  >
+                                    {log.message}
+                                  </Typography>
+                                  
+                                  {isCompactView && log.agentRole && (
+                                    <Typography
+                                      variant="caption"
+                                      sx={{ 
+                                        display: 'block',
+                                        mt: 0.5,
+                                        color: 'text.secondary',
+                                        fontSize: '0.65rem'
+                                      }}
+                                    >
+                                      Agent: {getTranslatedAgentRole(log.agentRole) || log.agentRole}
+                                    </Typography>
+                                  )}
+                                </Box>
+                              </Box>
+                            </Paper>
+                          );
+                        })}
                       </Stack>
-                    </Paper>
+                    </Collapse>
                   </Box>
                 );
               })}
@@ -348,48 +826,138 @@ export const LogsPanel: React.FC<LogsPanelProps> = ({
           </Box>
         </Stack>
       ) : (
-        <Paper sx={{ 
-          height: '100%',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center'
-        }}>
-          <Stack alignItems="center" spacing={3} sx={{ p: 4 }}>
+        <Paper 
+          sx={{ 
+            height: '100%',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            bgcolor: 'background.paper',
+            borderRadius: 2,
+            border: 1,
+            borderColor: 'divider'
+          }}
+        >
+          <Stack alignItems="center" spacing={3} sx={{ p: 4, textAlign: 'center', maxWidth: 500 }}>
             {(isTaskRunning || isTaskActive) ? (
               <>
-                <CircularProgress />
-                <Typography variant="h6" color="text.secondary">
-                  {intl.formatMessage({ id: 'agent.status.initializing' })}
-                </Typography>
-                <Typography variant="body2" color="text.secondary" textAlign="center">
-                  {intl.formatMessage({ id: 'agent.logs.waitingForActivity' })}
-                </Typography>
+                <Box
+                  sx={{
+                    position: 'relative',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center'
+                  }}
+                >
+                  <CircularProgress 
+                    size={64} 
+                    thickness={4} 
+                    sx={{ color: 'primary.main' }}
+                  />
+                  <Box
+                    sx={{
+                      position: 'absolute',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center'
+                    }}
+                  >
+                    <Timeline sx={{ fontSize: 28, color: 'primary.main' }} />
+                  </Box>
+                </Box>
+                <Box>
+                  <Typography variant="h6" color="text.primary" fontWeight="600" gutterBottom>
+                    {intl.formatMessage({ id: 'agent.logs.initializing', defaultMessage: 'Initializing Agent...' })}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    {intl.formatMessage({ id: 'agent.logs.waitingForActivity', defaultMessage: 'Waiting for agent activity...' })}
+                  </Typography>
+                </Box>
               </>
             ) : (
               <>
-                <Analytics sx={{ fontSize: 48, color: 'text.disabled' }} />
-                <Typography variant="h6" color="text.secondary">
-                  {intl.formatMessage({ id: 'agent.noRecentActivity' })}
-                </Typography>
-                <Typography variant="body2" color="text.secondary" textAlign="center">
-                  {intl.formatMessage({ id: 'agent.logs.waitingForActivity' })}
-                </Typography>
-                {currentExecution && (
-                  <Paper sx={{ p: 2 }}>
-                    <Typography variant="caption" color="text.secondary" textAlign="center">
-                      {intl.formatMessage({ id: 'agent.logs.viewingHistorical' })}
-                      <br />
-                      {intl.formatMessage({ id: 'agent.logs.executionDate' }, { 
-                        date: new Date(currentExecution.created_at || Date.now()).toLocaleString() 
-                      })}
-                    </Typography>
-                  </Paper>
-                )}
+                <Box
+                  sx={{
+                    p: 3,
+                    borderRadius: '50%',
+                    bgcolor: alpha(theme.palette.text.disabled, 0.1),
+                    color: 'text.disabled'
+                  }}
+                >
+                  <Analytics sx={{ fontSize: 64 }} />
+                </Box>
+                <Box>
+                  <Typography variant="h6" color="text.secondary" fontWeight="600" gutterBottom>
+                    {intl.formatMessage({ id: 'agent.logs.noActivity', defaultMessage: 'No Execution Activity' })}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                    {intl.formatMessage({ id: 'agent.logs.startTaskPrompt', defaultMessage: 'Start an agent task to view execution logs' })}
+                  </Typography>
+                  
+                  {currentExecution && (
+                    <Paper 
+                      variant="outlined" 
+                      sx={{ 
+                        p: 2, 
+                        mt: 2, 
+                        bgcolor: alpha(theme.palette.background.default, 0.5),
+                        borderRadius: 2
+                      }}
+                    >
+                      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', textAlign: 'center' }}>
+                        {intl.formatMessage({ id: 'agent.logs.viewingHistorical', defaultMessage: 'Viewing historical execution' })}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5, fontWeight: 500, textAlign: 'center' }}>
+                        {intl.formatMessage({ id: 'agent.logs.executionDate', defaultMessage: 'Execution Date: {date}' }, { 
+                          date: new Date(currentExecution.created_at || Date.now()).toLocaleString() 
+                        })}
+                      </Typography>
+                    </Paper>
+                  )}
+                </Box>
               </>
             )}
           </Stack>
         </Paper>
       )}
+
+      <Menu
+        anchorEl={filterMenuAnchor}
+        open={Boolean(filterMenuAnchor)}
+        onClose={() => setFilterMenuAnchor(null)}
+        PaperProps={{
+          sx: { minWidth: 200 }
+        }}
+      >
+        <MenuItem 
+          selected={selectedLogLevel === 'all'}
+          onClick={() => {
+            setSelectedLogLevel('all');
+            setFilterMenuAnchor(null);
+          }}
+        >
+          <ListItemText primary={intl.formatMessage({ id: 'agent.logs.filter.all', defaultMessage: 'All Logs' })} />
+        </MenuItem>
+        <Divider />
+        {(['error', 'warning', 'info', 'agent_execution', 'tool_request', 'tool_result', 'synthesis', 'status_update'] as LogLevel[]).map(level => {
+          const props = getLogTypeProps(level);
+          return (
+            <MenuItem 
+              key={level}
+              selected={selectedLogLevel === level}
+              onClick={() => {
+                setSelectedLogLevel(level);
+                setFilterMenuAnchor(null);
+              }}
+            >
+              <ListItemIcon>
+                {props.icon}
+              </ListItemIcon>
+              <ListItemText primary={props.label} />
+            </MenuItem>
+          );
+        })}
+      </Menu>
     </Box>
   );
 }; 

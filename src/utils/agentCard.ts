@@ -1,6 +1,11 @@
-import { AgentFactory } from '@/service/langchain/agent/factory';
+import { osswarmAgentToAgentCard } from '@/service/langchain/factory/renderer/factory';
 
-// Export AgentFactory methods for backward compatibility
-export const swarmAgentToAgentCard = AgentFactory.swarmAgentToAgentCard;
-export const osswarmAgentToAgentCard = AgentFactory.osswarmAgentToAgentCard;
-export const createMasterAgentCard = AgentFactory.createMasterAgentCard; 
+// Export renderer factory functions for backward compatibility
+export { 
+  osswarmAgentToAgentCard, 
+  createRegistryAgentCards, 
+  createMasterAgentCard 
+} from '@/service/langchain/factory/renderer/factory';
+
+// Legacy exports (deprecated but kept for compatibility)
+export const swarmAgentToAgentCard = osswarmAgentToAgentCard;

@@ -32,22 +32,75 @@ export const useTaskManagementStore = create<TaskManagementState>((set, get) => 
     const now = new Date().toISOString();
 
     try {
+      // ✅ First, verify the execution exists
+      const executionCheck = await window.electron.db.query({
+        query: `SELECT id FROM ${DBTABLES.OSSWARM_EXECUTIONS} WHERE id = @id`,
+        params: { id: executionId }
+      });
+
+      if (!executionCheck || executionCheck.length === 0) {
+        throw new Error(`Execution ${executionId} does not exist. Cannot create task.`);
+      }
+
+      // ✅ FIX: Handle multiple agent ID formats
+      let dbAgentId = agentId;
+      
+      // Handle registry-{role} format
+      if (agentId.startsWith('registry-')) {
+        const role = agentId.replace('registry-', '');
+        const agentCheck = await window.electron.db.query({
+          query: `SELECT id FROM ${DBTABLES.OSSWARM_AGENTS} WHERE execution_id = @execution_id AND role = @role`,
+          params: { execution_id: executionId, role: role }
+        });
+        
+        if (agentCheck && agentCheck.length > 0) {
+          dbAgentId = agentCheck[0].id;
+          console.log(`[TaskManagementStore] Mapped ${agentId} to database ID: ${dbAgentId}`);
+        } else {
+          throw new Error(`Agent with role ${role} not found in execution ${executionId}. Cannot create task.`);
+        }
+      }
+      // Handle langgraph-{role}-{timestamp} format
+      else if (agentId.startsWith('langgraph-')) {
+        const agentCheck = await window.electron.db.query({
+          query: `SELECT id FROM ${DBTABLES.OSSWARM_AGENTS} WHERE execution_id = @execution_id AND agent_id = @agent_id`,
+          params: { execution_id: executionId, agent_id: agentId }
+        });
+        
+        if (agentCheck && agentCheck.length > 0) {
+          dbAgentId = agentCheck[0].id;
+          console.log(`[TaskManagementStore] Mapped ${agentId} to database ID: ${dbAgentId}`);
+        } else {
+          throw new Error(`Agent with agent_id ${agentId} not found in execution ${executionId}. Cannot create task.`);
+        }
+      } 
+      // Handle direct database ID
+      else {
+        const agentCheck = await window.electron.db.query({
+          query: `SELECT id FROM ${DBTABLES.OSSWARM_AGENTS} WHERE id = @id`,
+          params: { id: agentId }
+        });
+
+        if (!agentCheck || agentCheck.length === 0) {
+          throw new Error(`Agent ${agentId} does not exist. Cannot create task.`);
+        }
+      }
+
+      // Create the task
       await window.electron.db.query({
         query: `
           INSERT INTO ${DBTABLES.OSSWARM_TASKS}
-          (id, execution_id, agent_id, task_description, status, priority, created_at, iterations, max_iterations)
-          VALUES (@id, @execution_id, @agent_id, @task_description, @status, @priority, @created_at, @iterations, @max_iterations)
+          (id, execution_id, agent_id, task_description, priority, status, created_at)
+          VALUES (@id, @execution_id, @agent_id, @task_description, @priority, @status, @created_at)
         `,
         params: {
           id: taskId,
           execution_id: executionId,
-          agent_id: agentId,
+          agent_id: dbAgentId, // ✅ Use the resolved database agent ID
           task_description: taskDescription,
-          status: 'pending',
           priority,
-          created_at: now,
-          iterations: 0,
-          max_iterations: 20
+          status: 'pending',
+          created_at: now
         }
       });
 
@@ -61,10 +114,10 @@ export const useTaskManagementStore = create<TaskManagementState>((set, get) => 
       const newTask: OSSwarmTask = {
         id: taskId,
         execution_id: executionId,
-        agent_id: agentId,
+        agent_id: dbAgentId,
         task_description: taskDescription,
-        status: 'pending',
         priority,
+        status: 'pending',
         created_at: now,
         iterations: 0,
         max_iterations: 20
@@ -73,7 +126,8 @@ export const useTaskManagementStore = create<TaskManagementState>((set, get) => 
       set(state => ({
         tasks: [...state.tasks, newTask]
       }));
-      
+
+      console.log(`[TaskManagementStore] Task created successfully: ${taskId}`);
       return taskId;
     } catch (error: any) {
       console.error('[TaskManagementStore] Error creating task:', error);

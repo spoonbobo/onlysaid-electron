@@ -1,4 +1,4 @@
-import { Box, Typography, Divider, IconButton, Badge, Avatar, TextField, Autocomplete, Chip, InputAdornment } from '@mui/material';
+import { Box, Typography, Divider, IconButton, Badge, Avatar, TextField, Autocomplete, Chip, InputAdornment, useMediaQuery, useTheme } from '@mui/material';
 import { useState, useEffect, useMemo } from 'react';
 import { Menu as MuiMenu, MenuItem } from '@mui/material';
 import {
@@ -37,9 +37,11 @@ import { useUserTokenStore } from '@/renderer/stores/User/UserToken';
 import { useCryptoStore } from '@/renderer/stores/Crypto/CryptoStore';
 import { toast } from '@/utils/toast';
 import { createNotificationsForUnreadMessages } from '@/utils/notifications';
+import CollapsedMenu from './CollapsedMenu';
 
 const TitleBar = () => {
   const intl = useIntl();
+  const theme = useTheme();
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
   const [showNotifications, setShowNotifications] = useState(false);
@@ -47,6 +49,10 @@ const TitleBar = () => {
   const [showDisclaimer, setShowDisclaimer] = useState(false);
   const [appIcon, setAppIcon] = useState<string | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
+  const [windowWidth, setWindowWidth] = useState(window.innerWidth);
+
+  // Define breakpoint for collapsed menu (similar to VS Code)
+  const isCollapsed = windowWidth < 800; // Collapse when window is less than 800px wide
 
   // Subscribe to notification store to get live updates
   const totalNotificationCount = useNotificationStore((state) =>
@@ -74,6 +80,16 @@ const TitleBar = () => {
   // Get user and disclaimer state
   const showDisclaimerFromStore = useUserStore((state) => state.showDisclaimer);
   const setShowDisclaimerInStore = useUserStore((state) => state.setShowDisclaimer);
+
+  // Listen to window resize events
+  useEffect(() => {
+    const handleResize = () => {
+      setWindowWidth(window.innerWidth);
+    };
+
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   // Define available contexts for search with sections
   const availableContexts = useMemo(() => {
@@ -328,6 +344,38 @@ const TitleBar = () => {
     return availableContexts.find(ctx => ctx.type === selectedContext?.type) || availableContexts[0] || undefined;
   };
 
+  // If window is too small, show collapsed menu
+  if (isCollapsed) {
+    return (
+      <>
+        <CollapsedMenu
+          appIcon={appIcon}
+          totalNotificationCount={totalNotificationCount}
+          onNotificationClick={handleNotificationClick}
+          onWindowAction={handleWindowAction}
+          onMenuAction={handleMenuAction}
+        />
+
+        <NotificationView
+          open={showNotifications}
+          onClose={handleCloseNotifications}
+        />
+
+        <AboutDialog
+          open={showAbout}
+          onClose={handleCloseAbout}
+        />
+
+        <DisclaimerDialog
+          open={showDisclaimerFromStore || showDisclaimer}
+          onAccept={handleDisclaimerAccept}
+          onDecline={handleDisclaimerDecline}
+        />
+      </>
+    );
+  }
+
+  // Original full TitleBar for larger windows
   return (
     <>
       <Box

@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { v4 as uuidv4 } from 'uuid';
 import { DBTABLES } from '@/../../constants/db';
-import { osswarmAgentToAgentCard } from '@/utils/agentCard';
+import { osswarmAgentToAgentCard } from '@/service/langchain/factory/renderer/factory';
 import { AgentCard } from '@/../../types/Agent/AgentCard';
 import { OSSwarmAgent, AgentUpdateData } from './types';
 
@@ -36,12 +36,38 @@ export const useAgentManagementStore = create<AgentManagementState>((set, get) =
   createAgent: async (executionId: string, agentId: string, role: string, expertise?: string[]) => {
     const callId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     console.log(`💾 [DB AGENT CREATE START] ${callId}:`, { executionId, agentId, role });
-    console.log(`💾 [DB AGENT CREATE STACK] ${callId}:`, new Error().stack?.split('\n').slice(1, 6).join('\n'));
     
     const dbAgentId = uuidv4();
     const now = new Date().toISOString();
 
     try {
+      // ✅ First, verify the execution exists with a retry mechanism
+      let executionExists = false;
+      let retryCount = 0;
+      const maxRetries = 3;
+      
+      while (!executionExists && retryCount < maxRetries) {
+        const executionCheck = await window.electron.db.query({
+          query: `SELECT id FROM ${DBTABLES.OSSWARM_EXECUTIONS} WHERE id = @id`,
+          params: { id: executionId }
+        });
+
+        if (executionCheck && executionCheck.length > 0) {
+          executionExists = true;
+          console.log(`💾 [DB AGENT CREATE] ${callId}: Execution verified on attempt ${retryCount + 1}`);
+        } else {
+          retryCount++;
+          if (retryCount < maxRetries) {
+            console.log(`💾 [DB AGENT CREATE] ${callId}: Execution not found, retry ${retryCount}/${maxRetries}`);
+            await new Promise(resolve => setTimeout(resolve, 100)); // Wait 100ms before retry
+          }
+        }
+      }
+
+      if (!executionExists) {
+        throw new Error(`Execution ${executionId} does not exist after ${maxRetries} attempts. Cannot create agent.`);
+      }
+
       await window.electron.db.query({
         query: `
           INSERT INTO ${DBTABLES.OSSWARM_AGENTS}

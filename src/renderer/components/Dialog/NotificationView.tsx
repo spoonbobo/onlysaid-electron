@@ -6,44 +6,26 @@ import {
   Button,
   Typography,
   Box,
-  List,
-  ListItem,
-  ListItemText,
-  ListItemIcon,
-  ListItemButton,
   Chip,
-  IconButton,
-  Divider,
-  Accordion,
-  AccordionSummary,
-  AccordionDetails,
-  Badge,
-  Avatar,
-  Tooltip
+  IconButton
 } from "@mui/material";
 import {
   Close as CloseIcon,
-  ExpandMore as ExpandMoreIcon,
   Home as HomeIcon,
   Business as WorkspaceIcon,
   People as PeopleIcon,
   SmartToy as AgentIcon,
   Chat as ChatIcon,
   School as KnowledgeIcon,
-  Notifications as NotificationIcon,
-  Circle as CircleIcon
+  Notifications as NotificationIcon
 } from "@mui/icons-material";
 import { FormattedMessage, useIntl } from "react-intl";
-import { useState } from "react";
 import { useNotificationStore } from "@/renderer/stores/Notification/NotificationStore";
 import { useWorkspaceStore } from "@/renderer/stores/Workspace/WorkspaceStore";
 import {
-  getAllNotifications,
   markNotificationAsRead,
   markHomeAsRead,
   markWorkspaceAsRead,
-  markHomeSectionAsRead,
-  markWorkspaceSectionAsRead,
   clearAllNotifications
 } from "@/utils/notifications";
 import * as R from "ramda";
@@ -144,7 +126,6 @@ function NotificationItem({ notification, onMarkAsRead }: NotificationItemProps)
 
 export default function NotificationView({ open, onClose }: NotificationViewProps) {
   const intl = useIntl();
-  const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({});
   const { workspaces } = useWorkspaceStore();
 
   // Get notifications from store with live updates
@@ -164,13 +145,6 @@ export default function NotificationView({ open, onClose }: NotificationViewProp
     homeNotifications
   );
 
-  const handleExpandSection = (sectionId: string) => {
-    setExpandedSections(prev => ({
-      ...prev,
-      [sectionId]: !prev[sectionId]
-    }));
-  };
-
   const handleMarkAsRead = (notificationId: string) => {
     markNotificationAsRead(notificationId);
   };
@@ -188,22 +162,6 @@ export default function NotificationView({ open, onClose }: NotificationViewProp
       await markWorkspaceAsRead(workspaceId);
     } catch (error) {
       console.error('Error marking workspace messages as read:', error);
-    }
-  };
-
-  const handleMarkHomeSectionAsRead = async (section: string) => {
-    try {
-      await markHomeSectionAsRead(section);
-    } catch (error) {
-      console.error('Error marking home section messages as read:', error);
-    }
-  };
-
-  const handleMarkWorkspaceSectionAsRead = async (workspaceId: string, section: string) => {
-    try {
-      await markWorkspaceSectionAsRead(workspaceId, section);
-    } catch (error) {
-      console.error('Error marking workspace section messages as read:', error);
     }
   };
 

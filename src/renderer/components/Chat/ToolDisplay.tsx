@@ -38,13 +38,88 @@ const ToolDisplay = memo(({ toolCalls, chatId, messageId }: ToolDisplayProps) =>
   const [selectedToolName, setSelectedToolName] = useState<string | undefined>(undefined);
   const [isLoadingLogs, setIsLoadingLogs] = useState(false);
   const [executingToolIds, setExecutingToolIds] = useState<Set<string>>(new Set());
-  const [executionStartTimes, setExecutionStartTimes] = useState<Map<string, number>>(new Map());
-  const [executionDurations, setExecutionDurations] = useState<Map<string, number>>(new Map());
+  
+  // ✅ COMMENTED OUT: Timer state management (suspected cause of re-renders)
+  // const [executionStartTimes, setExecutionStartTimes] = useState<Map<string, number>>(new Map());
+  // const [executionDurations, setExecutionDurations] = useState<Map<string, number>>(new Map());
+  // const [approvalStartTimes, setApprovalStartTimes] = useState<Map<string, number>>(new Map());
+  // const [currentTimers, setCurrentTimers] = useState<Map<string, number>>(new Map());
+  
   const [resultDialogOpen, setResultDialogOpen] = useState(false);
   const [selectedToolCall, setSelectedToolCall] = useState<IChatMessageToolCall | null>(null);
   const [autoApprovedTools, setAutoApprovedTools] = useState<Set<string>>(new Set());
   const [isSummarizing, setIsSummarizing] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
+
+  // ✅ COMMENTED OUT: Real-time timer updates (suspected cause of re-renders)
+  /*
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const now = Date.now();
+      const updatedTimers = new Map<string, number>();
+      
+      toolCalls.forEach(toolCall => {
+        const status = toolCall.status;
+        
+        // Timer for pending tools (from when they appear)
+        if (status === 'pending' || !status) {
+          const startTime = approvalStartTimes.get(toolCall.id) || now;
+          updatedTimers.set(toolCall.id, Math.floor((now - startTime) / 1000));
+        }
+        
+        // Timer for executing tools (from approval to completion)
+        else if (status === 'executing' || status === 'approved') {
+          const startTime = executionStartTimes.get(toolCall.id) || approvalStartTimes.get(toolCall.id) || now;
+          updatedTimers.set(toolCall.id, Math.floor((now - startTime) / 1000));
+        }
+      });
+      
+      setCurrentTimers(updatedTimers);
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [toolCalls, executionStartTimes, approvalStartTimes]);
+  */
+
+  // ✅ COMMENTED OUT: Track tool lifecycle timestamps (suspected cause of re-renders)
+  /*
+  useEffect(() => {
+    toolCalls.forEach(toolCall => {
+      const status = toolCall.status;
+      
+      // Set approval start time for new pending tools
+      if ((status === 'pending' || !status) && !approvalStartTimes.has(toolCall.id)) {
+        const startTime = Date.now();
+        setApprovalStartTimes(prev => new Map(prev).set(toolCall.id, startTime));
+        console.log(`[ToolDisplay-Timer] Started approval timer for ${toolCall.id} at ${new Date(startTime).toLocaleTimeString()}`);
+      }
+      
+      // Set execution start time when approved/executing
+      if ((status === 'approved' || status === 'executing') && !executionStartTimes.has(toolCall.id)) {
+        const startTime = Date.now();
+        setExecutionStartTimes(prev => new Map(prev).set(toolCall.id, startTime));
+        console.log(`[ToolDisplay-Timer] Started execution timer for ${toolCall.id} at ${new Date(startTime).toLocaleTimeString()}`);
+      }
+      
+      // Calculate final duration when completed
+      if ((status === 'executed' || status === 'error') && !executionDurations.has(toolCall.id)) {
+        const approvalStart = approvalStartTimes.get(toolCall.id);
+        const executionStart = executionStartTimes.get(toolCall.id);
+        const endTime = Date.now();
+        
+        let totalDuration = 0;
+        if (executionStart) {
+          totalDuration = Math.floor((endTime - executionStart) / 1000);
+        } else if (approvalStart) {
+          totalDuration = Math.floor((endTime - approvalStart) / 1000);
+        }
+        
+        setExecutionDurations(prev => new Map(prev).set(toolCall.id, totalDuration));
+        console.log(`[ToolDisplay-Timer] Final duration for ${toolCall.id}: ${totalDuration}s`);
+      }
+    });
+  }, [toolCalls]);
+  */
 
   // Helper function to format MCP name for display
   const formatMCPName = useCallback((key: string): string => {
@@ -57,11 +132,10 @@ const ToolDisplay = memo(({ toolCalls, chatId, messageId }: ToolDisplayProps) =>
   }, []);
 
   const isAgentExecution = useCallback((toolCall: IChatMessageToolCall) => {
-    // ✅ Add null/undefined checks
     const functionName = toolCall?.function?.name;
     const mcpServer = toolCall?.mcp_server;
     
-    if (!functionName) return false; // ✅ Guard against undefined
+    if (!functionName) return false;
     
     const result = mcpServer === 'agent_orchestrator' || 
            functionName.endsWith('_agent_execution');
@@ -92,13 +166,17 @@ const ToolDisplay = memo(({ toolCalls, chatId, messageId }: ToolDisplayProps) =>
       return;
     }
 
-    // Track execution start time
+    // ✅ Track execution start time and update status
     const startTime = Date.now();
-    setExecutionStartTimes(prev => new Map(prev).set(toolCall.id, startTime));
+    // setExecutionStartTimes(prev => new Map(prev).set(toolCall.id, startTime));
     setExecutingToolIds(prev => new Set(prev).add(toolCall.id));
+    
+    // Update tool status to executing
+    await updateToolCallStatus(toolCall.id, 'executing');
+    await refreshMessage(chatId, messageId);
 
     try {
-      console.log(`Executing tool ${toolCall.function.name} on server ${serverId} with args:`, toolCall.function.arguments);
+      console.log(`[ToolDisplay-Timer] Executing tool ${toolCall.function.name} on server ${serverId} - timer started`);
       await addLogForToolCall(toolCall.id, `Starting execution of tool "${toolCall.function.name}" on server "${serverId}".`);
 
       const result = await executeTool(
@@ -112,12 +190,14 @@ const ToolDisplay = memo(({ toolCalls, chatId, messageId }: ToolDisplayProps) =>
       if (result.success) {
         console.log(`Tool ${toolCall.function.name} executed successfully:`, result.data);
 
-        // Calculate execution duration
+        // ✅ Calculate execution duration
         const endTime = Date.now();
         const duration = Math.floor((endTime - startTime) / 1000);
 
         await updateToolCallResult(toolCall.id, result.data, duration);
         await addLogForToolCall(toolCall.id, `Tool execution completed successfully in ${duration}s. Result: ${JSON.stringify(result.data, null, 2)}`);
+        
+        console.log(`[ToolDisplay-Timer] Tool ${toolCall.function.name} completed in ${duration}s`);
       } else {
         console.error(`Tool ${toolCall.function.name} execution failed:`, result.error);
         await updateToolCallStatus(toolCall.id, 'error');
@@ -128,21 +208,18 @@ const ToolDisplay = memo(({ toolCalls, chatId, messageId }: ToolDisplayProps) =>
       await updateToolCallStatus(toolCall.id, 'error');
       await addLogForToolCall(toolCall.id, `Tool execution error: ${error.message || error}`);
     } finally {
-      // Calculate execution duration for local state
+      // ✅ Calculate final execution duration
       const endTime = Date.now();
       const duration = Math.floor((endTime - startTime) / 1000);
-      setExecutionDurations(prev => new Map(prev).set(toolCall.id, duration));
+      // setExecutionDurations(prev => new Map(prev).set(toolCall.id, duration));
 
       setExecutingToolIds(prev => {
         const newSet = new Set(prev);
         newSet.delete(toolCall.id);
         return newSet;
       });
-      setExecutionStartTimes(prev => {
-        const newMap = new Map(prev);
-        newMap.delete(toolCall.id);
-        return newMap;
-      });
+      
+      console.log(`[ToolDisplay-Timer] Tool ${toolCall.function.name} execution finished - final duration: ${duration}s`);
       await refreshMessage(chatId, messageId);
     }
   }, [executeTool, updateToolCallResult, updateToolCallStatus, addLogForToolCall, chatId, messageId, refreshMessage, getAllConfiguredServers]);
@@ -163,6 +240,9 @@ const ToolDisplay = memo(({ toolCalls, chatId, messageId }: ToolDisplayProps) =>
 
             // Mark as auto-approved to prevent duplicate processing
             setAutoApprovedTools(prev => new Set(prev).add(toolCall.id));
+
+            // ✅ Set execution start time for auto-approved tools
+            // setExecutionStartTimes(prev => new Map(prev).set(toolCall.id, Date.now()));
 
             // Update tool call status to approved
             await updateToolCallStatus(toolCall.id, 'approved');
@@ -203,6 +283,11 @@ const ToolDisplay = memo(({ toolCalls, chatId, messageId }: ToolDisplayProps) =>
         hasArguments: !!toolCall?.function?.arguments
       });
       
+      // ✅ Set execution start time when approved
+      const approvalTime = Date.now();
+      // setExecutionStartTimes(prev => new Map(prev).set(toolCallId, approvalTime));
+      console.log(`[ToolDisplay-Timer] Approval granted at ${new Date(approvalTime).toLocaleTimeString()} for ${toolCallId}`);
+      
       // ✅ Check if this is a LangGraph tool call
       const agentStore = useAgentStore.getState();
       const { resumeLangGraphWorkflow, pendingHumanInteractions } = agentStore;
@@ -222,12 +307,13 @@ const ToolDisplay = memo(({ toolCalls, chatId, messageId }: ToolDisplayProps) =>
         
         // ✅ Update status to executing first
         await updateToolCallStatus(toolCallId, 'executing');
-        await addLogForToolCall(toolCallId, `User approved tool execution. Starting execution...`);
+        await addLogForToolCall(toolCallId, `User approved tool execution at ${new Date(approvalTime).toLocaleTimeString()}. Starting execution...`);
         await refreshMessage(chatId, messageId);
         
         let toolExecutionResult: any = null;
         let executionSuccess = false;
         let executionError = '';
+        let executionDuration = 0;
         
         // ✅ Execute MCP tool if it has an MCP server
         if (toolCall.mcp_server && toolCall.mcp_server !== 'langgraph') {
@@ -238,7 +324,7 @@ const ToolDisplay = memo(({ toolCalls, chatId, messageId }: ToolDisplayProps) =>
           });
           
           try {
-            const startTime = Date.now();
+            const executionStartTime = Date.now();
             
             let toolArgs = {};
             if (typeof toolCall.function.arguments === 'string') {
@@ -265,14 +351,18 @@ const ToolDisplay = memo(({ toolCalls, chatId, messageId }: ToolDisplayProps) =>
               toolArgs
             );
             
-            const executionTime = Math.floor((Date.now() - startTime) / 1000);
+            const executionEndTime = Date.now();
+            executionDuration = Math.floor((executionEndTime - executionStartTime) / 1000);
+            
+            // ✅ Store final execution duration
+            // setExecutionDurations(prev => new Map(prev).set(toolCallId, executionDuration));
             
             console.log(`🔍 [ToolDisplay-APPROVE] MCP execution result:`, {
               success: mcpResult.success,
               hasData: !!mcpResult.data,
               dataType: typeof mcpResult.data,
               error: mcpResult.error,
-              executionTime
+              executionDuration
             });
             
             if (mcpResult.success) {
@@ -280,23 +370,24 @@ const ToolDisplay = memo(({ toolCalls, chatId, messageId }: ToolDisplayProps) =>
               executionSuccess = true;
               
               await updateToolCallStatus(toolCallId, 'executed');
-              await updateToolCallResult(toolCallId, mcpResult.data, executionTime);
-              await addLogForToolCall(toolCallId, `Tool executed successfully in ${executionTime}s: ${JSON.stringify(mcpResult.data)}`);
+              await updateToolCallResult(toolCallId, mcpResult.data, executionDuration);
+              await addLogForToolCall(toolCallId, `Tool executed successfully in ${executionDuration}s: ${JSON.stringify(mcpResult.data)}`);
               
-              console.log(`🔍 [ToolDisplay-APPROVE] ✅ MCP tool executed successfully`);
-              console.log(`🔍 [ToolDisplay-APPROVE] Result preview:`, 
-                JSON.stringify(mcpResult.data).substring(0, 200) + '...');
+              console.log(`🔍 [ToolDisplay-APPROVE] ✅ MCP tool executed successfully in ${executionDuration}s`);
             } else {
               executionError = mcpResult.error;
               await updateToolCallStatus(toolCallId, 'error');
-              await addLogForToolCall(toolCallId, `Tool execution failed: ${mcpResult.error}`);
+              await addLogForToolCall(toolCallId, `Tool execution failed after ${executionDuration}s: ${mcpResult.error}`);
               console.error(`🔍 [ToolDisplay-APPROVE] ❌ MCP tool execution failed:`, mcpResult.error);
             }
             
           } catch (error: any) {
+            const executionEndTime = Date.now();
+            executionDuration = Math.floor((executionEndTime - approvalTime) / 1000);
+            
             executionError = error.message;
             await updateToolCallStatus(toolCallId, 'error'); 
-            await addLogForToolCall(toolCallId, `Tool execution error: ${error.message}`);
+            await addLogForToolCall(toolCallId, `Tool execution error after ${executionDuration}s: ${error.message}`);
             console.error(`🔍 [ToolDisplay-APPROVE] ❌ MCP tool execution error:`, error);
           }
         } else {
@@ -307,12 +398,12 @@ const ToolDisplay = memo(({ toolCalls, chatId, messageId }: ToolDisplayProps) =>
           console.log(`🔍 [ToolDisplay-APPROVE] ✅ Non-MCP tool marked as executed`);
         }
         
-        // ✅ Create enhanced response with execution results
+        // ✅ Create enhanced response with execution results and timing
         const response: HumanInteractionResponse = {
           id: interaction.request.id,
           approved: true,
           timestamp: Date.now(),
-          // ✅ Add execution results to the response
+          // ✅ Remove executionDuration from toolExecutionResult
           toolExecutionResult: executionSuccess ? {
             success: true,
             result: toolExecutionResult,
@@ -332,16 +423,8 @@ const ToolDisplay = memo(({ toolCalls, chatId, messageId }: ToolDisplayProps) =>
           timestamp: response.timestamp,
           hasToolExecutionResult: !!response.toolExecutionResult,
           toolExecutionSuccess: response.toolExecutionResult?.success,
-          toolName: response.toolExecutionResult?.toolName,
-          mcpServer: response.toolExecutionResult?.mcpServer,
-          hasResult: !!response.toolExecutionResult?.result,
-          hasError: !!response.toolExecutionResult?.error
+          toolName: response.toolExecutionResult?.toolName
         });
-        
-        if (response.toolExecutionResult?.result) {
-          console.log(`🔍 [ToolDisplay-APPROVE] Tool result being sent to LangGraph:`, 
-            JSON.stringify(response.toolExecutionResult.result).substring(0, 300) + '...');
-        }
         
         console.log(`🔍 [ToolDisplay-APPROVE] 🔧 Resuming LangGraph workflow with execution results:`, {
           threadId: interaction.request.threadId,
@@ -362,9 +445,9 @@ const ToolDisplay = memo(({ toolCalls, chatId, messageId }: ToolDisplayProps) =>
           await addLogForToolCall(toolCallId, `Workflow completed successfully. Final response handled by Chat component.`);
           toast.success(`Workflow completed successfully!`);
         } else if (resumeResult.success) {
-          await addLogForToolCall(toolCallId, `Workflow resumed successfully with execution results.`);
+          await addLogForToolCall(toolCallId, `Workflow resumed successfully with execution results (${executionDuration}s).`);
           if (executionSuccess) {
-            toast.success(`Tool "${toolCall.function.name}" executed and workflow resumed`);
+            toast.success(`Tool "${toolCall.function.name}" executed (${executionDuration}s) and workflow resumed`);
           } else {
             toast.error(`Tool execution failed but workflow resumed`);
           }
@@ -388,13 +471,14 @@ const ToolDisplay = memo(({ toolCalls, chatId, messageId }: ToolDisplayProps) =>
     }
   };
 
-  // ✅ Enhanced MCP tool execution with better error handling
+  // ✅ COMMENTED OUT: Enhanced MCP tool execution with timer tracking
   const executeMCPToolDirectly = useCallback(async (
     serverName: string, 
     toolName: string, 
     args: Record<string, any>
   ) => {
-    console.log(`[ToolDisplay-MCP] Executing MCP tool directly:`, {
+    const startTime = Date.now();
+    console.log(`[ToolDisplay-MCP] Executing MCP tool directly at ${new Date(startTime).toLocaleTimeString()}:`, {
       serverName, toolName, args
     });
     
@@ -414,10 +498,15 @@ const ToolDisplay = memo(({ toolCalls, chatId, messageId }: ToolDisplayProps) =>
       
       const result = await Promise.race([executionPromise, timeoutPromise]) as any;
       
-      console.log(`[ToolDisplay-MCP] Direct execution result:`, result);
+      const endTime = Date.now();
+      const duration = Math.floor((endTime - startTime) / 1000);
+      
+      console.log(`[ToolDisplay-MCP] Direct execution completed in ${duration}s:`, result);
       return result;
     } catch (error: any) {
-      console.error(`[ToolDisplay-MCP] Direct execution failed:`, error);
+      const endTime = Date.now();
+      const duration = Math.floor((endTime - startTime) / 1000);
+      console.error(`[ToolDisplay-MCP] Direct execution failed after ${duration}s:`, error);
       throw error;
     }
   }, []);
@@ -596,8 +685,30 @@ const ToolDisplay = memo(({ toolCalls, chatId, messageId }: ToolDisplayProps) =>
   const handleReset = useCallback(async (toolCallId: string) => {
     console.log(`Tool call ${toolCallId} reset to pending for message ${messageId} in chat ${chatId}`);
     
-    // Check if this is an Agent-orchestrated tool call (approval ID format)
-    const isAgentOrchestrated = toolCallId.startsWith('approval-');
+    // ✅ Clear all timer state when resetting
+    // setExecutionStartTimes(prev => {
+    //   const newMap = new Map(prev);
+    //   newMap.delete(toolCallId);
+    //   return newMap;
+    // });
+    
+    // setApprovalStartTimes(prev => {
+    //   const newMap = new Map(prev);
+    //   newMap.delete(toolCallId);
+    //   return newMap;
+    // });
+    
+    // setExecutionDurations(prev => {
+    //   const newMap = new Map(prev);
+    //   newMap.delete(toolCallId);
+    //   return newMap;
+    // });
+    
+    // setCurrentTimers(prev => {
+    //   const newMap = new Map(prev);
+    //   newMap.delete(toolCallId);
+    //   return newMap;
+    // });
     
     // Remove from auto-approved set when resetting
     setAutoApprovedTools(prev => {
@@ -605,6 +716,11 @@ const ToolDisplay = memo(({ toolCalls, chatId, messageId }: ToolDisplayProps) =>
       newSet.delete(toolCallId);
       return newSet;
     });
+    
+    // ✅ Reset approval start time for the tool
+    // setApprovalStartTimes(prev => new Map(prev).set(toolCallId, Date.now()));
+    
+    const isAgentOrchestrated = toolCallId.startsWith('approval-');
     
     if (isAgentOrchestrated) {
       // ✅ Update both chat store AND database for Agent tools
@@ -798,6 +914,46 @@ const ToolDisplay = memo(({ toolCalls, chatId, messageId }: ToolDisplayProps) =>
     console.log(`🔍 [ToolDisplay-DEBUG] ==================== END COMPONENT DEBUG ====================`);
   }, [toolCalls, chatId, messageId]);
 
+  // ✅ COMMENTED OUT: Enhanced timer display helper (remove timer functionality)
+  /*
+  const getTimerDisplay = useCallback((toolCall: IChatMessageToolCall) => {
+    const status = toolCall.status;
+    const currentTime = currentTimers.get(toolCall.id) || 0;
+    const finalDuration = executionDurations.get(toolCall.id);
+    
+    // Show final duration for completed tools
+    if ((status === 'executed' || status === 'error') && finalDuration !== undefined) {
+      return {
+        duration: finalDuration,
+        label: `${finalDuration}s`,
+        color: status === 'executed' ? 'success' as const : 'error' as const
+      };
+    }
+    
+    // Show current timer for active tools
+    if (status === 'executing' || status === 'approved') {
+      return {
+        duration: currentTime,
+        label: `${currentTime}s`,
+        color: 'primary' as const,
+        isActive: true
+      };
+    }
+    
+    // Show pending timer
+    if (status === 'pending' || !status) {
+      return {
+        duration: currentTime,
+        label: `${currentTime}s`,
+        color: 'secondary' as const,
+        isActive: true
+      };
+    }
+    
+    return null;
+  }, [currentTimers, executionDurations]);
+  */
+
   if (!toolCalls || toolCalls.length === 0) {
     return null;
   }
@@ -810,6 +966,8 @@ const ToolDisplay = memo(({ toolCalls, chatId, messageId }: ToolDisplayProps) =>
         </Typography>
 
         {toolCalls.map((toolCall) => {
+          // ✅ COMMENTED OUT: Remove excessive debug logging
+          /*
           console.log(`🔍 [ToolDisplay-DEBUG] ==================== RENDERING TOOL ====================`);
           console.log(`🔍 [ToolDisplay-DEBUG] Tool render debug:`, {
             id: toolCall.id,
@@ -821,30 +979,23 @@ const ToolDisplay = memo(({ toolCalls, chatId, messageId }: ToolDisplayProps) =>
             hasResult: !!toolCall.result,
             resultLength: toolCall.result ? String(toolCall.result).length : 0
           });
-          
-          // Debug interaction tracking
-          const langGraphInteractions = (window as any).langGraphInteractions || new Map();
-          const hasInteraction = langGraphInteractions.has(toolCall.id);
-          console.log(`🔍 [ToolDisplay-DEBUG] Tool interaction tracking:`, {
-            toolId: toolCall.id,
-            hasInteraction,
-            interactionDetails: hasInteraction ? {
-              requestId: langGraphInteractions.get(toolCall.id)?.request?.id,
-              threadId: langGraphInteractions.get(toolCall.id)?.request?.threadId,
-              type: langGraphInteractions.get(toolCall.id)?.request?.type
-            } : null
-          });
+          */
           
           const isLoadingThisLog = isLoadingLogs && selectedToolName === toolCall.function.name;
           const isExecuting = executingToolIds.has(toolCall.id);
           const currentStatus = toolCall.status;
           const isAutoApproved = autoApprovedTools.has(toolCall.id);
-          const duration = toolCall.execution_time_seconds || executionDurations.get(toolCall.id);
+          // ✅ COMMENTED OUT: Timer-related variables
+          // const duration = toolCall.execution_time_seconds || executionDurations.get(toolCall.id);
+          const duration = toolCall.execution_time_seconds; // Only use stored duration
           const isCompleted = currentStatus === 'executed' || currentStatus === 'error';
           const showSummarize = shouldShowSummarizeForTool(toolCall);
           const isAgentOrchestrated = toolCall.id.startsWith('approval-');
           const isLangGraphOrchestrated = toolCall.mcp_server === 'langgraph';
           const isAgentExecutionCall = isAgentExecution(toolCall);
+          
+          // ✅ COMMENTED OUT: Get timer display information
+          // const timerInfo = getTimerDisplay(toolCall);
 
           let statusDisplayKey;
           if (currentStatus === 'approved') {
@@ -895,7 +1046,29 @@ const ToolDisplay = memo(({ toolCalls, chatId, messageId }: ToolDisplayProps) =>
                     sx={{ ml: 1, fontSize: '0.65rem', height: 18 }}
                   />
                 )}
-                :
+                {/* ✅ COMMENTED OUT: Timer display chip */}
+                {/*
+                {timerInfo && (
+                  <Chip
+                    icon={<AccessTimeIcon sx={{ fontSize: '0.75rem' }} />}
+                    label={timerInfo.label}
+                    size="small"
+                    variant={timerInfo.isActive ? "filled" : "outlined"}
+                    color={timerInfo.color}
+                    sx={{ 
+                      ml: 1, 
+                      fontSize: '0.7rem', 
+                      height: 20,
+                      animation: timerInfo.isActive ? 'pulse 2s infinite' : 'none',
+                      '@keyframes pulse': {
+                        '0%': { opacity: 1 },
+                        '50%': { opacity: 0.7 },
+                        '100%': { opacity: 1 }
+                      }
+                    }}
+                  />
+                )}
+                */}
               </Typography>
 
               {toolCall.tool_description && (
@@ -945,14 +1118,6 @@ const ToolDisplay = memo(({ toolCalls, chatId, messageId }: ToolDisplayProps) =>
                       <Typography variant="body2" sx={{ color: 'info.main', fontWeight: 'bold' }}>
                         {intl.formatMessage({ id: 'toolDisplay.executing' })}
                       </Typography>
-                      <Chip
-                        icon={<AccessTimeIcon sx={{ fontSize: '0.75rem' }} />}
-                        label={`${Math.floor((Date.now() - (executionStartTimes.get(toolCall.id) || Date.now())) / 1000)}s`}
-                        size="small"
-                        variant="outlined"
-                        color="primary"
-                        sx={{ fontSize: '0.7rem', height: 20 }}
-                      />
                     </Box>
                   ) : currentStatus === 'denied' ? (
                     <Typography variant="body2" sx={{ color: 'error.main', fontWeight: 'bold' }}>
@@ -973,7 +1138,7 @@ const ToolDisplay = memo(({ toolCalls, chatId, messageId }: ToolDisplayProps) =>
                           }
                         }}
                       >
-                        View Result {duration && `(${duration}s)`}
+                        {intl.formatMessage({ id: 'toolDisplay.viewResult' })}
                       </Typography>
                       
                       {showSummarize && (
@@ -1012,7 +1177,7 @@ const ToolDisplay = memo(({ toolCalls, chatId, messageId }: ToolDisplayProps) =>
                           }
                         }}
                       >
-                        View Error {duration && `(${duration}s)`}
+                        {intl.formatMessage({ id: 'toolDisplay.viewError' })}
                       </Typography>
                       
                       {showSummarize && (
@@ -1158,7 +1323,7 @@ const ToolDisplay = memo(({ toolCalls, chatId, messageId }: ToolDisplayProps) =>
         open={resultDialogOpen}
         onClose={handleCloseResultDialog}
         toolCall={selectedToolCall}
-        executionTime={selectedToolCall ? executionDurations.get(selectedToolCall.id) : undefined}
+        executionTime={selectedToolCall ? selectedToolCall.execution_time_seconds : undefined}
       />
     </>
   );

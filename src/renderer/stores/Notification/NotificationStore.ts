@@ -221,6 +221,11 @@ export const useNotificationStore = create<NotificationStore>()(
       clearAllNotifications: (workspaceId, homeSection, workspaceSection, homeContext, workspaceContext) => {
         set(state => {
           const filteredNotifications = state.notifications.filter(notification => {
+            // If no parameters provided, clear ALL notifications
+            if (!workspaceId && !homeSection && !workspaceSection && !homeContext && !workspaceContext) {
+              return false; // Remove all notifications
+            }
+            
             // Workspace context specific
             if (workspaceId && workspaceSection && workspaceContext) {
               return !(notification.workspaceId === workspaceId &&
@@ -245,8 +250,8 @@ export const useNotificationStore = create<NotificationStore>()(
             if (workspaceId && !workspaceSection) {
               return notification.workspaceId !== workspaceId;
             }
-            // Home general
-            return !!notification.workspaceId;
+            // This shouldn't be reached with the new logic above
+            return true;
           });
           const newCounts = calculateCounts(filteredNotifications);
 

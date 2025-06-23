@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import MainInterface from '@/renderer/scenes/Interface/MainInterface';
 import LoadingScreen from '@/renderer/components/LoadingScreen';
 import { useTopicStore } from '@/renderer/stores/Topic/TopicStore';
@@ -9,6 +9,16 @@ import { useMCPStore } from '@/renderer/stores/MCP/MCPStore';
 import { useToastStore } from '@/renderer/stores/Notification/ToastStore';
 import { useSocketStore } from '@/renderer/stores/Socket/SocketStore';
 import { useAppAssets } from '@/renderer/hooks/useAppAssets';
+import { useChatStore } from '@/renderer/stores/Chat/ChatStore';
+import { useIPCListeners } from '@/renderer/IPCListeners';
+
+// ✅ LangGraph Interaction interface
+interface LangGraphInteraction {
+  interactionId: string;
+  request: any;
+  messageType: string;
+  messageId: string | null;
+}
 
 function App() {
   const [isAppReady, setIsAppReady] = useState(false);
@@ -19,10 +29,41 @@ function App() {
   const [initToastId, setInitToastId] = useState<string | null>(null);
   const [googleServicesReady, setGoogleServicesReady] = useState(false);
   const { user } = useUserStore();
-  const { agent, createGuestAgent } = useAgentStore();
+  const { agent, createGuestAgent, resumeLangGraphWorkflow } = useAgentStore();
   const { initialize: initializeSocket, close: closeSocket } = useSocketStore();
   const { initializeGoogleCalendarListeners, initializeMicrosoftCalendarListeners } = useUserTokenStore();
   const { preloadAssets } = useAppAssets();
+  
+  // ✅ Global state for IPC listeners
+  const [osswarmToolRequests, setOSSwarmToolRequests] = useState<Map<string, {
+    approvalId: string;
+    request: any;
+    messageId: string;
+  }>>(new Map());
+  
+  const [langGraphInteractions, setLangGraphInteractions] = useState<Map<string, LangGraphInteraction>>(new Map());
+
+  // ✅ Get current chat context
+  const { selectedTopics } = useTopicStore();
+  const { messages: storeMessages, appendMessage, updateMessage } = useChatStore();
+  
+  const activeChatId = selectedContext?.section ? selectedTopics[selectedContext.section] || null : null;
+  const workspaceId = selectedContext?.id || '';
+
+  // ✅ Use the IPC listeners hook
+  const { handleHumanInteractionResponse } = useIPCListeners({
+    activeChatId,
+    workspaceId,
+    agent,
+    appendMessage,
+    updateMessage,
+    osswarmToolRequests,
+    setOSSwarmToolRequests,
+    langGraphInteractions,
+    setLangGraphInteractions,
+    resumeLangGraphWorkflow,
+    setGoogleServicesReady
+  });
 
   // Initialize app
   useEffect(() => {
@@ -166,32 +207,6 @@ function App() {
       );
     }
   }, [isConnected]);
-
-  useEffect(() => {
-    const handleGoogleServicesReady = () => {
-      console.log('[App] Google services ready');
-      setGoogleServicesReady(true);
-    };
-
-    const handleGoogleServicesError = (event: any, error: any) => {
-      console.warn('[App] Google services error:', error);
-      useToastStore.getState().addToast(
-        "Google Calendar services initialization failed",
-        "warning",
-        5000
-      );
-      // Still mark as ready to continue initialization
-      setGoogleServicesReady(true);
-    };
-
-    const removeReadyListener = window.electron.ipcRenderer.on('google-services:ready', handleGoogleServicesReady);
-    const removeErrorListener = window.electron.ipcRenderer.on('google-services:error', handleGoogleServicesError);
-
-    return () => {
-      removeReadyListener();
-      removeErrorListener();
-    };
-  }, []);
 
   // Ensure crypto is unlocked for logged-in users
   useEffect(() => {

@@ -20,11 +20,14 @@ import {
   Close,
   Refresh,
   DeleteForever,
-  Warning
+  Warning,
+  PlayArrow,
+  CheckCircle,
+  Error as ErrorIcon
 } from '@mui/icons-material';
 import { useIntl } from 'react-intl';
-import { OSSwarmExecution } from '@/renderer/stores/Agent/AgentTaskStore';
 import { toast } from '@/utils/toast';
+import { OSSwarmExecution } from '@/renderer/stores/Agent/task/types';
 
 interface TaskHistoryProps {
   open: boolean;
@@ -57,10 +60,16 @@ export const TaskHistory: React.FC<TaskHistoryProps> = ({
   const formatExecutionForDisplay = (execution: OSSwarmExecution) => {
     const date = new Date(execution.created_at);
     const timeAgo = getTimeAgo(date);
+    const startTime = new Date(execution.created_at).getTime();
+    const endTime = execution.completed_at ? new Date(execution.completed_at).getTime() : null;
+    const duration = endTime ? 
+      Math.round((endTime - startTime) / 1000) : 
+      Math.round((Date.now() - startTime) / 1000);
     
     return {
       ...execution,
       displayTime: timeAgo,
+      displayDuration: formatDuration(duration),
       displayDescription: execution.task_description.length > 50 
         ? execution.task_description.substring(0, 47) + '...'
         : execution.task_description
@@ -81,6 +90,29 @@ export const TaskHistory: React.FC<TaskHistoryProps> = ({
     return date.toLocaleDateString();
   };
 
+  const formatDuration = (seconds: number) => {
+    if (seconds < 60) return `${seconds}s`;
+    const minutes = Math.floor(seconds / 60);
+    if (minutes < 60) return `${minutes}m ${seconds % 60}s`;
+    const hours = Math.floor(minutes / 60);
+    return `${hours}h ${minutes % 60}m`;
+  };
+
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case 'completed':
+        return <CheckCircle sx={{ fontSize: 16 }} />;
+      case 'failed':
+        return <ErrorIcon sx={{ fontSize: 16 }} />;
+      case 'running':
+        return <PlayArrow sx={{ fontSize: 16 }} />;
+      case 'pending':
+        return <Warning sx={{ fontSize: 16 }} />;
+      default:
+        return <History sx={{ fontSize: 16 }} />;
+    }
+  };
+
   const handleDeleteExecution = async (executionId: string, event: React.MouseEvent) => {
     event.stopPropagation();
     
@@ -88,24 +120,11 @@ export const TaskHistory: React.FC<TaskHistoryProps> = ({
       setDeleteError(null);
       setDeletingId(executionId);
       await onDeleteExecution(executionId);
-      
-      if (onRefreshHistory) {
-        await onRefreshHistory();
-      }
-      
       toast.success('Execution deleted successfully');
     } catch (error: any) {
       console.error('Error deleting execution:', error);
       setDeleteError(error.message || 'Failed to delete execution');
-      
-      if (error.message?.includes('Execution not found') || error.message?.includes('not found')) {
-        toast.error('Execution no longer exists. Refreshing history...');
-        if (onRefreshHistory) {
-          await onRefreshHistory();
-        }
-      } else {
-        toast.error('Failed to delete execution. Try force delete.');
-      }
+      toast.error('Failed to delete execution');
     } finally {
       setDeletingId(null);
     }
@@ -134,24 +153,11 @@ export const TaskHistory: React.FC<TaskHistoryProps> = ({
       setDeleteError(null);
       setDeletingId(executionId);
       await onForceDeleteExecution(executionId);
-      
-      if (onRefreshHistory) {
-        await onRefreshHistory();
-      }
-      
-      toast.success('Execution deleted');
+      toast.success('Execution force deleted');
     } catch (error: any) {
       console.error('Error force deleting execution:', error);
-      setDeleteError(error.message || 'Failed to delete execution');
-      
-      if (error.message?.includes('Execution not found') || error.message?.includes('not found')) {
-        toast.error('Execution no longer exists. Refreshing history...');
-        if (onRefreshHistory) {
-          await onRefreshHistory();
-        }
-      } else {
-        toast.error('Delete failed');
-      }
+      setDeleteError(error.message || 'Failed to force delete execution');
+      toast.error('Force delete failed');
     } finally {
       setDeletingId(null);
     }
@@ -166,20 +172,11 @@ export const TaskHistory: React.FC<TaskHistoryProps> = ({
     try {
       setDeleteError(null);
       await onNukeAll();
-      
-      if (onRefreshHistory) {
-        await onRefreshHistory();
-      }
-      
       toast.success('All executions deleted');
     } catch (error: any) {
       console.error('Error nuking all executions:', error);
       setDeleteError(error.message || 'Failed to delete all executions');
       toast.error('Nuke failed');
-      
-      if (onRefreshHistory) {
-        await onRefreshHistory();
-      }
     }
   };
 
@@ -223,7 +220,7 @@ export const TaskHistory: React.FC<TaskHistoryProps> = ({
           
           <Stack direction="row" spacing={1}>
             {onNukeAll && executions.length > 0 && (
-              <Tooltip title="Delete all executions">
+              <Tooltip title={intl.formatMessage({ id: 'agent.deleteExecution' })}>
                 <Button
                   onClick={handleNukeAll}
                   color="error"
@@ -289,9 +286,7 @@ export const TaskHistory: React.FC<TaskHistoryProps> = ({
         overflow: 'visible'
       }}>
         {executions.length > 0 ? (
-          <Stack spacing={1.5} sx={{ 
-            py: 1 
-          }}>
+          <Stack spacing={1.5} sx={{ py: 1 }}>
             {executions.map((execution, index) => {
               const formatted = formatExecutionForDisplay(execution);
               const isDeleting = deletingId === execution.id;
@@ -337,13 +332,15 @@ export const TaskHistory: React.FC<TaskHistoryProps> = ({
                                 {formatted.displayDescription}
                               </Typography>
                             </Tooltip>
+                
                             <Chip
+                              icon={getStatusIcon(execution.status)}
                               label={execution.status.toUpperCase()}
                               size="small"
                               sx={{ 
                                 fontWeight: 600, 
                                 borderRadius: 1.5,
-                                minWidth: 80,
+                                minWidth: 100,
                                 fontSize: '0.75rem',
                                 height: 24,
                                 '& .MuiChip-label': {
@@ -354,6 +351,7 @@ export const TaskHistory: React.FC<TaskHistoryProps> = ({
                                 execution.status === 'completed' ? 'success' :
                                 execution.status === 'failed' ? 'error' :
                                 execution.status === 'running' ? 'primary' :
+                                execution.status === 'pending' ? 'warning' :
                                 'default'
                               }
                               variant={execution.status === 'failed' ? 'filled' : 'outlined'}
@@ -365,13 +363,13 @@ export const TaskHistory: React.FC<TaskHistoryProps> = ({
                               {formatted.displayTime}
                             </Typography>
                             <Typography variant="caption" color="text.secondary">
-                              {execution.total_agents} agents
+                              Duration: {formatted.displayDuration}
                             </Typography>
                             <Typography variant="caption" color="text.secondary">
-                              {execution.total_tasks} tasks
+                              {execution.total_agents} {intl.formatMessage({ id: 'agent.agents' })}
                             </Typography>
                             <Typography variant="caption" color="text.secondary">
-                              {execution.total_tool_executions} tools
+                              {execution.total_tool_executions} {intl.formatMessage({ id: 'agent.tools' })}
                             </Typography>
                           </Stack>
                         </Stack>

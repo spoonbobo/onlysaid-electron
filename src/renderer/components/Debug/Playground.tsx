@@ -1,152 +1,15 @@
-import React, { useState, useEffect } from "react";
+import React from "react";
 import {
   Box,
   Typography,
-  FormControl,
-  Select,
-  MenuItem,
-  SelectChangeEvent,
   Stack,
 } from "@mui/material";
 import {
   MenuBook as MenuBookIcon,
 } from "@mui/icons-material";
-import { useMCPStore } from "@/renderer/stores/MCP/MCPStore";
-import { SERVICE_TYPE_MAPPING, getServiceTools } from "@/utils/mcp";
-import { useAgentTaskStore } from '@/renderer/stores/Agent/AgentTaskStore';
-import MCPDebug from "./MCPDebug";
 import KBDebug from "./KBDebug";
 
 const Playground = () => {
-  const mcpStore = useMCPStore();
-  const [services, setServices] = useState<{ [key: string]: any }>({});
-  const [selectedService, setSelectedService] = useState<string>("");
-  const [selectedTool, setSelectedTool] = useState<string>("");
-
-  useEffect(() => {
-    const allServers = mcpStore.getAllConfiguredServers();
-    console.log("All servers:", allServers);
-
-    const enabledServices: { [key: string]: any } = {};
-
-    Object.entries(allServers).forEach(([key, value]) => {
-      if (value.enabled) {
-        const serviceKey = SERVICE_TYPE_MAPPING[key] || key;
-        const tools = getServiceTools(key);
-
-        console.log(`Server: ${key}, ServiceKey: ${serviceKey}, Tools:`, tools);
-
-        const displayName = mcpStore.formatServerName(key);
-
-        enabledServices[serviceKey] = {
-          name: displayName,
-          tools: tools || []
-        };
-      }
-    });
-
-    setServices(enabledServices);
-
-    // Set first service as default if any exist
-    const serviceKeys = Object.keys(enabledServices);
-    if (serviceKeys.length > 0 && !selectedService) {
-      setSelectedService(serviceKeys[0]);
-    }
-  }, [mcpStore]);
-
-  // Reset selected tool when service changes
-  useEffect(() => {
-    setSelectedTool("");
-  }, [selectedService]);
-
-  const handleServiceChange = (event: SelectChangeEvent) => {
-    setSelectedService(event.target.value);
-  };
-
-  const handleToolSelect = (toolName: string) => {
-    setSelectedTool(toolName);
-  };
-
-  const handleBackToService = () => {
-    setSelectedTool("");
-  };
-
-  // Set up Agent listeners for agent task management
-  useEffect(() => {
-    console.log('[Playground] Setting up Agent listeners...');
-    
-    // ✅ Handle database operations from Agent Core
-    const handleCreateExecution = async (event: any, data: any) => {
-      try {
-        const { taskDescription, chatId, workspaceId, responseChannel } = data;
-        // ✅ Get fresh reference to avoid stale closure
-        const createdId = await useAgentTaskStore.getState().createExecution(taskDescription, chatId, workspaceId);
-        window.electron.ipcRenderer.send(responseChannel, {
-          success: true,
-          data: { executionId: createdId }
-        });
-      } catch (error: any) {
-        console.error('[Playground] Error creating Agent execution:', error);
-        window.electron.ipcRenderer.send(data.responseChannel, {
-          success: false,
-          error: error.message
-        });
-      }
-    };
-
-    const handleCreateAgent = async (event: any, data: any) => {
-      try {
-        const { executionId, agentId, role, expertise, responseChannel } = data;
-        // ✅ Get fresh reference to avoid stale closure
-        const dbAgentId = await useAgentTaskStore.getState().createAgent(executionId, agentId, role, expertise);
-        window.electron.ipcRenderer.send(responseChannel, {
-          success: true,
-          data: { dbAgentId }
-        });
-      } catch (error: any) {
-        console.error('[Playground] Error creating Agent agent:', error);
-        window.electron.ipcRenderer.send(data.responseChannel, {
-          success: false,
-          error: error.message
-        });
-      }
-    };
-
-    const handleUpdateExecutionStatus = async (event: any, data: any) => {
-      try {
-        const { executionId, status, result, error, responseChannel } = data;
-        // ✅ Get fresh reference to avoid stale closure
-        await useAgentTaskStore.getState().updateExecutionStatus(executionId, status, result, error);
-        if (responseChannel) {
-          window.electron.ipcRenderer.send(responseChannel, {
-            success: true,
-            data: {}
-          });
-        }
-      } catch (error: any) {
-        console.error('[Playground] Error updating Agent execution status:', error);
-        if (data.responseChannel) {
-          window.electron.ipcRenderer.send(data.responseChannel, {
-            success: false,
-            error: error.message
-          });
-        }
-      }
-    };
-
-    // Set up listeners
-    window.electron.ipcRenderer.on('agent:create_execution', handleCreateExecution);
-    window.electron.ipcRenderer.on('agent:create_agent', handleCreateAgent);
-    window.electron.ipcRenderer.on('agent:update_execution_status', handleUpdateExecutionStatus);
-
-    return () => {
-      // Cleanup listeners
-      window.electron.ipcRenderer.removeListener('agent:create_execution', handleCreateExecution);
-      window.electron.ipcRenderer.removeListener('agent:create_agent', handleCreateAgent);
-      window.electron.ipcRenderer.removeListener('agent:update_execution_status', handleUpdateExecutionStatus);
-    };
-  }, []); // ✅ Empty dependency array to run only once
-
   return (
     <Box sx={{ display: 'flex', height: '100%', minHeight: 400 }}>
       {/* Sidebar */}
@@ -168,89 +31,26 @@ const Playground = () => {
             <MenuBookIcon fontSize="small" />
             <Box>
               <Typography variant="subtitle1" fontWeight="600">
-                MCP Tools & KB Testing
+                Knowledge Base Testing
               </Typography>
               <Typography variant="caption" sx={{ opacity: 0.9 }}>
-                API Documentation & Testing
+                OnlySaid KB Query Interface
               </Typography>
             </Box>
           </Stack>
         </Box>
 
-        {/* Service Selector */}
-        <Box sx={{ p: 2, borderBottom: 1, borderColor: 'divider' }}>
-          <Typography variant="subtitle2" sx={{ mb: 1 }}>
-            Service
+        {/* Info */}
+        <Box sx={{ p: 2 }}>
+          <Typography variant="body2" color="text.secondary" textAlign="center">
+            Test your OnlySaid Knowledge Base queries and document retrieval
           </Typography>
-          <FormControl fullWidth size="small">
-            <Select
-              value={selectedService}
-              onChange={handleServiceChange}
-              displayEmpty
-            >
-              <MenuItem value="" disabled>Choose service...</MenuItem>
-              <MenuItem value="knowledgeBase">🧠 Knowledge Base Testing</MenuItem>
-              {Object.entries(services).map(([key, service]) => (
-                <MenuItem key={key} value={key}>
-                  {service.name} ({service.tools.length})
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
         </Box>
-
-        {/* Render appropriate sidebar content based on selected service */}
-        {selectedService === "knowledgeBase" ? (
-          <Box sx={{ p: 2 }}>
-            <Typography variant="body2" color="text.secondary" textAlign="center">
-              Knowledge Base testing interface selected
-            </Typography>
-          </Box>
-        ) : selectedService && (
-          <MCPDebug
-            services={services}
-            selectedService={selectedService}
-            selectedTool={selectedTool}
-            onToolSelect={handleToolSelect}
-            onBackToService={handleBackToService}
-            renderMode="sidebar"
-          />
-        )}
       </Box>
 
       {/* Main Content */}
       <Box sx={{ flex: 1, overflow: 'auto', bgcolor: 'background.default' }}>
-        {!selectedService ? (
-          <Box sx={{ 
-            display: 'flex', 
-            alignItems: 'center', 
-            justifyContent: 'center', 
-            height: '100%',
-            textAlign: 'center',
-            p: 3
-          }}>
-            <Stack spacing={2} alignItems="center">
-              <MenuBookIcon sx={{ fontSize: 48, color: 'text.secondary' }} />
-              <Typography variant="h6" color="text.secondary">
-                Welcome to MCP Tools & KB Testing
-              </Typography>
-              <Typography variant="body2" color="text.secondary">
-                Select a service to explore available tools or test Knowledge Base
-              </Typography>
-            </Stack>
-          </Box>
-        ) : selectedService === "knowledgeBase" ? (
-          <KBDebug />
-        ) : (
-          <MCPDebug
-            services={services}
-            selectedService={selectedService}
-            selectedTool={selectedTool}
-            onToolSelect={handleToolSelect}
-            onBackToService={handleBackToService}
-            renderMode="main"
-          />
-        )}
+        <KBDebug />
       </Box>
     </Box>
   );

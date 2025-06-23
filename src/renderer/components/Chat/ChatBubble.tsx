@@ -79,8 +79,28 @@ const ChatBubble = memo(({
     };
   }, [isStreaming, msg.text, streamContent]);
 
+  const getThinkingMessage = () => {
+    const executingTools = msg.tool_calls?.filter(tc => 
+      tc.status === 'executing' || tc.status === 'approved'
+    ) || [];
+    
+    if (executingTools.length > 0) {
+      const toolNames = executingTools.map(tc => tc.function?.name || 'Tool').join(', ');
+      return `Executing ${toolNames}... (${thinkingDuration}s)`;
+    }
+    
+    const pendingTools = msg.tool_calls?.filter(tc => 
+      tc.status === 'pending' || !tc.status
+    ) || [];
+    
+    if (pendingTools.length > 0) {
+      return `Waiting for tool approval... (${thinkingDuration}s)`;
+    }
+    
+    return `Thinking... (${thinkingDuration}s)`;
+  };
+
   const getTimeString = () => {
-    // Try created_at first, then fall back to sent_at
     const timestamp = msg.created_at || msg.sent_at;
     if (!timestamp) return "";
 
@@ -333,8 +353,29 @@ const ChatBubble = memo(({
           ) : (
             (msg.text || isStreaming || streamContent) ? (
               (isStreaming && !textForCopy && !streamContent) ? (
-                <Typography sx={{ color: "text.secondary", whiteSpace: 'pre-wrap' }}>
-                  <FormattedMessage id="chat.thinkingDuration" defaultMessage="Thinking ({duration}s)" values={{ duration: thinkingDuration }} />
+                <Typography sx={{ 
+                  color: "text.secondary", 
+                  whiteSpace: 'pre-wrap',
+                  fontStyle: 'italic',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 1
+                }}>
+                  {getThinkingMessage()}
+                  <Box
+                    sx={{
+                      width: 8,
+                      height: 8,
+                      borderRadius: '50%',
+                      bgcolor: 'primary.main',
+                      animation: 'pulse 1.5s infinite',
+                      '@keyframes pulse': {
+                        '0%': { opacity: 1, transform: 'scale(1)' },
+                        '50%': { opacity: 0.5, transform: 'scale(1.2)' },
+                        '100%': { opacity: 1, transform: 'scale(1)' }
+                      }
+                    }}
+                  />
                 </Typography>
               ) : (
                 <MarkdownRenderer
@@ -353,6 +394,27 @@ const ChatBubble = memo(({
         }
 
         <FileDisplay message={msg} />
+
+        {msg.tool_calls && msg.tool_calls.length > 0 && msg.text && (
+          <Box sx={{ mt: 1, pt: 1, borderTop: '1px solid', borderColor: 'divider', opacity: 0.8 }}>
+            <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: '0.7rem' }}>
+              {(() => {
+                const executedTools = msg.tool_calls.filter(tc => tc.status === 'executed');
+                const failedTools = msg.tool_calls.filter(tc => tc.status === 'error');
+                const pendingTools = msg.tool_calls.filter(tc => tc.status === 'pending' || !tc.status);
+                const executingTools = msg.tool_calls.filter(tc => tc.status === 'executing' || tc.status === 'approved');
+                
+                const parts = [];
+                if (executedTools.length > 0) parts.push(`${executedTools.length} executed`);
+                if (failedTools.length > 0) parts.push(`${failedTools.length} failed`);
+                if (executingTools.length > 0) parts.push(`${executingTools.length} executing`);
+                if (pendingTools.length > 0) parts.push(`${pendingTools.length} pending`);
+                
+                return `Tools: ${parts.join(', ')}`;
+              })()}
+            </Typography>
+          </Box>
+        )}
 
         {msg.reactions && msg.reactions.length > 0 && (
           <Box sx={{
@@ -481,9 +543,6 @@ const ChatBubble = memo(({
     </Box>
   );
 }, (prevProps, nextProps) => {
-  // Only prevent re-render if we're absolutely sure nothing important has changed
-
-  // Always re-render if any of these core props change
   if (prevProps.isStreaming !== nextProps.isStreaming ||
     prevProps.isConnecting !== nextProps.isConnecting ||
     prevProps.isHovered !== nextProps.isHovered ||
@@ -492,47 +551,46 @@ const ChatBubble = memo(({
     return false;
   }
 
-  // Always re-render if message ID changes (different message entirely)
   if (prevProps.message.id !== nextProps.message.id) {
     return false;
   }
 
-  // Always re-render if streaming content changes
   if (nextProps.isStreaming && prevProps.streamContent !== nextProps.streamContent) {
     return false;
   }
 
-  // Always re-render if message text changes
   if (prevProps.message.text !== nextProps.message.text) {
     return false;
   }
 
-  // Always re-render if sender_object changes (this fixes the async loading issue)
   if (prevProps.message.sender_object !== nextProps.message.sender_object) {
     return false;
   }
 
-  // Always re-render if reactions array reference changes
   if (prevProps.message.reactions !== nextProps.message.reactions) {
     return false;
   }
 
-  // Always re-render if files array reference changes
   if (prevProps.message.files !== nextProps.message.files) {
     return false;
   }
 
-  // Always re-render if tool_calls reference changes
   if (prevProps.message.tool_calls !== nextProps.message.tool_calls) {
     return false;
   }
 
-  // Always re-render if reply message changes
   if (prevProps.replyToMessage !== nextProps.replyToMessage) {
     return false;
   }
 
-  // If we get here, we can safely skip the re-render
+  if (prevProps.message.tool_calls && nextProps.message.tool_calls) {
+    const prevStatuses = prevProps.message.tool_calls.map(tc => tc.status).join(',');
+    const nextStatuses = nextProps.message.tool_calls.map(tc => tc.status).join(',');
+    if (prevStatuses !== nextStatuses) {
+      return false;
+    }
+  }
+
   return true;
 });
 

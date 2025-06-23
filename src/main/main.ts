@@ -221,6 +221,9 @@ const createWindow = async () => {
     show: true,
     width: 1024,
     height: 728,
+    // Set minimum window size to prevent UI from breaking
+    minWidth: 600,  // Minimum width to accommodate collapsed menu
+    minHeight: 400, // Minimum height for basic functionality
     icon: getAssetPath('icon.png'),
     frame: false,
     titleBarStyle: 'hidden',
