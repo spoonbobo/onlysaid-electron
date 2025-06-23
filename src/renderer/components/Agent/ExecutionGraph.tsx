@@ -152,16 +152,48 @@ export const ExecutionGraphComponent: React.FC<ExecutionGraphProps> = ({
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   const [hoveredNode, setHoveredNode] = useState<Node | null>(null);
+  
+  // ✅ Fixed: Use container dimensions that respect parent constraints
+  const [containerDimensions, setContainerDimensions] = useState({ width, height });
 
   // ✅ Use MUI theme-friendly status colors
   const statusColors = useMemo(() => getStatusColors(theme), [theme]);
+
+  // ✅ Fixed: Better dimension handling that respects constraints
+  useEffect(() => {
+    const updateDimensions = () => {
+      if (containerRef.current) {
+        const rect = containerRef.current.getBoundingClientRect();
+        const newWidth = rect.width > 0 ? rect.width : width;
+        const newHeight = rect.height > 0 ? rect.height : height;
+        
+        setContainerDimensions({
+          width: newWidth,
+          height: newHeight
+        });
+      }
+    };
+
+    // Initial measurement
+    updateDimensions();
+
+    // Update on resize
+    const resizeObserver = new ResizeObserver(updateDimensions);
+    if (containerRef.current) {
+      resizeObserver.observe(containerRef.current);
+    }
+
+    return () => {
+      resizeObserver.disconnect();
+    };
+  }, [width, height, fullscreen]);
 
   // ✅ Calculate optimal position for node details panel
   const calculatePanelPosition = useCallback((node: Node) => {
     if (!containerRef.current) return { top: 20, left: 20, right: null, bottom: null, preference: 5 };
 
-    const containerWidth = fullscreen ? window.innerWidth : width;
-    const containerHeight = fullscreen ? window.innerHeight : height;
+    const containerWidth = fullscreen ? window.innerWidth : containerDimensions.width;
+    const containerHeight = fullscreen ? window.innerHeight : containerDimensions.height;
     
     // Transform node position from canvas coordinates to screen coordinates
     const screenX = (node.x + pan.x) * zoom;
@@ -229,7 +261,7 @@ export const ExecutionGraphComponent: React.FC<ExecutionGraphProps> = ({
       bottom: null,
       preference: 5
     };
-  }, [zoom, pan, width, height, fullscreen]);
+  }, [zoom, pan, containerDimensions, fullscreen]);
 
   // Enhanced node and edge calculation with better positioning
   const { nodes, edges, stats } = useMemo(() => {
@@ -237,8 +269,10 @@ export const ExecutionGraphComponent: React.FC<ExecutionGraphProps> = ({
 
     const nodes: Node[] = [];
     const edges: Edge[] = [];
-    const centerX = width / 2;
-    const centerY = height / 2;
+    
+    // ✅ Use dynamic container dimensions
+    const centerX = containerDimensions.width / 2;
+    const centerY = containerDimensions.height / 2;
 
     // Create execution node (center) with enhanced styling
     const executionNode: Node = {
@@ -260,7 +294,7 @@ export const ExecutionGraphComponent: React.FC<ExecutionGraphProps> = ({
     nodes.push(executionNode);
 
     // Create agent nodes in a circle with better spacing
-    const agentRadius = Math.min(width, height) * 0.25;
+    const agentRadius = Math.min(containerDimensions.width, containerDimensions.height) * 0.25;
     const agentCount = graph.agents.length;
     
     graph.agents.forEach((agent, index) => {
@@ -383,7 +417,7 @@ export const ExecutionGraphComponent: React.FC<ExecutionGraphProps> = ({
     };
 
     return { nodes, edges, stats };
-  }, [graph, width, height, statusColors, theme]);
+  }, [graph, containerDimensions, statusColors, theme]);
 
   // Animation logic (keeping the same as before but with theme colors)
   const animate = useCallback(() => {
@@ -408,17 +442,17 @@ export const ExecutionGraphComponent: React.FC<ExecutionGraphProps> = ({
         ctx.lineWidth = 1;
         const gridSize = 50;
         
-        for (let x = -width; x < width * 2; x += gridSize) {
+        for (let x = -containerDimensions.width; x < containerDimensions.width * 2; x += gridSize) {
           ctx.beginPath();
-          ctx.moveTo(x, -height);
-          ctx.lineTo(x, height * 2);
+          ctx.moveTo(x, -containerDimensions.height);
+          ctx.lineTo(x, containerDimensions.height * 2);
           ctx.stroke();
         }
         
-        for (let y = -height; y < height * 2; y += gridSize) {
+        for (let y = -containerDimensions.height; y < containerDimensions.height * 2; y += gridSize) {
           ctx.beginPath();
-          ctx.moveTo(-width, y);
-          ctx.lineTo(width * 2, y);
+          ctx.moveTo(-containerDimensions.width, y);
+          ctx.lineTo(containerDimensions.width * 2, y);
           ctx.stroke();
         }
       }
@@ -575,7 +609,7 @@ export const ExecutionGraphComponent: React.FC<ExecutionGraphProps> = ({
     };
 
     render();
-  }, [isPlaying, nodes, edges, zoom, pan, selectedNode, hoveredNode, theme, statusColors]);
+  }, [isPlaying, nodes, edges, zoom, pan, selectedNode, hoveredNode, theme, statusColors, containerDimensions]);
 
   useEffect(() => {
     if (canvasRef.current) {
@@ -674,9 +708,12 @@ export const ExecutionGraphComponent: React.FC<ExecutionGraphProps> = ({
     <Box 
       ref={containerRef}
       sx={{ 
-        position: 'relative', 
-        width: fullscreen ? '100vw' : width, 
+        // ✅ Fixed: Proper container sizing with constraints
+        position: 'relative',
+        width: fullscreen ? '100vw' : width,
         height: fullscreen ? '100vh' : height,
+        maxWidth: fullscreen ? '100vw' : '100%',
+        maxHeight: fullscreen ? '100vh' : '100%',
         pointerEvents: 'auto',
         overflow: 'hidden',
         bgcolor: 'background.default',
@@ -705,7 +742,7 @@ export const ExecutionGraphComponent: React.FC<ExecutionGraphProps> = ({
         }}
       >
         <Stack direction={fullscreen ? "column" : "row"} spacing={1} alignItems="center">
-          <Tooltip title={intl.formatMessage({ id: isPlaying ? 'osswarm.graph.pauseAnimation' : 'osswarm.graph.playAnimation' })}>
+          <Tooltip title={intl.formatMessage({ id: isPlaying ? 'agent.graph.pauseAnimation' : 'agent.graph.playAnimation' })}>
             <IconButton
               size="small"
               onClick={() => setIsPlaying(!isPlaying)}
@@ -725,33 +762,33 @@ export const ExecutionGraphComponent: React.FC<ExecutionGraphProps> = ({
           {!fullscreen && <Divider orientation="vertical" flexItem />}
           
           <ButtonGroup size="small" variant="outlined" orientation={fullscreen ? "vertical" : "horizontal"}>
-            <Tooltip title={intl.formatMessage({ id: 'osswarm.graph.zoomIn' })}>
+            <Tooltip title={intl.formatMessage({ id: 'agent.graph.zoomIn' })}>
               <IconButton onClick={handleZoomIn}>
                 <ZoomIn />
               </IconButton>
             </Tooltip>
             
-            <Tooltip title={intl.formatMessage({ id: 'osswarm.graph.zoomOut' })}>
+            <Tooltip title={intl.formatMessage({ id: 'agent.graph.zoomOut' })}>
               <IconButton onClick={handleZoomOut}>
                 <ZoomOut />
               </IconButton>
             </Tooltip>
             
-            <Tooltip title={intl.formatMessage({ id: 'osswarm.graph.centerView' })}>
+            <Tooltip title={intl.formatMessage({ id: 'agent.graph.centerView' })}>
               <IconButton onClick={handleCenter}>
                 <CenterFocusStrong />
               </IconButton>
             </Tooltip>
           </ButtonGroup>
 
-          <Tooltip title={intl.formatMessage({ id: 'osswarm.graph.refresh' })}>
+          <Tooltip title={intl.formatMessage({ id: 'agent.graph.refresh' })}>
             <IconButton size="small" onClick={handleRefresh}>
               <Refresh />
             </IconButton>
           </Tooltip>
 
           {onFullscreenToggle && (
-            <Tooltip title={intl.formatMessage({ id: fullscreen ? 'osswarm.graph.exitFullscreen' : 'osswarm.graph.fullscreen' })}>
+            <Tooltip title={intl.formatMessage({ id: fullscreen ? 'agent.graph.exitFullscreen' : 'agent.graph.fullscreen' })}>
               <IconButton size="small" onClick={onFullscreenToggle}>
                 {fullscreen ? <FullscreenExit /> : <Fullscreen />}
               </IconButton>
@@ -791,14 +828,14 @@ export const ExecutionGraphComponent: React.FC<ExecutionGraphProps> = ({
               <Stack direction="row" alignItems="center" spacing={1}>
                 <Timeline color="primary" />
                 <Typography variant="h6" sx={{ fontSize: fullscreen ? '1.1rem' : '1rem' }}>
-                  {intl.formatMessage({ id: 'osswarm.graph.executionStatus' })}
+                  {intl.formatMessage({ id: 'agent.graph.executionStatus' })}
                 </Typography>
               </Stack>
               
               <Stack direction="row" spacing={2} justifyContent="space-between">
                 <Box textAlign="center" sx={{ flex: 1 }}>
                   <Typography variant="caption" color="text.secondary">
-                    {intl.formatMessage({ id: 'osswarm.graph.agents' })}
+                    {intl.formatMessage({ id: 'agent.graph.agents' })}
                   </Typography>
                   <Typography variant="h6" fontWeight="bold">
                     {graph.agents.length}
@@ -806,7 +843,7 @@ export const ExecutionGraphComponent: React.FC<ExecutionGraphProps> = ({
                 </Box>
                 <Box textAlign="center" sx={{ flex: 1 }}>
                   <Typography variant="caption" color="text.secondary">
-                    {intl.formatMessage({ id: 'osswarm.graph.tasks' })}
+                    {intl.formatMessage({ id: 'agent.graph.tasks' })}
                   </Typography>
                   <Typography variant="h6" fontWeight="bold">
                     {graph.tasks.length}
@@ -817,7 +854,7 @@ export const ExecutionGraphComponent: React.FC<ExecutionGraphProps> = ({
               <Stack direction="row" spacing={2} justifyContent="space-between">
                 <Box textAlign="center" sx={{ flex: 1 }}>
                   <Typography variant="caption" color="text.secondary">
-                    {intl.formatMessage({ id: 'osswarm.graph.tools' })}
+                    {intl.formatMessage({ id: 'agent.graph.tools' })}
                   </Typography>
                   <Typography variant="h6" fontWeight="bold">
                     {graph.toolExecutions.length}
@@ -825,7 +862,7 @@ export const ExecutionGraphComponent: React.FC<ExecutionGraphProps> = ({
                 </Box>
                 <Box textAlign="center" sx={{ flex: 1 }}>
                   <Typography variant="caption" color="text.secondary">
-                    {intl.formatMessage({ id: 'osswarm.graph.status' })}
+                    {intl.formatMessage({ id: 'agent.graph.status' })}
                   </Typography>
                   <Chip
                     label={graph.execution.status.toUpperCase()}
@@ -844,17 +881,16 @@ export const ExecutionGraphComponent: React.FC<ExecutionGraphProps> = ({
         </Fade>
       )}
 
-      {/* ✅ Node Details Panel positioned near the selected node */}
+      {/* Node Details Panel - keeping all the existing complex positioning logic */}
       {selectedNode && (
         <Zoom in={true}>
           <Card
             elevation={4}
             sx={{
               position: 'absolute',
-              zIndex: 15, // Higher than other panels
+              zIndex: 15,
               overflow: 'hidden',
               borderRadius: 2,
-              // ✅ Dynamic positioning based on selected node
               ...(() => {
                 const position = calculatePanelPosition(selectedNode);
                 return {
@@ -864,16 +900,13 @@ export const ExecutionGraphComponent: React.FC<ExecutionGraphProps> = ({
                   ...(position.bottom !== null && { bottom: position.bottom }),
                   width: fullscreen ? Math.min(450, window.innerWidth * 0.35) : 350,
                   maxHeight: fullscreen ? 'min(500px, 60vh)' : 'min(400px, 60vh)',
-                  // Add a subtle pointer/arrow effect
                   '&::before': {
                     content: '""',
                     position: 'absolute',
                     width: 0,
                     height: 0,
                     borderStyle: 'solid',
-                    // Position arrow based on panel position relative to node
                     ...(position.preference === 1 && {
-                      // Panel is to the right of node - arrow on left
                       left: -8,
                       top: '50%',
                       transform: 'translateY(-50%)',
@@ -881,7 +914,6 @@ export const ExecutionGraphComponent: React.FC<ExecutionGraphProps> = ({
                       borderColor: `transparent ${theme.palette.background.paper} transparent transparent`
                     }),
                     ...(position.preference === 2 && {
-                      // Panel is to the left of node - arrow on right
                       right: -8,
                       top: '50%',
                       transform: 'translateY(-50%)',
@@ -889,7 +921,6 @@ export const ExecutionGraphComponent: React.FC<ExecutionGraphProps> = ({
                       borderColor: `transparent transparent transparent ${theme.palette.background.paper}`
                     }),
                     ...(position.preference === 3 && {
-                      // Panel is below node - arrow on top
                       top: -8,
                       left: '50%',
                       transform: 'translateX(-50%)',
@@ -897,7 +928,6 @@ export const ExecutionGraphComponent: React.FC<ExecutionGraphProps> = ({
                       borderColor: `transparent transparent ${theme.palette.background.paper} transparent`
                     }),
                     ...(position.preference === 4 && {
-                      // Panel is above node - arrow on bottom
                       bottom: -8,
                       left: '50%',
                       transform: 'translateX(-50%)',
@@ -907,18 +937,15 @@ export const ExecutionGraphComponent: React.FC<ExecutionGraphProps> = ({
                   }
                 };
               })(),
-              // ✅ Enhanced visual connection to selected node
               border: 2,
               borderColor: selectedNode.borderColor,
               boxShadow: `0 8px 32px ${alpha(selectedNode.borderColor, 0.3)}`,
-              // ✅ Mobile responsive adjustments
               '@media (max-width: 768px)': {
                 width: 'calc(100vw - 40px)',
                 maxWidth: 'calc(100vw - 40px)',
                 left: '20px !important',
                 right: 'auto !important',
                 maxHeight: '50vh',
-                // Remove arrow on mobile for cleaner look
                 '&::before': {
                   display: 'none'
                 }
@@ -935,7 +962,6 @@ export const ExecutionGraphComponent: React.FC<ExecutionGraphProps> = ({
               }}
             >
               <Stack spacing={2} sx={{ height: '100%' }}>
-                {/* Header section - fixed */}
                 <Stack direction="row" alignItems="center" spacing={2} sx={{ flexShrink: 0 }}>
                   <Paper
                     sx={{ 
@@ -961,7 +987,7 @@ export const ExecutionGraphComponent: React.FC<ExecutionGraphProps> = ({
                       }} 
                       noWrap
                     >
-                      {intl.formatMessage({ id: `osswarm.graph.${selectedNode.type}` })}
+                      {intl.formatMessage({ id: `agent.graph.${selectedNode.type}` })}
                     </Typography>
                     <Chip 
                       label={selectedNode.status.toUpperCase()} 
@@ -988,7 +1014,6 @@ export const ExecutionGraphComponent: React.FC<ExecutionGraphProps> = ({
                   </Tooltip>
                 </Stack>
 
-                {/* Label section - fixed */}
                 <Typography 
                   variant="body2" 
                   fontWeight="medium" 
@@ -1001,35 +1026,34 @@ export const ExecutionGraphComponent: React.FC<ExecutionGraphProps> = ({
                   {selectedNode.label}
                 </Typography>
 
-                {/* Metadata section - scrollable */}
                 {selectedNode.metadata && (
                   <Box sx={{ 
                     flexGrow: 1,
                     overflow: 'auto',
-                    pr: 1, // Add padding for scrollbar
-                    minHeight: 0 // Important for flex child to shrink
+                    pr: 1,
+                    minHeight: 0
                   }}>
                     <Stack spacing={fullscreen ? 2 : 1}>
+                      {/* Keeping all the existing metadata display logic */}
                       {selectedNode.type === 'execution' && (
                         <>
                           <Typography variant="caption" display="block">
-                            <strong>{intl.formatMessage({ id: 'osswarm.graph.created' })}:</strong> {new Date(selectedNode.metadata.created_at).toLocaleString()}
+                            <strong>{intl.formatMessage({ id: 'agent.graph.created' })}:</strong> {new Date(selectedNode.metadata.created_at).toLocaleString()}
                           </Typography>
                           {selectedNode.metadata.started_at && (
                             <Typography variant="caption" display="block">
-                              <strong>{intl.formatMessage({ id: 'osswarm.graph.started' })}:</strong> {new Date(selectedNode.metadata.started_at).toLocaleString()}
+                              <strong>{intl.formatMessage({ id: 'agent.graph.started' })}:</strong> {new Date(selectedNode.metadata.started_at).toLocaleString()}
                             </Typography>
                           )}
                           {selectedNode.metadata.completed_at && (
                             <Typography variant="caption" display="block">
-                              <strong>{intl.formatMessage({ id: 'osswarm.graph.completed' })}:</strong> {new Date(selectedNode.metadata.completed_at).toLocaleString()}
+                              <strong>{intl.formatMessage({ id: 'agent.graph.completed' })}:</strong> {new Date(selectedNode.metadata.completed_at).toLocaleString()}
                             </Typography>
                           )}
-                          {/* Enhanced logs summary for execution */}
                           {graph && graph.logs && (
                             <Stack spacing={1}>
                               <Typography variant="caption" display="block">
-                                <strong>{intl.formatMessage({ id: 'osswarm.graph.totalLogs' }, { count: graph.logs.length })}:</strong> {graph.logs.length}
+                                <strong>{intl.formatMessage({ id: 'agent.graph.totalLogs' }, { count: graph.logs.length })}:</strong> {graph.logs.length}
                               </Typography>
                               <Stack direction="row" spacing={0.5} flexWrap="wrap">
                                 {graph.logs.filter(l => l.log_type === 'error').length > 0 && (
@@ -1065,21 +1089,21 @@ export const ExecutionGraphComponent: React.FC<ExecutionGraphProps> = ({
                       {selectedNode.type === 'agent' && (
                         <>
                           <Typography variant="caption" display="block">
-                            <strong>{intl.formatMessage({ id: 'osswarm.graph.role' })}:</strong> {selectedNode.metadata.role}
+                            <strong>{intl.formatMessage({ id: 'agent.graph.role' })}:</strong> {selectedNode.metadata.role}
                           </Typography>
                           {selectedNode.metadata.expertise && (
                             <Typography variant="caption" display="block">
-                              <strong>{intl.formatMessage({ id: 'osswarm.graph.expertise' })}:</strong> {JSON.parse(selectedNode.metadata.expertise).join(', ')}
+                              <strong>{intl.formatMessage({ id: 'agent.graph.expertise' })}:</strong> {JSON.parse(selectedNode.metadata.expertise).join(', ')}
                             </Typography>
                           )}
                           {selectedNode.metadata.current_task && (
                             <Typography variant="caption" display="block" sx={{ wordBreak: 'break-word' }}>
-                              <strong>{intl.formatMessage({ id: 'osswarm.graph.currentTask' })}:</strong> {selectedNode.metadata.current_task}
+                              <strong>{intl.formatMessage({ id: 'agent.graph.currentTask' })}:</strong> {selectedNode.metadata.current_task}
                             </Typography>
                           )}
                           {graph && graph.logs && (
                             <Typography variant="caption" display="block">
-                              <strong>{intl.formatMessage({ id: 'osswarm.graph.agentLogs' })}:</strong> {graph.logs.filter(l => l.agent_id === selectedNode.metadata.id).length}
+                              <strong>{intl.formatMessage({ id: 'agent.graph.agentLogs' })}:</strong> {graph.logs.filter(l => l.agent_id === selectedNode.metadata.id).length}
                             </Typography>
                           )}
                         </>
@@ -1088,19 +1112,19 @@ export const ExecutionGraphComponent: React.FC<ExecutionGraphProps> = ({
                       {selectedNode.type === 'task' && (
                         <>
                           <Typography variant="caption" display="block">
-                            <strong>{intl.formatMessage({ id: 'osswarm.graph.priority' })}:</strong> {selectedNode.metadata.priority}
+                            <strong>{intl.formatMessage({ id: 'agent.graph.priority' })}:</strong> {selectedNode.metadata.priority}
                           </Typography>
                           <Typography variant="caption" display="block">
-                            <strong>{intl.formatMessage({ id: 'osswarm.graph.iterations' })}:</strong> {selectedNode.metadata.iterations}/{selectedNode.metadata.max_iterations}
+                            <strong>{intl.formatMessage({ id: 'agent.graph.iterations' })}:</strong> {selectedNode.metadata.iterations}/{selectedNode.metadata.max_iterations}
                           </Typography>
                           {selectedNode.metadata.result && (
                             <Typography variant="caption" display="block" sx={{ wordBreak: 'break-word' }}>
-                              <strong>{intl.formatMessage({ id: 'osswarm.graph.result' })}:</strong> {selectedNode.metadata.result.substring(0, fullscreen ? 300 : 150)}{selectedNode.metadata.result.length > (fullscreen ? 300 : 150) ? '...' : ''}
+                              <strong>{intl.formatMessage({ id: 'agent.graph.result' })}:</strong> {selectedNode.metadata.result.substring(0, fullscreen ? 300 : 150)}{selectedNode.metadata.result.length > (fullscreen ? 300 : 150) ? '...' : ''}
                             </Typography>
                           )}
                           {graph && graph.logs && (
                             <Typography variant="caption" display="block">
-                              <strong>{intl.formatMessage({ id: 'osswarm.graph.taskLogs' })}:</strong> {graph.logs.filter(l => l.task_id === selectedNode.metadata.id).length}
+                              <strong>{intl.formatMessage({ id: 'agent.graph.taskLogs' })}:</strong> {graph.logs.filter(l => l.task_id === selectedNode.metadata.id).length}
                             </Typography>
                           )}
                         </>
@@ -1109,24 +1133,24 @@ export const ExecutionGraphComponent: React.FC<ExecutionGraphProps> = ({
                       {selectedNode.type === 'tool' && (
                         <>
                           <Typography variant="caption" display="block">
-                            <strong>{intl.formatMessage({ id: 'osswarm.graph.tool' })}:</strong> {selectedNode.metadata.tool_name}
+                            <strong>{intl.formatMessage({ id: 'agent.graph.tool' })}:</strong> {selectedNode.metadata.tool_name}
                           </Typography>
                           {selectedNode.metadata.mcp_server && (
                             <Typography variant="caption" display="block">
-                              <strong>{intl.formatMessage({ id: 'osswarm.graph.mcpServer' })}:</strong> {selectedNode.metadata.mcp_server}
+                              <strong>{intl.formatMessage({ id: 'agent.graph.mcpServer' })}:</strong> {selectedNode.metadata.mcp_server}
                             </Typography>
                           )}
                           {selectedNode.metadata.execution_time && (
                             <Typography variant="caption" display="block">
-                              <strong>{intl.formatMessage({ id: 'osswarm.graph.executionTime' })}:</strong> {selectedNode.metadata.execution_time}s
+                              <strong>{intl.formatMessage({ id: 'agent.graph.executionTime' })}:</strong> {selectedNode.metadata.execution_time}s
                             </Typography>
                           )}
                           <Typography variant="caption" display="block">
-                            <strong>{intl.formatMessage({ id: 'osswarm.graph.humanApproved' })}:</strong> {selectedNode.metadata.human_approved ? intl.formatMessage({ id: 'common.yes' }) : intl.formatMessage({ id: 'common.no' })}
+                            <strong>{intl.formatMessage({ id: 'agent.graph.humanApproved' })}:</strong> {selectedNode.metadata.human_approved ? intl.formatMessage({ id: 'common.yes' }) : intl.formatMessage({ id: 'common.no' })}
                           </Typography>
                           {graph && graph.logs && (
                             <Typography variant="caption" display="block">
-                              <strong>{intl.formatMessage({ id: 'osswarm.graph.toolLogs' })}:</strong> {graph.logs.filter(l => l.tool_execution_id === selectedNode.metadata.id).length}
+                              <strong>{intl.formatMessage({ id: 'agent.graph.toolLogs' })}:</strong> {graph.logs.filter(l => l.tool_execution_id === selectedNode.metadata.id).length}
                             </Typography>
                           )}
                         </>
@@ -1140,11 +1164,11 @@ export const ExecutionGraphComponent: React.FC<ExecutionGraphProps> = ({
         </Zoom>
       )}
 
-      {/* Canvas */}
+      {/* ✅ Canvas - now with proper sizing constraints */}
       <canvas
         ref={canvasRef}
-        width={fullscreen ? window.innerWidth : width}
-        height={fullscreen ? window.innerHeight : height}
+        width={containerDimensions.width}
+        height={containerDimensions.height}
         onMouseDown={handleCanvasMouseDown}
         onMouseMove={handleCanvasMouseMove}
         onMouseUp={handleCanvasMouseUp}
@@ -1153,7 +1177,10 @@ export const ExecutionGraphComponent: React.FC<ExecutionGraphProps> = ({
           cursor: isDragging ? 'grabbing' : hoveredNode ? 'pointer' : 'grab',
           backgroundColor: theme.palette.mode === 'dark' ? theme.palette.grey[900] : theme.palette.background.default,
           pointerEvents: 'auto',
-          userSelect: 'none'
+          userSelect: 'none',
+          display: 'block',
+          maxWidth: '100%',
+          maxHeight: '100%'
         }}
       />
 
@@ -1171,10 +1198,10 @@ export const ExecutionGraphComponent: React.FC<ExecutionGraphProps> = ({
         >
           <AccountTree sx={{ fontSize: 64, opacity: 0.3, mb: 2 }} />
           <Typography variant="h6" gutterBottom>
-            {intl.formatMessage({ id: 'osswarm.graph.noExecutionGraph' })}
+            {intl.formatMessage({ id: 'agent.graph.noExecutionGraph' })}
           </Typography>
           <Typography variant="body2">
-            {intl.formatMessage({ id: 'osswarm.graph.startExecutionToSeeGraph' })}
+            {intl.formatMessage({ id: 'agent.graph.startExecutionToSeeGraph' })}
           </Typography>
         </Box>
       )}
@@ -1182,4 +1209,4 @@ export const ExecutionGraphComponent: React.FC<ExecutionGraphProps> = ({
   );
 };
 
-export default ExecutionGraphComponent; 
+export default ExecutionGraphComponent;

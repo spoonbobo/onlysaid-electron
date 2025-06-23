@@ -32,8 +32,7 @@ export const healthCheck = async (token: string): Promise<boolean> => {
       }
     });
     
-    console.log('[HealthCheck] Response status:', response.status);
-    console.log('[HealthCheck] Response data:', response.data);
+    console.log('[HealthCheck] Response status:', response.status, 'Response data:', response.data);
     
     return response.status === 200;
   } catch (error: any) {

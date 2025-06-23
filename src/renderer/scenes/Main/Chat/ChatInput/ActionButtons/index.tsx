@@ -8,7 +8,7 @@ import ModelSelector from "./ModelSelector";
 import AIMode from "./AIMode";
 import KBSelector from "./KBSelector";
 import MCPSelector from "./MCPSelector";
-import OSSwarmToggle from "./OSSwarmToggle";
+import AgentTaskToggle from "./AgentTaskToggle";
 
 interface ActionButtonsProps {
   input: string;
@@ -17,8 +17,8 @@ interface ActionButtonsProps {
   disabled?: boolean;
   isSending?: boolean;
   hasAttachments?: boolean;
-  onOSSwarmToggle?: (show: boolean) => void;
-  osswarmOverlayVisible?: boolean;
+  onAgentToggle?: (show: boolean) => void;
+  agentOverlayVisible?: boolean;
 }
 
 export default function ActionButtons({
@@ -28,8 +28,8 @@ export default function ActionButtons({
   disabled = false,
   isSending = false,
   hasAttachments = false,
-  onOSSwarmToggle,
-  osswarmOverlayVisible = false
+  onAgentToggle,
+  agentOverlayVisible = false
 }: ActionButtonsProps) {
   const { modelId, provider, aiMode } = useLLMConfigurationStore();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -79,10 +79,10 @@ export default function ActionButtons({
         {aiMode === "agent" && (
           <>
             <MCPSelector disabled={disabled} />
-            <OSSwarmToggle 
+            <AgentTaskToggle 
               disabled={disabled} 
-              onToggle={onOSSwarmToggle}
-              isOverlayVisible={osswarmOverlayVisible}
+              onToggle={onAgentToggle}
+              isOverlayVisible={agentOverlayVisible}
             />
           </>
         )}

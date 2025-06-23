@@ -37,7 +37,7 @@ export const StatsFooter: React.FC<StatsFooterProps> = ({
       <Stack direction="row" spacing={4} justifyContent="space-around">
         <Stack alignItems="center" sx={{ flex: 1 }}>
           <Typography variant="caption" color="text.secondary" fontWeight={600}>
-            {intl.formatMessage({ id: 'osswarm.stats.agents' })}
+            {intl.formatMessage({ id: 'agent.stats.agents' })}
           </Typography>
           <Typography variant="h5" fontWeight="bold" color="primary.main">
             {currentGraph.agents.length}
@@ -46,7 +46,7 @@ export const StatsFooter: React.FC<StatsFooterProps> = ({
         
         <Stack alignItems="center" sx={{ flex: 1 }}>
           <Typography variant="caption" color="text.secondary" fontWeight={600}>
-            {intl.formatMessage({ id: 'osswarm.stats.tasks' })}
+            {intl.formatMessage({ id: 'agent.stats.tasks' })}
           </Typography>
           <Typography variant="h5" fontWeight="bold" color="primary.main">
             {currentGraph.tasks.length}
@@ -55,7 +55,7 @@ export const StatsFooter: React.FC<StatsFooterProps> = ({
         
         <Stack alignItems="center" sx={{ flex: 1 }}>
           <Typography variant="caption" color="text.secondary" fontWeight={600}>
-            {intl.formatMessage({ id: 'osswarm.stats.tools' })}
+            {intl.formatMessage({ id: 'agent.stats.tools' })}
           </Typography>
           <Typography variant="h5" fontWeight="bold" color="primary.main">
             {currentGraph.toolExecutions.length}
@@ -64,7 +64,7 @@ export const StatsFooter: React.FC<StatsFooterProps> = ({
         
         <Stack alignItems="center" sx={{ flex: 1 }}>
           <Typography variant="caption" color="text.secondary" fontWeight={600}>
-            {intl.formatMessage({ id: 'osswarm.stats.status' })}
+            {intl.formatMessage({ id: 'agent.stats.status' })}
           </Typography>
           <Chip
             label={currentGraph.execution.status.toUpperCase()}

@@ -1,9 +1,13 @@
 import { ipcMain } from 'electron';
 import { LangChainServiceFactory } from './factory';
 import { LangChainAgentOptions, OpenAIMessage } from './agent';
+import { setupOSSwarmHandlers } from './OSSwarm/handlers';
 
 export function setupLangChainHandlers() {
   console.log('[LangChain] Setting up IPC handlers...');
+
+  // Initialise OSSwarm handlers as part of the LangChain setup
+  setupOSSwarmHandlers();
 
   // Main LangChain completion handler
   ipcMain.handle('ai:get_completion_langchain', async (event, { messages, options }) => {

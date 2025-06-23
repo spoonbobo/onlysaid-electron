@@ -32,6 +32,10 @@ const configuration: webpack.Configuration = {
         'playwright',
         'playwright-core',
         'chromium-bidi',
+        '@langchain/core',
+        'langchain',
+        '@langchain/ollama',
+        '@langchain/openai',
     ],
 
     /**
@@ -46,7 +50,11 @@ const configuration: webpack.Configuration = {
                 dependency !== '@modelcontextprotocol/sdk' &&
                 dependency !== '@playwright/mcp' &&
                 dependency !== 'playwright' &&
-                dependency !== 'playwright-core'
+                dependency !== 'playwright-core' &&
+                dependency !== '@langchain/core' &&
+                dependency !== 'langchain' &&
+                dependency !== '@langchain/ollama' &&
+                dependency !== '@langchain/openai'
         ),
     },
 

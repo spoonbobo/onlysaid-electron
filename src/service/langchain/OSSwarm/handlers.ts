@@ -1,305 +1,463 @@
 import { ipcMain } from 'electron';
-import { OSSwarmFactory } from './factory';
 import { LangChainAgentOptions } from '../agent';
-import { OSSwarmLimits } from './core';
+import { LangGraphOSSwarmFactory } from './langgraph-factory';
+import { LangGraphOSSwarmState } from './langgraph-state';
+import { v4 as uuidv4 } from 'uuid';
+import { getMainHumanInTheLoopManager, HumanInteractionResponse } from '@/main/langchain/human_in_the_loop';
+import { LangGraphOSSwarmWorkflow } from './langgraph-workflow';
+
+// Track active tool executions and workflows
+const activeToolExecutions = new Map<string, AbortController>();
+const activeWorkflows = new Map<string, any>();
 
 export function setupOSSwarmHandlers() {
-  console.log('[OSSwarm] Setting up IPC handlers...');
+  console.log('[LangGraph Agent] Setting up LangGraph-based IPC handlers...');
 
-  // Execute OSSwarm task with human-in-the-loop
-  ipcMain.handle('osswarm:execute_task', async (event, { task, options, limits, chatId, workspaceId }) => {
-    console.log('[OSSwarm] osswarm:execute_task received:', {
+  // Enhanced execute_task handler
+  ipcMain.handle('agent:execute_task', async (event, { task, options, limits, chatId, workspaceId }) => {
+    console.log(`🔍 [MAIN-IPC] ==================== EXECUTE TASK START ====================`);
+    console.log(`🔍 [MAIN-IPC] IPC agent:execute_task received:`, {
       task: task?.substring(0, 100) + '...',
       provider: options?.provider,
       model: options?.model,
       toolsCount: options?.tools?.length || 0,
       hasKnowledgeBases: !!options?.knowledgeBases,
       chatId,
-      workspaceId
-    });
-
-    // ✅ ADD DETAILED TOOL DEBUGGING
-    console.log('[OSSwarm Handlers] Raw options.tools received:', {
-      toolsCount: options?.tools?.length || 0,
-      toolsList: options?.tools?.map((t: any) => ({
-        name: t.function?.name,
-        mcpServer: t.mcpServer,
-        hasFunction: !!t.function,
-        hasParameters: !!t.function?.parameters
-      })) || []
+      workspaceId,
+      executionId: options?.executionId,
+      threadId: options?.threadId,
+      humanInTheLoop: options?.humanInTheLoop
     });
 
     try {
-      if (!task || !options) {
-        const error = 'Task and options are required for OSSwarm execution.';
-        console.error('[OSSwarm]', error);
-        return { success: false, error };
-      }
-
-      // ✅ Store the webContents for OSSwarm core to use
+      console.log(`�� [MAIN-IPC] Step 1: Setting up global webContents...`);
       (global as any).osswarmWebContents = event.sender;
-      console.log('[OSSwarm] Stored webContents for tool execution');
+      console.log(`🔍 [MAIN-IPC] ✅ WebContents stored globally`);
 
-      // ✅ Extract KB configuration from options
-      const { chatId, workspaceId, knowledgeBases, ...restOptions } = options;
+      console.log(`🔍 [MAIN-IPC] Step 2: Creating LangGraph workflow...`);
+      const workflow = new LangGraphOSSwarmWorkflow(options);
+      console.log(`🔍 [MAIN-IPC] ✅ Workflow instance created`);
 
-      // ✅ ADD MORE DETAILED DEBUGGING BEFORE CREATING LANGCHAIN OPTIONS
-      console.log('[OSSwarm Handlers] restOptions.tools after destructuring:', {
-        toolsCount: restOptions.tools?.length || 0,
-        toolsList: restOptions.tools?.map((t: any) => ({
-          name: t.function?.name,
-          mcpServer: t.mcpServer
-        })) || []
+      const threadId = options?.threadId || `thread_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      console.log(`🔍 [MAIN-IPC] Thread ID: ${threadId}`);
+      
+      console.log(`🔍 [MAIN-IPC] Step 3: Executing workflow...`);
+      const result = await workflow.executeWorkflow(task, threadId, {
+        executionId: options?.executionId || uuidv4(),
+        chatId,
+        workspaceId,
+        streamCallback: (update: string) => {
+          console.log(`🔍 [MAIN-IPC] Stream update:`, update.substring(0, 100) + '...');
+          event.sender.send('agent:stream_update', { update });
+        },
+        ...options
       });
 
-      const langChainOptions: LangChainAgentOptions = {
-        model: restOptions.model,
-        temperature: restOptions.temperature || 0.7,
-        maxTokens: restOptions.maxTokens,
-        provider: restOptions.provider,
-        apiKeys: restOptions.apiKeys || {},
-        ollamaConfig: restOptions.ollamaConfig,
-        tools: restOptions.tools,
-        systemPrompt: restOptions.systemPrompt,
+      console.log(`🔍 [MAIN-IPC] ✅ Workflow execution completed:`, { 
+        success: result.success, 
+        hasResult: !!result.result,
+        requiresHumanInteraction: result.requiresHumanInteraction,
+        error: result.error
+      });
+
+      const response = {
+        success: result.success,
+        result: result.result,
+        requiresHumanInteraction: result.requiresHumanInteraction,
+        threadId,
+        error: result.error
       };
 
-      // ✅ VERIFY LANGCHAIN OPTIONS TOOLS
-      console.log('[OSSwarm Handlers] Final langChainOptions.tools:', {
-        toolsCount: langChainOptions.tools?.length || 0,
-        toolsList: langChainOptions.tools?.map((t: any) => ({
-          name: t.function?.name,
-          mcpServer: t.mcpServer
-        })) || []
-      });
+      console.log(`🔍 [MAIN-IPC] Returning response:`, response);
+      return response;
 
-      console.log('[OSSwarm] Creating swarm with options:', {
-        model: langChainOptions.model,
-        provider: langChainOptions.provider,
-        toolsCount: langChainOptions.tools?.length || 0,
-        hasSystemPrompt: !!langChainOptions.systemPrompt,
-        hasKnowledgeBases: !!knowledgeBases?.enabled,
-        kbCount: knowledgeBases?.selectedKbIds?.length || 0,
-        chatId,
-        workspaceId
-      });
-
-      const swarmLimits: Partial<OSSwarmLimits> = limits || {};
-
-      // ✅ Create swarm with KB configuration
-      const swarm = await OSSwarmFactory.createSwarm(
-        langChainOptions, 
-        swarmLimits, 
-        true, // human-in-the-loop
-        knowledgeBases?.enabled ? {
-          enabled: true,
-          selectedKbIds: knowledgeBases.selectedKbIds || [],
-          workspaceId: workspaceId
-        } : undefined
-      );
-      console.log('[OSSwarm] Swarm created successfully with RAG support:', !!knowledgeBases?.enabled);
-
-      // ✅ Execute task with streaming updates and context
-      console.log('[OSSwarm] Starting task execution...');
-      const result = await swarm.executeTask(task, (update: string) => {
-        console.log('[OSSwarm] Stream update:', update);
-        event.sender.send('osswarm:stream_update', { update });
-      }, chatId, workspaceId);
-
-      console.log('[OSSwarm] Task execution completed:', {
-        success: result.success,
-        hasResult: !!result.result,
-        hasError: !!result.error,
-        resultLength: result.result?.length || 0
-      });
-
-      return { success: true, result: result.result, error: result.error };
     } catch (error: any) {
-      console.error('[OSSwarm] Critical error in osswarm:execute_task:', {
+      console.error(`🔍 [MAIN-IPC] ❌ Critical error in agent:execute_task:`, {
         message: error.message,
         stack: error.stack,
         name: error.name
       });
       return { success: false, error: error.message || 'Unknown error occurred' };
+    } finally {
+      console.log(`🔍 [MAIN-IPC] ==================== EXECUTE TASK END ====================`);
     }
   });
 
-  // Handle human approval responses
-  ipcMain.handle('osswarm:approve_tool', async (event, { approvalId, approved }) => {
-    console.log(`[OSSwarm] 🔧 Approval handler called at ${Date.now()}:`, {
+  // Handle human approval responses (updated for LangGraph)
+  ipcMain.handle('agent:approve_tool', async (event, { approvalId, approved }) => {
+    console.log(`[LangGraph Agent] 🔧 Approval handler called:`, {
       approvalId,
-      approved,
-      hasApprovalId: !!approvalId,
-      approvedType: typeof approved
+      approved
     });
     
     try {
-      // Find the swarm instance and handle approval
-      const swarm = OSSwarmFactory.getCurrentSwarm();
-      console.log(`[OSSwarm] 🔧 Current swarm lookup:`, {
-        hasSwarm: !!swarm,
-        isInitialized: swarm?.isInitialized?.(),
-        swarmType: typeof swarm,
-        timestamp: Date.now()
-      });
-      
-      if (swarm && swarm.isInitialized()) {
-        console.log(`[OSSwarm] 🔧 Forwarding approval to swarm: ${approvalId} = ${approved}`);
-        console.log(`[OSSwarm] 🔧 About to call swarm.handleApprovalResponse...`);
-        
-        swarm.handleApprovalResponse(approvalId, approved);
-        
-        console.log(`[OSSwarm] 🔧 Approval forwarded successfully at ${Date.now()}`);
-        return { success: true, timestamp: Date.now() };
-      } else {
-        console.error('[OSSwarm] 🔧 No active swarm found or swarm not initialized:', {
-          hasSwarm: !!swarm,
-          isInitialized: swarm?.isInitialized?.(),
-          timestamp: Date.now()
-        });
-        return { success: false, error: 'No active swarm found', timestamp: Date.now() };
-      }
+      // For LangGraph implementation, we'll need to implement approval handling
+      // This is a placeholder for now
+      console.log(`[LangGraph Agent] Tool approval: ${approvalId} = ${approved}`);
+      return { success: true, message: 'LangGraph approval handling not yet implemented' };
     } catch (error: any) {
-      console.error('[OSSwarm] 🔧 Error in osswarm:approve_tool:', {
+      console.error('[LangGraph Agent] Error in agent:approve_tool:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  // Enhanced resume workflow handler
+  ipcMain.handle('agent:resume_workflow', async (event, { threadId, response, workflowType }) => {
+    console.log(`🔍 [MAIN-IPC] ==================== RESUME WORKFLOW START ====================`);
+    console.log(`🔍 [MAIN-IPC] IPC agent:resume_workflow received:`, { 
+      threadId, 
+      approved: response?.approved,
+      responseId: response?.id,
+      workflowType,
+      timestamp: response?.timestamp
+    });
+    
+    try {
+      console.log(`🔍 [MAIN-IPC] Step 1: Loading LangGraph workflow class...`);
+      const { LangGraphOSSwarmWorkflow } = require('./langgraph-workflow');
+      console.log(`🔍 [MAIN-IPC] ✅ Workflow class loaded`);
+      
+      console.log(`🔍 [MAIN-IPC] Step 2: Calling static resumeWorkflow method...`);
+      const result = await LangGraphOSSwarmWorkflow.resumeWorkflow(threadId, response);
+
+      console.log(`🔍 [MAIN-IPC] ✅ Resume workflow completed:`, {
+        success: result.success,
+        completed: result.completed,
+        requiresHumanInteraction: result.requiresHumanInteraction,
+        error: result.error
+      });
+
+      console.log(`🔍 [MAIN-IPC] Returning resume result:`, result);
+      return result;
+
+    } catch (error: any) {
+      console.error(`🔍 [MAIN-IPC] ❌ Error in agent:resume_workflow:`, {
         message: error.message,
         stack: error.stack,
-        approvalId,
-        approved,
-        timestamp: Date.now()
+        threadId,
+        responseId: response?.id
       });
-      return { success: false, error: error.message, timestamp: Date.now() };
+      return { success: false, error: error.message };
+    } finally {
+      console.log(`🔍 [MAIN-IPC] ==================== RESUME WORKFLOW END ====================`);
     }
   });
 
-  // ✅ Handle MCP tool execution requests from OSSwarm
-  ipcMain.on('osswarm:execute_mcp_tool', async (event, { executionId, serverName, toolName, arguments: toolArgs, responseChannel }) => {
-    console.log('[OSSwarm] 🔧 Received MCP tool execution request:', {
+  console.log('[LangGraph Agent] IPC handlers set up successfully');
+}
+
+// Helper functions to manage active workflows
+function getActiveWorkflow(threadId: string) {
+  return activeWorkflows.get(threadId);
+}
+
+function setActiveWorkflow(threadId: string, workflow: any) {
+  activeWorkflows.set(threadId, workflow);
+}
+
+function clearActiveWorkflow(threadId: string) {
+  activeWorkflows.delete(threadId);
+}
+
+// Clean up old workflows periodically (prevent memory leaks)
+setInterval(() => {
+  const now = Date.now();
+  const maxAge = 30 * 60 * 1000; // 30 minutes
+  
+  for (const [threadId, workflow] of activeWorkflows.entries()) {
+    if (now - workflow.createdAt > maxAge) {
+      console.log(`[LangGraph Agent] Cleaning up old workflow: ${threadId}`);
+      activeWorkflows.delete(threadId);
+    }
+  }
+}, 5 * 60 * 1000); // Check every 5 minutes
+
+// Enhanced MCP tool execution handler
+ipcMain.on('agent:execute_mcp_tool', async (event, { executionId, serverName, toolName, arguments: toolArgs, responseChannel }) => {
+  console.log(`🔍 [MAIN-MCP] ==================== MCP TOOL EXECUTION START ====================`);
+  console.log(`🔍 [MAIN-MCP] MCP tool execution request:`, {
+    executionId,
+    serverName,
+    toolName,
+    hasArguments: !!toolArgs,
+    argumentsType: typeof toolArgs,
+    responseChannel,
+    argumentsKeys: toolArgs ? Object.keys(toolArgs) : []
+  });
+
+  try {
+    console.log(`🔍 [MAIN-MCP] Step 1: Loading MCP clients...`);
+    const { activeClients } = require('../../main/mcp');
+    console.log(`🔍 [MAIN-MCP] Available MCP clients:`, Object.keys(activeClients));
+    
+    console.log(`🔍 [MAIN-MCP] Step 2: Finding MCP client for server: ${serverName}`);
+    const client = serverName === 'default' 
+      ? Object.values(activeClients)[0] 
+      : activeClients[serverName];
+      
+    if (!client) {
+      console.error(`🔍 [MAIN-MCP] ❌ No active MCP client found for server: ${serverName}`);
+      console.log(`🔍 [MAIN-MCP] Available servers:`, Object.keys(activeClients));
+      throw new Error(`No active MCP client found for server: ${serverName}`);
+    }
+    
+    console.log(`🔍 [MAIN-MCP] ✅ Found MCP client for server: ${serverName}`);
+    console.log(`🔍 [MAIN-MCP] Client details:`, {
+      hasCallTool: typeof client.callTool === 'function',
+      clientType: client.constructor?.name,
+      clientMethods: Object.getOwnPropertyNames(Object.getPrototypeOf(client))
+    });
+    
+    console.log(`🔍 [MAIN-MCP] Step 3: Preparing tool arguments...`);
+    let finalArgs = toolArgs;
+    
+    // Ensure arguments are properly formatted
+    if (typeof toolArgs === 'string') {
+      try {
+        finalArgs = JSON.parse(toolArgs);
+        console.log(`🔍 [MAIN-MCP] Parsed string arguments successfully`);
+      } catch (parseError) {
+        console.warn(`🔍 [MAIN-MCP] Failed to parse arguments, using as-is:`, parseError);
+        finalArgs = {};
+      }
+    }
+    
+    if (!finalArgs || typeof finalArgs !== 'object' || Array.isArray(finalArgs)) {
+      console.log(`🔍 [MAIN-MCP] Using empty arguments object`);
+      finalArgs = {};
+    }
+    
+    console.log(`🔍 [MAIN-MCP] Final arguments:`, finalArgs);
+    
+    console.log(`🔍 [MAIN-MCP] Step 4: Executing tool: ${toolName}`);
+    const startTime = Date.now();
+    
+    const result = await client.callTool({
+      name: toolName,
+      arguments: finalArgs
+    });
+    
+    const executionTime = Date.now() - startTime;
+    
+    console.log(`🔍 [MAIN-MCP] ✅ MCP tool execution completed:`, {
       executionId,
-      serverName,
-      toolName,
-      responseChannel
+      success: !!result,
+      hasData: !!result,
+      resultType: typeof result,
+      dataLength: result ? JSON.stringify(result).length : 0,
+      executionTime: `${executionTime}ms`
     });
 
+    const response = {
+      success: true,
+      data: result,
+      toolName,
+      serverName,
+      executionId,
+      executionTime
+    };
+
+    console.log(`🔍 [MAIN-MCP] Step 5: Sending result back via channel: ${responseChannel}`);
+    event.sender.send(responseChannel, response);
+    console.log(`🔍 [MAIN-MCP] ✅ Response sent successfully`);
+    
+  } catch (error: any) {
+    console.error(`🔍 [MAIN-MCP] ❌ MCP tool execution failed:`, {
+      message: error.message,
+      stack: error.stack,
+      executionId,
+      toolName,
+      serverName,
+      errorType: error.constructor?.name
+    });
+    
+    const errorResponse = { 
+      success: false, 
+      error: error.message,
+      executionId,
+      toolName,
+      serverName,
+      errorType: error.constructor?.name
+    };
+    
+    console.log(`🔍 [MAIN-MCP] Sending error response via channel: ${responseChannel}`);
+    event.sender.send(responseChannel, errorResponse);
+  } finally {
+    console.log(`🔍 [MAIN-MCP] ==================== MCP TOOL EXECUTION END ====================`);
+  }
+});
+
+// Simplified handlers for LangGraph
+ipcMain.handle('agent:get_status', async () => {
+  try {
+    const cacheSize = LangGraphOSSwarmFactory.getCacheSize();
+    return { 
+      success: true, 
+      cacheSize,
+      implementation: 'LangGraph'
+    };
+  } catch (error: any) {
+    console.error('[LangGraph Agent] Error getting status:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('agent:clear_cache', async () => {
+  try {
+    const cacheSize = LangGraphOSSwarmFactory.getCacheSize();
+    LangGraphOSSwarmFactory.clearCache();
+    console.log(`[LangGraph Agent] Cleared cache with ${cacheSize} instances`);
+    return { success: true, clearedInstances: cacheSize };
+  } catch (error: any) {
+    console.error('[LangGraph Agent] Error clearing cache:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// Stub handlers for backward compatibility
+ipcMain.handle('agent:abort_task', async (event, { taskId = 'current' }) => {
+  console.log('[LangGraph Agent] Abort task requested (not yet implemented):', taskId);
+  return { success: false, error: 'Abort not yet implemented in LangGraph version' };
+});
+
+ipcMain.handle('agent:get_agent_cards', async (event) => {
+  console.log('[LangGraph Agent] Get agent cards requested (not yet implemented)');
+  return { success: true, agentCards: [] };
+});
+
+ipcMain.handle('agent:get_agent_card', async (event, { agentId }) => {
+  console.log('[LangGraph Agent] Get agent card requested (not yet implemented):', agentId);
+  return { success: false, error: 'Agent card retrieval not yet implemented in LangGraph version' };
+});
+
+ipcMain.handle('agent:get_agent_cards_by_role', async (event, { role }) => {
+  console.log('[LangGraph Agent] Get agent cards by role requested (not yet implemented):', role);
+  return { success: true, agentCards: [] };
+});
+
+ipcMain.handle('agent:agent_action', async (event, { agentId, action, payload }) => {
+  console.log(`[LangGraph Agent] Agent action requested (not yet implemented): ${action} for agent ${agentId}`);
+  return { success: false, error: 'Agent actions not yet implemented in LangGraph version' };
+});
+
+export function setupLangGraphOSSwarmHandlers() {
+  console.log('[LangGraph Agent] Setting up LangGraph-enhanced handlers...');
+  
+  // Enhanced execution handler
+  ipcMain.handle('agent:execute_task_langgraph', async (event, { task, options, limits, chatId, workspaceId }) => {
+    console.log('[LangGraph Agent] LangGraph execution requested:', {
+      task: task?.substring(0, 100) + '...',
+      provider: options?.provider,
+      model: options?.model
+    });
+    
     try {
-      // ✅ Use ipcMain.handle to call the renderer's MCP handler
-      const result: any = await new Promise((resolve, reject) => {
-        const tempChannel = `mcp:execute_tool:${executionId}`;
-        
-        // Set up one-time listener for the response
-        ipcMain.once(tempChannel, (responseEvent, result) => {
-          resolve(result);
-        });
-        
-        // Send request to renderer
-        event.sender.send('mcp:execute_tool_request', {
-          serverName,
-          toolName,
-          arguments: toolArgs,
-          responseChannel: tempChannel
-        });
-        
-        // Timeout after 30 seconds
-        setTimeout(() => {
-          ipcMain.removeAllListeners(tempChannel);
-          reject(new Error('MCP tool execution timeout'));
-        }, 30000);
-      });
-
-      console.log('[OSSwarm] 🔧 MCP tool execution result:', {
-        executionId,
-        success: (result as any)?.success,
-        hasData: !!(result as any)?.data
-      });
-
-      // Send result back through the response channel
-      event.sender.send(responseChannel, result);
-    } catch (error: any) {
-      console.error('[OSSwarm] 🔧 Error executing MCP tool:', error);
+      // Store webContents for renderer communication
+      (global as any).osswarmWebContents = event.sender;
       
-      // Send error back through the response channel
-      event.sender.send(responseChannel, {
-        success: false,
-        error: error.message
+      // Create LangGraph workflow
+      const workflow = await LangGraphOSSwarmFactory.createWorkflow(
+        options,
+        limits,
+        true,
+        options?.knowledgeBases
+      );
+      
+      const compiledWorkflow = workflow.compile();
+      
+      // Prepare initial state
+      const initialState: LangGraphOSSwarmState = {
+        originalTask: task,
+        messages: [],
+        taskDecomposition: [],
+        currentPhase: 'initialization',
+        availableAgentCards: [],
+        activeAgentCards: {},
+        agentResults: {},
+        executionId: options?.executionId || uuidv4(),
+        chatId,
+        workspaceId,
+        iterationCount: 0,
+        pendingApprovals: [],
+        approvalHistory: [],
+        waitingForHumanResponse: false,
+        kbContext: options?.knowledgeBases?.enabled ? {
+          enabled: true,
+          workspaceId: options.knowledgeBases.workspaceId || workspaceId,
+          selectedKbIds: options.knowledgeBases.selectedKbIds || [],
+          retrievedKnowledge: []
+        } : undefined,
+        streamCallback: (update: string) => {
+          event.sender.send('agent:stream_update', { update });
+        },
+        errors: [],
+        recoveryAttempts: 0,
+        confidence: 0,
+        threadId: options?.executionId || uuidv4()
+      };
+      
+      // Execute LangGraph workflow
+      const result = await compiledWorkflow.invoke(initialState, {
+        configurable: {
+          thread_id: initialState.executionId
+        }
       });
-    }
-  });
-
-  // ✅ Get execution history
-  ipcMain.handle('osswarm:get_execution_history', async (event, { limit = 50 }) => {
-    try {
-      // This would be handled by the renderer process AgentTaskStore
-      // We'll just return success here as the store handles the actual DB queries
-      return { success: true };
-    } catch (error: any) {
-      console.error('[OSSwarm] Error getting execution history:', error);
-      return { success: false, error: error.message };
-    }
-  });
-
-  // ✅ Get execution graph
-  ipcMain.handle('osswarm:get_execution_graph', async (event, { executionId }) => {
-    try {
-      // This would be handled by the renderer process AgentTaskStore
-      // We'll just return success here as the store handles the actual DB queries
-      return { success: true };
-    } catch (error: any) {
-      console.error('[OSSwarm] Error getting execution graph:', error);
-      return { success: false, error: error.message };
-    }
-  });
-
-  // Get swarm status
-  ipcMain.handle('osswarm:get_status', async () => {
-    try {
-      const swarm = OSSwarmFactory.getCurrentSwarm();
-      const swarmStatus = swarm?.getSwarmStatus?.() || null;
+      
+      console.log('[LangGraph Agent] Workflow completed:', {
+        success: !!result.synthesizedResult,
+        agentsUsed: Object.keys(result.activeAgentCards).length
+      });
       
       return { 
         success: true, 
-        cacheSize: OSSwarmFactory.getCacheSize(),
-        swarmStatus
+        result: result.synthesizedResult,
+        agentCards: Object.values(result.activeAgentCards),
+        executionSummary: {
+          agentsUsed: Object.keys(result.activeAgentCards).length,
+          totalTime: Date.now() - Date.now() // Calculate proper timing
+        }
       };
-    } catch (error: any) {
-      console.error('[OSSwarm] Error getting status:', error);
-      return { success: false, error: error.message };
-    }
-  });
-
-  // Clear swarm cache
-  ipcMain.handle('osswarm:clear_cache', async () => {
-    try {
-      const cacheSize = OSSwarmFactory.getCacheSize();
-      OSSwarmFactory.clearCache();
-      console.log(`[OSSwarm] Cleared cache with ${cacheSize} instances`);
-      return { success: true, clearedInstances: cacheSize };
-    } catch (error: any) {
-      console.error('[OSSwarm] Error clearing cache:', error);
-      return { success: false, error: error.message };
-    }
-  });
-
-  // ✅ Add abort handler
-  ipcMain.handle('osswarm:abort_task', async (event, { taskId = 'current' }) => {
-    console.log('[OSSwarm] Abort task requested:', taskId);
-    
-    try {
-      const swarm = OSSwarmFactory.getCurrentSwarm();
       
-      if (swarm && swarm.isInitialized()) {
-        // Call abort on the swarm
-        const result = swarm.abortExecution?.() || { success: true };
-        
-        console.log('[OSSwarm] Task aborted successfully:', taskId);
-        return { success: true, taskId };
-      } else {
-        console.warn('[OSSwarm] No active swarm to abort');
-        return { success: false, error: 'No active swarm found', taskId };
-      }
     } catch (error: any) {
-      console.error('[OSSwarm] Error aborting task:', error);
-      return { success: false, error: error.message, taskId };
+      console.error('[LangGraph Agent] Critical error:', error);
+      return { success: false, error: error.message };
     }
   });
+  
+  // Keep existing handlers for backward compatibility
+  setupOSSwarmHandlers();
+}
 
-
-  console.log('[OSSwarm] IPC handlers set up successfully');
-} 
+// Add enhanced approval handling
+ipcMain.handle('agent:process_tool_approval', async (event, { approvalId, approved, threadId }) => {
+  console.log(`🔍 [MAIN-IPC] ==================== PROCESS TOOL APPROVAL START ====================`);
+  console.log(`🔍 [MAIN-IPC] Tool approval received:`, { approvalId, approved, threadId });
+  
+  try {
+    // Create human interaction response
+    const response: HumanInteractionResponse = {
+      id: approvalId,
+      approved: approved,
+      timestamp: Date.now()
+    };
+    
+    console.log(`🔍 [MAIN-IPC] Resuming workflow with approval response...`);
+    
+    // Resume the workflow with the approval
+    const result = await LangGraphOSSwarmWorkflow.resumeWorkflow(threadId, response);
+    
+    console.log(`🔍 [MAIN-IPC] Approval processed successfully:`, {
+      success: result.success,
+      completed: result.completed,
+      requiresMoreApproval: result.requiresHumanInteraction
+    });
+    
+    return result;
+    
+  } catch (error: any) {
+    console.error(`🔍 [MAIN-IPC] ❌ Error processing tool approval:`, error);
+    return { success: false, error: error.message };
+  } finally {
+    console.log(`🔍 [MAIN-IPC] ==================== PROCESS TOOL APPROVAL END ====================`);
+  }
+}); 

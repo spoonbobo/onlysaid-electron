@@ -1,6 +1,5 @@
 import { create } from "zustand";
 import { IUserCryptoKeys } from "@/../../types/Chat/Message";
-import { toast } from "@/utils/toast";
 import { useWorkspaceStore } from '../Workspace/WorkspaceStore';
 import { useTopicStore } from '../Topic/TopicStore';
 import { DBTABLES } from '@/../../constants/db';
@@ -73,17 +72,13 @@ export const useCryptoStore = create<CryptoStore>((set, get) => ({
     try {
       // Derive password from user ID + token
       const cryptoPassword = await deriveCryptoPasswordFromToken(userId, token);
-      console.log('[CryptoStore] 🔑 Crypto password derived, length:', cryptoPassword.length);
       
       // Check if user already has crypto keys
       const keysResponse = await window.electron.crypto.getUserKeys(userId);
-      console.log('[CryptoStore] 🔍 Keys response:', keysResponse);
       
       if (keysResponse.success && keysResponse.data) {
         // User has existing crypto keys, unlock them
-        console.log('[CryptoStore] 🔓 User has existing crypto keys, unlocking...');
         const masterKeyResponse = await window.electron.crypto.deriveMasterKey(cryptoPassword, keysResponse.data.masterKeySalt);
-        console.log('[CryptoStore] 🔑 Master key derivation result:', masterKeyResponse.success);
         if (masterKeyResponse.success) {
           // ✅ FIX: Preserve existing chatKeys cache instead of clearing it
           const { chatKeys: existingChatKeys } = get();
@@ -100,9 +95,7 @@ export const useCryptoStore = create<CryptoStore>((set, get) => ({
         }
       } else {
         // User doesn't have crypto keys, create new ones
-        console.log('[CryptoStore] 🆕 Creating new crypto keys for user...');
         const response = await window.electron.crypto.initializeUser(userId, cryptoPassword);
-        console.log('[CryptoStore] 🆕 Initialize user result:', response.success);
         if (response.success) {
           set({
             userCryptoKeys: response.data,
@@ -129,7 +122,6 @@ export const useCryptoStore = create<CryptoStore>((set, get) => ({
   },
 
   lockCrypto: () => {
-    console.log('[CryptoStore] 🔒 Locking crypto and clearing all cached keys');
     set({
       userCryptoKeys: null,
       masterKey: null,
@@ -145,24 +137,19 @@ export const useCryptoStore = create<CryptoStore>((set, get) => ({
     const { chatKeys, isUnlocked, currentUserId } = get();
 
     if (!currentUserId || !isUnlocked) {
-      console.log('[CryptoStore] ❌ Cannot get chat key: crypto not unlocked or no user');
       return null;
     }
 
     // Return cached key if available
     if (chatKeys[chatId]) {
-      console.log('[CryptoStore] ✅ Using cached chat key for:', chatId);
       return chatKeys[chatId];
     }
-
-    console.log('[CryptoStore] 🔍 Chat key not cached, deriving standard key for:', chatId);
 
     try {
       // ✅ NEW: Get workspace ID from context if not provided
       const effectiveWorkspaceId = workspaceId || useTopicStore.getState().selectedContext?.id;
       
       if (!effectiveWorkspaceId) {
-        console.error('No workspace ID available for key derivation');
         return null;
       }
 
@@ -171,17 +158,12 @@ export const useCryptoStore = create<CryptoStore>((set, get) => ({
       
       try {
         chatKey = await deriveStandardChatKey(chatId, effectiveWorkspaceId);
-        console.log('✅ Successfully derived standard chat key');
       } catch (error) {
-        console.warn('⚠️ Standard key derivation failed, trying legacy method:', error);
-        
         // Fallback to legacy method
         chatKey = await deriveCryptoPasswordFromToken(chatId, "workspace-key");
-        console.log('✅ Using legacy key derivation');
       }
 
       if (chatKey) {
-        console.log('[CryptoStore] ✅ Successfully derived and caching chat key for:', chatId);
         set(state => ({
           chatKeys: {
             ...state.chatKeys,
@@ -192,7 +174,6 @@ export const useCryptoStore = create<CryptoStore>((set, get) => ({
 
       return chatKey;
     } catch (error: any) {
-      console.error('Failed to get chat key:', error);
       return null;
     }
   },
@@ -217,12 +198,6 @@ export const useCryptoStore = create<CryptoStore>((set, get) => ({
         userMasterKeys[userId] = sharedWorkspaceKey;
       });
 
-      console.log('🔑 Creating chat key with base64 format:', {
-        chatId,
-        userCount: userIds.length,
-        keyLength: sharedWorkspaceKey.length
-      });
-
       const response = await window.electron.crypto.createChatKey(
         chatId,
         currentUserId,
@@ -244,10 +219,8 @@ export const useCryptoStore = create<CryptoStore>((set, get) => ({
         };
       });
       
-      console.log('[CryptoStore] ✅ Chat key created successfully, cleared cache for refetch');
       return true;
     } catch (error: any) {
-      console.error('Failed to create chat key:', error);
       set({ 
         error: error.message || 'Failed to create chat key',
         isLoading: false 
@@ -272,7 +245,6 @@ export const useCryptoStore = create<CryptoStore>((set, get) => ({
       const workspaceId = selectedContext?.id;
       
       if (!workspaceId) {
-        console.error('No workspace context available for encryption');
         throw new Error('No workspace context available');
       }
       
@@ -280,10 +252,7 @@ export const useCryptoStore = create<CryptoStore>((set, get) => ({
       const workspaceUsers = await useWorkspaceStore.getState().getUsersByWorkspace(workspaceId);
       const allUserIds = workspaceUsers.map(user => user.user_id);
       
-      console.log(`🔑 Creating chat key for ${allUserIds.length} users:`, allUserIds);
-      
       if (allUserIds.length === 0) {
-        console.error('No users found in workspace for encryption');
         throw new Error('No users found in workspace');
       }
       
@@ -309,7 +278,6 @@ export const useCryptoStore = create<CryptoStore>((set, get) => ({
       encrypted.keyVersion = 1;
       return encrypted;
     } catch (error: any) {
-      console.error('Failed to encrypt message:', error);
       throw error;
     }
   },
@@ -318,60 +286,40 @@ export const useCryptoStore = create<CryptoStore>((set, get) => ({
     const { isUnlocked } = get();
     
     if (!isUnlocked) {
-      console.error('Encryption not available');
       return null;
     }
     
     const chatKey = await get().getChatKey(chatId);
     if (!chatKey) {
-      console.error('No chat key available for decryption');
       return null;
     }
 
     try {
       // ✅ FIX: Add validation and better error handling
       if (!encryptedMessage || !encryptedMessage.encryptedContent || !encryptedMessage.iv) {
-        console.error('Invalid encrypted message format:', encryptedMessage);
         return null;
       }
-
-      // ✅ FIX: Log the encrypted message structure for debugging
-      console.log('🔍 Decrypting message:', {
-        chatId,
-        keyLength: chatKey.length,
-        hasIv: !!encryptedMessage.iv,
-        hasContent: !!encryptedMessage.encryptedContent,
-        keyVersion: encryptedMessage.keyVersion,
-        algorithm: encryptedMessage.algorithm
-      });
 
       const response = await window.electron.crypto.decryptMessage(encryptedMessage, chatKey);
       
       if (!response.success) {
         // ✅ FIX: Try with different key derivation methods for backward compatibility
-        console.warn('❌ Decryption failed with current key, trying fallback methods...');
-        
-        // Try with old key format if available
         try {
           const fallbackKey = await deriveCryptoPasswordFromToken(chatId, "workspace-key-old");
           const fallbackResponse = await window.electron.crypto.decryptMessage(encryptedMessage, fallbackKey);
           
           if (fallbackResponse.success) {
-            console.log('✅ Decryption successful with fallback key');
             return fallbackResponse.data;
           }
         } catch (fallbackError) {
-          console.error('❌ Fallback decryption also failed:', fallbackError);
+          // Silent fallback failure
         }
         
-        console.error('Failed to decrypt message:', response.error);
         return null;
       }
 
       return response.data;
     } catch (error: any) {
-      console.error('Failed to decrypt message:', error);
-      
       // ✅ FIX: Clear the cached key if decryption fails, it might be wrong
       set(state => {
         const newChatKeys = { ...state.chatKeys };
@@ -388,13 +336,10 @@ export const useCryptoStore = create<CryptoStore>((set, get) => ({
     const { isUnlocked, currentUserId } = get();
     
     if (!isUnlocked || !currentUserId) {
-      console.error('Encryption not available for granting chat keys');
       return false;
     }
 
     try {
-      console.log(`🔑 Granting workspace chat keys to user ${userId} in workspace ${workspaceId}`);
-      
       // ✅ FIX: Get chats from remote API instead of local database
       let chatIds: string[] = [];
       
@@ -407,19 +352,11 @@ export const useCryptoStore = create<CryptoStore>((set, get) => ({
           workspaceId: workspaceId
         });
         
-        console.log('🔍 Remote chat API response:', response);
-        
         if (response.data && response.data.data && Array.isArray(response.data.data)) {
           chatIds = response.data.data.map((chat: any) => chat.id);
-          console.log(`Found ${chatIds.length} chats in workspace from API:`, chatIds);
-        } else {
-          console.log('No chats found in workspace from API');
         }
       } catch (apiError) {
-        console.error('Failed to fetch chats from API:', apiError);
-        
         // Fallback: try local database
-        console.log('🔄 Falling back to local database...');
         const chats = await window.electron.db.query({
           query: `SELECT id FROM ${DBTABLES.CHATROOM} WHERE workspace_id = @workspaceId`,
           params: { workspaceId }
@@ -427,12 +364,10 @@ export const useCryptoStore = create<CryptoStore>((set, get) => ({
         
         if (Array.isArray(chats) && chats.length > 0) {
           chatIds = chats.map(chat => chat.id);
-          console.log(`Found ${chatIds.length} chats in workspace from local DB:`, chatIds);
         }
       }
 
       if (chatIds.length === 0) {
-        console.log('❌ No chats found to grant access to');
         return false;
       }
 
@@ -447,7 +382,6 @@ export const useCryptoStore = create<CryptoStore>((set, get) => ({
           });
 
           if (!Array.isArray(existingKey) || existingKey.length === 0) {
-            console.log(`No chat key found for chat ${chatId}, skipping`);
             continue;
           }
 
@@ -458,7 +392,6 @@ export const useCryptoStore = create<CryptoStore>((set, get) => ({
           });
 
           if (Array.isArray(existingUserKey) && existingUserKey.length > 0) {
-            console.log(`User ${userId} already has access to chat ${chatId}`);
             continue;
           }
 
@@ -476,26 +409,22 @@ export const useCryptoStore = create<CryptoStore>((set, get) => ({
           );
 
           if (response.success) {
-            console.log(`✅ Granted chat key access for chat ${chatId} to user ${userId}`);
             successCount++;
-          } else {
-            console.error(`❌ Failed to grant chat key access for chat ${chatId}:`, response.error);
           }
         } catch (error) {
-          console.error(`Error granting access to chat ${chatId}:`, error);
+          // Silent error handling
         }
       }
 
-      console.log(`✅ Completed granting workspace chat keys to user ${userId}. Success: ${successCount}/${chatIds.length}`);
       return successCount > 0;
     } catch (error: any) {
-      console.error('Failed to grant workspace chat keys:', error);
       return false;
     }
   },
 
   // Add this helper method to debug encrypted messages
   debugEncryptedMessage: async (encryptedMessage: any, chatId: string) => {
+    // Debug method - keeping console.logs for debugging purposes
     console.log('🔍 Debug encrypted message:', {
       chatId,
       messageStructure: {

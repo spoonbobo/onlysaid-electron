@@ -51,7 +51,7 @@ export default function MCPSelector({ disabled = false }: MCPSelectorProps) {
   }, [availableMcps, aiMode, selectedMcpServerIds, setSelectedMcpServerIds, clearSelectedMcpServerIds]);
 
   const loadMcps = async () => {
-    console.log("MCPSelector: loadMcps called");
+    // console.log("MCPSelector: loadMcps called");
     const allServers = getAllConfiguredServers();
 
     const enabledAndConfiguredMcpsBase: Omit<IMCPServiceDisplay, 'tools' | 'toolsError'>[] = Object.entries(allServers)
@@ -62,7 +62,7 @@ export default function MCPSelector({ disabled = false }: MCPSelectorProps) {
       }));
 
     const mcpDataWithTools = enabledAndConfiguredMcpsBase.map((mcpBase) => {
-      console.log(`MCPSelector: Loading tools for MCP ${mcpBase.id}`);
+      // console.log(`MCPSelector: Loading tools for MCP ${mcpBase.id}`);
 
       const storedTools = getServiceTools(mcpBase.id);
 
@@ -71,7 +71,7 @@ export default function MCPSelector({ disabled = false }: MCPSelectorProps) {
         description: tool.description || ""
       }));
 
-      console.log(`MCPSelector: Successfully processed tools for ${mcpBase.id}:`, validTools.length);
+      // console.log(`MCPSelector: Successfully processed tools for ${mcpBase.id}:`, validTools.length);
 
       return {
         ...mcpBase,
@@ -80,13 +80,10 @@ export default function MCPSelector({ disabled = false }: MCPSelectorProps) {
       };
     });
 
-    console.log("MCPSelector: Final mcpDataWithTools:", mcpDataWithTools);
+    // console.log("MCPSelector: Final mcpDataWithTools:", mcpDataWithTools);
     setAvailableMcps(mcpDataWithTools);
 
     if (mcpDataWithTools.length > 0 && !initialSelectAllDone) {
-      if (selectedMcpServerIds.length === 0) {
-        setSelectedMcpServerIds(mcpDataWithTools.map(mcp => mcp.id));
-      }
       setInitialSelectAllDone(true);
     } else if (mcpDataWithTools.length === 0) {
       if (selectedMcpServerIds.length > 0) {

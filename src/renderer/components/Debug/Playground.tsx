@@ -71,11 +71,11 @@ const Playground = () => {
     setSelectedTool("");
   };
 
-  // Set up OSSwarm listeners for agent task management
+  // Set up Agent listeners for agent task management
   useEffect(() => {
-    console.log('[Playground] Setting up OSSwarm listeners...');
+    console.log('[Playground] Setting up Agent listeners...');
     
-    // ✅ Handle database operations from OSSwarm Core
+    // ✅ Handle database operations from Agent Core
     const handleCreateExecution = async (event: any, data: any) => {
       try {
         const { taskDescription, chatId, workspaceId, responseChannel } = data;
@@ -86,7 +86,7 @@ const Playground = () => {
           data: { executionId: createdId }
         });
       } catch (error: any) {
-        console.error('[Playground] Error creating OSSwarm execution:', error);
+        console.error('[Playground] Error creating Agent execution:', error);
         window.electron.ipcRenderer.send(data.responseChannel, {
           success: false,
           error: error.message
@@ -104,7 +104,7 @@ const Playground = () => {
           data: { dbAgentId }
         });
       } catch (error: any) {
-        console.error('[Playground] Error creating OSSwarm agent:', error);
+        console.error('[Playground] Error creating Agent agent:', error);
         window.electron.ipcRenderer.send(data.responseChannel, {
           success: false,
           error: error.message
@@ -124,7 +124,7 @@ const Playground = () => {
           });
         }
       } catch (error: any) {
-        console.error('[Playground] Error updating OSSwarm execution status:', error);
+        console.error('[Playground] Error updating Agent execution status:', error);
         if (data.responseChannel) {
           window.electron.ipcRenderer.send(data.responseChannel, {
             success: false,
@@ -135,15 +135,15 @@ const Playground = () => {
     };
 
     // Set up listeners
-    window.electron.ipcRenderer.on('osswarm:create_execution', handleCreateExecution);
-    window.electron.ipcRenderer.on('osswarm:create_agent', handleCreateAgent);
-    window.electron.ipcRenderer.on('osswarm:update_execution_status', handleUpdateExecutionStatus);
+    window.electron.ipcRenderer.on('agent:create_execution', handleCreateExecution);
+    window.electron.ipcRenderer.on('agent:create_agent', handleCreateAgent);
+    window.electron.ipcRenderer.on('agent:update_execution_status', handleUpdateExecutionStatus);
 
     return () => {
       // Cleanup listeners
-      window.electron.ipcRenderer.removeListener('osswarm:create_execution', handleCreateExecution);
-      window.electron.ipcRenderer.removeListener('osswarm:create_agent', handleCreateAgent);
-      window.electron.ipcRenderer.removeListener('osswarm:update_execution_status', handleUpdateExecutionStatus);
+      window.electron.ipcRenderer.removeListener('agent:create_execution', handleCreateExecution);
+      window.electron.ipcRenderer.removeListener('agent:create_agent', handleCreateAgent);
+      window.electron.ipcRenderer.removeListener('agent:update_execution_status', handleUpdateExecutionStatus);
     };
   }, []); // ✅ Empty dependency array to run only once
 

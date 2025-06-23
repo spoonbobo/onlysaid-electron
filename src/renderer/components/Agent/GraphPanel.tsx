@@ -47,18 +47,24 @@ export const GraphPanel: React.FC<GraphPanelProps> = ({
       height: '100%',
       display: 'flex',
       flexDirection: 'column',
-      overflow: 'hidden'
+      overflow: 'hidden',
+      position: 'relative'
     }}>
       {hasExecutionGraph ? (
-        <ExecutionGraphComponent
-          graph={currentGraph}
-          isLive={isTaskRunning || isTaskActive}
-          width={isFullscreen ? window.innerWidth - 40 : 600}
-          height={isFullscreen ? window.innerHeight - 120 : 400}
-          fullscreen={isFullscreen}
-          onFullscreenToggle={onFullscreenToggle}
-          onRefresh={handleRefresh}
-        />
+        <Box sx={{ 
+          flexGrow: 1, 
+          display: 'flex',
+          minHeight: 0,
+          position: 'relative'
+        }}>
+          <ExecutionGraphComponent
+            graph={currentGraph}
+            isLive={isTaskRunning || isTaskActive}
+            fullscreen={isFullscreen}
+            onFullscreenToggle={onFullscreenToggle}
+            onRefresh={handleRefresh}
+          />
+        </Box>
       ) : (
         <Card sx={{ 
           display: 'flex', 
@@ -72,10 +78,10 @@ export const GraphPanel: React.FC<GraphPanelProps> = ({
             <Stack alignItems="center" spacing={3} sx={{ py: 6 }}>
               <Timeline sx={{ fontSize: 64, color: 'text.disabled' }} />
               <Typography variant="h5" color="text.secondary" fontWeight={500}>
-                {intl.formatMessage({ id: 'osswarm.graph.noExecutionGraph' })}
+                {intl.formatMessage({ id: 'agent.graph.noExecutionGraph' })}
               </Typography>
               <Typography variant="body1" color="text.secondary" textAlign="center" sx={{ maxWidth: 400 }}>
-                {intl.formatMessage({ id: 'osswarm.graph.startOrSelectFromHistory' })}
+                {intl.formatMessage({ id: 'agent.graph.startOrSelectFromHistory' })}
               </Typography>
               <Button
                 variant="contained"
@@ -91,7 +97,7 @@ export const GraphPanel: React.FC<GraphPanelProps> = ({
                   py: 1.5
                 }}
               >
-                {intl.formatMessage({ id: 'osswarm.viewHistory' })}
+                {intl.formatMessage({ id: 'agent.viewHistory' })}
               </Button>
             </Stack>
           </CardContent>

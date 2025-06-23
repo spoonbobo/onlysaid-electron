@@ -9,7 +9,8 @@ import { getServiceTools, formatMCPName } from '@/utils/mcp';
 import { formatMessagesForContext } from '@/utils/message';
 import type OpenAI from 'openai';
 import { appendRulesToSystemPrompt } from '@/utils/rules';
-import { useStreamStore } from '@/renderer/stores/Stream/StreamStore';
+import { useAgentStore } from '@/renderer/stores/Agent/AgentStore';
+import { getHumanInTheLoopManager } from '@/service/langchain/human_in_the_loop/human_in_the_loop';
 
 export const agentModeSystemPrompt = (user: IUser, agent: IUser, kbIds?: string[]) => {
   let kbInfo = "";
@@ -18,7 +19,7 @@ export const agentModeSystemPrompt = (user: IUser, agent: IUser, kbIds?: string[
   }
 
   return `
-You are ${agent.username}, the Master Agent of OSSwarm coordinating specialized AI agents to solve complex tasks.
+You are ${agent.username}, the Master Agent coordinating specialized AI agents to solve complex tasks.
 You are in a chat with your companion, ${user.username}.
 
 You have access to a distributed swarm of specialized agents and tools. Your available tools will be provided to you separately.${kbInfo}
@@ -87,19 +88,25 @@ export async function processAgentModeAIResponse({
   setStreamingState,
   markStreamAsCompleted,
 }: ProcessAgentModeAIResponseParams): Promise<{ success: boolean; responseText?: string; assistantMessageId?: string; error?: any; toolCalls?: OpenAI.Chat.Completions.ChatCompletionMessageToolCall[]; aborted?: boolean }> {
+  // Initialize human-in-the-loop manager instead of abort controller
+  const humanInTheLoopManager = getHumanInTheLoopManager();
+  const threadId = `agent_mode_${activeChatId}_${Date.now()}`;
+  
+  console.log("[AgentMode] Starting with human-in-the-loop support:", { threadId });
+
   // Use provided agent or get from store
   const assistantSender = agent || getAgentFromStore();
-  const assistantSenderId = assistantSender?.id || "osswarm-master";
+  const assistantSenderId = assistantSender?.id || "agent-master";
 
   if (!assistantSender) {
-    console.warn("[AgentMode] No agent available, using fallback ID for OSSwarm master.");
+    console.warn("[AgentMode] No agent available, using fallback ID for Agent master.");
   }
 
-  // ========== REUSE EXISTING OSSWARM LOGIC ==========
-  console.log("[AgentMode DEBUG] Delegating to existing OSSwarm infrastructure...");
+  // ========== REUSE EXISTING AGENT TASK LOGIC ==========
+  console.log("[AgentMode DEBUG] Delegating to existing Agent Task infrastructure...");
 
-  // Get the executeOSSwarmTask function from StreamStore (reusing existing logic)
-  const { executeOSSwarmTask } = useStreamStore.getState();
+  // Get the executeAgentTask function from AgentStore
+  const { executeAgentTask } = useAgentStore.getState();
   const { selectedMcpServerIds } = useMCPSettingsStore.getState();
   const { selectedKbIds } = useKBSettingsStore.getState();
   
@@ -115,7 +122,7 @@ export async function processAgentModeAIResponse({
   } = useLLMConfigurationStore.getState();
 
   if (!provider || !modelId) {
-    const errMsg = "No model or provider selected for OSSwarm.";
+    const errMsg = "No model or provider selected for Agent Task.";
     console.error(`[AgentMode DEBUG] ${errMsg}`);
     return { success: false, error: errMsg };
   }
@@ -161,8 +168,8 @@ export async function processAgentModeAIResponse({
       });
       allSelectedToolsFromMCPs = Array.from(uniqueToolsMap.values());
 
-      console.log(`[AgentMode DEBUG] Total unique tools available for OSSwarm: ${allSelectedToolsFromMCPs.length}`);
-      console.log(`[AgentMode DEBUG] Final tools being passed to OSSwarm:`, allSelectedToolsFromMCPs);
+      console.log(`[AgentMode DEBUG] Total unique tools available for Agent Task: ${allSelectedToolsFromMCPs.length}`);
+      console.log(`[AgentMode DEBUG] Final tools being passed to Agent Task:`, allSelectedToolsFromMCPs);
     } catch (error) {
       console.error("[AgentMode DEBUG] Error processing tools from MCPStore:", error);
     }
@@ -188,8 +195,8 @@ export async function processAgentModeAIResponse({
     taskDescription += `\n\nNote: You have access to Knowledge Base(s): [${selectedKbIds.join(', ')}]. Consider using them if they contain relevant information for this request.`;
   }
 
-  // Prepare OSSwarm options with explicit tool logging and KB integration
-  const swarmOptions = {
+  // Prepare Agent Task options with explicit tool logging and KB integration
+  const agentOptions = {
     model: modelId,
     provider: provider,
     temperature: configTemperature || 0.7,
@@ -204,42 +211,46 @@ export async function processAgentModeAIResponse({
     tools: allSelectedToolsFromMCPs,
     systemPrompt: systemPromptText,
     humanInTheLoop: true,
-    knowledgeBases: selectedKbIds.length > 0 ? {
+    knowledgeBases: selectedKbIds.length > 0 && workspaceId ? {
       enabled: true,
       selectedKbIds: selectedKbIds,
       workspaceId: workspaceId,
     } : undefined,
   };
 
-  console.log("[AgentMode DEBUG] OSSwarm configuration:");
-  console.log("[AgentMode DEBUG] - Tools count:", swarmOptions.tools?.length || 0);
+  console.log("[AgentMode DEBUG] Agent Task configuration:");
+  console.log("[AgentMode DEBUG] - Tools count:", agentOptions.tools?.length || 0);
   console.log("[AgentMode DEBUG] - Knowledge Bases:", selectedKbIds.length > 0 ? selectedKbIds : "None selected");
   console.log("[AgentMode DEBUG] - Workspace ID:", workspaceId || "Not provided");
-  console.log("[AgentMode DEBUG] - Tools details:", swarmOptions.tools?.map(t => ({
+  console.log("[AgentMode DEBUG] - Tools details:", agentOptions.tools?.map(t => ({
     name: t.function?.name,
     hasParams: !!t.function?.parameters,
     mcpServer: (t as any).mcpServer
   })));
-  console.log("[AgentMode DEBUG] - Full swarmOptions:", swarmOptions);
+  console.log("[AgentMode DEBUG] - Full agentOptions:", agentOptions);
 
   try {
-    console.log('[AgentMode] Calling executeOSSwarmTask with:', {
+    console.log('[AgentMode] Calling executeAgentTask with:', {
       taskLength: taskDescription.length,
-      toolsCount: swarmOptions.tools?.length || 0,
+      toolsCount: agentOptions.tools?.length || 0,
       kbCount: selectedKbIds.length,
       workspaceId: workspaceId,
-      provider: swarmOptions.provider,
-      model: swarmOptions.model
+      provider: agentOptions.provider,
+      model: agentOptions.model
     });
 
-    const result = await executeOSSwarmTask(
+    const result = await executeAgentTask(
       taskDescription,
-      swarmOptions,
+      {
+        ...agentOptions,
+        threadId, // Pass thread ID for human interactions
+        humanInTheLoop: true // Enable human-in-the-loop
+      },
       activeChatId,
-      workspaceId // Pass workspaceId to executeOSSwarmTask
+      workspaceId
     );
 
-    console.log('[AgentMode] executeOSSwarmTask result:', {
+    console.log('[AgentMode] executeAgentTask result:', {
       success: result.success,
       hasResult: !!result.result,
       hasError: !!result.error,
@@ -247,13 +258,15 @@ export async function processAgentModeAIResponse({
       errorMessage: result.error
     });
 
-    if (result.error && result.error.includes('aborted')) {
-      console.log("[AgentMode] OSSwarm task was aborted by user");
-      return { success: false, error: result.error, aborted: true };
+    // Handle human interaction requirements
+    if (result.requiresHumanInteraction) {
+      console.log("[AgentMode] Task requires human interaction");
+      // The human interaction will be handled by the AgentStore IPC listeners
+      // and the LangGraph workflow will handle the interrupt/resume cycle
     }
 
     if (result.success && result.result) {
-      // Create assistant message using OSSwarm result
+      // Create assistant message using Agent Task result
       const assistantMessage: IChatMessage = {
         id: uuidv4(),
         chat_id: activeChatId,
@@ -268,7 +281,7 @@ export async function processAgentModeAIResponse({
       appendMessage(activeChatId, assistantMessage);
       markStreamAsCompleted(activeChatId, result.result, assistantMessage.id);
 
-      console.log("[AgentMode DEBUG] OSSwarm task completed successfully via existing infrastructure with KB integration");
+      console.log("[AgentMode DEBUG] Agent task completed successfully via existing infrastructure with KB integration");
 
       return {
         success: true,
@@ -277,8 +290,8 @@ export async function processAgentModeAIResponse({
       };
 
     } else {
-      const errorMsg = result.error || "OSSwarm execution failed without specific error.";
-      console.error("[AgentMode] OSSwarm execution failed:", {
+      const errorMsg = result.error || "Agent task execution failed without specific error.";
+      console.error("[AgentMode] Agent task execution failed:", {
         error: errorMsg,
         fullResult: result
       });
@@ -287,15 +300,15 @@ export async function processAgentModeAIResponse({
     }
 
   } catch (error: any) {
-    if (error.message && error.message.includes('aborted')) {
-      return { success: false, error: error.message, aborted: true };
-    }
+    // Clean up human interactions on error
+    humanInTheLoopManager.clearInteractions(threadId);
     
-    console.error("[AgentMode] Critical error in OSSwarm AgentMode processing:", {
-      message: error.message,
-      stack: error.stack,
-      name: error.name
-    });
-    return { success: false, error: error.message || error };
+    console.error("[AgentMode] Error in agent processing:", error);
+    return { success: false, error: error.message };
+  } finally {
+    // Clean up human interactions when done
+    setTimeout(() => {
+      humanInTheLoopManager.clearInteractions(threadId);
+    }, 30000); // Clean up after 30 seconds
   }
 }

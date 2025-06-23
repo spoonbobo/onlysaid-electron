@@ -150,34 +150,23 @@ type CryptoChannels =
 type HealthCheckChannels = 'health:start-periodic-check' | 'health:stop-periodic-check' | 'health:check' | 'health:check-failed' | 'health:is-running';
 
 // Add this new type around line 91 with other channel types:
-type OSSwarmChannels = 
-  | 'osswarm:execute_task' 
-  | 'osswarm:get_status' 
-  | 'osswarm:clear_cache' 
-  | 'osswarm:stream_update' 
-  | 'osswarm:approve_tool' 
-  | 'osswarm:tool_approval_request' 
-  | 'osswarm:tool_execution_start' 
-  | 'osswarm:tool_execution_complete' 
-  | 'osswarm:execute_mcp_tool' 
-  | 'osswarm:abort_task' 
-  | 'osswarm:execution_created' 
-  | 'osswarm:agent_created' 
-  | 'osswarm:agent_updated' 
-  | 'osswarm:execution_updated'
-  | 'osswarm:task_created'
-  | 'osswarm:task_updated'
-  | 'osswarm:tool_execution_created'
-  | 'osswarm:tool_execution_updated'
-  | 'osswarm:create_execution'
-  | 'osswarm:create_agent'
-  | 'osswarm:create_task'
-  | 'osswarm:create_tool_execution'
-  | 'osswarm:update_execution_status'
-  | 'osswarm:update_agent_status'
-  | 'osswarm:update_task_status'
-  | 'osswarm:update_tool_execution_status'
-  | 'osswarm:update_tool_execution_by_approval';
+type AgentChannels = 
+  | 'agent:execute_task' 
+  | 'agent:get_status' 
+  | 'agent:clear_cache' 
+  | 'agent:stream_update' 
+  | 'agent:approve_tool' 
+  | 'agent:abort_task' 
+  | 'agent:human_interaction_request'
+  | 'agent:human_interaction_response'
+  | 'agent:resume_workflow'
+  | 'agent:tool_approval_request'
+  | 'agent:tool_execution_start'
+  | 'agent:tool_execution_complete'
+  | 'agent:execute_mcp_tool'
+  | 'agent:clear_interactions'
+  | 'agent:get_pending_interactions'
+  | 'agent:process_tool_approval';
 
 export type Channels =
   | AuthChannels
@@ -202,7 +191,7 @@ export type Channels =
   | AppChannels
   | CryptoChannels
   | HealthCheckChannels
-  | OSSwarmChannels;
+  | AgentChannels;
 
 const electronHandler = {
   ipcRenderer: {
@@ -500,21 +489,39 @@ const electronHandler = {
       return () => ipcRenderer.removeListener('health:check-failed', callback);
     },
   },
-  osswarm: {
+  agent: {
     executeTask: (params: { task: string; options: any; limits?: any }) =>
-      ipcRenderer.invoke('osswarm:execute_task', params),
+      ipcRenderer.invoke('agent:execute_task', params),
     getStatus: () =>
-      ipcRenderer.invoke('osswarm:get_status'),
+      ipcRenderer.invoke('agent:get_status'),
     clearCache: () =>
-      ipcRenderer.invoke('osswarm:clear_cache'),
+      ipcRenderer.invoke('agent:clear_cache'),
     approveTool: (params: { approvalId: string; approved: boolean }) =>
-      ipcRenderer.invoke('osswarm:approve_tool', params),
+      ipcRenderer.invoke('agent:approve_tool', params),
     abortTask: (params: { taskId?: string }) =>
-      ipcRenderer.invoke('osswarm:abort_task', params),
+      ipcRenderer.invoke('agent:abort_task', params),
+    resumeWorkflow: (params: { threadId: string; response: any; workflowType?: string }) =>
+      ipcRenderer.invoke('agent:resume_workflow', params),
+    processToolApproval: (params: { approvalId: string; approved: boolean; threadId: string }) =>
+      ipcRenderer.invoke('agent:process_tool_approval', params),
     onToolApprovalRequest: (callback: (event: IpcRendererEvent, data: any) => void) => {
-      ipcRenderer.on('osswarm:tool_approval_request', callback);
-      return () => ipcRenderer.removeListener('osswarm:tool_approval_request', callback);
+      ipcRenderer.on('agent:tool_approval_request', callback);
+      return () => ipcRenderer.removeListener('agent:tool_approval_request', callback);
     },
+    getExecutionHistory: (params: { limit?: number }) =>
+      ipcRenderer.invoke('agent:get_execution_history', params),
+    getExecutionGraph: (params: { executionId: string }) =>
+      ipcRenderer.invoke('agent:get_execution_graph', params),
+    getAgentCards: () =>
+      ipcRenderer.invoke('agent:get_agent_cards'),
+    getAgentCard: (params: { agentId: string }) =>
+      ipcRenderer.invoke('agent:get_agent_card', params),
+    getAgentCardsByRole: (params: { role: string }) =>
+      ipcRenderer.invoke('agent:get_agent_cards_by_role', params),
+    agentAction: (params: { agentId: string; action: string; payload?: any }) =>
+      ipcRenderer.invoke('agent:agent_action', params),
+    abortToolExecution: (params: { executionId: string }) =>
+      ipcRenderer.invoke('agent:abort_tool_execution', params),
   },
 };
 

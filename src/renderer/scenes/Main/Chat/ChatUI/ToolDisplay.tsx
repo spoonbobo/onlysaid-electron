@@ -3,7 +3,6 @@ import { IChatMessageToolCall } from "@/../../types/Chat/Message";
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
 import CancelOutlinedIcon from '@mui/icons-material/CancelOutlined';
 import RestartAltIcon from '@mui/icons-material/RestartAlt';
-import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import AccessTimeIcon from '@mui/icons-material/AccessTime';
 import { memo, useCallback, useState, useEffect } from 'react';
 import { useIntl } from 'react-intl';
@@ -20,6 +19,7 @@ import { useLLMConfigurationStore } from "@/renderer/stores/LLM/LLMConfiguration
 import { useUserStore } from "@/renderer/stores/User/UserStore";
 import { useStreamStore } from "@/renderer/stores/Stream/StreamStore";
 import { useTopicStore } from "@/renderer/stores/Topic/TopicStore";
+import { HumanInteractionResponse } from "@/service/langchain/human_in_the_loop/human_in_the_loop";
 
 interface ToolDisplayProps {
   toolCalls: IChatMessageToolCall[];
@@ -44,6 +44,7 @@ const ToolDisplay = memo(({ toolCalls, chatId, messageId }: ToolDisplayProps) =>
   const [selectedToolCall, setSelectedToolCall] = useState<IChatMessageToolCall | null>(null);
   const [autoApprovedTools, setAutoApprovedTools] = useState<Set<string>>(new Set());
   const [isSummarizing, setIsSummarizing] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
 
   // Helper function to format MCP name for display
   const formatMCPName = useCallback((key: string): string => {
@@ -53,6 +54,26 @@ const ToolDisplay = memo(({ toolCalls, chatId, messageId }: ToolDisplayProps) =>
       .trim()
       .replace(/Category$/, '')
       .trim();
+  }, []);
+
+  const isAgentExecution = useCallback((toolCall: IChatMessageToolCall) => {
+    // ✅ Add null/undefined checks
+    const functionName = toolCall?.function?.name;
+    const mcpServer = toolCall?.mcp_server;
+    
+    if (!functionName) return false; // ✅ Guard against undefined
+    
+    const result = mcpServer === 'agent_orchestrator' || 
+           functionName.endsWith('_agent_execution');
+    
+    console.log('[ToolDisplay] 🐛 DEBUG: isAgentExecution check:', {
+      toolCallId: toolCall.id,
+      functionName: functionName,
+      mcpServer: mcpServer,
+      isAgentExecution: result
+    });
+    
+    return result;
   }, []);
 
   const handleExecute = useCallback(async (toolCall: IChatMessageToolCall) => {
@@ -166,84 +187,308 @@ const ToolDisplay = memo(({ toolCalls, chatId, messageId }: ToolDisplayProps) =>
     checkAndAutoApprove();
   }, [toolCalls, chatId, messageId, getServerAutoApproved, updateToolCallStatus, refreshMessage, formatMCPName, autoApprovedTools, handleExecute]);
 
-  const handleApprove = useCallback(async (toolCallId: string) => {
-    console.log(`Tool call ${toolCallId} manually approved for message ${messageId} in chat ${chatId}`);
+  const handleApprove = async (toolCallId: string) => {
+    console.log(`🔍 [ToolDisplay-APPROVE] ==================== APPROVE CLICKED ====================`);
+    console.log(`🔍 [ToolDisplay-APPROVE] toolCallId: ${toolCallId}`);
     
-    const isOSSwarmOrchestrated = toolCallId.startsWith('approval-');
-    
-    if (isOSSwarmOrchestrated) {
-      console.log(`[ToolDisplay] 🔧 OSSwarm-orchestrated tool call ${toolCallId} approved - starting approval process`);
+    try {
+      setIsProcessing(true);
       
-      try {
-        const toolCall = toolCalls.find(tc => tc.id === toolCallId);
-        if (toolCall) {
-          await addLogForToolCall(toolCallId, `OSSwarm tool "${toolCall.function.name}" approved by user. Sending approval to OSSwarm orchestrator.`);
-        }
+      const toolCall = toolCalls.find(tc => tc.id === toolCallId);
+      console.log(`🔍 [ToolDisplay-APPROVE] Found tool call:`, {
+        found: !!toolCall,
+        functionName: toolCall?.function?.name,
+        mcpServer: toolCall?.mcp_server,
+        status: toolCall?.status,
+        hasArguments: !!toolCall?.function?.arguments
+      });
+      
+      // ✅ Check if this is a LangGraph tool call
+      const agentStore = useAgentStore.getState();
+      const { resumeLangGraphWorkflow, pendingHumanInteractions } = agentStore;
+      
+      const interaction = Object.values(pendingHumanInteractions || {})
+        .find(interaction => interaction.request.id === toolCallId);
+      
+      console.log(`🔍 [ToolDisplay-APPROVE] Interaction check:`, {
+        hasInteraction: !!interaction,
+        interactionId: interaction?.request?.id,
+        threadId: interaction?.request?.threadId,
+        requestType: interaction?.request?.type
+      });
+      
+      if (interaction && toolCall) {
+        console.log(`🔍 [ToolDisplay-APPROVE] 🔧 LangGraph tool approval - executing and reporting back`);
         
-        const result = await window.electron.osswarm.approveTool({
-          approvalId: toolCallId,
-          approved: true
-        });
+        // ✅ Update status to executing first
+        await updateToolCallStatus(toolCallId, 'executing');
+        await addLogForToolCall(toolCallId, `User approved tool execution. Starting execution...`);
+        await refreshMessage(chatId, messageId);
         
-        if (result && result.success) {
-          // ✅ Update both chat store AND database for OSSwarm tools
-          const { updateMessage } = useChatStore.getState();
-          const messages = useChatStore.getState().messages[chatId] || [];
-          const currentMessage = messages.find(msg => msg.id === messageId);
+        let toolExecutionResult: any = null;
+        let executionSuccess = false;
+        let executionError = '';
+        
+        // ✅ Execute MCP tool if it has an MCP server
+        if (toolCall.mcp_server && toolCall.mcp_server !== 'langgraph') {
+          console.log(`🔍 [ToolDisplay-APPROVE] Executing MCP tool:`, {
+            mcpServer: toolCall.mcp_server,
+            toolName: toolCall.function.name,
+            argumentsType: typeof toolCall.function.arguments
+          });
           
-          if (currentMessage && currentMessage.tool_calls) {
-            const updatedToolCalls = currentMessage.tool_calls.map(tc => 
-              tc.id === toolCallId ? { ...tc, status: 'approved' as const } : tc
+          try {
+            const startTime = Date.now();
+            
+            let toolArgs = {};
+            if (typeof toolCall.function.arguments === 'string') {
+              try {
+                toolArgs = JSON.parse(toolCall.function.arguments);
+                console.log(`🔍 [ToolDisplay-APPROVE] Parsed tool arguments:`, toolArgs);
+              } catch (parseError) {
+                console.error(`🔍 [ToolDisplay-APPROVE] Failed to parse arguments:`, parseError);
+                toolArgs = {};
+              }
+            } else {
+              toolArgs = toolCall.function.arguments || {};
+            }
+            
+            console.log(`🔍 [ToolDisplay-APPROVE] Calling executeMCPToolDirectly with:`, {
+              serverName: toolCall.mcp_server,
+              toolName: toolCall.function.name,
+              args: toolArgs
+            });
+            
+            const mcpResult = await executeMCPToolDirectly(
+              toolCall.mcp_server,
+              toolCall.function.name,
+              toolArgs
             );
             
-            await updateMessage(chatId, messageId, {
-              tool_calls: updatedToolCalls
+            const executionTime = Math.floor((Date.now() - startTime) / 1000);
+            
+            console.log(`🔍 [ToolDisplay-APPROVE] MCP execution result:`, {
+              success: mcpResult.success,
+              hasData: !!mcpResult.data,
+              dataType: typeof mcpResult.data,
+              error: mcpResult.error,
+              executionTime
             });
+            
+            if (mcpResult.success) {
+              toolExecutionResult = mcpResult.data;
+              executionSuccess = true;
+              
+              await updateToolCallStatus(toolCallId, 'executed');
+              await updateToolCallResult(toolCallId, mcpResult.data, executionTime);
+              await addLogForToolCall(toolCallId, `Tool executed successfully in ${executionTime}s: ${JSON.stringify(mcpResult.data)}`);
+              
+              console.log(`🔍 [ToolDisplay-APPROVE] ✅ MCP tool executed successfully`);
+              console.log(`🔍 [ToolDisplay-APPROVE] Result preview:`, 
+                JSON.stringify(mcpResult.data).substring(0, 200) + '...');
+            } else {
+              executionError = mcpResult.error;
+              await updateToolCallStatus(toolCallId, 'error');
+              await addLogForToolCall(toolCallId, `Tool execution failed: ${mcpResult.error}`);
+              console.error(`🔍 [ToolDisplay-APPROVE] ❌ MCP tool execution failed:`, mcpResult.error);
+            }
+            
+          } catch (error: any) {
+            executionError = error.message;
+            await updateToolCallStatus(toolCallId, 'error'); 
+            await addLogForToolCall(toolCallId, `Tool execution error: ${error.message}`);
+            console.error(`🔍 [ToolDisplay-APPROVE] ❌ MCP tool execution error:`, error);
           }
-          
-          // ✅ ALSO update the database so the approval persists across chat re-entries
-          await updateToolCallStatus(toolCallId, 'approved');
-          
-          await addLogForToolCall(toolCallId, `Approval sent to OSSwarm successfully. Tool will execute automatically.`);
-          toast.success('Tool approved - executing automatically');
         } else {
-          await addLogForToolCall(toolCallId, `OSSwarm approval failed: ${result?.error || 'Unknown error'}`);
-          toast.error(`Failed to approve tool: ${result?.error || 'Unknown error'}`);
+          // No MCP execution needed, just mark as approved
+          executionSuccess = true;
+          await updateToolCallStatus(toolCallId, 'executed');
+          await addLogForToolCall(toolCallId, `Tool approved (no MCP execution required)`);
+          console.log(`🔍 [ToolDisplay-APPROVE] ✅ Non-MCP tool marked as executed`);
         }
-      } catch (error: any) {
-        await addLogForToolCall(toolCallId, `Error during OSSwarm approval: ${error.message}`);
-        toast.error(`Failed to approve tool: ${error.message}`);
+        
+        // ✅ Create enhanced response with execution results
+        const response: HumanInteractionResponse = {
+          id: interaction.request.id,
+          approved: true,
+          timestamp: Date.now(),
+          // ✅ Add execution results to the response
+          toolExecutionResult: executionSuccess ? {
+            success: true,
+            result: toolExecutionResult,
+            toolName: toolCall.function.name,
+            mcpServer: toolCall.mcp_server
+          } : {
+            success: false,
+            error: executionError,
+            toolName: toolCall.function.name,
+            mcpServer: toolCall.mcp_server
+          }
+        };
+        
+        console.log(`🔍 [ToolDisplay-APPROVE] 🔧 Creating response for LangGraph:`, {
+          id: response.id,
+          approved: response.approved,
+          timestamp: response.timestamp,
+          hasToolExecutionResult: !!response.toolExecutionResult,
+          toolExecutionSuccess: response.toolExecutionResult?.success,
+          toolName: response.toolExecutionResult?.toolName,
+          mcpServer: response.toolExecutionResult?.mcpServer,
+          hasResult: !!response.toolExecutionResult?.result,
+          hasError: !!response.toolExecutionResult?.error
+        });
+        
+        if (response.toolExecutionResult?.result) {
+          console.log(`🔍 [ToolDisplay-APPROVE] Tool result being sent to LangGraph:`, 
+            JSON.stringify(response.toolExecutionResult.result).substring(0, 300) + '...');
+        }
+        
+        console.log(`🔍 [ToolDisplay-APPROVE] 🔧 Resuming LangGraph workflow with execution results:`, {
+          threadId: interaction.request.threadId,
+          approved: true,
+          hasExecutionResult: !!response.toolExecutionResult
+        });
+        
+        // ✅ Resume workflow with execution results
+        const resumeResult = await resumeLangGraphWorkflow(interaction.request.threadId, response);
+        
+        console.log(`🔍 [ToolDisplay-APPROVE] Resume workflow result:`, {
+          success: resumeResult.success,
+          completed: resumeResult.completed,
+          error: resumeResult.error
+        });
+        
+        if (resumeResult.success) {
+          await addLogForToolCall(toolCallId, `Workflow resumed successfully with execution results.`);
+          if (executionSuccess) {
+            toast.success(`Tool "${toolCall.function.name}" executed and workflow resumed`);
+          } else {
+            toast.error(`Tool execution failed but workflow resumed`);
+          }
+        } else {
+          await addLogForToolCall(toolCallId, `Failed to resume workflow: ${resumeResult.error}`);
+          toast.error(`Failed to resume workflow: ${resumeResult.error}`);
+        }
+        
+      } else {
+        console.log(`🔍 [ToolDisplay-APPROVE] 🔧 Non-LangGraph tool - executing directly`);
+        // ... existing non-LangGraph handling ...
       }
-    } else {
-      await updateToolCallStatus(toolCallId, 'approved');
+      
+    } catch (error: any) {
+      console.error(`🔍 [ToolDisplay-APPROVE] ❌ Error in handleApprove:`, error);
+      // ... existing error handling ...
+    } finally {
+      setIsProcessing(false);
       await refreshMessage(chatId, messageId);
-      toast.success('Tool approved');
+      console.log(`🔍 [ToolDisplay-APPROVE] ==================== APPROVE COMPLETED ====================`);
     }
-  }, [toolCalls, chatId, messageId, refreshMessage, updateToolCallStatus, addLogForToolCall]);
+  };
+
+  // ✅ Enhanced MCP tool execution with better error handling
+  const executeMCPToolDirectly = useCallback(async (
+    serverName: string, 
+    toolName: string, 
+    args: Record<string, any>
+  ) => {
+    console.log(`[ToolDisplay-MCP] Executing MCP tool directly:`, {
+      serverName, toolName, args
+    });
+    
+    try {
+      const { executeTool } = useMCPClientStore.getState();
+      
+      if (!executeTool) {
+        throw new Error('MCP client executeTool function not available');
+      }
+      
+      // ✅ Add timeout to prevent hanging
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('Tool execution timeout after 30 seconds')), 30000);
+      });
+      
+      const executionPromise = executeTool(serverName, toolName, args);
+      
+      const result = await Promise.race([executionPromise, timeoutPromise]) as any;
+      
+      console.log(`[ToolDisplay-MCP] Direct execution result:`, result);
+      return result;
+    } catch (error: any) {
+      console.error(`[ToolDisplay-MCP] Direct execution failed:`, error);
+      throw error;
+    }
+  }, []);
+
+  const handleReject = async (toolCallId: string) => {
+    console.log(`🔍 [ToolDisplay-DEBUG] ==================== REJECT CLICKED ====================`);
+    console.log(`🔍 [ToolDisplay-DEBUG] toolCallId: ${toolCallId}`);
+    
+    try {
+      setIsProcessing(true);
+      
+      const agentStore = useAgentStore.getState();
+      const { resumeLangGraphWorkflow } = agentStore;
+      
+      const interaction = Object.values(agentStore.pendingHumanInteractions || {})
+        .find(interaction => interaction.request.id === toolCallId);
+      
+      if (!interaction) {
+        console.error(`🔍 [ToolDisplay-DEBUG] ❌ No interaction found for toolCallId: ${toolCallId}`);
+        toast.error('No interaction found for this tool call');
+        return;
+      }
+      
+      const response: HumanInteractionResponse = {
+        id: interaction.request.id,
+        approved: false,
+        timestamp: Date.now()
+      };
+      
+      await updateToolCallStatus(toolCallId, 'rejected');
+      await addLogForToolCall(toolCallId, `User rejected tool execution.`);
+      
+      const resumeResult = await resumeLangGraphWorkflow(interaction.request.threadId, response);
+      
+      if (resumeResult.success) {
+        await addLogForToolCall(toolCallId, `Workflow resumed after rejection.`);
+        toast.success('Tool rejected - workflow resumed');
+      } else {
+        await addLogForToolCall(toolCallId, `Failed to resume workflow: ${resumeResult.error}`);
+        toast.error(`Failed to resume workflow: ${resumeResult.error}`);
+      }
+      
+    } catch (error: any) {
+      console.error(`🔍 [ToolDisplay-DEBUG] ❌ Error in handleReject:`, error);
+      toast.error(`Error rejecting tool: ${error.message}`);
+    } finally {
+      setIsProcessing(false);
+      console.log(`🔍 [ToolDisplay-DEBUG] ==================== REJECT COMPLETED ====================`);
+    }
+  };
 
   const handleDeny = useCallback(async (toolCallId: string) => {
     console.log(`Tool call ${toolCallId} denied for message ${messageId} in chat ${chatId}`);
     
-    // Check if this is an OSSwarm-orchestrated tool call (approval ID format)
-    const isOSSwarmOrchestrated = toolCallId.startsWith('approval-');
+    const isAgentOrchestrated = toolCallId.startsWith('approval-');
+    const isLangGraphOrchestrated = toolCalls.find(tc => tc.id === toolCallId)?.mcp_server === 'langgraph';
     
-    if (isOSSwarmOrchestrated) {
-      console.log(`[ToolDisplay] 🔧 OSSwarm-orchestrated tool call ${toolCallId} denied`);
+    if (isAgentOrchestrated) {
+      console.log(`[ToolDisplay] 🔧 Agent-orchestrated tool call ${toolCallId} denied`);
       
       try {
-        // Add log for OSSwarm denial
+        // Add log for Agent denial
         const toolCall = toolCalls.find(tc => tc.id === toolCallId);
         if (toolCall) {
-          await addLogForToolCall(toolCallId, `OSSwarm tool "${toolCall.function.name}" denied by user. Sending denial to OSSwarm orchestrator.`);
+          await addLogForToolCall(toolCallId, `Agent tool "${toolCall.function.name}" denied by user. Sending denial to Agent orchestrator.`);
         }
         
-        // Send denial to OSSwarm via IPC
-        await window.electron.osswarm.approveTool({
+        // Send denial to Agent via IPC
+        await window.electron.agent.approveTool({
           approvalId: toolCallId,
           approved: false
         });
         
-        // ✅ Update both chat store AND database for OSSwarm tools
+        // ✅ Update both chat store AND database for Agent tools
         const { updateMessage } = useChatStore.getState();
         const messages = useChatStore.getState().messages[chatId] || [];
         const currentMessage = messages.find(msg => msg.id === messageId);
@@ -257,23 +502,70 @@ const ToolDisplay = memo(({ toolCalls, chatId, messageId }: ToolDisplayProps) =>
             tool_calls: updatedToolCalls
           });
           
-          console.log(`[ToolDisplay] 🔧 OSSwarm-orchestrated tool call status updated in chat store`);
+          console.log(`[ToolDisplay] 🔧 Agent-orchestrated tool call status updated in chat store`);
         }
         
         // ✅ ALSO update the database so the denial persists across chat re-entries
         await updateToolCallStatus(toolCallId, 'denied');
         
         // Add log for successful denial
-        await addLogForToolCall(toolCallId, `Denial sent to OSSwarm successfully. Tool execution cancelled.`);
+        await addLogForToolCall(toolCallId, `Denial sent to Agent orchestrator successfully. Tool execution cancelled.`);
         
         toast.info('Tool denied');
       } catch (error: any) {
-        console.error('[ToolDisplay] 🔧 Error denying OSSwarm-orchestrated tool:', error);
-        await addLogForToolCall(toolCallId, `Error during OSSwarm denial: ${error.message}`);
+        console.error('[ToolDisplay] 🔧 Error denying Agent-orchestrated tool:', error);
+        await addLogForToolCall(toolCallId, `Error during Agent denial: ${error.message}`);
         toast.error(`Failed to deny tool: ${error.message}`);
       }
+    } else if (isLangGraphOrchestrated) {
+      console.log(`[ToolDisplay] 🔧 LangGraph-orchestrated tool call ${toolCallId} denied`);
+      
+      try {
+        const toolCall = toolCalls.find(tc => tc.id === toolCallId);
+        if (toolCall) {
+          await addLogForToolCall(toolCallId, `LangGraph tool "${toolCall.function.name}" denied by user.`);
+        }
+        
+        // ✅ Update tool call status in UI and database
+        const { updateMessage } = useChatStore.getState();
+        const messages = useChatStore.getState().messages[chatId] || [];
+        const currentMessage = messages.find(msg => msg.id === messageId);
+        
+        if (currentMessage && currentMessage.tool_calls) {
+          const updatedToolCalls = currentMessage.tool_calls.map(tc => 
+            tc.id === toolCallId ? { ...tc, status: 'denied' as const } : tc
+          );
+          
+          await updateMessage(chatId, messageId, {
+            tool_calls: updatedToolCalls
+          });
+        }
+        
+        await updateToolCallStatus(toolCallId, 'denied');
+        
+        // ✅ Send denial response to resume LangGraph workflow
+        const { resumeLangGraphWorkflow } = useAgentStore.getState();
+        const langGraphInteractions = (window as any).langGraphInteractions || new Map();
+        const interaction = langGraphInteractions.get(toolCallId);
+        
+        if (interaction) {
+          const response = {
+            id: toolCallId,
+            approved: false,
+            timestamp: Date.now()
+          };
+          
+          await resumeLangGraphWorkflow(toolCallId, response);
+          await addLogForToolCall(toolCallId, `Denial sent to LangGraph successfully. Workflow will abort.`);
+        }
+        
+        toast.info('Agent execution denied - workflow aborted');
+      } catch (error: any) {
+        await addLogForToolCall(toolCallId, `Error during LangGraph denial: ${error.message}`);
+        toast.error(`Failed to deny agent execution: ${error.message}`);
+      }
     } else {
-      // Regular MCP tool call (not OSSwarm-orchestrated) - use database operations
+      // Regular MCP tool call
       await updateToolCallStatus(toolCallId, 'denied');
       await refreshMessage(chatId, messageId);
       toast.info('Tool denied');
@@ -301,8 +593,8 @@ const ToolDisplay = memo(({ toolCalls, chatId, messageId }: ToolDisplayProps) =>
   const handleReset = useCallback(async (toolCallId: string) => {
     console.log(`Tool call ${toolCallId} reset to pending for message ${messageId} in chat ${chatId}`);
     
-    // Check if this is an OSSwarm-orchestrated tool call (approval ID format)
-    const isOSSwarmOrchestrated = toolCallId.startsWith('approval-');
+    // Check if this is an Agent-orchestrated tool call (approval ID format)
+    const isAgentOrchestrated = toolCallId.startsWith('approval-');
     
     // Remove from auto-approved set when resetting
     setAutoApprovedTools(prev => {
@@ -311,8 +603,8 @@ const ToolDisplay = memo(({ toolCalls, chatId, messageId }: ToolDisplayProps) =>
       return newSet;
     });
     
-    if (isOSSwarmOrchestrated) {
-      // ✅ Update both chat store AND database for OSSwarm tools
+    if (isAgentOrchestrated) {
+      // ✅ Update both chat store AND database for Agent tools
       const { updateMessage } = useChatStore.getState();
       const messages = useChatStore.getState().messages[chatId] || [];
       const currentMessage = messages.find(msg => msg.id === messageId);
@@ -326,16 +618,16 @@ const ToolDisplay = memo(({ toolCalls, chatId, messageId }: ToolDisplayProps) =>
           tool_calls: updatedToolCalls
         });
         
-        console.log(`[ToolDisplay] 🔧 OSSwarm-orchestrated tool call reset in chat store`);
+        console.log(`[ToolDisplay] 🔧 Agent-orchestrated tool call reset in chat store`);
       }
       
       // ✅ ALSO update the database so the reset persists across chat re-entries
       await updateToolCallStatus(toolCallId, 'pending');
       
       // Add log for reset
-      await addLogForToolCall(toolCallId, `OSSwarm tool call reset to pending status by user.`);
+      await addLogForToolCall(toolCallId, `Agent tool call reset to pending status by user.`);
     } else {
-      // Regular MCP tool call (not OSSwarm-orchestrated) - use database operations
+      // Regular MCP tool call (not Agent-orchestrated) - use database operations
       await updateToolCallStatus(toolCallId, 'pending');
       await refreshMessage(chatId, messageId);
     }
@@ -463,13 +755,45 @@ const ToolDisplay = memo(({ toolCalls, chatId, messageId }: ToolDisplayProps) =>
 
   // Instead, just add a simple refresh effect when toolCalls change
   useEffect(() => {
-    // If any OSSwarm tool calls have results, the component will re-render automatically
+    // If any Agent tool calls have results, the component will re-render automatically
     console.log('[ToolDisplay] Tool calls updated:', toolCalls.map(tc => ({ 
       id: tc.id, 
       status: tc.status, 
       hasResult: !!tc.result 
     })));
   }, [toolCalls]);
+
+  // Add this enhanced component mount effect for debugging:
+  useEffect(() => {
+    console.log(`🔍 [ToolDisplay-DEBUG] ==================== COMPONENT MOUNT/UPDATE ====================`);
+    console.log(`🔍 [ToolDisplay-DEBUG] Component props:`, {
+      toolCallsCount: toolCalls.length,
+      chatId,
+      messageId,
+      toolCalls: toolCalls.map(tc => ({
+        id: tc.id,
+        functionName: tc.function.name,
+        mcpServer: tc.mcp_server,
+        status: tc.status,
+        hasResult: !!tc.result
+      }))
+    });
+    
+    // Debug global state
+    console.log(`🔍 [ToolDisplay-DEBUG] Global state:`, {
+      langGraphInteractions: {
+        exists: !!(window as any).langGraphInteractions,
+        size: ((window as any).langGraphInteractions || new Map()).size,
+        keys: Array.from(((window as any).langGraphInteractions || new Map()).keys())
+      },
+      agentStore: {
+        exists: !!useAgentStore.getState(),
+        hasResumeFunction: typeof useAgentStore.getState().resumeLangGraphWorkflow === 'function'
+      }
+    });
+    
+    console.log(`🔍 [ToolDisplay-DEBUG] ==================== END COMPONENT DEBUG ====================`);
+  }, [toolCalls, chatId, messageId]);
 
   if (!toolCalls || toolCalls.length === 0) {
     return null;
@@ -483,6 +807,31 @@ const ToolDisplay = memo(({ toolCalls, chatId, messageId }: ToolDisplayProps) =>
         </Typography>
 
         {toolCalls.map((toolCall) => {
+          console.log(`🔍 [ToolDisplay-DEBUG] ==================== RENDERING TOOL ====================`);
+          console.log(`🔍 [ToolDisplay-DEBUG] Tool render debug:`, {
+            id: toolCall.id,
+            functionName: toolCall.function.name,
+            mcpServer: toolCall.mcp_server,
+            toolDescription: toolCall.tool_description,
+            status: toolCall.status,
+            isAgentExecution: isAgentExecution(toolCall),
+            hasResult: !!toolCall.result,
+            resultLength: toolCall.result ? String(toolCall.result).length : 0
+          });
+          
+          // Debug interaction tracking
+          const langGraphInteractions = (window as any).langGraphInteractions || new Map();
+          const hasInteraction = langGraphInteractions.has(toolCall.id);
+          console.log(`🔍 [ToolDisplay-DEBUG] Tool interaction tracking:`, {
+            toolId: toolCall.id,
+            hasInteraction,
+            interactionDetails: hasInteraction ? {
+              requestId: langGraphInteractions.get(toolCall.id)?.request?.id,
+              threadId: langGraphInteractions.get(toolCall.id)?.request?.threadId,
+              type: langGraphInteractions.get(toolCall.id)?.request?.type
+            } : null
+          });
+          
           const isLoadingThisLog = isLoadingLogs && selectedToolName === toolCall.function.name;
           const isExecuting = executingToolIds.has(toolCall.id);
           const currentStatus = toolCall.status;
@@ -490,7 +839,9 @@ const ToolDisplay = memo(({ toolCalls, chatId, messageId }: ToolDisplayProps) =>
           const duration = toolCall.execution_time_seconds || executionDurations.get(toolCall.id);
           const isCompleted = currentStatus === 'executed' || currentStatus === 'error';
           const showSummarize = shouldShowSummarizeForTool(toolCall);
-          const isOSSwarmOrchestrated = toolCall.id.startsWith('approval-');
+          const isAgentOrchestrated = toolCall.id.startsWith('approval-');
+          const isLangGraphOrchestrated = toolCall.mcp_server === 'langgraph';
+          const isAgentExecutionCall = isAgentExecution(toolCall);
 
           let statusDisplayKey;
           if (currentStatus === 'approved') {
@@ -512,16 +863,24 @@ const ToolDisplay = memo(({ toolCalls, chatId, messageId }: ToolDisplayProps) =>
               <Typography variant="body2" component="div" sx={{ color: "text.secondary", display: 'flex', alignItems: 'center', mb: 0.25 }}>
                 <Box component="span" sx={{ mr: 0.5 }}>•</Box>
                 <Box component="span" sx={{ fontFamily: "monospace", color: "primary.main", px: 0.5, borderRadius: '4px' }}>
-                  {toolCall.function.name}
+                  {isAgentExecutionCall 
+                    ? toolCall.function.name.replace('_agent_execution', '').replace('_', ' ').toUpperCase() + ' Agent'
+                    : toolCall.function.name
+                  }
                 </Box>
                 {toolCall.mcp_server && (
                   <Box component="span" sx={{ ml: 1, fontSize: '0.75rem', color: 'text.secondary', fontStyle: 'italic' }}>
-                    ({formatMCPName(toolCall.mcp_server)})
+                    ({isAgentExecutionCall 
+                      ? 'Agent Orchestrator'
+                      : isLangGraphOrchestrated 
+                        ? 'LangGraph' 
+                        : formatMCPName(toolCall.mcp_server)
+                    })
                   </Box>
                 )}
-                {isOSSwarmOrchestrated && (
+                {isAgentOrchestrated && (
                   <Box component="span" sx={{ ml: 1, fontSize: '0.75rem', color: 'warning.main', fontStyle: 'italic' }}>
-                    via OSSwarm
+                    via Agent
                   </Box>
                 )}
                 {isAutoApproved && (
@@ -562,7 +921,7 @@ const ToolDisplay = memo(({ toolCalls, chatId, messageId }: ToolDisplayProps) =>
                         size="small"
                         color="error"
                         startIcon={<CancelOutlinedIcon />}
-                        onClick={() => handleDeny(toolCall.id)}
+                        onClick={() => handleReject(toolCall.id)}
                       >
                         {intl.formatMessage({ id: 'toolDisplay.deny' })}
                       </Button>
@@ -577,38 +936,21 @@ const ToolDisplay = memo(({ toolCalls, chatId, messageId }: ToolDisplayProps) =>
                           </Typography>
                         )}
                       </Typography>
-                      {/* Only show execute button for non-OSSwarm tools */}
-                      {!isOSSwarmOrchestrated && (
-                        <>
-                          <Button
-                            disableElevation
-                            variant='outlined'
-                            size="small"
-                            color="primary"
-                            startIcon={<PlayArrowIcon />}
-                            onClick={() => handleExecute(toolCall)}
-                            disabled={isExecuting}
-                          >
-                            {isExecuting ? intl.formatMessage({ id: 'toolDisplay.executing' }) : intl.formatMessage({ id: 'toolDisplay.execute' })}
-                          </Button>
-                          {/* Only show timer for non-OSSwarm tools */}
-                          {isExecuting && (
-                            <Chip
-                              icon={<AccessTimeIcon sx={{ fontSize: '0.75rem' }} />}
-                              label={`${Math.floor((Date.now() - (executionStartTimes.get(toolCall.id) || Date.now())) / 1000)}s`}
-                              size="small"
-                              variant="outlined"
-                              color="primary"
-                              sx={{ fontSize: '0.7rem', height: 20 }}
-                            />
-                          )}
-                        </>
-                      )}
                     </Box>
                   ) : currentStatus === 'executing' ? (
-                    <Typography variant="body2" sx={{ color: 'info.main', fontWeight: 'bold' }}>
-                      {intl.formatMessage({ id: 'toolDisplay.executing' })}
-                    </Typography>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <Typography variant="body2" sx={{ color: 'info.main', fontWeight: 'bold' }}>
+                        {intl.formatMessage({ id: 'toolDisplay.executing' })}
+                      </Typography>
+                      <Chip
+                        icon={<AccessTimeIcon sx={{ fontSize: '0.75rem' }} />}
+                        label={`${Math.floor((Date.now() - (executionStartTimes.get(toolCall.id) || Date.now())) / 1000)}s`}
+                        size="small"
+                        variant="outlined"
+                        color="primary"
+                        sx={{ fontSize: '0.7rem', height: 20 }}
+                      />
+                    </Box>
                   ) : currentStatus === 'denied' ? (
                     <Typography variant="body2" sx={{ color: 'error.main', fontWeight: 'bold' }}>
                       {intl.formatMessage({ id: 'toolDisplay.denied' })}
@@ -631,7 +973,6 @@ const ToolDisplay = memo(({ toolCalls, chatId, messageId }: ToolDisplayProps) =>
                         View Result {duration && `(${duration}s)`}
                       </Typography>
                       
-                      {/* Add summarize link inline with View Result */}
                       {showSummarize && (
                         <Typography
                           variant="caption"
@@ -671,7 +1012,6 @@ const ToolDisplay = memo(({ toolCalls, chatId, messageId }: ToolDisplayProps) =>
                         View Error {duration && `(${duration}s)`}
                       </Typography>
                       
-                      {/* Add summarize link inline with View Error too */}
                       {showSummarize && (
                         <Typography
                           variant="caption"

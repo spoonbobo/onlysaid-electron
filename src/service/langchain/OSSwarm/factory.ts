@@ -1,64 +1,65 @@
-import { OSSwarmService } from './service';
+// DEPRECATED: This file is deprecated in favor of LangGraph implementation
+// Use LangGraphOSSwarmFactory from './langgraph-factory' instead
+
 import { LangChainAgentOptions } from '../agent';
-import { OSSwarmLimits } from './core';
 
+/**
+ * @deprecated Use LangGraphOSSwarmFactory instead
+ * This class is kept for backward compatibility but will be removed
+ */
 export class OSSwarmFactory {
-  private static instances: Map<string, OSSwarmService> = new Map();
-  private static currentSwarm: OSSwarmService | null = null;
+  private static instances: Map<string, any> = new Map();
+  private static currentSwarm: any = null;
 
+  /**
+   * @deprecated Use LangGraphOSSwarmFactory.createWorkflow() instead
+   */
   static async createSwarm(
     options: LangChainAgentOptions,
-    limits?: Partial<OSSwarmLimits>,
+    limits?: any,
     humanInTheLoop: boolean = true,
     knowledgeBases?: {
       enabled: boolean;
       selectedKbIds: string[];
       workspaceId?: string;
     }
-  ): Promise<OSSwarmService> {
-    console.log('[OSSwarm Factory] createSwarm called with options:', {
-      provider: options.provider,
-      model: options.model,
-      toolsCount: options.tools?.length || 0,
-      toolsList: options.tools?.map((t: any) => ({
-        name: t.function?.name,
-        mcpServer: t.mcpServer
-      })) || [],
-      hasKnowledgeBases: !!knowledgeBases?.enabled
-    });
-
-    const key = this.generateKey(options);
-    
-    let instance = this.instances.get(key);
-    
-    if (!instance) {
-      console.log(`[OSSwarm Factory] Creating new swarm for ${options.provider}:${options.model} with human-in-the-loop: ${humanInTheLoop} and KB: ${!!knowledgeBases?.enabled}`);
-      instance = new OSSwarmService();
-      await instance.initializeSwarm(options, limits, humanInTheLoop, knowledgeBases);
-      this.instances.set(key, instance);
-    } else {
-      console.log(`[OSSwarm Factory] Using cached swarm instance`);
-    }
-
-    this.currentSwarm = instance;
-    return instance;
+  ): Promise<any> {
+    console.warn('[OSSwarm Factory] DEPRECATED: OSSwarmFactory is deprecated. Use LangGraphOSSwarmFactory instead.');
+    throw new Error('OSSwarmFactory is deprecated. Use LangGraphOSSwarmFactory.createWorkflow() instead.');
   }
 
-  static getCurrentSwarm(): OSSwarmService | null {
-    return this.currentSwarm;
+  /**
+   * @deprecated No longer supported in LangGraph implementation
+   */
+  static getCurrentSwarm(): any {
+    console.warn('[OSSwarm Factory] DEPRECATED: getCurrentSwarm() is not supported in LangGraph implementation.');
+    return null;
   }
 
-  private static generateKey(options: LangChainAgentOptions): string {
-    return `${options.provider}:${options.model}:${options.temperature || 0.7}`;
-  }
-
+  /**
+   * @deprecated Use LangGraphOSSwarmFactory.clearCache() instead
+   */
   static clearCache(): void {
-    console.log(`[OSSwarm Factory] Clearing ${this.instances.size} swarm instances`);
+    console.warn('[OSSwarm Factory] DEPRECATED: Use LangGraphOSSwarmFactory.clearCache() instead.');
     this.instances.clear();
     this.currentSwarm = null;
   }
 
+  /**
+   * @deprecated Use LangGraphOSSwarmFactory.getCacheSize() instead
+   */
   static getCacheSize(): number {
-    return this.instances.size;
+    console.warn('[OSSwarm Factory] DEPRECATED: Use LangGraphOSSwarmFactory.getCacheSize() instead.');
+    return 0;
+  }
+
+  static getCacheStats(): { totalInstances: number; cacheKeys: string[] } {
+    console.warn('[OSSwarm Factory] DEPRECATED: getCacheStats() is not supported.');
+    return { totalInstances: 0, cacheKeys: [] };
+  }
+
+  static removeInstance(): boolean {
+    console.warn('[OSSwarm Factory] DEPRECATED: removeInstance() is not supported.');
+    return false;
   }
 } 

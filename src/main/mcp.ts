@@ -3,7 +3,6 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { spawn, ChildProcess } from 'child_process';
 import { IMCPTool } from '@/../../types/MCP/tool';
-import path from 'path';
 
 const activeClients: Record<string, Client> = {};
 const activeProcesses: Record<string, ChildProcess> = {};
@@ -11,6 +10,10 @@ const activeProcesses: Record<string, ChildProcess> = {};
 // Global spawn override for Windows
 let originalSpawn: typeof spawn | null = null;
 let isSpawnPatched = false;
+
+// Expose active MCP clients so other main-process modules
+// (e.g. LangGraph workflow) can access them without bundler-path issues
+(global as any).__mcpActiveClients__ = activeClients;
 
 function patchSpawnForWindows() {
   if (process.platform === 'win32' && !isSpawnPatched) {
@@ -382,3 +385,5 @@ export function setupMCPHandlers() {
     }
   });
 }
+
+export { activeClients };

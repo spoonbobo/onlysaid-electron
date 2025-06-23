@@ -25,6 +25,7 @@ export interface LangChainAgentOptions {
   };
   tools?: OpenAI.Chat.Completions.ChatCompletionTool[];
   systemPrompt?: string;
+  humanInTheLoop?: boolean;
   knowledgeBases?: {
     enabled: boolean;
     selectedKbIds: string[];
@@ -37,9 +38,15 @@ export interface OpenAIMessage {
   content: string;
 }
 
+export interface CompletionOptions {
+  signal?: AbortSignal;
+  timeout?: number;
+}
+
 export class LangChainAgentService {
   private chatModel: BaseChatModel | null = null;
   private agentExecutor: AgentExecutor | null = null;
+  private activeOperations: Set<AbortController> = new Set();
 
   constructor(private options: LangChainAgentOptions) {
     this.initializeChatModel();
@@ -168,6 +175,66 @@ export class LangChainAgentService {
   }
 
   /**
+   * Check if operation should be aborted
+   */
+  private checkAborted(signal?: AbortSignal, operationName?: string): void {
+    if (signal?.aborted) {
+      console.log(`[LangChain Agent] Operation ${operationName || 'unknown'} aborted`);
+      throw new Error(`Operation ${operationName || 'completion'} aborted`);
+    }
+  }
+
+  /**
+   * Create a timeout promise that rejects after the specified duration
+   */
+  private createTimeoutPromise(timeout: number, signal?: AbortSignal): Promise<never> {
+    return new Promise((_, reject) => {
+      const timeoutId = setTimeout(() => {
+        if (!signal?.aborted) {
+          reject(new Error(`Operation timed out after ${timeout}ms`));
+        }
+      }, timeout);
+
+      // Clear timeout if aborted
+      signal?.addEventListener('abort', () => {
+        clearTimeout(timeoutId);
+        reject(new Error('Operation aborted'));
+      });
+    });
+  }
+
+  /**
+   * Wrap a promise with timeout and abort support
+   */
+  private async withTimeoutAndAbort<T>(
+    promise: Promise<T>,
+    options?: CompletionOptions,
+    operationName?: string
+  ): Promise<T> {
+    const { signal, timeout = 60000 } = options || {};
+    
+    // Check if already aborted
+    this.checkAborted(signal, operationName);
+
+    // Create combined promise with timeout and abort support
+    const promises: Promise<T | never>[] = [promise];
+    
+    if (timeout > 0) {
+      promises.push(this.createTimeoutPromise(timeout, signal));
+    }
+
+    try {
+      return await Promise.race(promises);
+    } catch (error: any) {
+      if (error.name === 'AbortError' || signal?.aborted || error.message?.includes('aborted')) {
+        console.log(`[LangChain Agent] ${operationName || 'Operation'} was aborted`);
+        throw new Error(`${operationName || 'Operation'} aborted`);
+      }
+      throw error;
+    }
+  }
+
+  /**
    * Initialize agent executor with tools
    */
   private async initializeAgentExecutor(tools: any[]): Promise<void> {
@@ -217,17 +284,38 @@ export class LangChainAgentService {
   /**
    * Simple completion without tools
    */
-  async getSimpleCompletion(messages: OpenAIMessage[]): Promise<OpenAI.Chat.Completions.ChatCompletion> {
+  async getSimpleCompletion(
+    messages: OpenAIMessage[], 
+    options?: CompletionOptions
+  ): Promise<OpenAI.Chat.Completions.ChatCompletion> {
     if (!this.chatModel) {
       throw new Error('Chat model not initialized');
     }
 
+    const { signal, timeout = 60000 } = options || {};
     const langChainMessages = this.convertToLangChainMessages(messages);
 
     try {
       console.log(`[LangChain Agent] Processing simple completion with ${messages.length} messages`);
       
-      const response = await this.chatModel.invoke(langChainMessages);
+      // Check abort before starting
+      this.checkAborted(signal, 'simple completion');
+
+      // Create the completion promise with abort support
+      const completionPromise = this.chatModel.invoke(langChainMessages, {
+        signal,
+        timeout,
+      });
+
+      // Wrap with timeout and abort handling
+      const response = await this.withTimeoutAndAbort(
+        completionPromise,
+        { signal, timeout },
+        'simple completion'
+      );
+      
+      // Check abort after completion
+      this.checkAborted(signal, 'simple completion');
       
       // Convert LangChain response back to OpenAI format
       const openAIResponse: OpenAI.Chat.Completions.ChatCompletion = {
@@ -256,7 +344,11 @@ export class LangChainAgentService {
 
       console.log(`[LangChain Agent] Simple completion successful, response length: ${response.content?.toString().length || 0}`);
       return openAIResponse;
-    } catch (error) {
+    } catch (error: any) {
+      if (error.name === 'AbortError' || signal?.aborted || error.message?.includes('aborted')) {
+        console.log('[LangChain Agent] Simple completion aborted');
+        throw new Error('Simple completion aborted');
+      }
       console.error('[LangChain Agent] Error in simple completion:', error);
       throw error;
     }
@@ -265,33 +357,65 @@ export class LangChainAgentService {
   /**
    * Agent completion with tools
    */
-  async getAgentCompletion(messages: OpenAIMessage[]): Promise<OpenAI.Chat.Completions.ChatCompletion> {
+  async getAgentCompletion(
+    messages: OpenAIMessage[], 
+    options?: CompletionOptions
+  ): Promise<OpenAI.Chat.Completions.ChatCompletion> {
     const tools = this.convertToLangChainTools(this.options.tools);
+    const { signal, timeout = 60000 } = options || {};
     
     if (tools.length === 0) {
       console.log('[LangChain Agent] No tools available, falling back to simple completion');
-      return this.getSimpleCompletion(messages);
+      return this.getSimpleCompletion(messages, options);
     }
 
     try {
-      // Don't use agent executor - just get the model to decide which tools to call
       if (!this.chatModel) {
         throw new Error('Chat model not initialized');
       }
 
-      const langChainMessages = this.convertToLangChainMessages(messages);
+      // Check abort before starting
+      this.checkAborted(signal, 'agent completion');
 
-      // Convert LangChain tools to OpenAI format for the model
+      const langChainMessages = this.convertToLangChainMessages(messages);
       const openAITools = this.options.tools || [];
+
+      console.log(`[LangChain Agent] DEBUG - Exact tools being passed:`, {
+        toolCount: openAITools.length,
+        tools: openAITools.map(t => ({
+          name: t.function?.name,
+          mcpServer: (t as any).mcpServer
+        }))
+      });
 
       console.log(`[LangChain Agent] Processing tool selection with ${openAITools.length} tools`);
 
-      // For ChatOpenAI models, bind tools before invoking
+      // Create a fresh model instance with only our tools and abort support
       const modelWithTools = openAITools.length > 0 
-        ? (this.chatModel as any).bind({ tools: openAITools, tool_choice: "auto" })
+        ? (this.chatModel as any).bind({ 
+            tools: openAITools, 
+            tool_choice: "auto",
+            signal,
+            timeout,
+            ...((this.chatModel as any).lc_kwargs || {})
+          })
         : this.chatModel;
 
-      const response = await modelWithTools.invoke(langChainMessages);
+      // Create the completion promise
+      const completionPromise = modelWithTools.invoke(langChainMessages, {
+        signal,
+        timeout,
+      });
+
+      // Wrap with timeout and abort handling
+      const response: any = await this.withTimeoutAndAbort(
+        completionPromise,
+        { signal, timeout },
+        'agent completion'
+      );
+
+      // Check abort after completion
+      this.checkAborted(signal, 'agent completion');
 
       // Extract tool calls from the response
       let toolCalls: any[] = [];
@@ -343,7 +467,11 @@ export class LangChainAgentService {
 
       console.log(`[LangChain Agent] Tool selection completed, tool calls: ${formattedToolCalls.length}`);
       return openAIResponse;
-    } catch (error) {
+    } catch (error: any) {
+      if (error.name === 'AbortError' || signal?.aborted || error.message?.includes('aborted')) {
+        console.log('[LangChain Agent] Agent completion aborted');
+        throw new Error('Agent completion aborted');
+      }
       console.error('[LangChain Agent] Error in agent completion:', error);
       throw error;
     }
@@ -351,26 +479,79 @@ export class LangChainAgentService {
 
   /**
    * Main completion method that decides between simple and agent completion
+   * Enhanced with comprehensive abort support
    */
-  async getCompletion(messages: OpenAIMessage[]): Promise<OpenAI.Chat.Completions.ChatCompletion> {
+  async getCompletion(
+    messages: OpenAIMessage[], 
+    abortController?: AbortController,
+    timeout?: number
+  ): Promise<OpenAI.Chat.Completions.ChatCompletion> {
+    const signal = abortController?.signal;
+    const options: CompletionOptions = { signal, timeout };
+
     console.log('[LangChain Agent] Processing completion request:', {
       provider: this.options.provider,
       model: this.options.model,
       messageCount: messages.length,
       hasTools: this.options.tools && this.options.tools.length > 0,
+      hasAbortController: !!abortController,
+      timeout: timeout || 60000,
     });
 
+    // Check if already aborted
+    this.checkAborted(signal, 'completion');
+
+    // Track this operation
+    if (abortController) {
+      this.activeOperations.add(abortController);
+    }
+
     try {
+      let result: OpenAI.Chat.Completions.ChatCompletion;
+
       // If we have tools, use agent completion, otherwise use simple completion
       if (this.options.tools && this.options.tools.length > 0) {
-        return await this.getAgentCompletion(messages);
+        result = await this.getAgentCompletion(messages, options);
       } else {
-        return await this.getSimpleCompletion(messages);
+        result = await this.getSimpleCompletion(messages, options);
       }
-    } catch (error) {
+
+      // Final abort check
+      this.checkAborted(signal, 'completion');
+      
+      console.log('[LangChain Agent] Completion successful');
+      return result;
+    } catch (error: any) {
+      if (error.name === 'AbortError' || signal?.aborted || error.message?.includes('aborted')) {
+        console.log('[LangChain Agent] Completion aborted by user');
+        throw new Error('Completion aborted');
+      }
       console.error('[LangChain Agent] Error in completion:', error);
       throw error;
+    } finally {
+      // Clean up operation tracking
+      if (abortController) {
+        this.activeOperations.delete(abortController);
+      }
     }
+  }
+
+  /**
+   * Abort all active operations
+   */
+  abortAllOperations(): void {
+    console.log(`[LangChain Agent] Aborting ${this.activeOperations.size} active operations`);
+    
+    for (const controller of this.activeOperations) {
+      try {
+        controller.abort();
+      } catch (error) {
+        console.warn('[LangChain Agent] Error aborting operation:', error);
+      }
+    }
+    
+    this.activeOperations.clear();
+    console.log('[LangChain Agent] All operations aborted');
   }
 
   /**
@@ -405,4 +586,28 @@ export class LangChainAgentService {
   isInitialized(): boolean {
     return this.chatModel !== null;
   }
-} 
+
+  /**
+   * Get the number of active operations
+   */
+  getActiveOperationsCount(): number {
+    return this.activeOperations.size;
+  }
+
+  /**
+   * Cleanup resources
+   */
+  dispose(): void {
+    console.log('[LangChain Agent] Disposing service...');
+    
+    // Abort all active operations
+    this.abortAllOperations();
+    
+    // Clear model references
+    this.chatModel = null;
+    this.agentExecutor = null;
+    
+    console.log('[LangChain Agent] Service disposed');
+  }
+}
+

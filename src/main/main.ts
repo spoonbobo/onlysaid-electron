@@ -38,7 +38,9 @@ import { setupAppHandlers } from './app';
 import { setupCryptoHandlers } from './crypto/cryptoHandlers';
 import { setupN8nHandlers } from './n8n';
 import { setupHealthCheckHandlers, cleanupHealthCheck } from './healthcheck';
-import { setupLangChainHandlers, setupOSSwarmHandlers } from '../service/langchain';
+import { setupLangChainHandlers } from '../service/langchain';
+import { setupHumanInTheLoopHandlers } from './langchain/human_in_the_loop';
+
 // Load environment variables
 dotenv.config();
 
@@ -61,31 +63,27 @@ setupCryptoHandlers();
 setupN8nHandlers();
 setupHealthCheckHandlers();
 setupLangChainHandlers();
-setupOSSwarmHandlers();
+
 // Initialize authentication modules
 initAuth(process.env.ONLYSAID_API_URL || '', process.env.ONLYSAID_DOMAIN || '');
 
 // Simplified Google Auth initialization (no preloading needed)
 async function initializeGoogleAuth() {
-  console.log('[Main] ===== INITIALIZING GOOGLE AUTH =====');
   try {
     // @ts-ignore
     const { initGoogleAuth } = await import('./google');
     initGoogleAuth();
-    console.log('[Main] Google Auth initialized successfully');
   } catch (error) {
-    console.warn('[Main] Google Auth initialization failed:', error);
+    // Silent fail for Google Auth
   }
 }
 
 // Add Microsoft Auth initialization
 async function initializeMicrosoftAuth() {
-  console.log('[Main] ===== INITIALIZING MICROSOFT AUTH =====');
   try {
     initMicrosoftAuth();
-    console.log('[Main] Microsoft Auth initialized successfully');
   } catch (error) {
-    console.warn('[Main] Microsoft Auth initialization failed:', error);
+    // Silent fail for Microsoft Auth
   }
 }
 
@@ -116,7 +114,6 @@ let mainWindow: BrowserWindow | null = null;
 
 ipcMain.on('ipc-example', async (event, arg) => {
   const msgTemplate = (pingPong: string) => `IPC test: ${pingPong}`;
-  console.log(msgTemplate(arg));
   event.reply('ipc-example', msgTemplate('pong'));
 });
 
@@ -124,10 +121,8 @@ ipcMain.handle('db:initialize', async () => {
   try {
     initializeDatabase();
     await runMigrations();
-    console.log('Database initialized');
     return true;
   } catch (error) {
-    console.error('Failed to initialize database:', error);
     throw error;
   }
 });
@@ -136,7 +131,6 @@ ipcMain.handle('db:query', async (_event, { query, params }) => {
   try {
     return executeQuery(query, params);
   } catch (error) {
-    console.error('Error executing query:', error);
     throw error;
   }
 });
@@ -145,7 +139,6 @@ ipcMain.handle('db:transaction', async (_event, callback) => {
   try {
     return executeTransaction(callback);
   } catch (error) {
-    console.error('Error executing transaction:', error);
     throw error;
   }
 });
@@ -155,7 +148,6 @@ ipcMain.handle('db:close', async () => {
     closeDatabase();
     return true;
   } catch (error) {
-    console.error('Error closing database:', error);
     throw error;
   }
 });
@@ -171,10 +163,8 @@ ipcMain.handle('session:set-cookie', async (event, cookieDetails) => {
       path: cookieDetails.path || '/',
       domain: cookieDetails.domain,
     });
-    console.log(`[Main] Cookie "${cookieDetails.name}" set for ${cookieDetails.url}`);
     return { success: true };
   } catch (error) {
-    console.error('[Main] Failed to set cookie:', error);
     return { success: false, error: error instanceof Error ? error.message : String(error) };
   }
 });
@@ -185,7 +175,6 @@ ipcMain.handle('dialog:showSaveDialog', async (event, options) => {
     const result = await dialog.showSaveDialog(mainWindow!, options);
     return result;
   } catch (error) {
-    console.error('Error showing save dialog:', error);
     throw error;
   }
 });
@@ -204,30 +193,22 @@ const installExtensions = async () => {
       extensions.map((name) => installer[name]),
       forceDownload,
     )
-    .catch(console.log);
+    .catch(() => {});
 };
 
 const createWindow = async () => {
-  console.log('[Main] ===== INITIALIZATION STARTED =====');
-  console.log('[Main] 📋 Task 1/7: Setting up development environment...');
-
   if (isDebug) {
-    console.log('[Main] Installing development extensions...');
     await installExtensions();
-    console.log('[Main] ✅ Development extensions installed');
   }
 
-  console.log('[Main] 📋 Task 2/7: Initializing database...');
   // Initialize database directly during app startup
   try {
     const db = initializeDatabase();
     await runMigrations();
-    console.log('[Main] ✅ Database initialized and migrations applied');
   } catch (error) {
-    console.error('[Main] ❌ Failed to initialize database:', error);
+    // Database initialization failed
   }
 
-  console.log('[Main] 📋 Task 3/7: Setting up application window...');
   const RESOURCES_PATH = app.isPackaged
     ? path.join(process.resourcesPath, 'assets')
     : path.join(__dirname, '../../assets');
@@ -253,25 +234,19 @@ const createWindow = async () => {
       webSecurity: true
     },
   });
-  console.log('[Main] ✅ Application window created');
 
   // Disable the native application menu completely
   Menu.setApplicationMenu(null);
 
-  console.log('[Main] 📋 Task 4/7: Setting up socket handlers...');
   setupSocketHandlers(mainWindow);
-  console.log('[Main] ✅ Socket handlers configured');
-
-  console.log('[Main] 📋 Task 5/7: Setting up menubar handlers...');
   setupMenuBarHandlers(mainWindow);
-  console.log('[Main] ✅ Menubar handlers configured');
-
-  console.log('[Main] 📋 Task 6/7: Loading application interface...');
+  
+  // ✅ Setup human-in-the-loop handlers with main window reference
+  setupHumanInTheLoopHandlers(mainWindow);
+  
   mainWindow.loadURL(resolveHtmlPath('index.html'));
-  console.log('[Main] ✅ Application interface loaded');
 
   mainWindow.on('ready-to-show', () => {
-    console.log('[Main] 📋 Task 7/7: Finalizing window setup...');
     if (!mainWindow) {
       throw new Error('"mainWindow" is not defined');
     }
@@ -284,16 +259,12 @@ const createWindow = async () => {
     // Since we're using direct HTTP requests, Google services are ready immediately
     setTimeout(() => {
       if (mainWindow && mainWindow.webContents) {
-        console.log('[Main] ✅ Google services ready (using direct HTTP requests)');
         mainWindow.webContents.send('google-services:ready');
       }
     }, 1000); // Small delay to let UI settle
-    
-    console.log('[Main] ✅ Window setup completed');
   });
 
   mainWindow.on('closed', () => {
-    console.log('[Main] Window closed event fired');
     mainWindow = null;
   });
 
@@ -303,15 +274,8 @@ const createWindow = async () => {
     return { action: 'deny' };
   });
 
-  console.log('[Main] Setting up auto-updater...');
   new AppUpdater();
-  console.log('[Main] ✅ Auto-updater configured');
-
-  console.log('[Main] Setting up window event handlers...');
   setupWindowHandlers(mainWindow);
-  console.log('[Main] ✅ Window event handlers configured');
-
-  console.log('[Main] ===== INITIALIZATION COMPLETED =====');
 };
 
 /**
@@ -339,25 +303,20 @@ app
       if (mainWindow === null) createWindow();
     });
   })
-  .catch(console.log);
+  .catch(() => {});
 
 // Update the app quit handler
 app.on('will-quit', (event) => {
   try {
-    console.log('App is quitting, cleaning up...');
-
     // Unregister global shortcuts
     unregisterMenuAccelerators();
-    console.log('Global shortcuts unregistered');
 
     // Clean up health check
     cleanupHealthCheck();
-    console.log('Health check cleaned up');
 
     // Close database
     closeDatabase();
-    console.log('Database closed successfully on app exit');
   } catch (error) {
-    console.error('Error during app cleanup:', error);
+    // Silent cleanup error
   }
 });

@@ -7,27 +7,27 @@ import {
   Timeline, 
   TimelineOutlined
 } from '@mui/icons-material';
-import { useStreamStore } from '@/renderer/stores/Stream/StreamStore';
+import { useAgentStore } from '@/renderer/stores/Agent/AgentStore';
 import { useAgentTaskStore } from '@/renderer/stores/Agent/AgentTaskStore';
 
-interface OSSwarmToggleProps {
+interface AgentTaskToggleProps {
   disabled?: boolean;
   onToggle?: (show: boolean) => void;
   isOverlayVisible?: boolean;
 }
 
-export default function OSSwarmToggle({ 
+export default function AgentTaskToggle({ 
   disabled = false, 
   onToggle,
   isOverlayVisible = false
-}: OSSwarmToggleProps) {
+}: AgentTaskToggleProps) {
   const [isActive, setIsActive] = useState(false);
   
   const { 
-    activeOSSwarmTasks, 
-    osswarmTaskStatus,
-    osswarmUpdates 
-  } = useStreamStore();
+    activeAgentTasks, 
+    agentTaskStatus,
+    agentTaskUpdates 
+  } = useAgentStore();
   
   const { 
     currentExecution,
@@ -38,12 +38,12 @@ export default function OSSwarmToggle({
     setIsActive(isOverlayVisible);
   }, [isOverlayVisible]);
 
-  // Check if there's any OSSwarm activity
-  const hasActiveTask = Object.values(activeOSSwarmTasks).some(active => active);
-  const hasRunningTask = Object.values(osswarmTaskStatus).some(status => 
+  // Check if there's any Agent Task activity
+  const hasActiveTask = Object.values(activeAgentTasks).some(active => active);
+  const hasRunningTask = Object.values(agentTaskStatus).some(status => 
     ['initializing', 'running', 'completing'].includes(status)
   );
-  const hasRecentUpdates = Object.values(osswarmUpdates).some(updates => 
+  const hasRecentUpdates = Object.values(agentTaskUpdates).some(updates => 
     updates && updates.length > 0
   );
   const hasCurrentExecution = currentExecution !== null;
@@ -55,7 +55,7 @@ export default function OSSwarmToggle({
 
   // Get status color
   const getStatusColor = () => {
-    const currentTaskStatus = osswarmTaskStatus['current'];
+    const currentTaskStatus = agentTaskStatus['current'];
     
     if (currentTaskStatus === 'failed') return 'error.main';
     if (currentTaskStatus === 'completed') return 'success.main';
@@ -73,10 +73,10 @@ export default function OSSwarmToggle({
   return (
     <Tooltip 
       title={
-        isRunning ? "OSSwarm is running - Click to view" :
-        hasActivity ? "OSSwarm activity detected - Click to view" :
-        isActive ? "Close OSSwarm Monitor" :
-        "Open OSSwarm Monitor"
+        isRunning ? "Agent Task is running - Click to view" :
+        hasActivity ? "Agent Task activity detected - Click to view" :
+        isActive ? "Close Agent Task Monitor" :
+        "Open Agent Task Monitor"
       }
       placement="top"
     >

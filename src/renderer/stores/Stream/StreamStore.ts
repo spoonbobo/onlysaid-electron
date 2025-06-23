@@ -1,13 +1,11 @@
 import { create } from 'zustand';
 import { useLLMConfigurationStore } from '../LLM/LLMConfiguration';
-import { useAgentSettingsStore } from '../Agent/AgentSettingStore';
 
 interface StreamMessage {
   content: string;
   full: string;
   timestamp: number;
 }
-
 
 interface StreamState {
   // State
@@ -30,22 +28,6 @@ interface StreamState {
     messages: OpenAIMessage[],
     options: OpenAIStreamOptions
   ) => Promise<string>;
-
-  // OSSwarm streaming
-  osswarmUpdates: Record<string, string[]>;
-  activeOSSwarmTasks: Record<string, boolean>;
-  osswarmTaskStatus: Record<string, 'idle' | 'initializing' | 'running' | 'completing' | 'completed' | 'failed' | 'aborted'>;
-  
-  executeOSSwarmTask: (
-    task: string,
-    options: any,
-    chatId?: string,
-    workspaceId?: string
-  ) => Promise<{ success: boolean; result?: string; error?: string }>;
-  abortOSSwarmTask: (taskId?: string) => Promise<void>;
-  clearOSSwarmUpdates: (taskId: string) => void;
-  forceStopOSSwarmTask: (taskId: string) => void;
-  setOSSwarmTaskStatus: (taskId: string, status: StreamState['osswarmTaskStatus'][string]) => void;
 }
 
 export interface OpenAIMessage {
@@ -61,31 +43,6 @@ export interface OpenAIStreamOptions {
   provider?: "openai" | "deepseek" | "ollama" | "onlysaid-kb" | null;
   kbIds?: string[];
 }
-
-// Helper function to get API configuration based on provider
-const getProviderConfig = () => {
-  const config = useLLMConfigurationStore.getState();
-  return {
-    openai: {
-      key: config.openAIKey,
-      enabled: config.openAIEnabled && config.openAIVerified,
-    },
-    deepseek: {
-      key: config.deepSeekKey,
-      enabled: config.deepSeekEnabled && config.deepSeekVerified,
-    },
-    oneasia: {
-      key: config.oneasiaKey,
-      enabled: config.oneasiaEnabled && config.oneasiaVerified,
-    },
-    ollama: {
-      baseUrl: config.ollamaBaseURL,
-      model: config.ollamaModel,
-      enabled: config.ollamaEnabled && config.ollamaVerified,
-    },
-    temperature: config.temperature,
-  };
-};
 
 export const useStreamStore = create<StreamState>((set, get) => {
   // Add batching mechanism
@@ -160,36 +117,6 @@ export const useStreamStore = create<StreamState>((set, get) => {
           batchedChunks[streamId] = [];
         }
       }, BATCH_INTERVAL);
-    });
-
-    window.electron.ipcRenderer.on('osswarm:stream_update', (...args) => {
-      const payload = args[1] as { update?: string };
-      if (payload?.update) {
-        const taskId = 'current';
-        
-        // Update status based on stream content
-        let newStatus: StreamState['osswarmTaskStatus'][string] = 'running';
-        if (payload.update.includes('initializing') || payload.update.includes('analyzing')) {
-          newStatus = 'initializing';
-        } else if (payload.update.includes('completed') || payload.update.includes('success')) {
-          newStatus = 'completing';
-        } else if (payload.update.includes('error') || payload.update.includes('failed')) {
-          newStatus = 'failed';
-        } else if (payload.update.includes('aborted')) {
-          newStatus = 'aborted';
-        }
-        
-        set(state => ({
-          osswarmUpdates: {
-            ...state.osswarmUpdates,
-            [taskId]: [...(state.osswarmUpdates[taskId] || []), payload.update!]
-          },
-          osswarmTaskStatus: {
-            ...state.osswarmTaskStatus,
-            [taskId]: newStatus
-          }
-        }));
-      }
     });
   }
 
@@ -359,137 +286,5 @@ export const useStreamStore = create<StreamState>((set, get) => {
         flushAndFinalizeStream(streamId);
       }
     },
-
-    osswarmUpdates: {},
-    activeOSSwarmTasks: {},
-    osswarmTaskStatus: {},
-
-    executeOSSwarmTask: async (task: string, options: any, chatId?: string, workspaceId?: string) => {
-      const taskId = 'current';
-      
-      const { swarmLimits } = useAgentSettingsStore.getState();
-      
-      console.log('[StreamStore] Executing OSSwarm task with context:', { chatId, workspaceId });
-      
-      // Set initial state
-      set(state => ({
-        osswarmUpdates: { ...state.osswarmUpdates, [taskId]: [] },
-        activeOSSwarmTasks: { ...state.activeOSSwarmTasks, [taskId]: true },
-        osswarmTaskStatus: { ...state.osswarmTaskStatus, [taskId]: 'initializing' }
-      }));
-
-      try {
-        const result = await window.electron.osswarm.executeTask({
-          task,
-          options: {
-            ...options,
-            chatId,
-            workspaceId
-          },
-          limits: swarmLimits
-        });
-
-        // Update final status
-        const finalStatus = result.success ? 'completed' : 'failed';
-        set(state => ({
-          activeOSSwarmTasks: { ...state.activeOSSwarmTasks, [taskId]: false },
-          osswarmTaskStatus: { ...state.osswarmTaskStatus, [taskId]: finalStatus }
-        }));
-
-        // Clear updates after delay only if completed successfully
-        if (result.success) {
-          setTimeout(() => {
-            set(state => ({
-              osswarmUpdates: { ...state.osswarmUpdates, [taskId]: [] },
-              osswarmTaskStatus: { ...state.osswarmTaskStatus, [taskId]: 'idle' }
-            }));
-          }, 5000); // Longer delay to show completion status
-        }
-
-        return result;
-      } catch (error: any) {
-        set(state => ({
-          activeOSSwarmTasks: { ...state.activeOSSwarmTasks, [taskId]: false },
-          osswarmTaskStatus: { ...state.osswarmTaskStatus, [taskId]: 'failed' }
-        }));
-        
-        // Don't auto-clear on error - let user see the error
-        return { success: false, error: error.message };
-      }
-    },
-
-    abortOSSwarmTask: async (taskId = 'current') => {
-      console.log('[StreamStore] Aborting OSSwarm task:', taskId);
-      
-      try {
-        // Set aborting status immediately
-        set(state => ({
-          osswarmTaskStatus: { ...state.osswarmTaskStatus, [taskId]: 'aborted' }
-        }));
-
-        await window.electron.osswarm.abortTask({ taskId });
-        
-        set(state => ({
-          activeOSSwarmTasks: { ...state.activeOSSwarmTasks, [taskId]: false },
-          osswarmUpdates: { 
-            ...state.osswarmUpdates, 
-            [taskId]: [...(state.osswarmUpdates[taskId] || []), '[OSSwarm] Task aborted by user'] 
-          }
-        }));
-
-        // Clear after showing abort message
-        setTimeout(() => {
-          set(state => ({
-            osswarmUpdates: { ...state.osswarmUpdates, [taskId]: [] },
-            osswarmTaskStatus: { ...state.osswarmTaskStatus, [taskId]: 'idle' }
-          }));
-        }, 3000);
-
-      } catch (error: any) {
-        console.error('[StreamStore] Error aborting OSSwarm task:', error);
-        set(state => ({
-          osswarmUpdates: { 
-            ...state.osswarmUpdates, 
-            [taskId]: [...(state.osswarmUpdates[taskId] || []), `[OSSwarm] Abort failed: ${error.message}`] 
-          },
-          osswarmTaskStatus: { ...state.osswarmTaskStatus, [taskId]: 'failed' }
-        }));
-      }
-    },
-
-    clearOSSwarmUpdates: (taskId: string) => {
-      set(state => ({
-        osswarmUpdates: { ...state.osswarmUpdates, [taskId]: [] },
-        osswarmTaskStatus: { ...state.osswarmTaskStatus, [taskId]: 'idle' }
-      }));
-    },
-
-    forceStopOSSwarmTask: (taskId: string) => {
-      console.log('[StreamStore] Force stopping OSSwarm task:', taskId);
-      
-      set(state => ({
-        activeOSSwarmTasks: { ...state.activeOSSwarmTasks, [taskId]: false },
-        osswarmTaskStatus: { ...state.osswarmTaskStatus, [taskId]: 'aborted' },
-        osswarmUpdates: { 
-          ...state.osswarmUpdates, 
-          [taskId]: [...(state.osswarmUpdates[taskId] || []), '[OSSwarm] Task forcefully stopped'] 
-        }
-      }));
-
-      // Clear after a short delay
-      setTimeout(() => {
-        set(state => ({
-          osswarmUpdates: { ...state.osswarmUpdates, [taskId]: [] },
-          osswarmTaskStatus: { ...state.osswarmTaskStatus, [taskId]: 'idle' }
-        }));
-      }, 2000);
-    },
-
-    setOSSwarmTaskStatus: (taskId: string, status: StreamState['osswarmTaskStatus'][string]) => {
-      set(state => ({
-        osswarmTaskStatus: { ...state.osswarmTaskStatus, [taskId]: status }
-      }));
-    },
-
   };
 });

@@ -206,8 +206,6 @@ export class CryptoService implements ICryptoService {
    * Create chat key and distribute to users
    */
   async createChatKey(chatId: string, createdBy: string, userIds: string[], userMasterKeys: Record<string, string>): Promise<void> {
-    console.log(`🔑 [createChatKey] Creating key for chat ${chatId}, users: ${userIds.join(', ')}`);
-    
     // Check if chat key already exists in chat_keys table
     const existingKey = await executeQuery(
       'SELECT id, key_data FROM chat_keys WHERE chat_id = @chatId AND key_version = @keyVersion',
@@ -217,7 +215,6 @@ export class CryptoService implements ICryptoService {
     let chatKeyData: string;
 
     if (existingKey.length > 0) {
-      console.log(`🔑 [createChatKey] Chat key already exists for chat ${chatId}, using existing key`);
       chatKeyData = existingKey[0].key_data;
     } else {
       // Generate new chat key
@@ -226,8 +223,6 @@ export class CryptoService implements ICryptoService {
       chatKey.createdBy = createdBy;
       chatKeyData = chatKey.keyData;
 
-      console.log(`🔑 [createChatKey] Generated new chat key:`, chatKeyData ? 'YES' : 'NO');
-
       // Store chat key in chat_keys table
       const keyId = crypto.randomUUID();
       await executeQuery(
@@ -235,19 +230,14 @@ export class CryptoService implements ICryptoService {
          VALUES (@id, @chatId, @keyData, @keyVersion, @createdBy)`,
         { id: keyId, chatId, keyData: chatKeyData, keyVersion: 1, createdBy }
       );
-
-      console.log(`✅ [createChatKey] Stored new chat key in chat_keys table`);
     }
 
     // Encrypt and distribute to each user (even if key already existed)
     for (const userId of userIds) {
       const masterKey = userMasterKeys[userId];
       if (!masterKey) {
-        console.log(`❌ [createChatKey] No master key for user ${userId}`);
         continue;
       }
-
-      console.log(`🔑 [createChatKey] Processing user ${userId}`);
 
       // Check if user already has access to this key
       const existingUserKey = await executeQuery(
@@ -256,15 +246,11 @@ export class CryptoService implements ICryptoService {
       );
 
       if (existingUserKey.length > 0) {
-        console.log(`✅ [createChatKey] User ${userId} already has access to chat ${chatId}, skipping`);
         continue;
       }
 
-      console.log(`🔐 [createChatKey] Encrypting chat key for user ${userId}`);
       const encryptedChatKey = await this.encryptWorkspaceKey(chatKeyData, masterKey);
-      console.log(`🔐 [createChatKey] Encrypted key length:`, encryptedChatKey.length);
       
-      // ✅ FIX: Explicitly set has_access = 1 (SQLite boolean)
       const userKeyId = crypto.randomUUID();
       await executeQuery(
         `INSERT INTO user_chat_keys (id, user_id, chat_id, encrypted_chat_key, key_version, granted_by, has_access)
@@ -279,15 +265,6 @@ export class CryptoService implements ICryptoService {
           hasAccess: 1 
         }
       );
-
-      console.log(`✅ [createChatKey] Stored encrypted key for user ${userId}`);
-      
-      // ✅ ADD: Verify the record was inserted correctly
-      const verifyInsert = await executeQuery(
-        'SELECT id, has_access FROM user_chat_keys WHERE user_id = @userId AND chat_id = @chatId AND key_version = @keyVersion',
-        { userId, chatId, keyVersion: 1 }
-      );
-      console.log(`🔍 [createChatKey] Verification query result:`, verifyInsert);
     }
 
     console.log(`✅ [createChatKey] Completed chat key creation for ${userIds.length} users`);

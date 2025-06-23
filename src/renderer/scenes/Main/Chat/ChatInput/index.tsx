@@ -22,8 +22,8 @@ interface ChatInputProps {
   disabled?: boolean;
   replyingTo?: IChatMessage | null;
   onCancelReply?: () => void;
-  onOSSwarmToggle?: (show: boolean) => void;
-  osswarmOverlayVisible?: boolean;
+  onAgentToggle?: (show: boolean) => void;
+  agentOverlayVisible?: boolean;
 }
 
 function ChatInput({
@@ -33,8 +33,8 @@ function ChatInput({
   disabled = false,
   replyingTo = null,
   onCancelReply,
-  onOSSwarmToggle,
-  osswarmOverlayVisible = false
+  onAgentToggle,
+  agentOverlayVisible = false
 }: ChatInputProps) {
   const [isSending, setIsSending] = useState(false);
   const { attachments, setAttachment, clearAttachments } = useCurrentTopicContext();
@@ -351,8 +351,8 @@ function ChatInput({
             isSending={isSending}
             onAttachment={handleAttachment}
             hasAttachments={Object.keys(attachments).length > 0}
-            onOSSwarmToggle={onOSSwarmToggle}
-            osswarmOverlayVisible={osswarmOverlayVisible}
+            onAgentToggle={onAgentToggle}
+            agentOverlayVisible={agentOverlayVisible}
           />
         </Box>
       </FileDrop>

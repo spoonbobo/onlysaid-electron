@@ -21,10 +21,9 @@ import {
   Button,
   IconButton
 } from "@mui/material";
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useMemo } from "react";
 import { useAgentStore } from "@/renderer/stores/Agent/AgentStore";
 import { useLLMConfigurationStore } from "@/renderer/stores/LLM/LLMConfiguration";
-import { useStreamStore } from "@/renderer/stores/Stream/StreamStore";
 import { useAgentTaskStore } from "@/renderer/stores/Agent/AgentTaskStore";
 import { 
   Timeline, 
@@ -35,11 +34,13 @@ import {
   Analytics,
   CheckCircle,
   Error as ErrorIcon,
-  Info as InfoIcon
+  Info as InfoIcon,
+  Person
 } from "@mui/icons-material";
 import { useIntl } from "react-intl";
 import { alpha } from "@mui/material/styles";
 import { toast } from "@/utils/toast";
+import { useHistoryStore } from '@/renderer/stores/Agent/task/HistoryStore';   // top of file
 
 // Import sub-components
 import { StatusHeader } from './StatusHeader';
@@ -47,6 +48,8 @@ import { LogsPanel } from './LogsPanel';
 import { GraphPanel } from './GraphPanel';
 import { StatsFooter } from './StatsFooter';
 import TaskHistory from '../Dialog/Agent/TaskHistory';
+import AgentCards from './AgentCards';
+import { AgentCard as IAgentCard } from '@/../../types/Agent/AgentCard';
 
 interface AgentWorkOverlayProps {
   visible?: boolean;
@@ -68,16 +71,18 @@ export default function AgentWorkOverlay({
   const overlayRef = useRef<HTMLDivElement>(null);
   
   // Store hooks
-  const { isProcessingResponse } = useAgentStore();
-  const { aiMode } = useLLMConfigurationStore();
   const { 
-    osswarmUpdates, 
-    activeOSSwarmTasks, 
-    osswarmTaskStatus,
-    abortOSSwarmTask, 
-    forceStopOSSwarmTask,
-    clearOSSwarmUpdates 
-  } = useStreamStore();
+    isProcessingResponse,
+    agentTaskUpdates, 
+    activeAgentTasks, 
+    agentTaskStatus,
+    abortAgentTask, 
+    forceStopAgentTask,
+    clearAgentTaskUpdates 
+  } = useAgentStore();
+  
+  const { aiMode } = useLLMConfigurationStore();
+  
   const { 
     currentGraph, 
     currentExecution,
@@ -86,7 +91,9 @@ export default function AgentWorkOverlay({
     setCurrentExecution,
     deleteExecution,
     forceDeleteExecution,
-    nukeAllExecutions
+    nukeAllExecutions,
+    getAgentCards,
+    getAgentCardsByExecution
   } = useAgentTaskStore();
   
   // Local state
@@ -96,17 +103,23 @@ export default function AgentWorkOverlay({
   const [isAborting, setIsAborting] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showHistoryDialog, setShowHistoryDialog] = useState(false);
-  const [deleteConfirmDialog, setDeleteConfirmDialog] = useState<string | null>(null);
   const [parentBounds, setParentBounds] = useState<DOMRect | null>(null);
+  
+  // ✅ Add agent cards state
+  const [showAgentCards, setShowAgentCards] = useState(false);
+  const [agentViewMode, setAgentViewMode] = useState<'grid' | 'list'>('grid');
+  const [agentSearchQuery, setAgentSearchQuery] = useState('');
+  const [agentStatusFilter, setAgentStatusFilter] = useState('all');
+  const [agentRoleFilter, setAgentRoleFilter] = useState('all');
 
-  // Get current OSSwarm state
-  const currentTaskUpdates = osswarmUpdates['current'] || [];
-  const currentTaskStatus = osswarmTaskStatus['current'] || 'idle';
-  const isTaskActive = activeOSSwarmTasks['current'] || false;
+  // Get current Agent Task state
+  const currentTaskUpdates = agentTaskUpdates['current'] || [];
+  const currentTaskStatus = agentTaskStatus['current'] || 'idle';
+  const isTaskActive = activeAgentTasks['current'] || false;
 
   // Enhanced logic for determining when to show overlay
   const isAgentModeActive = aiMode === "agent" && isProcessingResponse;
-  const hasOSSwarmUpdates = currentTaskUpdates.length > 0;
+  const hasAgentTaskUpdates = currentTaskUpdates.length > 0;
   const hasExecutionGraph = currentGraph !== null;
   
   // Check execution status
@@ -116,6 +129,14 @@ export default function AgentWorkOverlay({
   // Check task status
   const isTaskRunning = ['initializing', 'running', 'completing'].includes(currentTaskStatus);
   const isTaskCompleted = ['completed', 'failed', 'aborted'].includes(currentTaskStatus);
+
+  // ✅ Memoize agent cards
+  const agentCards = useMemo(() => {
+    if (currentGraph?.execution?.id) {
+      return getAgentCardsByExecution(currentGraph.execution.id);
+    }
+    return getAgentCards();
+  }, [currentGraph, getAgentCards, getAgentCardsByExecution]);
 
   // Calculate parent container bounds when fullscreen and respectParentBounds is enabled
   useEffect(() => {
@@ -152,7 +173,7 @@ export default function AgentWorkOverlay({
                              isTaskActive || 
                              isTaskRunning || 
                              isExecutionRunning ||
-                             (hasOSSwarmUpdates && !isTaskCompleted) ||
+                             (hasAgentTaskUpdates && !isTaskCompleted) ||
                              (hasExecutionGraph && !isExecutionCompleted);
     
     if (shouldShowOverlay) {
@@ -171,7 +192,7 @@ export default function AgentWorkOverlay({
     isTaskActive, 
     isTaskRunning,
     isExecutionRunning, 
-    hasOSSwarmUpdates,
+    hasAgentTaskUpdates,
     hasExecutionGraph,
     isTaskCompleted, 
     isExecutionCompleted,
@@ -182,7 +203,7 @@ export default function AgentWorkOverlay({
   const handleAbort = async () => {
     setIsAborting(true);
     try {
-      await abortOSSwarmTask('current');
+      await abortAgentTask('current');
     } catch (error) {
       console.error('[AgentWorkOverlay] Error aborting task:', error);
     } finally {
@@ -191,11 +212,11 @@ export default function AgentWorkOverlay({
   };
 
   const handleForceStop = () => {
-    forceStopOSSwarmTask('current');
+    forceStopAgentTask('current');
   };
 
   const handleClose = () => {
-    clearOSSwarmUpdates('current');
+    clearAgentTaskUpdates('current');
     setShouldShow(false);
     onClose?.();
   };
@@ -204,6 +225,7 @@ export default function AgentWorkOverlay({
     setIsFullscreen(!isFullscreen);
   };
 
+  // ✅ Enhanced history select with error handling
   const handleHistorySelect = async (executionId: string) => {
     try {
       await setCurrentExecution(executionId);
@@ -211,33 +233,105 @@ export default function AgentWorkOverlay({
       setCurrentTab(1);
     } catch (error) {
       console.error('[AgentWorkOverlay] Error loading historical execution:', error);
+      
+      // ✅ If execution not found, refresh history and show error
+      if (error instanceof Error && error.message?.includes('Execution not found')) {
+        toast.error('Execution no longer exists. Refreshing history...');
+        await loadExecutionHistory(20);
+      } else {
+        toast.error('Failed to load execution');
+      }
     }
   };
 
+  // ✅ Simplified delete handler - let the stores handle state management
   const handleDeleteExecution = async (executionId: string) => {
     try {
+      console.log('[AgentWorkOverlay] Deleting execution:', executionId);
       await deleteExecution(executionId);
-      setDeleteConfirmDialog(null);
-      
-      // ✅ Force refresh the history immediately
-      await loadExecutionHistory(20);
-      
       toast.success('Execution deleted successfully');
     } catch (error) {
       console.error('[AgentWorkOverlay] Error deleting execution:', error);
       toast.error('Failed to delete execution');
+      
+      // ✅ Only refresh on error to sync state
+      await loadExecutionHistory(20);
+    }
+  };
+
+  // ✅ Simplified force delete handler
+  const handleForceDeleteExecution = async (executionId: string) => {
+    try {
+      console.log('[AgentWorkOverlay] Force deleting execution:', executionId);
+      await forceDeleteExecution(executionId);
+      toast.success('Execution deleted');
+    } catch (error) {
+      console.error('Force delete failed:', error);
+      toast.error('Delete failed');
+      
+      // ✅ Only refresh on error to sync state
+      await loadExecutionHistory(20);
+    }
+  };
+
+  // ✅ Simplified nuke handler
+  const handleNukeAll = async () => {
+    try {
+      console.log('[AgentWorkOverlay] Nuking all executions');
+      await nukeAllExecutions();
+      toast.success('All executions deleted');
+    } catch (error) {
+      console.error('Nuke all failed:', error);
+      toast.error('Failed to delete all executions');
+      
+      // ✅ Only refresh on error to sync state
+      await loadExecutionHistory(20);
     }
   };
 
   const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
     setCurrentTab(newValue);
+    
+    // ✅ Show agent cards when switching to agents tab
+    if (newValue === 2) { // Assuming agents tab is index 2
+      setShowAgentCards(true);
+    }
+  };
+
+  // ✅ Add agent card handlers
+  const handleAgentSelect = (agentCard: IAgentCard) => {
+    console.log('[AgentWorkOverlay] Agent selected:', agentCard);
+    // Could navigate to agent details or show agent-specific info
+  };
+
+  const handleAgentAction = (action: string, agentCard: IAgentCard) => {
+    console.log('[AgentWorkOverlay] Agent action:', action, agentCard);
+    
+    switch (action) {
+      case 'pause':
+        // Implement pause agent logic
+        break;
+      case 'start':
+        // Implement start agent logic
+        break;
+      case 'menu':
+        // Show agent context menu
+        break;
+      default:
+        console.warn('Unknown agent action:', action);
+    }
+  };
+
+  const handleRefreshAgents = () => {
+    // Refresh agent data
+    loadExecutionHistory(20);
   };
 
   // Enhanced status info with better MUI theme integration
   const getStatusInfo = () => {
     if (currentTaskStatus === 'failed' || currentGraph?.execution?.status === 'failed') {
       return { 
-        text: intl.formatMessage({ id: 'osswarm.status.failed' }), 
+        text: intl.formatMessage({ id: 'agent.status.failed' }), 
         color: theme.palette.error.main,
         bgcolor: theme.palette.error.main,
         icon: <ErrorIcon />,
@@ -246,7 +340,7 @@ export default function AgentWorkOverlay({
     }
     if (currentTaskStatus === 'aborted') {
       return { 
-        text: intl.formatMessage({ id: 'osswarm.status.aborted' }), 
+        text: intl.formatMessage({ id: 'agent.status.aborted' }), 
         color: theme.palette.warning.main,
         bgcolor: theme.palette.warning.main,
         icon: <Warning />,
@@ -255,7 +349,7 @@ export default function AgentWorkOverlay({
     }
     if (currentTaskStatus === 'completed' || currentGraph?.execution?.status === 'completed') {
       return { 
-        text: intl.formatMessage({ id: 'osswarm.status.completed' }), 
+        text: intl.formatMessage({ id: 'agent.status.completed' }), 
         color: theme.palette.success.main,
         bgcolor: theme.palette.success.main,
         icon: <CheckCircle />,
@@ -264,7 +358,7 @@ export default function AgentWorkOverlay({
     }
     if (currentTaskStatus === 'completing') {
       return { 
-        text: intl.formatMessage({ id: 'osswarm.status.completing' }), 
+        text: intl.formatMessage({ id: 'agent.status.completing' }), 
         color: theme.palette.info.main,
         bgcolor: theme.palette.info.main,
         icon: <InfoIcon />,
@@ -273,7 +367,7 @@ export default function AgentWorkOverlay({
     }
     if (currentTaskStatus === 'running' || isTaskActive) {
       return { 
-        text: intl.formatMessage({ id: 'osswarm.status.running' }), 
+        text: intl.formatMessage({ id: 'agent.status.running' }), 
         color: theme.palette.primary.main,
         bgcolor: theme.palette.primary.main,
         icon: <PlayArrow />,
@@ -282,7 +376,7 @@ export default function AgentWorkOverlay({
     }
     if (currentTaskStatus === 'initializing') {
       return { 
-        text: intl.formatMessage({ id: 'osswarm.status.initializing' }), 
+        text: intl.formatMessage({ id: 'agent.status.initializing' }), 
         color: theme.palette.primary.main,
         bgcolor: theme.palette.primary.main,
         icon: <CircularProgress size={16} sx={{ color: 'inherit' }} />,
@@ -290,7 +384,7 @@ export default function AgentWorkOverlay({
       };
     }
     return { 
-      text: intl.formatMessage({ id: 'osswarm.monitor.title' }), 
+      text: intl.formatMessage({ id: 'agent.monitor.title' }), 
       color: theme.palette.primary.main,
       bgcolor: theme.palette.primary.main,
       icon: <Analytics />,
@@ -335,17 +429,6 @@ export default function AgentWorkOverlay({
     };
   };
 
-  // ✅ Simplified force delete handler
-  const handleForceDeleteExecution = async (executionId: string) => {
-    try {
-      await forceDeleteExecution(executionId);
-      toast.success('Execution deleted');
-    } catch (error) {
-      console.error('Force delete failed:', error);
-      toast.error('Delete failed');
-    }
-  };
-
   if (!shouldShow) {
     return null;
   }
@@ -361,10 +444,11 @@ export default function AgentWorkOverlay({
             position: 'absolute',
             top: 16,
             right: 16,
-            minWidth: isMinimized ? 320 : 650,
-            maxWidth: isMinimized ? 400 : 950,
-            minHeight: 'auto',
-            maxHeight: isMinimized ? 80 : '85vh',
+            minWidth: isMinimized ? 280 : 650,
+            maxWidth: isMinimized ? 500 : 950,
+            width: isMinimized ? 'auto' : undefined,
+            minHeight: isMinimized ? 'auto' : undefined,
+            maxHeight: isMinimized ? 'auto' : '85vh',
           }),
           zIndex: isFullscreen ? 2000 : 1000,
           borderRadius: isFullscreen ? (respectParentBounds ? 2 : 0) : 3,
@@ -375,9 +459,7 @@ export default function AgentWorkOverlay({
           flexDirection: 'column',
           boxShadow: isFullscreen ? (respectParentBounds ? theme.shadows[8] : 'none') : theme.shadows[12],
           bgcolor: 'background.paper',
-          background: isFullscreen 
-            ? 'background.paper'
-            : `linear-gradient(135deg, ${theme.palette.background.paper} 0%, ${alpha(statusInfo.color, 0.02)} 100%)`,
+          background: 'background.paper',
         }}
       >
         {/* Status Header Component */}
@@ -397,44 +479,15 @@ export default function AgentWorkOverlay({
           onClose={handleClose}
         />
 
-        {/* Collapsible content - removed animations */}
+        {/* Collapsible content */}
         {!isMinimized && (
           <Box sx={{ 
-            flexGrow: 1, 
             display: 'flex', 
-            flexDirection: 'column',
-            overflow: 'hidden'
+            flexDirection: 'column', 
+            height: '100%',
+            bgcolor: 'background.paper'
           }}>
-            {/* Status alerts - removed animations */}
-            {(currentTaskStatus === 'failed' || currentTaskStatus === 'aborted') && (
-              <Box sx={{ p: 2, pb: 0 }}>
-                <Stack spacing={1}>
-                  {currentTaskStatus === 'failed' && (
-                    <Alert 
-                      severity="error" 
-                      variant="filled"
-                      sx={{ borderRadius: 2 }}
-                      icon={<ErrorIcon />}
-                    >
-                      {intl.formatMessage({ id: 'osswarm.error.executionFailed' })}
-                    </Alert>
-                  )}
-                  
-                  {currentTaskStatus === 'aborted' && (
-                    <Alert 
-                      severity="warning" 
-                      variant="filled"
-                      sx={{ borderRadius: 2 }}
-                      icon={<Warning />}
-                    >
-                      {intl.formatMessage({ id: 'osswarm.warning.executionAborted' })}
-                    </Alert>
-                  )}
-                </Stack>
-              </Box>
-            )}
-
-            {/* Enhanced MUI Tabs */}
+            {/* ✅ Updated Tabs with Agents tab */}
             <Paper 
               square 
               elevation={0} 
@@ -463,27 +516,35 @@ export default function AgentWorkOverlay({
               >
                 <Tab 
                   icon={<ListIcon />} 
-                  label={intl.formatMessage({ id: 'osswarm.tabs.logs' })}
+                  label={intl.formatMessage({ id: 'agent.tabs.logs' })}
                   iconPosition="start"
                 />
                 <Tab 
                   icon={<Timeline />} 
-                  label={intl.formatMessage({ id: 'osswarm.tabs.graph' })}
+                  label={intl.formatMessage({ id: 'agent.tabs.graph' })}
                   iconPosition="start"
                   disabled={!hasExecutionGraph}
+                />
+                {/* ✅ Add Agents tab */}
+                <Tab 
+                  icon={<Person />} 
+                  label={intl.formatMessage({ id: 'agent.tabs.agents' })}
+                  iconPosition="start"
                 />
               </Tabs>
             </Paper>
 
             {/* Tab content container */}
-            <Box sx={{ 
-              flexGrow: 1, 
-              overflow: 'hidden', 
-              display: 'flex', 
-              flexDirection: 'column',
-              minHeight: 0,
-              p: 2
-            }}>
+            <Box 
+              sx={{ 
+                flexGrow: 1, 
+                overflow: 'hidden',
+                display: 'flex',
+                flexDirection: 'column',
+                bgcolor: 'background.paper'
+              }}
+            >
+              {/* Logs Panel */}
               {currentTab === 0 && (
                 <LogsPanel
                   currentGraph={currentGraph}
@@ -497,6 +558,7 @@ export default function AgentWorkOverlay({
                 />
               )}
 
+              {/* Graph Panel */}
               {currentTab === 1 && (
                 <GraphPanel
                   currentGraph={currentGraph}
@@ -508,93 +570,55 @@ export default function AgentWorkOverlay({
                   onShowHistory={() => setShowHistoryDialog(true)}
                 />
               )}
-            </Box>
 
-            {/* Stats Footer */}
-            {hasExecutionGraph && currentGraph && (
-              <StatsFooter
-                currentGraph={currentGraph}
-                isFullscreen={isFullscreen}
-              />
-            )}
+              {/* ✅ Agents Panel */}
+              {currentTab === 2 && (
+                <Box sx={{ 
+                  flexGrow: 1, 
+                  overflow: 'auto',
+                  bgcolor: alpha(theme.palette.background.default, 0.3)
+                }}>
+                  <AgentCards
+                    agents={agentCards}
+                    loading={isTaskActive || isTaskRunning}
+                    viewMode={agentViewMode}
+                    onViewModeChange={setAgentViewMode}
+                    onAgentSelect={handleAgentSelect}
+                    onAgentAction={handleAgentAction}
+                    onRefresh={handleRefreshAgents}
+                    searchQuery={agentSearchQuery}
+                    onSearchChange={setAgentSearchQuery}
+                    statusFilter={agentStatusFilter}
+                    onStatusFilterChange={setAgentStatusFilter}
+                    roleFilter={agentRoleFilter}
+                    onRoleFilterChange={setAgentRoleFilter}
+                  />
+                </Box>
+              )}
+            </Box>
           </Box>
+        )}
+
+        {/* Stats Footer Component */}
+        {currentGraph && (
+          <StatsFooter
+            currentGraph={currentGraph}
+            isFullscreen={isFullscreen}
+          />
         )}
       </Paper>
 
-      {/* Task History Dialog */}
+      {/* ✅ TaskHistory Dialog with correct handlers */}
       <TaskHistory
         open={showHistoryDialog}
         onClose={() => setShowHistoryDialog(false)}
         executions={executions}
         onSelectExecution={handleHistorySelect}
-        onDeleteExecution={(executionId) => setDeleteConfirmDialog(executionId)}
+        onDeleteExecution={handleDeleteExecution}
         onForceDeleteExecution={handleForceDeleteExecution}
         onRefreshHistory={() => loadExecutionHistory(20)}
-        onNukeAll={async () => {
-          await nukeAllExecutions();
-          toast.success('All executions deleted');
-        }}
+        onNukeAll={handleNukeAll}
       />
-
-      {/* Delete Confirmation Dialog */}
-      <Dialog
-        open={deleteConfirmDialog !== null}
-        onClose={() => setDeleteConfirmDialog(null)}
-        maxWidth="sm"
-        sx={{ zIndex: 2100 }}
-        PaperProps={{
-          sx: { 
-            borderRadius: 3,
-            bgcolor: 'background.paper'
-          }
-        }}
-      >
-        <DialogTitle sx={{ pb: 2 }}>
-          <Stack direction="row" alignItems="center" spacing={2}>
-            <Paper sx={{ p: 1, borderRadius: 2, bgcolor: 'error.light' }}>
-              <Delete sx={{ color: 'error.contrastText' }} />
-            </Paper>
-            <Typography variant="h6" fontWeight={600}>
-              {intl.formatMessage({ id: 'osswarm.deleteExecution' })}
-            </Typography>
-          </Stack>
-        </DialogTitle>
-        <DialogContent sx={{ pb: 2 }}>
-          <Alert severity="warning" sx={{ mb: 2, borderRadius: 2 }}>
-            <Typography variant="body2">
-              {intl.formatMessage({ id: 'osswarm.deleteExecutionConfirmation' })}
-            </Typography>
-          </Alert>
-          <Typography variant="body2" color="text.secondary">
-            {intl.formatMessage({ id: 'osswarm.deleteExecutionWarning' })}
-          </Typography>
-        </DialogContent>
-        <DialogActions sx={{ p: 3, pt: 1 }}>
-          <Button 
-            onClick={() => setDeleteConfirmDialog(null)}
-            variant="outlined"
-            sx={{ 
-              borderRadius: 2,
-              textTransform: 'none',
-              fontWeight: 500
-            }}
-          >
-            {intl.formatMessage({ id: 'common.cancel' })}
-          </Button>
-          <Button
-            onClick={() => deleteConfirmDialog && handleDeleteExecution(deleteConfirmDialog)}
-            color="error"
-            variant="contained"
-            sx={{ 
-              borderRadius: 2,
-              textTransform: 'none',
-              fontWeight: 600
-            }}
-          >
-            {intl.formatMessage({ id: 'common.delete' })}
-          </Button>
-        </DialogActions>
-      </Dialog>
     </>
   );
 }

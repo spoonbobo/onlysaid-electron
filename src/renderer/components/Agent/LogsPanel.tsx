@@ -112,11 +112,11 @@ export const LogsPanel: React.FC<LogsPanelProps> = ({
               <Stack direction="row" alignItems="center" spacing={1}>
                 <BugReport color="primary" />
                 <Typography variant="subtitle2">
-                  {intl.formatMessage({ id: 'osswarm.logs.total' }, { count: allLogs.length })}
+                  {intl.formatMessage({ id: 'agent.logs.total' }, { count: allLogs.length })}
                 </Typography>
                 {historicalLogs.length > 0 && (
                   <Typography variant="caption" color="text.secondary">
-                    ({historicalLogs.length} {intl.formatMessage({ id: 'osswarm.logs.historical' })}, {liveUpdates.length} {intl.formatMessage({ id: 'osswarm.logs.live' })})
+                    ({historicalLogs.length} {intl.formatMessage({ id: 'agent.logs.historical' })}, {liveUpdates.length} {intl.formatMessage({ id: 'agent.logs.live' })})
                   </Typography>
                 )}
               </Stack>
@@ -200,29 +200,29 @@ export const LogsPanel: React.FC<LogsPanelProps> = ({
                 <CircularProgress />
                 <Typography variant="h6" color="text.secondary">
                   {currentTaskStatus === 'initializing' 
-                    ? intl.formatMessage({ id: 'osswarm.status.initializing' })
-                    : intl.formatMessage({ id: 'osswarm.status.coordinating' })
+                    ? intl.formatMessage({ id: 'agent.status.initializing' })
+                    : intl.formatMessage({ id: 'agent.status.coordinating' })
                   }
                 </Typography>
                 <Typography variant="body2" color="text.secondary" textAlign="center">
-                  {intl.formatMessage({ id: 'osswarm.logs.waitingForActivity' })}
+                  {intl.formatMessage({ id: 'agent.logs.waitingForActivity' })}
                 </Typography>
               </>
             ) : (
               <>
                 <Analytics sx={{ fontSize: 48, color: 'text.disabled' }} />
                 <Typography variant="h6" color="text.secondary">
-                  {statusInfo.text}
+                  {intl.formatMessage({ id: 'agent.noRecentActivity' })}
                 </Typography>
                 <Typography variant="body2" color="text.secondary" textAlign="center">
-                  {intl.formatMessage({ id: 'osswarm.noRecentActivity' })}
+                  {intl.formatMessage({ id: 'agent.logs.waitingForActivity' })}
                 </Typography>
                 {currentExecution && currentExecution.status !== 'running' && (
                   <Paper sx={{ p: 2 }}>
                     <Typography variant="caption" color="text.secondary" textAlign="center">
-                      {intl.formatMessage({ id: 'osswarm.logs.viewingHistorical' })}
+                      {intl.formatMessage({ id: 'agent.logs.viewingHistorical' })}
                       <br />
-                      {intl.formatMessage({ id: 'osswarm.logs.executionDate' }, { 
+                      {intl.formatMessage({ id: 'agent.logs.executionDate' }, { 
                         date: new Date(currentExecution.created_at).toLocaleString() 
                       })}
                     </Typography>
