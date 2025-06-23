@@ -19,7 +19,7 @@ import { summarizeToolCallResults } from "@/renderer/stores/Agent/mode/Ask";
 import { v4 as uuidv4 } from 'uuid';
 import { getCurrentWorkspaceId } from "@/utils/workspace";
 import { useAgentTaskStore } from "@/renderer/stores/Agent/AgentTaskStore";
-import { getHumanInTheLoopManager, requestApproval, HumanInteractionResponse, HumanInteractionRequest } from '@/service/langchain/human_in_the_loop/human_in_the_loop';
+import { getHumanInTheLoopManager, requestApproval, HumanInteractionResponse, HumanInteractionRequest } from '@/service/langchain/human_in_the_loop/renderer/human_in_the_loop';
 
 const rendererIpcTracker = new Map<string, { count: number; timestamps: number[] }>();
 
@@ -764,7 +764,7 @@ export const useAgentStore = create<AgentState>()(
           }
         },
 
-        // Updated executeAgentTask method with human-in-the-loop
+        // Updated executeAgentTask method to ensure thread ID consistency
         executeAgentTask: async (task: string, options: any, chatId?: string, workspaceId?: string) => {
           trackRendererIpcCall('agent:execute_task', { 
             task: task?.substring(0, 50) + '...',
@@ -773,13 +773,15 @@ export const useAgentStore = create<AgentState>()(
           });
           
           const taskId = 'current';
+          // ✅ Use thread ID from options if provided, otherwise generate one
           const threadId = options.threadId || `thread_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
           
           console.log('[AgentStore] Executing Agent Task with LangGraph workflow:', { 
             chatId, 
             workspaceId, 
             threadId,
-            humanInTheLoop: options.humanInTheLoop 
+            humanInTheLoop: options.humanInTheLoop,
+            hasThreadIdFromOptions: !!options.threadId
           });
           
           // Set initial state

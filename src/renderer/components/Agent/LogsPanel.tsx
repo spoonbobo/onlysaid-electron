@@ -1,93 +1,217 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Box,
   Typography,
   Paper,
   Stack,
   Chip,
-  Card,
-  CardContent,
   CircularProgress,
-  useTheme,
-  alpha
+  Divider
 } from '@mui/material';
-import { BugReport, Analytics } from '@mui/icons-material';
+import { BugReport, Analytics, Timeline } from '@mui/icons-material';
 import { useIntl } from 'react-intl';
-import { ExecutionGraph } from '@/renderer/stores/Agent/AgentTaskStore';
+
+interface LangGraphLog {
+  id: string;
+  message: string;
+  timestamp: string;
+  type: 'info' | 'status_update' | 'agent_execution' | 'tool_request' | 'tool_result' | 'warning' | 'error' | 'synthesis';
+  isLive: boolean;
+  agentRole?: string;
+  toolName?: string;
+  executionId?: string;
+}
 
 interface LogsPanelProps {
-  currentGraph: ExecutionGraph | null;
-  currentTaskUpdates: string[];
+  // LangGraph execution data
+  currentExecution: {
+    executionId?: string;
+    status?: string;
+    currentPhase?: string;
+    activeAgentCards?: Record<string, any>;
+    agentResults?: Record<string, any>;
+    errors?: string[];
+    created_at?: string;
+  } | null;
   isTaskRunning: boolean;
   isTaskActive: boolean;
-  currentTaskStatus: string;
-  currentExecution: any;
-  statusInfo: any;
   isFullscreen: boolean;
 }
 
 export const LogsPanel: React.FC<LogsPanelProps> = ({
-  currentGraph,
-  currentTaskUpdates,
+  currentExecution,
   isTaskRunning,
   isTaskActive,
-  currentTaskStatus,
-  currentExecution,
-  statusInfo,
   isFullscreen
 }) => {
-  const theme = useTheme();
   const intl = useIntl();
+  const [logs, setLogs] = useState<LangGraphLog[]>([]);
+  const [streamUpdates, setStreamUpdates] = useState<string[]>([]);
 
-  // Format logs logic
-  const historicalLogs = currentGraph?.logs || [];
-  const liveUpdates = currentTaskUpdates || [];
-
-  const formattedHistoricalLogs = historicalLogs.map(log => {
-    const timestamp = new Date(log.created_at).toLocaleTimeString();
-    let formattedMessage = log.message;
+  // Listen for LangGraph stream updates
+  useEffect(() => {
+    console.log('[LogsPanel] Setting up LangGraph stream listeners...');
     
-    if (log.agent_role) {
-      formattedMessage = `[${log.agent_role}] ${formattedMessage}`;
-    }
-    
-    if (log.tool_name && log.log_type === 'tool_request') {
-      formattedMessage = `🔧 ${formattedMessage} (${log.tool_name})`;
-    } else if (log.tool_name && log.log_type === 'tool_result') {
-      formattedMessage = `✅ ${formattedMessage} (${log.tool_name})`;
-    } else if (log.log_type === 'error') {
-      formattedMessage = `❌ ${formattedMessage}`;
-    } else if (log.log_type === 'warning') {
-      formattedMessage = `⚠️ ${formattedMessage}`;
-    } else if (log.log_type === 'status_update') {
-      formattedMessage = `📊 ${formattedMessage}`;
-    } else if (log.log_type === 'info') {
-      formattedMessage = `ℹ️ ${formattedMessage}`;
-    }
-    
-    return {
-      id: log.id,
-      message: formattedMessage,
-      timestamp,
-      type: log.log_type,
-      isHistorical: true
+    const handleStreamUpdate = (event: any, ...args: unknown[]) => {
+      const data = args[0] as { update: string };
+      console.log('[LogsPanel] 📡 Received stream update:', data.update.substring(0, 100) + '...');
+      
+      setStreamUpdates(prev => [...prev, data.update]);
     };
-  });
-  
-  const formattedLiveUpdates = liveUpdates.map((update, index) => ({
-    id: `live-${index}`,
-    message: update,
-    timestamp: new Date().toLocaleTimeString(),
-    type: 'info' as const,
-    isHistorical: false
-  }));
-  
-  const allLogs = [...formattedHistoricalLogs, ...formattedLiveUpdates]
+
+    const handleAgentUpdated = (event: any, ...args: unknown[]) => {
+      const data = args[0] as { agentCard: any; status: string; currentTask?: string; executionId?: string };
+      console.log('[LogsPanel] 🤖 Agent updated:', data);
+      
+      const logEntry: LangGraphLog = {
+        id: `agent-${Date.now()}-${Math.random()}`,
+        message: `Agent ${data.agentCard.name || data.agentCard.role} status: ${data.status}${data.currentTask ? ` (${data.currentTask})` : ''}`,
+        timestamp: new Date().toLocaleTimeString(),
+        type: 'agent_execution',
+        isLive: true,
+        agentRole: data.agentCard.role,
+        executionId: data.executionId
+      };
+      
+      setLogs(prev => [...prev, logEntry]);
+    };
+
+    const handleExecutionUpdated = (event: any, ...args: unknown[]) => {
+      const data = args[0] as { executionId: string; status: string; progress: any };
+      console.log('[LogsPanel] ⚡ Execution updated:', data);
+      
+      const logEntry: LangGraphLog = {
+        id: `execution-${Date.now()}-${Math.random()}`,
+        message: `Execution phase: ${data.progress?.phase || data.status}${data.progress?.analysis ? ` - ${data.progress.analysis}` : ''}`,
+        timestamp: new Date().toLocaleTimeString(),
+        type: 'status_update',
+        isLive: true,
+        executionId: data.executionId
+      };
+      
+      setLogs(prev => [...prev, logEntry]);
+    };
+
+    const handleResultSynthesized = (event: any, ...args: unknown[]) => {
+      const data = args[0] as { executionId: string; result: string; agentCards: any[] };
+      console.log('[LogsPanel] 🔮 Result synthesized:', data);
+      
+      const logEntry: LangGraphLog = {
+        id: `synthesis-${Date.now()}-${Math.random()}`,
+        message: `Synthesis completed with ${data.agentCards?.length || 0} agent contributions`,
+        timestamp: new Date().toLocaleTimeString(),
+        type: 'synthesis',
+        isLive: true,
+        executionId: data.executionId
+      };
+      
+      setLogs(prev => [...prev, logEntry]);
+    };
+
+    // Set up listeners
+    const unsubscribeStream = window.electron?.ipcRenderer?.on?.('agent:stream_update', handleStreamUpdate);
+    const unsubscribeAgent = window.electron?.ipcRenderer?.on?.('agent:agent_updated', handleAgentUpdated);
+    const unsubscribeExecution = window.electron?.ipcRenderer?.on?.('agent:execution_updated', handleExecutionUpdated);
+    const unsubscribeSynthesis = window.electron?.ipcRenderer?.on?.('agent:result_synthesized', handleResultSynthesized);
+
+    return () => {
+      console.log('[LogsPanel] Cleaning up LangGraph listeners');
+      unsubscribeStream?.();
+      unsubscribeAgent?.();
+      unsubscribeExecution?.();
+      unsubscribeSynthesis?.();
+    };
+  }, []);
+
+  // Process execution data into historical logs
+  const historicalLogs: LangGraphLog[] = React.useMemo(() => {
+    if (!currentExecution) return [];
+
+    const logs: LangGraphLog[] = [];
+    const baseTimestamp = currentExecution.created_at || new Date().toISOString();
+
+    // Add execution start log
+    logs.push({
+      id: `start-${currentExecution.executionId}`,
+      message: `Agent execution started (ID: ${currentExecution.executionId})`,
+      timestamp: new Date(baseTimestamp).toLocaleTimeString(),
+      type: 'info',
+      isLive: false,
+      executionId: currentExecution.executionId
+    });
+
+    // Add current phase log
+    if (currentExecution.currentPhase) {
+      logs.push({
+        id: `phase-${currentExecution.executionId}`,
+        message: `Current phase: ${currentExecution.currentPhase}`,
+        timestamp: new Date().toLocaleTimeString(),
+        type: 'status_update',
+        isLive: false,
+        executionId: currentExecution.executionId
+      });
+    }
+
+    // Add agent logs
+    if (currentExecution.activeAgentCards) {
+      Object.values(currentExecution.activeAgentCards).forEach((agentCard: any, index) => {
+        logs.push({
+          id: `agent-card-${index}`,
+          message: `Agent ${agentCard.name || agentCard.role} (${agentCard.status || 'active'})`,
+          timestamp: new Date(Date.now() + index * 1000).toLocaleTimeString(),
+          type: 'agent_execution',
+          isLive: false,
+          agentRole: agentCard.role,
+          executionId: currentExecution.executionId
+        });
+      });
+    }
+
+    // Add error logs
+    if (currentExecution.errors?.length) {
+      currentExecution.errors.forEach((error, index) => {
+        logs.push({
+          id: `error-${index}`,
+          message: error,
+          timestamp: new Date(Date.now() + 2000 + index * 1000).toLocaleTimeString(),
+          type: 'error',
+          isLive: false,
+          executionId: currentExecution.executionId
+        });
+      });
+    }
+
+    return logs;
+  }, [currentExecution]);
+
+  // Process stream updates into live logs
+  const liveStreamLogs: LangGraphLog[] = React.useMemo(() => {
+    return streamUpdates.map((update, index) => ({
+      id: `stream-${index}`,
+      message: update,
+      timestamp: new Date().toLocaleTimeString(),
+      type: 'info' as const,
+      isLive: true
+    }));
+  }, [streamUpdates]);
+
+  // Combine all logs
+  const allLogs = [...historicalLogs, ...logs, ...liveStreamLogs]
     .sort((a, b) => {
-      if (a.isHistorical && !b.isHistorical) return -1;
-      if (!a.isHistorical && b.isHistorical) return 1;
+      // Sort live logs after historical logs, but maintain chronological order within each group
+      if (a.isLive && !b.isLive) return 1;
+      if (!a.isLive && b.isLive) return -1;
       return a.timestamp.localeCompare(b.timestamp);
     });
+
+  // Get log type counts for chips
+  const logTypeCounts = React.useMemo(() => {
+    const counts: Record<string, number> = {};
+    allLogs.forEach(log => {
+      counts[log.type] = (counts[log.type] || 0) + 1;
+    });
+    return counts;
+  }, [allLogs]);
 
   return (
     <Box
@@ -100,7 +224,7 @@ export const LogsPanel: React.FC<LogsPanelProps> = ({
     >
       {allLogs.length > 0 ? (
         <Stack spacing={2} sx={{ height: '100%', overflow: 'hidden' }}>
-          {/* Simplified logs header */}
+          {/* Header */}
           <Paper 
             elevation={1} 
             sx={{ 
@@ -110,45 +234,58 @@ export const LogsPanel: React.FC<LogsPanelProps> = ({
           >
             <Stack direction="row" alignItems="center" justifyContent="space-between">
               <Stack direction="row" alignItems="center" spacing={1}>
-                <BugReport color="primary" />
+                <Timeline color="primary" />
                 <Typography variant="subtitle2">
                   {intl.formatMessage({ id: 'agent.logs.total' }, { count: allLogs.length })}
                 </Typography>
-                {historicalLogs.length > 0 && (
-                  <Typography variant="caption" color="text.secondary">
-                    ({historicalLogs.length} {intl.formatMessage({ id: 'agent.logs.historical' })}, {liveUpdates.length} {intl.formatMessage({ id: 'agent.logs.live' })})
-                  </Typography>
-                )}
+                <Typography variant="caption" color="text.secondary">
+                  ({historicalLogs.length} historical, {logs.length + liveStreamLogs.length} live)
+                </Typography>
               </Stack>
               
-              {/* Simplified log type filter chips */}
-              {historicalLogs.length > 0 && (
-                <Stack direction="row" spacing={0.5} flexWrap="wrap">
-                  {['info', 'status_update', 'tool_request', 'tool_result', 'warning', 'error'].map(logType => {
-                    const count = historicalLogs.filter(log => log.log_type === logType).length;
-                    if (count === 0) return null;
-                    
-                    return (
-                      <Chip
-                        key={logType}
-                        label={`${logType} (${count})`}
-                        size="small"
-                        variant="outlined"
-                        color={
-                          logType === 'error' ? 'error' :
-                          logType === 'warning' ? 'warning' :
-                          logType === 'tool_request' || logType === 'tool_result' ? 'info' :
-                          'default'
-                        }
-                      />
-                    );
-                  })}
-                </Stack>
-              )}
+              {/* Log type chips */}
+              <Stack direction="row" spacing={0.5} flexWrap="wrap">
+                {Object.entries(logTypeCounts).map(([logType, count]) => {
+                  if (count === 0) return null;
+                  
+                  const getChipProps = (type: string) => {
+                    switch (type) {
+                      case 'error':
+                        return { color: 'error' as const, icon: '❌' };
+                      case 'warning':
+                        return { color: 'warning' as const, icon: '⚠️' };
+                      case 'tool_request':
+                        return { color: 'info' as const, icon: '🔧' };
+                      case 'tool_result':
+                        return { color: 'success' as const, icon: '✅' };
+                      case 'agent_execution':
+                        return { color: 'secondary' as const, icon: '🤖' };
+                      case 'synthesis':
+                        return { color: 'primary' as const, icon: '🔮' };
+                      case 'status_update':
+                        return { color: 'default' as const, icon: '📊' };
+                      default:
+                        return { color: 'default' as const, icon: 'ℹ️' };
+                    }
+                  };
+                  
+                  const chipProps = getChipProps(logType);
+                  
+                  return (
+                    <Chip
+                      key={logType}
+                      label={`${chipProps.icon} ${logType} (${count})`}
+                      size="small"
+                      variant="outlined"
+                      color={chipProps.color}
+                    />
+                  );
+                })}
+              </Stack>
             </Stack>
           </Paper>
           
-          {/* Simplified scrollable logs container */}
+          {/* Scrollable logs container */}
           <Box
             sx={{
               flexGrow: 1,
@@ -157,33 +294,56 @@ export const LogsPanel: React.FC<LogsPanelProps> = ({
             }}
           >
             <Stack spacing={1}>
-              {allLogs.map((log, index) => (
-                <Paper
-                  key={log.id}
-                  variant="outlined"
-                  sx={{ p: 2 }}
-                >
-                  <Stack direction="row" spacing={2} alignItems="flex-start">
-                    <Stack direction="row" alignItems="center" spacing={1}>
-                      <Typography variant="caption" color="text.secondary">
-                        {log.timestamp}
-                      </Typography>
-                      {log.isHistorical && (
-                        <Chip label="HIST" size="small" />
-                      )}
-                    </Stack>
-                    <Typography
-                      variant="body2"
+              {allLogs.map((log, index) => {
+                const isFirst = index === 0;
+                const isNewSection = index > 0 && allLogs[index - 1].isLive !== log.isLive;
+                
+                return (
+                  <Box key={log.id}>
+                    {/* Section divider */}
+                    {(isFirst || isNewSection) && (
+                      <Box sx={{ my: 1 }}>
+                        <Divider>
+                          <Typography variant="caption" color="text.secondary">
+                            {log.isLive ? 'Live Updates' : 'Historical Logs'}
+                          </Typography>
+                        </Divider>
+                      </Box>
+                    )}
+                    
+                    <Paper
+                      variant="outlined"
                       sx={{ 
-                        wordBreak: 'break-word',
-                        flexGrow: 1
+                        p: 2,
+                        backgroundColor: log.isLive ? 'action.hover' : 'background.paper'
                       }}
                     >
-                      {log.message}
-                    </Typography>
-                  </Stack>
-                </Paper>
-              ))}
+                      <Stack direction="row" spacing={2} alignItems="flex-start">
+                        <Stack direction="row" alignItems="center" spacing={1} sx={{ minWidth: 120 }}>
+                          <Typography variant="caption" color="text.secondary">
+                            {log.timestamp}
+                          </Typography>
+                          {log.isLive && (
+                            <Chip label="LIVE" size="small" color="success" variant="filled" />
+                          )}
+                          {log.agentRole && (
+                            <Chip label={log.agentRole} size="small" variant="outlined" />
+                          )}
+                        </Stack>
+                        <Typography
+                          variant="body2"
+                          sx={{ 
+                            wordBreak: 'break-word',
+                            flexGrow: 1
+                          }}
+                        >
+                          {log.message}
+                        </Typography>
+                      </Stack>
+                    </Paper>
+                  </Box>
+                );
+              })}
             </Stack>
           </Box>
         </Stack>
@@ -199,10 +359,7 @@ export const LogsPanel: React.FC<LogsPanelProps> = ({
               <>
                 <CircularProgress />
                 <Typography variant="h6" color="text.secondary">
-                  {currentTaskStatus === 'initializing' 
-                    ? intl.formatMessage({ id: 'agent.status.initializing' })
-                    : intl.formatMessage({ id: 'agent.status.coordinating' })
-                  }
+                  {intl.formatMessage({ id: 'agent.status.initializing' })}
                 </Typography>
                 <Typography variant="body2" color="text.secondary" textAlign="center">
                   {intl.formatMessage({ id: 'agent.logs.waitingForActivity' })}
@@ -217,13 +374,13 @@ export const LogsPanel: React.FC<LogsPanelProps> = ({
                 <Typography variant="body2" color="text.secondary" textAlign="center">
                   {intl.formatMessage({ id: 'agent.logs.waitingForActivity' })}
                 </Typography>
-                {currentExecution && currentExecution.status !== 'running' && (
+                {currentExecution && (
                   <Paper sx={{ p: 2 }}>
                     <Typography variant="caption" color="text.secondary" textAlign="center">
                       {intl.formatMessage({ id: 'agent.logs.viewingHistorical' })}
                       <br />
                       {intl.formatMessage({ id: 'agent.logs.executionDate' }, { 
-                        date: new Date(currentExecution.created_at).toLocaleString() 
+                        date: new Date(currentExecution.created_at || Date.now()).toLocaleString() 
                       })}
                     </Typography>
                   </Paper>

@@ -1,5 +1,3 @@
-export { setupOSSwarmHandlers } from './handlers';
-
 // LangGraph exports
 export { LangGraphOSSwarmFactory } from './langgraph-factory';
 export { LangGraphOSSwarmWorkflow } from './langgraph-workflow';

@@ -11,7 +11,7 @@ import {
   getHumanInTheLoopManager, 
   HumanInteractionRequest, 
   HumanInteractionResponse 
-} from '../human_in_the_loop/human_in_the_loop';
+} from '../human_in_the_loop/renderer/human_in_the_loop';
 
 // ✅ Enhanced HumanInteractionResponse type to include execution results
 interface EnhancedHumanInteractionResponse extends HumanInteractionResponse {
@@ -84,7 +84,6 @@ const OSSwarmStateAnnotation = Annotation.Root({
 export class LangGraphOSSwarmWorkflow {
   private graph: any;
   private agentOptions: LangChainAgentOptions;
-  private humanInTheLoopManager = getHumanInTheLoopManager();
   
   private static activeWorkflows = new Map<string, any>();
   
@@ -236,13 +235,38 @@ export class LangGraphOSSwarmWorkflow {
   private routeAfterCompletion = (state: typeof OSSwarmStateAnnotation.State): string => {
     console.log('[ROUTER-COMPLETE] analysing state…');
 
-    if (state.pendingApprovals?.some(a => a.status === 'pending')) {
-      console.log('[ROUTER-COMPLETE] ▶ pending approvals detected');
+    // ✅ FIXED: More robust check for truly pending approvals
+    const trulyPendingApprovals = state.pendingApprovals?.filter(a => 
+      a.status === 'pending' && 
+      !a.processed && 
+      !state.mcpExecutionResults[a.id]
+    ) || [];
+
+    console.log('[ROUTER-COMPLETE] Detailed approval analysis:', {
+      totalApprovals: state.pendingApprovals?.length || 0,
+      trulyPending: trulyPendingApprovals.length,
+      pendingDetails: state.pendingApprovals?.map(a => ({
+        id: a.id,
+        status: a.status,
+        processed: a.processed,
+        hasMcpResult: !!state.mcpExecutionResults[a.id]
+      }))
+    });
+
+    if (trulyPendingApprovals.length > 0) {
+      console.log(`[ROUTER-COMPLETE] ▶ ${trulyPendingApprovals.length} truly pending approvals detected`);
       return 'tool_approval';
     }
 
-    if (state.pendingApprovals?.some(a => a.status === 'approved')) {
-      console.log('[ROUTER-COMPLETE] ▶ approved tools waiting for execution');
+    // ✅ FIXED: Check for approved tools that haven't been executed AND processed
+    const approvedNotExecuted = state.pendingApprovals?.filter(a => 
+      a.status === 'approved' && 
+      !a.processed && 
+      !state.mcpExecutionResults[a.id]
+    ) || [];
+
+    if (approvedNotExecuted.length > 0) {
+      console.log(`[ROUTER-COMPLETE] ▶ ${approvedNotExecuted.length} approved tools waiting for execution`);
       return 'tool_execution';
     }
 
@@ -490,19 +514,94 @@ export class LangGraphOSSwarmWorkflow {
     };
   };
   
+  // ✅ FIXED: Enhanced toolApprovalNode to properly clear processed approvals
   private toolApprovalNode = async (
     state: typeof OSSwarmStateAnnotation.State
   ): Promise<Partial<typeof OSSwarmStateAnnotation.State>> => {
     console.log('[LangGraph] Tool approval node - processing pending approvals...');
     
-    const pendingApprovals = state.pendingApprovals?.filter(approval => approval.status === 'pending') || [];
+    // ✅ FIRST: Check for truly pending approvals that need human interaction
+    const pendingApprovals = state.pendingApprovals?.filter(approval => 
+      approval.status === 'pending' && !approval.processed && !state.mcpExecutionResults[approval.id]
+    ) || [];
     
-    if (pendingApprovals.length === 0) {
-      console.log('[LangGraph] No pending approvals, continuing...');
-      return { currentPhase: 'tool_execution' };
+    console.log('[LangGraph] Pending approvals analysis:', {
+      totalApprovals: state.pendingApprovals?.length || 0,
+      trulyPending: pendingApprovals.length,
+      hasMcpResults: Object.keys(state.mcpExecutionResults || {}).length,
+      pendingIds: pendingApprovals.map(a => a.id)
+    });
+    
+    // ✅ SECOND: Check if we're receiving tool execution results from resume ONLY if no pending approvals
+    const hasToolExecutionResults = state.mcpExecutionResults && Object.keys(state.mcpExecutionResults).length > 0;
+    
+    if (hasToolExecutionResults && pendingApprovals.length === 0) {
+      console.log('[LangGraph] Processing tool execution results from resume...');
+      
+      // ✅ Only update approvals that haven't been processed yet
+      const updatedApprovals = state.pendingApprovals?.map(approval => {
+        const mcpResult = state.mcpExecutionResults[approval.id];
+        if (mcpResult && !approval.processed) {
+          console.log(`[LangGraph] Updating approval ${approval.id} with execution result:`, mcpResult.success ? 'executed' : 'failed');
+          return {
+            ...approval,
+            status: mcpResult.success ? 'executed' as const : 'failed' as const,
+            result: mcpResult.success ? mcpResult.result : mcpResult.error,
+            timestamp: Date.now(),
+            processed: true
+          };
+        }
+        return approval;
+      }) || [];
+      
+      console.log('[LangGraph] Tool execution results processed, moving to agent completion');
+      
+      return {
+        pendingApprovals: updatedApprovals as ToolApprovalRequest[],
+        currentPhase: 'agent_completion'
+      };
     }
     
-    console.log(`[LangGraph] Processing ${pendingApprovals.length} pending approvals`);
+    // ✅ THIRD: Check if any tools have been marked as executed by the UI
+    const executedByUI = state.pendingApprovals?.some(approval => 
+      approval.status === 'executed' && !approval.processed
+    ) || false;
+    
+    if (executedByUI && pendingApprovals.length === 0) {
+      console.log('[LangGraph] Found tools executed by UI, proceeding to agent completion...');
+      
+      // ✅ Mark executed tools as processed
+      const updatedApprovals = state.pendingApprovals?.map(approval => {
+        if (approval.status === 'executed' && !approval.processed) {
+          return { ...approval, processed: true };
+        }
+        return approval;
+      }) || [];
+      
+      return { 
+        pendingApprovals: updatedApprovals as ToolApprovalRequest[],
+        currentPhase: 'agent_completion' 
+      };
+    }
+    
+    // ✅ FOURTH: Handle truly pending approvals that need human interaction
+    if (pendingApprovals.length === 0) {
+      console.log('[LangGraph] No truly pending approvals, checking for approved tools...');
+      
+      const approvedTools = state.pendingApprovals?.filter(approval => 
+        approval.status === 'approved' && !approval.processed && !state.mcpExecutionResults[approval.id]
+      ) || [];
+      
+      if (approvedTools.length > 0) {
+        console.log('[LangGraph] Found approved tools, moving to tool execution...');
+        return { currentPhase: 'tool_execution' };
+      }
+      
+      console.log('[LangGraph] No pending or approved tools, moving to agent completion...');
+      return { currentPhase: 'agent_completion' };
+    }
+    
+    console.log(`[LangGraph] Processing ${pendingApprovals.length} pending approvals - sending to UI for approval`);
     
     // ✅ Send interaction requests to renderer BEFORE interrupt
     for (const approval of pendingApprovals) {
@@ -532,27 +631,8 @@ export class LangGraphOSSwarmWorkflow {
       await this.sendHumanInteractionToRenderer(interactionRequest);
     }
     
-    // ✅ Enhanced interrupt with proper typing (following documentation pattern)
-    const approvalDecisions = interrupt<
-      {
-        type: string;
-        pendingApprovals: Array<{
-          id: string;
-          toolName: string;
-          arguments: any;
-          agentRole: string;
-          context: string;
-          mcpServer: string;
-          risk: string;
-        }>;
-        message: string;
-      },
-      Array<{
-        id: string;
-        approved: boolean;
-        timestamp: number;
-      }>
-    >({
+    // ✅ Enhanced interrupt with proper typing - THIS IS WHERE IT SHOULD PAUSE
+    const approvalDecisions = interrupt({
       type: 'tool_approval_request',
       pendingApprovals: pendingApprovals.map(approval => ({
         id: approval.id,
@@ -566,27 +646,70 @@ export class LangGraphOSSwarmWorkflow {
       message: `Please approve/deny ${pendingApprovals.length} tool execution(s)`
     });
     
-    // ✅ Process approval decisions (this runs after resume)
-    console.log('[LangGraph] Processing approval decisions:', approvalDecisions);
+    // ✅ This code only runs after human response - process approval decisions
+    console.log('[LangGraph] Processing approval decision from resume:', approvalDecisions);
+    
+    let updatedMcpResults = { ...state.mcpExecutionResults };
     
     const updatedApprovals = state.pendingApprovals?.map(approval => {
-      const decision = Array.isArray(approvalDecisions) ? 
-        approvalDecisions.find((d: any) => d.id === approval.id) :
-        ((approvalDecisions as any)?.id === approval.id ? approvalDecisions : null);
-      
-      if (decision) {
+      // ✅ Handle case where resume contains execution results
+      if (approvalDecisions.toolExecutionResult && approvalDecisions.id === approval.id) {
+        const execResult = approvalDecisions.toolExecutionResult;
+        
+        console.log(`[LangGraph] Processing tool execution result for ${approval.id}:`, {
+          success: execResult.success,
+          toolName: execResult.toolName,
+          hasResult: !!execResult.result,
+          hasError: !!execResult.error
+        });
+        
+        // Store execution result in mcpExecutionResults
+        updatedMcpResults[approval.id] = {
+          toolId: approval.id,
+          success: execResult.success,
+          result: execResult.result,
+          error: execResult.error,
+          toolName: execResult.toolName,
+          mcpServer: execResult.mcpServer
+        };
+        
         return {
           ...approval,
-          status: (decision as any).approved ? ('approved' as const) : ('denied' as const),
-          timestamp: Date.now()
+          status: execResult.success ? 'executed' as const : 'failed' as const,
+          result: execResult.success ? execResult.result : execResult.error,
+          timestamp: Date.now(),
+          processed: true
         };
       }
+      
+      // ✅ Standard approval/denial logic
+      if (approvalDecisions.id === approval.id) {
+        return {
+          ...approval,
+          status: approvalDecisions.approved ? ('approved' as const) : ('denied' as const),
+          timestamp: Date.now(),
+          processed: approvalDecisions.approved ? false : true
+        };
+      }
+      
       return approval;
     }) || [];
     
+    // ✅ Check if any tools were executed directly
+    const hasDirectExecutions = updatedApprovals.some(approval => 
+      approval.status === 'executed' && approval.processed
+    );
+    
+    console.log(`[LangGraph] Approval processing complete:`, {
+      hasDirectExecutions,
+      nextPhase: hasDirectExecutions ? 'agent_completion' : 'tool_execution',
+      updatedApprovals: updatedApprovals.map(a => ({ id: a.id, status: a.status, processed: a.processed }))
+    });
+    
     return {
       pendingApprovals: updatedApprovals as ToolApprovalRequest[],
-      currentPhase: 'tool_execution'
+      mcpExecutionResults: updatedMcpResults,
+      currentPhase: hasDirectExecutions ? 'agent_completion' : 'tool_execution'
     };
   };
   
@@ -653,8 +776,10 @@ export class LangGraphOSSwarmWorkflow {
   ): Promise<Partial<typeof OSSwarmStateAnnotation.State>> => {
     console.log('[LangGraph] Agent completion node - finalizing agent results...');
     
+    // ✅ Only process tools that have been executed/failed/denied and not yet processed into agent results
     const completedTools = state.pendingApprovals?.filter(approval => 
-      approval.status === 'executed' || approval.status === 'failed' || approval.status === 'denied'
+      (approval.status === 'executed' || approval.status === 'failed' || approval.status === 'denied') &&
+      approval.processed !== false // Either processed=true or undefined (legacy)
     ) || [];
     
     const updatedAgentCards = { ...state.activeAgentCards };
@@ -667,6 +792,8 @@ export class LangGraphOSSwarmWorkflow {
       acc[agentRole].push(tool);
       return acc;
     }, {} as Record<string, ToolApprovalRequest[]>);
+    
+    let anyAgentUpdated = false;
     
     for (const [role, agentTools] of Object.entries(toolsByAgent)) {
       if (agentTools.length > 0 && updatedAgentCards[role] && !updatedAgentResults[role]) {
@@ -707,13 +834,28 @@ export class LangGraphOSSwarmWorkflow {
         });
         
         console.log(`[LangGraph] Agent ${role} completed with status: ${newStatus}`);
+        anyAgentUpdated = true;
       }
     }
     
-    /* Don't force currentPhase to 'synthesis' – let router decide */
+    // ✅ FIXED: Mark processed tools to prevent re-processing
+    const finalApprovals = state.pendingApprovals?.map(approval => {
+      if (completedTools.some(tool => tool.id === approval.id)) {
+        return { ...approval, processed: true };
+      }
+      return approval;
+    }) || [];
+    
+    console.log('[LangGraph] Agent completion processing complete:', {
+      anyAgentUpdated,
+      completedToolsCount: completedTools.length,
+      finalApprovalsCount: finalApprovals.length
+    });
+    
     return {
       activeAgentCards: updatedAgentCards,
-      agentResults: updatedAgentResults
+      agentResults: updatedAgentResults,
+      pendingApprovals: finalApprovals as ToolApprovalRequest[]
     };
   };
   
@@ -952,14 +1094,31 @@ export class LangGraphOSSwarmWorkflow {
     }
   }
   
+  private async sendHumanInteractionToRenderer(request: HumanInteractionRequest): Promise<void> {
+    console.log(`[LangGraph-DEBUG] Sending interaction to renderer:`, {
+      requestId: request.id,
+      type: request.type,
+      threadId: request.threadId
+    });
+    
+    const webContents = (global as any).osswarmWebContents;
+    if (webContents && !webContents.isDestroyed()) {
+      webContents.send('agent:human_interaction_request', {
+        interactionId: request.id,
+        request
+      });
+    }
+  }
+  
   compile() {
     const compiledGraph = this.graph.compile({
       checkpointer: new MemorySaver(),
       interruptBefore: [],
-      interruptAfter: []
+      interruptAfter: [],
+      recursionLimit: 50 // ✅ Increase recursion limit as safety net
     });
     
-    console.log('[LangGraph] Workflow compiled successfully');
+    console.log('[LangGraph] Workflow compiled successfully with recursion limit: 50');
     return compiledGraph;
   }
   
@@ -983,6 +1142,7 @@ export class LangGraphOSSwarmWorkflow {
       const compiledGraph = this.compile();
       console.log(`[LangGraph-WORKFLOW] Workflow compiled successfully`);
       
+      // ✅ Store workflow BEFORE execution
       console.log(`[LangGraph-WORKFLOW] Storing workflow for thread: ${threadId}`);
       LangGraphOSSwarmWorkflow.activeWorkflows.set(threadId, compiledGraph);
       console.log(`[LangGraph-WORKFLOW] Workflow stored. Total active workflows: ${LangGraphOSSwarmWorkflow.activeWorkflows.size}`);
@@ -1010,111 +1170,148 @@ export class LangGraphOSSwarmWorkflow {
       console.log(`[LangGraph-WORKFLOW] Invoking workflow with config:`, config);
       console.log(`[LangGraph-WORKFLOW] Initial state keys:`, Object.keys(initialState));
       
-      const result = await compiledGraph.invoke(initialState, config);
+      // ✅ FIXED: Use invoke instead of stream for initial execution
+      // Stream is for resuming, invoke is for initial execution
+      try {
+        const finalResult = await compiledGraph.invoke(initialState, config);
+        
+        console.log(`[LangGraph-WORKFLOW] Workflow invoke completed:`, {
+          hasResult: !!finalResult,
+          resultKeys: finalResult ? Object.keys(finalResult) : []
+        });
+        
+        // ✅ Check if workflow completed or was interrupted
+        const isCompleted = finalResult?.synthesizedResult || finalResult?.currentPhase === 'completed';
+        
+        if (isCompleted) {
+          // ✅ Only clean up if actually completed
+          LangGraphOSSwarmWorkflow.activeWorkflows.delete(threadId);
+          console.log(`[LangGraph-WORKFLOW] Workflow completed, cleaned up thread: ${threadId}`);
+          
+          const result = finalResult?.synthesizedResult ||
+          Object.values(finalResult?.agentResults || {})
+                .map((r: any) => r.result)
+                .join('\n\n') ||
+          `Task "${task}" completed.`;
+          
+        return {
+          success: true,
+          result,
+          workflowState: finalResult
+        };
+      } else {
+        // ✅ Workflow was interrupted - DON'T clean up, keep for resume
+        console.log(`[LangGraph-WORKFLOW] Workflow ended without completion - keeping for resume`);
+        return {
+          success: true,
+          result: 'Workflow paused for human interaction',
+          requiresHumanInteraction: true,
+          workflowState: finalResult
+        };
+      }
       
-      const finalResult =
-        result?.synthesizedResult ||
-        Object.values(result?.agentResults || {})
-              .map((r: any) => r.result)
-              .join('\n\n') ||
-        `Task "${task}" completed.`;
-
-      return {
-        success: true,
-        result: finalResult,
-        workflowState: result
-      };
-      
-    } catch (error: any) {
-      console.log(`[LangGraph-WORKFLOW] Exception details:`, {
-        name: error.name,
-        message: error.message,
-        hasInterrupts: !!error.interrupts,
-        interruptCount: error.interrupts?.length || 0
-      });
-      
-      if (error.name === 'GraphInterrupt') {
-        console.log(`[LangGraph-WORKFLOW] GraphInterrupt detected - workflow paused for human interaction`);
-        console.log(`[LangGraph-WORKFLOW] Interrupt data:`, error.interrupts?.[0]?.value);
+    } catch (innerError: any) {
+      // Handle invoke-specific errors
+      if (innerError.name === 'GraphInterrupt') {
+        console.log(`[LangGraph-WORKFLOW] GraphInterrupt during invoke - workflow paused`);
+        console.log(`[LangGraph-WORKFLOW] Interrupt data:`, innerError.interrupts?.[0]?.value);
         
         return {
           success: true,
           result: 'Workflow paused for human interaction',
           requiresHumanInteraction: true,
-          interruptData: error.interrupts?.[0]?.value
+          interruptData: innerError.interrupts?.[0]?.value
         };
+      } else {
+        // Re-throw other errors to be handled by outer catch
+        throw innerError;
       }
-      
-      console.error(`[LangGraph-WORKFLOW] Actual workflow error:`, {
-        message: error.message,
-        stack: error.stack,
-        name: error.name
-      });
-      
-      LangGraphOSSwarmWorkflow.activeWorkflows.delete(threadId);
-      console.log(`[LangGraph-WORKFLOW] Cleaned up failed workflow for thread: ${threadId}`);
-      
-      return {
-        success: false,
-        error: error.message
-      };
     }
+    
+  } catch (error: any) {
+    console.log(`[LangGraph-WORKFLOW] Workflow execution failed:`, error);
+    throw error;
   }
+}
+
+public static getActiveWorkflows(): Map<string, any> {
+  return LangGraphOSSwarmWorkflow.activeWorkflows;
+}
+
+public static listActiveWorkflows(): string[] {
+  return Array.from(LangGraphOSSwarmWorkflow.activeWorkflows.keys());
+}
+
+public static async resumeWorkflow(
+  threadId: string,
+  humanResponse: EnhancedHumanInteractionResponse
+) {
+  console.log(`🔍 [RESUME] Resuming workflow with enhanced Command pattern...`);
+  console.log(`🔍 [RESUME] Thread ID: ${threadId}`);
+  console.log(`🔍 [RESUME] Human response:`, {
+    id: humanResponse.id,
+    approved: humanResponse.approved,
+    hasToolExecutionResult: !!humanResponse.toolExecutionResult,
+    toolSuccess: humanResponse.toolExecutionResult?.success,
+    toolName: humanResponse.toolExecutionResult?.toolName
+  });
   
-  // ✅ UPDATED: Resume workflow using Command pattern with MCP integration
-  public static async resumeWorkflow(
-    threadId: string,
-    humanResponse: EnhancedHumanInteractionResponse
-  ) {
-    console.log(`🔍 [RESUME] Resuming workflow with enhanced Command pattern...`);
+  try {
+    const compiledGraph = LangGraphOSSwarmWorkflow.activeWorkflows.get(threadId);
+    
+    if (!compiledGraph) {
+      console.error(`🔍 [RESUME] No workflow found for thread: ${threadId}`);
+      console.log(`🔍 [RESUME] Available threads:`, Array.from(LangGraphOSSwarmWorkflow.activeWorkflows.keys()));
+      throw new Error(`No active workflow found for thread ${threadId}`);
+    }
+    
+    console.log(`🔍 [RESUME] Found workflow for thread: ${threadId}`);
+    
+    // Create resume value based on response
+    let resumeValue: any;
+    
+    if (humanResponse.toolExecutionResult) {
+      resumeValue = {
+        id: humanResponse.id,
+        approved: true,
+        timestamp: Date.now(),
+        toolExecutionResult: humanResponse.toolExecutionResult
+      };
+      console.log(`🔍 [RESUME] Resuming with tool execution result:`, resumeValue);
+    } else {
+      resumeValue = {
+        id: humanResponse.id,
+        approved: humanResponse.approved,
+        timestamp: Date.now()
+      };
+      console.log(`🔍 [RESUME] Resuming with approval decision:`, resumeValue);
+    }
+    
+    const config = { configurable: { thread_id: threadId } };
+    
+    console.log(`🔍 [RESUME] Calling invoke with Command resume...`);
     
     try {
-      const compiledGraph = LangGraphOSSwarmWorkflow.activeWorkflows.get(threadId);
-      
-      if (!compiledGraph) {
-        throw new Error(`No active workflow found for thread ${threadId}`);
-      }
-      
-      // ✅ Create properly structured resume value following documentation patterns
-      let resumeValue: any;
-      
-      if (humanResponse.toolExecutionResult) {
-        // ✅ MCP execution result - array format as shown in docs
-        resumeValue = [{
-          toolId: humanResponse.id,
-          success: humanResponse.toolExecutionResult.success,
-          result: humanResponse.toolExecutionResult.result,
-          error: humanResponse.toolExecutionResult.error,
-          toolName: humanResponse.toolExecutionResult.toolName,
-          mcpServer: humanResponse.toolExecutionResult.mcpServer
-        }];
-      } else {
-        // ✅ Approval decision - array format for multiple approvals
-        resumeValue = [{
-          id: humanResponse.id,
-          approved: humanResponse.approved,
-          timestamp: Date.now()
-        }];
-      }
-      
-      const config = { configurable: { thread_id: threadId } };
-      
-      // ✅ Resume using Command as per LangGraph documentation
-      const result = await compiledGraph.stream(
+      const { Command } = require("@langchain/langgraph");
+      const finalResult = await compiledGraph.invoke(
         new Command({ resume: resumeValue }),
         config
       );
       
-      // ✅ Process the stream result properly
-      let finalResult: any = null;
-      for await (const event of result) {
-        finalResult = event;
-      }
-      
       const isCompleted = finalResult?.synthesizedResult || finalResult?.currentPhase === 'completed';
       
+      console.log(`🔍 [RESUME] Workflow resume result:`, {
+        isCompleted,
+        hasResult: !!finalResult,
+        resultKeys: finalResult ? Object.keys(finalResult) : [],
+        currentPhase: finalResult?.currentPhase
+      });
+      
       if (isCompleted) {
+        console.log(`🔍 [RESUME] Workflow completed after resume - cleaning up`);
         LangGraphOSSwarmWorkflow.activeWorkflows.delete(threadId);
+      } else {
+        console.log(`🔍 [RESUME] Workflow still requires more interaction`);
       }
       
       return {
@@ -1124,59 +1321,31 @@ export class LangGraphOSSwarmWorkflow {
         requiresHumanInteraction: !isCompleted
       };
       
-    } catch (error: any) {
-      if (error.name === 'GraphInterrupt') {
+    } catch (resumeError: any) {
+      if (resumeError.name === 'GraphInterrupt') {
+        console.log(`🔍 [RESUME] Another GraphInterrupt during resume - workflow still needs interaction`);
         return {
           success: true,
           completed: false,
           result: 'Workflow paused for interaction',
           requiresHumanInteraction: true,
-          interruptData: error.interrupts?.[0]?.value
+          interruptData: resumeError.interrupts?.[0]?.value
         };
+      } else {
+        throw resumeError;
       }
-      
-      console.error(`🔍 [RESUME] Resume error:`, error);
-      LangGraphOSSwarmWorkflow.activeWorkflows.delete(threadId);
-      
-      return {
-        success: false,
-        completed: false,
-        error: error.message
-      };
     }
-  }
-  
-  public static cleanupWorkflow(threadId: string) {
+    
+  } catch (error: any) {
+    console.error(`🔍 [RESUME] Resume error:`, error);
+    console.log(`🔍 [RESUME] Cleaning up failed resume for thread: ${threadId}`);
     LangGraphOSSwarmWorkflow.activeWorkflows.delete(threadId);
-    console.log(`[LangGraph] Cleaned up workflow for thread: ${threadId}`);
-  }
-
-  // ✅ Add the missing sendHumanInteractionToRenderer method
-  private async sendHumanInteractionToRenderer(request: HumanInteractionRequest): Promise<void> {
-    console.log(`[LangGraph-DEBUG] Sending interaction to renderer:`, {
-      requestId: request.id,
-      type: request.type,
-      threadId: request.threadId,
-      timestamp: request.timestamp,
-      hasData: !!request.data
-    });
     
-    const webContents = (global as any).osswarmWebContents;
-    console.log(`[LangGraph-DEBUG] WebContents state:`, {
-      exists: !!webContents,
-      isDestroyed: webContents ? webContents.isDestroyed() : 'N/A',
-      globalExists: !!(global as any).osswarmWebContents
-    });
-    
-    if (webContents && !webContents.isDestroyed()) {
-      webContents.send('agent:human_interaction_request', {
-        interactionId: request.id,
-        request
-      });
-      
-      console.log(`[LangGraph-DEBUG] IPC message sent successfully`);
-    } else {
-      console.log(`[LangGraph-DEBUG] Cannot send IPC - WebContents unavailable`);
-    }
+    return {
+      success: false,
+      completed: false,
+      error: error.message
+    };
   }
+}
 }

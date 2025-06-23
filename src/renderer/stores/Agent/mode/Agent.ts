@@ -10,7 +10,7 @@ import { formatMessagesForContext } from '@/utils/message';
 import type OpenAI from 'openai';
 import { appendRulesToSystemPrompt } from '@/utils/rules';
 import { useAgentStore } from '@/renderer/stores/Agent/AgentStore';
-import { getHumanInTheLoopManager } from '@/service/langchain/human_in_the_loop/human_in_the_loop';
+import { getHumanInTheLoopManager } from '@/service/langchain/human_in_the_loop/renderer/human_in_the_loop';
 
 export const agentModeSystemPrompt = (user: IUser, agent: IUser, kbIds?: string[]) => {
   let kbInfo = "";
@@ -78,7 +78,7 @@ interface ProcessAgentModeAIResponseParams {
 
 export async function processAgentModeAIResponse({
   activeChatId,
-  workspaceId, // Add workspaceId parameter
+  workspaceId,
   userMessageText,
   agent,
   currentUser,
@@ -88,11 +88,13 @@ export async function processAgentModeAIResponse({
   setStreamingState,
   markStreamAsCompleted,
 }: ProcessAgentModeAIResponseParams): Promise<{ success: boolean; responseText?: string; assistantMessageId?: string; error?: any; toolCalls?: OpenAI.Chat.Completions.ChatCompletionMessageToolCall[]; aborted?: boolean }> {
-  // Initialize human-in-the-loop manager instead of abort controller
-  const humanInTheLoopManager = getHumanInTheLoopManager();
+  // ✅ Use consistent thread ID pattern
   const threadId = `agent_mode_${activeChatId}_${Date.now()}`;
   
-  console.log("[AgentMode] Starting with human-in-the-loop support:", { threadId });
+  console.log("[AgentMode] Starting with thread ID:", threadId);
+
+  // Initialize human-in-the-loop manager instead of abort controller
+  const humanInTheLoopManager = getHumanInTheLoopManager();
 
   // Use provided agent or get from store
   const assistantSender = agent || getAgentFromStore();
@@ -195,7 +197,7 @@ export async function processAgentModeAIResponse({
     taskDescription += `\n\nNote: You have access to Knowledge Base(s): [${selectedKbIds.join(', ')}]. Consider using them if they contain relevant information for this request.`;
   }
 
-  // Prepare Agent Task options with explicit tool logging and KB integration
+  // Prepare Agent Task options with explicit thread ID
   const agentOptions = {
     model: modelId,
     provider: provider,
@@ -211,6 +213,7 @@ export async function processAgentModeAIResponse({
     tools: allSelectedToolsFromMCPs,
     systemPrompt: systemPromptText,
     humanInTheLoop: true,
+    threadId: threadId, // ✅ Explicitly pass thread ID
     knowledgeBases: selectedKbIds.length > 0 && workspaceId ? {
       enabled: true,
       selectedKbIds: selectedKbIds,
@@ -230,22 +233,11 @@ export async function processAgentModeAIResponse({
   console.log("[AgentMode DEBUG] - Full agentOptions:", agentOptions);
 
   try {
-    console.log('[AgentMode] Calling executeAgentTask with:', {
-      taskLength: taskDescription.length,
-      toolsCount: agentOptions.tools?.length || 0,
-      kbCount: selectedKbIds.length,
-      workspaceId: workspaceId,
-      provider: agentOptions.provider,
-      model: agentOptions.model
-    });
+    console.log('[AgentMode] Calling executeAgentTask with thread ID:', threadId);
 
     const result = await executeAgentTask(
       taskDescription,
-      {
-        ...agentOptions,
-        threadId, // Pass thread ID for human interactions
-        humanInTheLoop: true // Enable human-in-the-loop
-      },
+      agentOptions, // This now includes threadId
       activeChatId,
       workspaceId
     );

@@ -547,13 +547,9 @@ export default function AgentWorkOverlay({
               {/* Logs Panel */}
               {currentTab === 0 && (
                 <LogsPanel
-                  currentGraph={currentGraph}
-                  currentTaskUpdates={currentTaskUpdates}
+                  currentExecution={currentExecution}
                   isTaskRunning={isTaskRunning}
                   isTaskActive={isTaskActive}
-                  currentTaskStatus={currentTaskStatus}
-                  currentExecution={currentExecution}
-                  statusInfo={statusInfo}
                   isFullscreen={isFullscreen}
                 />
               )}

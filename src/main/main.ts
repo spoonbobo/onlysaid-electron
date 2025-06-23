@@ -39,7 +39,7 @@ import { setupCryptoHandlers } from './crypto/cryptoHandlers';
 import { setupN8nHandlers } from './n8n';
 import { setupHealthCheckHandlers, cleanupHealthCheck } from './healthcheck';
 import { setupLangChainHandlers } from '../service/langchain';
-import { setupHumanInTheLoopHandlers } from './langchain/human_in_the_loop';
+import { setupHumanInTheLoopHandlers } from '../service/langchain/human_in_the_loop/ipc/human_in_the_loop';
 
 // Load environment variables
 dotenv.config();

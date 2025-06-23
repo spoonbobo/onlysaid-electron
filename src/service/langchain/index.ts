@@ -1,12 +1,11 @@
 export { LangChainServiceFactory } from './factory';
 export { LangChainAgentService } from './agent';
-export { setupLangChainHandlers } from './handlers';
+export { setupLangChainHandlers } from './ipc_handlers';
 
 // LangGraph OSSwarm exports (replacing old OSSwarm)
 export { 
   LangGraphOSSwarmFactory, 
-  LangGraphOSSwarmWorkflow,
-  setupOSSwarmHandlers 
+  LangGraphOSSwarmWorkflow
 } from './OSSwarm';
 
 // Re-export types

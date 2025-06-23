@@ -10,7 +10,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { Typography } from "@mui/material";
 import { useChatStore } from "@/renderer/stores/Chat/ChatStore";
 import { useCurrentTopicContext, useTopicStore } from "@/renderer/stores/Topic/TopicStore";
-import { useStreamStore, OpenAIMessage, OpenAIStreamOptions } from "@/renderer/stores/Stream/StreamStore";
+import { useStreamStore } from "@/renderer/stores/Stream/StreamStore";
 import { useUserStore } from "@/renderer/stores/User/UserStore";
 import { useAgentStore } from "@/renderer/stores/Agent/AgentStore";
 import { useWorkspaceStore } from "@/renderer/stores/Workspace/WorkspaceStore";
@@ -898,6 +898,84 @@ function Chat() {
     };
   }, [activeChatId, appendMessage, workspaceId]);
 
+  // Add this new useEffect for LangGraph result synthesis
+  useEffect(() => {
+    console.log('[Chat] Setting up LangGraph result synthesis listener...');
+    
+    const handleResultSynthesized = async (event: any, ...args: unknown[]) => {
+      const data = args[0] as { executionId: string; result: string; agentCards: any[] };
+      
+      console.log('[Chat] 🔮 Received LangGraph result synthesis:', {
+        executionId: data.executionId,
+        resultLength: data.result?.length || 0,
+        agentCount: data.agentCards?.length || 0
+      });
+      
+      if (!activeChatId) {
+        console.warn('[Chat] No active chat ID, ignoring result synthesis');
+        return;
+      }
+      
+      const { agent } = useAgentStore.getState();
+      if (!agent) {
+        console.error('[Chat] No agent available for synthesis message');
+        return;
+      }
+      
+      const synthesisMessage: IChatMessage = {
+        id: `langgraph-synthesis-${data.executionId}`,
+        chat_id: activeChatId,
+        sender: agent.id || '',
+        sender_object: agent,
+        text: data.result,
+        created_at: new Date().toISOString(),
+        sent_at: new Date().toISOString(),
+        status: 'completed',
+        workspace_id: workspaceId
+      };
+      
+      try {
+        // Save to database
+        await window.electron.db.query({
+          query: `
+            INSERT OR REPLACE INTO messages 
+            (id, chat_id, sender, text, created_at, sent_at, status, workspace_id)
+            VALUES (@id, @chat_id, @sender, @text, @created_at, @sent_at, @status, @workspace_id)
+          `,
+          params: {
+            id: synthesisMessage.id,
+            chat_id: activeChatId,
+            sender: agent.id,
+            text: synthesisMessage.text,
+            created_at: synthesisMessage.created_at,
+            sent_at: synthesisMessage.sent_at,
+            status: 'completed',
+            workspace_id: workspaceId || null,
+          }
+        });
+        
+        console.log('[Chat] ✅ Synthesis message saved to database');
+        
+        // Add to UI
+        appendMessage(activeChatId, synthesisMessage);
+        
+        console.log('[Chat] ✅ Synthesis message displayed in chat');
+        
+      } catch (error) {
+        console.error('[Chat] ❌ Failed to save synthesis message:', error);
+        // Still show in UI even if database save failed
+        appendMessage(activeChatId, synthesisMessage);
+      }
+    };
+
+    const unsubscribeResultSynthesis = window.electron?.ipcRenderer?.on?.('agent:result_synthesized', handleResultSynthesized);
+    
+    return () => {
+      console.log('[Chat] Cleaning up LangGraph result synthesis listener');
+      unsubscribeResultSynthesis?.();
+    };
+  }, [activeChatId, appendMessage, workspaceId]);
+
   // Add state for LangGraph interactions
   const [langGraphInteractions, setLangGraphInteractions] = useState<Map<string, {
     interactionId: string;
@@ -932,7 +1010,49 @@ function Chat() {
       });
       
       // Resume the workflow with the response
-      await resumeLangGraphWorkflow(interaction.request.threadId, response);
+      const resumeResult = await resumeLangGraphWorkflow(interaction.request.threadId, response);
+      
+      // ✅ NEW: Handle workflow completion here
+      if (resumeResult.success && resumeResult.completed && resumeResult.result) {
+        console.log('[Chat]  Workflow completed, creating final AI response...');
+        
+        const { agent } = useAgentStore.getState();
+        if (agent) {
+          const finalResponseMessage: IChatMessage = {
+            id: `langgraph-final-${Date.now()}`,
+            chat_id: activeChatId || '',
+            sender: agent.id || '',
+            sender_object: agent,
+            text: resumeResult.result,
+            created_at: new Date().toISOString(),
+            sent_at: new Date().toISOString(),
+            status: 'completed',
+            workspace_id: workspaceId
+          };
+          
+          // Add to UI and save to database
+          appendMessage(activeChatId || '', finalResponseMessage);
+          
+          try {
+            await window.electron.db.query({
+              query: `INSERT INTO messages (id, chat_id, sender, text, created_at, sent_at, status, workspace_id) VALUES (@id, @chat_id, @sender, @text, @created_at, @sent_at, @status, @workspace_id)`,
+              params: {
+                id: finalResponseMessage.id,
+                chat_id: activeChatId,
+                sender: agent.id,
+                text: finalResponseMessage.text,
+                created_at: finalResponseMessage.created_at,
+                sent_at: finalResponseMessage.sent_at,
+                status: 'completed',
+                workspace_id: workspaceId || null,
+              }
+            });
+            toast.success('Workflow completed successfully!');
+          } catch (dbError) {
+            console.error('[Chat] Failed to save final response:', dbError);
+          }
+        }
+      }
       
       // Only update message if messageId exists (not for silent approvals)
       if (interaction.messageId) {
@@ -958,7 +1078,7 @@ function Chat() {
       console.error('[Chat] Error handling human interaction response:', error);
       toast.error('Failed to process approval response');
     }
-  }, [langGraphInteractions, activeChatId, updateMessage]);
+  }, [langGraphInteractions, activeChatId, updateMessage, appendMessage, workspaceId]);
 
   // ✅ Expose the handler globally so ToolDisplay can use it
   useEffect(() => {

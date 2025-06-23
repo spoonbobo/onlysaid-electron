@@ -66,6 +66,7 @@ export interface ToolApprovalRequest {
   mcpServer: string;
   result?: any;
   error?: string;
+  processed?: boolean;
 }
 
 export interface ToolExecution {

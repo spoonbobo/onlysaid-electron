@@ -19,7 +19,7 @@ import { useLLMConfigurationStore } from "@/renderer/stores/LLM/LLMConfiguration
 import { useUserStore } from "@/renderer/stores/User/UserStore";
 import { useStreamStore } from "@/renderer/stores/Stream/StreamStore";
 import { useTopicStore } from "@/renderer/stores/Topic/TopicStore";
-import { HumanInteractionResponse } from "@/service/langchain/human_in_the_loop/human_in_the_loop";
+import { HumanInteractionResponse } from "@/service/langchain/human_in_the_loop/renderer/human_in_the_loop";
 
 interface ToolDisplayProps {
   toolCalls: IChatMessageToolCall[];
@@ -358,7 +358,10 @@ const ToolDisplay = memo(({ toolCalls, chatId, messageId }: ToolDisplayProps) =>
           error: resumeResult.error
         });
         
-        if (resumeResult.success) {
+        if (resumeResult.success && resumeResult.completed && resumeResult.result) {
+          await addLogForToolCall(toolCallId, `Workflow completed successfully. Final response handled by Chat component.`);
+          toast.success(`Workflow completed successfully!`);
+        } else if (resumeResult.success) {
           await addLogForToolCall(toolCallId, `Workflow resumed successfully with execution results.`);
           if (executionSuccess) {
             toast.success(`Tool "${toolCall.function.name}" executed and workflow resumed`);

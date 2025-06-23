@@ -155,18 +155,17 @@ type AgentChannels =
   | 'agent:get_status' 
   | 'agent:clear_cache' 
   | 'agent:stream_update' 
-  | 'agent:approve_tool' 
-  | 'agent:abort_task' 
   | 'agent:human_interaction_request'
   | 'agent:human_interaction_response'
   | 'agent:resume_workflow'
-  | 'agent:tool_approval_request'
   | 'agent:tool_execution_start'
   | 'agent:tool_execution_complete'
   | 'agent:execute_mcp_tool'
   | 'agent:clear_interactions'
   | 'agent:get_pending_interactions'
-  | 'agent:process_tool_approval';
+  | 'agent:result_synthesized'
+  | 'agent:agent_updated'
+  | 'agent:execution_updated';
 
 export type Channels =
   | AuthChannels
@@ -502,8 +501,8 @@ const electronHandler = {
       ipcRenderer.invoke('agent:abort_task', params),
     resumeWorkflow: (params: { threadId: string; response: any; workflowType?: string }) =>
       ipcRenderer.invoke('agent:resume_workflow', params),
-    processToolApproval: (params: { approvalId: string; approved: boolean; threadId: string }) =>
-      ipcRenderer.invoke('agent:process_tool_approval', params),
+    // processToolApproval: (params: { approvalId: string; approved: boolean; threadId: string }) =>
+    //   ipcRenderer.invoke('agent:process_tool_approval', params),
     onToolApprovalRequest: (callback: (event: IpcRendererEvent, data: any) => void) => {
       ipcRenderer.on('agent:tool_approval_request', callback);
       return () => ipcRenderer.removeListener('agent:tool_approval_request', callback);

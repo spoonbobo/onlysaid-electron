@@ -15,7 +15,7 @@ import MarkdownRenderer from "@/renderer/components/Chat/MarkdownRenderer";
 import { FormattedMessage } from "react-intl";
 import DeleteMessageDialog from "@/renderer/components/Dialog/Chat/DeleteMessage";
 import ThisIsEncrypted from "@/renderer/components/Dialog/Chat/ThisIsEncrypted";
-import ToolDisplay from "@/renderer/scenes/Main/Chat/ChatUI/ToolDisplay";
+import ToolDisplay from "@/renderer/components/Chat/ToolDisplay";
 import FileDisplay from "./FileDisplay";
 import LockIcon from '@mui/icons-material/Lock';
 import LockOpenIcon from '@mui/icons-material/LockOpen';
