@@ -19,7 +19,6 @@ import { toast } from "@/utils/toast";
 import { IChatRoom } from "@/../../types/Chat/Chatroom";
 import ChatUIWithNoChat from "./ChatUIWithNoChat";
 import AgentWorkOverlay from "../../../components/Agent/AgentWorkOverlay";
-import { useAgentTaskStore } from "@/renderer/stores/Agent/AgentTaskStore";
 
 function Chat() {
   const {
@@ -104,8 +103,6 @@ function Chat() {
   const input = getInput(activeChatId || '', contextId);
 
   const fetchMessagesTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-
-  const agentTaskStore = useAgentTaskStore();
 
   useEffect(() => {
     if (fetchMessagesTimeoutRef.current) {

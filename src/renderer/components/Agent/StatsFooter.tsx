@@ -8,7 +8,7 @@ import {
   alpha
 } from '@mui/material';
 import { useIntl } from 'react-intl';
-import { ExecutionGraph } from '@/renderer/stores/Agent/AgentTaskStore';
+import { ExecutionGraph } from '@/renderer/stores/Agent/task';
 
 interface StatsFooterProps {
   currentGraph: ExecutionGraph;

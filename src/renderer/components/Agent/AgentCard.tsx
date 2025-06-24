@@ -124,26 +124,26 @@ export const AgentCard: React.FC<AgentCardProps> = ({
     }
   };
 
-
   return (
     <Card
       sx={{
         cursor: onSelect ? 'pointer' : 'default',
-        transition: 'all 0.2s ease-in-out',
         border: 2,
         borderColor: alpha(statusColor, 0.3),
         '&:hover': onSelect ? {
           boxShadow: theme.shadows[8],
           borderColor: statusColor,
-          transform: 'translateY(-2px)'
         } : {},
         ...(compact && {
           minHeight: 'auto'
-        })
+        }),
+        height: '100%',
+        display: 'flex',
+        flexDirection: 'column'
       }}
       onClick={handleCardClick}
     >
-      <CardContent sx={{ pb: compact ? 1 : 2 }}>
+      <CardContent sx={{ pb: compact ? 1 : 2, flexGrow: 1 }}>
         {/* Header with Avatar and Status */}
         <Stack direction="row" alignItems="center" spacing={2} sx={{ mb: compact ? 1 : 2 }}>
           <Badge
@@ -240,7 +240,7 @@ export const AgentCard: React.FC<AgentCardProps> = ({
         {agentCard.currentTask && (
           <Box sx={{ mb: compact ? 1 : 2 }}>
             <Typography variant="caption" color="text.secondary" fontWeight={500}>
-              {intl.formatMessage({ id: 'agent.currentTask' })}:
+              {intl.formatMessage({ id: 'agent.currentTask', defaultMessage: 'Current Task' })}:
             </Typography>
             <Typography
               variant="body2"
@@ -279,7 +279,7 @@ export const AgentCard: React.FC<AgentCardProps> = ({
         {!compact && agentCard.expertise && agentCard.expertise.length > 0 && (
           <Box sx={{ mb: 2 }}>
             <Typography variant="caption" color="text.secondary" fontWeight={500} sx={{ mb: 1, display: 'block' }}>
-              {intl.formatMessage({ id: 'agent.expertise' })}:
+              {intl.formatMessage({ id: 'agent.expertise', defaultMessage: 'Expertise' })}:
             </Typography>
             <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap>
               {agentCard.expertise.slice(0, 4).map((skill, index) => (
@@ -315,10 +315,10 @@ export const AgentCard: React.FC<AgentCardProps> = ({
         )}
 
         {/* Capabilities */}
-        {!compact && (
+        {!compact && agentCard.capabilities && (
           <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
             {agentCard.capabilities.toolCalling && (
-              <Tooltip title={intl.formatMessage({ id: 'agent.capabilities.toolCalling' })}>
+              <Tooltip title={intl.formatMessage({ id: 'agent.capabilities.toolCalling', defaultMessage: 'Tool Calling' })}>
                 <Chip
                   icon={<Build />}
                   label="Tools"
@@ -334,7 +334,7 @@ export const AgentCard: React.FC<AgentCardProps> = ({
             )}
             
             {agentCard.capabilities.knowledgeBase && (
-              <Tooltip title={intl.formatMessage({ id: 'agent.capabilities.knowledgeBase' })}>
+              <Tooltip title={intl.formatMessage({ id: 'agent.capabilities.knowledgeBase', defaultMessage: 'Knowledge Base' })}>
                 <Chip
                   icon={<Storage />}
                   label="KB"
@@ -350,7 +350,7 @@ export const AgentCard: React.FC<AgentCardProps> = ({
             )}
 
             {agentCard.capabilities.streaming && (
-              <Tooltip title={intl.formatMessage({ id: 'agent.capabilities.streaming' })}>
+              <Tooltip title={intl.formatMessage({ id: 'agent.capabilities.streaming', defaultMessage: 'Streaming' })}>
                 <Chip
                   label="Stream"
                   size="small"
@@ -369,14 +369,14 @@ export const AgentCard: React.FC<AgentCardProps> = ({
 
       {/* Actions */}
       {showActions && !compact && (
-        <CardActions sx={{ pt: 0, justifyContent: 'space-between' }}>
+        <CardActions sx={{ pt: 0, justifyContent: 'space-between', mt: 'auto' }}>
           <Typography variant="caption" color="text.secondary">
-            {agentCard.skills.length} {intl.formatMessage({ id: 'agent.skills' })}
+            {agentCard.skills?.length || 0} {intl.formatMessage({ id: 'agent.skills', defaultMessage: 'skills' })}
           </Typography>
           
           <Stack direction="row" spacing={1}>
             {agentCard.status === 'busy' && (
-              <Tooltip title={intl.formatMessage({ id: 'agent.actions.pause' })}>
+              <Tooltip title={intl.formatMessage({ id: 'agent.actions.pause', defaultMessage: 'Pause' })}>
                 <IconButton
                   size="small"
                   onClick={(e) => handleActionClick('pause', e)}
@@ -387,7 +387,7 @@ export const AgentCard: React.FC<AgentCardProps> = ({
             )}
             
             {agentCard.status === 'idle' && (
-              <Tooltip title={intl.formatMessage({ id: 'agent.actions.start' })}>
+              <Tooltip title={intl.formatMessage({ id: 'agent.actions.start', defaultMessage: 'Start' })}>
                 <IconButton
                   size="small"
                   onClick={(e) => handleActionClick('start', e)}

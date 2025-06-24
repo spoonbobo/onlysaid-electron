@@ -449,6 +449,85 @@ export function setupLangChainHandlers() {
     }
   });
 
+  ipcMain.handle('agent:update_agent_status', async (event, { agentId, status, currentTask, executionId }) => {
+    console.log('[IPC-DB] Updating agent status:', { agentId, status, currentTask, executionId });
+    
+    try {
+      event.sender.send('agent:update_agent_status', {
+        agentId,
+        status,
+        currentTask,
+        executionId
+      });
+      
+      // ✅ ALSO: Send real-time update to UI
+      event.sender.send('agent:agent_updated', {
+        agentCard: { id: agentId },
+        status,
+        currentTask,
+        executionId
+      });
+      
+      return { success: true };
+    } catch (error: any) {
+      console.error('[IPC-DB] Error updating agent status:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  ipcMain.handle('agent:update_task_status', async (event, { taskId, status, result, error, executionId }) => {
+    console.log('[IPC-DB] Updating task status:', { taskId, status, executionId });
+    
+    try {
+      event.sender.send('agent:update_task_status', {
+        taskId,
+        status,
+        result,
+        error,
+        executionId
+      });
+      
+      // ✅ ALSO: Send real-time update to UI
+      event.sender.send('agent:task_updated', {
+        taskId,
+        status,
+        result,
+        error,
+        executionId
+      });
+      
+      return { success: true };
+    } catch (error: any) {
+      console.error('[IPC-DB] Error updating task status:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  ipcMain.handle('agent:create_execution_record', async (event, { executionId, taskDescription, chatId, workspaceId }) => {
+    console.log('[IPC-DB] Creating execution record:', { executionId, taskDescription, chatId, workspaceId });
+    
+    try {
+      event.sender.send('agent:create_execution_record', {
+        executionId,
+        taskDescription,
+        chatId,
+        workspaceId
+      });
+      
+      // ✅ ALSO: Send real-time update to UI
+      event.sender.send('agent:execution_updated', {
+        executionId,
+        status: 'pending',
+        taskDescription
+      });
+      
+      return { success: true };
+    } catch (error: any) {
+      console.error('[IPC-DB] Error creating execution record:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
   console.log('[LangChain] IPC handlers set up successfully');
 }
 

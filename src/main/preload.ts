@@ -166,12 +166,16 @@ type AgentChannels =
   | 'agent:result_synthesized'
   | 'agent:agent_updated'
   | 'agent:execution_updated'
+  | 'agent:task_updated'
   | 'agent:save_agent_to_db'
   | 'agent:save_task_to_db'
   | 'agent:save_tool_execution_to_db'
   | 'agent:update_execution_status'
   | 'agent:add_log_to_db'
-  | 'agent:create_execution_record';
+  | 'agent:create_execution_record'
+  | 'agent:update_agent_status'
+  | 'agent:update_task_status'
+  | 'agent:clear_task_state';
 
 export type Channels =
   | AuthChannels
@@ -507,8 +511,6 @@ const electronHandler = {
       ipcRenderer.invoke('agent:abort_task', params),
     resumeWorkflow: (params: { threadId: string; response: any; workflowType?: string }) =>
       ipcRenderer.invoke('agent:resume_workflow', params),
-    // processToolApproval: (params: { approvalId: string; approved: boolean; threadId: string }) =>
-    //   ipcRenderer.invoke('agent:process_tool_approval', params),
     onToolApprovalRequest: (callback: (event: IpcRendererEvent, data: any) => void) => {
       ipcRenderer.on('agent:tool_approval_request', callback);
       return () => ipcRenderer.removeListener('agent:tool_approval_request', callback);
@@ -527,6 +529,43 @@ const electronHandler = {
       ipcRenderer.invoke('agent:agent_action', params),
     abortToolExecution: (params: { executionId: string }) =>
       ipcRenderer.invoke('agent:abort_tool_execution', params),
+    saveAgentToDb: (params: { executionId: string; agentId: string; role: string; expertise?: string[] }) =>
+      ipcRenderer.invoke('agent:save_agent_to_db', params),
+    saveTaskToDb: (params: { executionId: string; agentId: string; taskDescription: string; priority?: number }) =>
+      ipcRenderer.invoke('agent:save_task_to_db', params),
+    saveToolExecutionToDb: (params: { 
+      executionId: string; 
+      agentId: string; 
+      toolName: string; 
+      toolArguments?: any; 
+      approvalId?: string; 
+      taskId?: string; 
+      mcpServer?: string 
+    }) =>
+      ipcRenderer.invoke('agent:save_tool_execution_to_db', params),
+    updateExecutionStatus: (params: { executionId: string; status: string; result?: string; error?: string }) =>
+      ipcRenderer.invoke('agent:update_execution_status', params),
+    addLogToDb: (params: { 
+      executionId: string; 
+      logType: string; 
+      message: string; 
+      agentId?: string; 
+      taskId?: string; 
+      toolExecutionId?: string; 
+      metadata?: any 
+    }) =>
+      ipcRenderer.invoke('agent:add_log_to_db', params),
+    createExecutionRecord: (params: { 
+      executionId: string; 
+      taskDescription: string; 
+      chatId?: string; 
+      workspaceId?: string 
+    }) =>
+      ipcRenderer.invoke('agent:create_execution_record', params),
+    updateAgentStatus: (params: { agentId: string; status: string; currentTask?: string; executionId: string }) =>
+      ipcRenderer.invoke('agent:update_agent_status', params),
+    updateTaskStatus: (params: { taskId: string; status: string; result?: string; error?: string; executionId: string }) =>
+      ipcRenderer.invoke('agent:update_task_status', params),
   },
 };
 

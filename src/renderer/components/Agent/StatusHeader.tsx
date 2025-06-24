@@ -31,6 +31,7 @@ interface StatusHeaderProps {
   isAborting: boolean;
   isFullscreen: boolean;
   isMinimized: boolean;
+  isViewingCurrentExecution?: boolean;
   onShowHistory: () => void;
   onAbort: () => void;
   onForceStop: () => void;
@@ -47,6 +48,7 @@ export const StatusHeader: React.FC<StatusHeaderProps> = ({
   isAborting,
   isFullscreen,
   isMinimized,
+  isViewingCurrentExecution = true,
   onShowHistory,
   onAbort,
   onForceStop,
@@ -117,7 +119,7 @@ export const StatusHeader: React.FC<StatusHeaderProps> = ({
                 {intl.formatMessage({ id: 'agent.history' })}
               </Button>
 
-              {(isTaskActive || isTaskRunning) && !isAborting && (
+              {(isTaskActive || isTaskRunning) && !isAborting && !isTaskCompleted && isViewingCurrentExecution && (
                 <Button
                   size="small"
                   startIcon={<Stop />}
@@ -175,7 +177,7 @@ export const StatusHeader: React.FC<StatusHeaderProps> = ({
                 </IconButton>
               </Tooltip>
 
-              {(isTaskActive || isTaskRunning) && !isAborting && (
+              {(isTaskActive || isTaskRunning) && !isAborting && !isTaskCompleted && isViewingCurrentExecution && (
                 <Tooltip title={intl.formatMessage({ id: 'agent.abort' })}>
                   <IconButton
                     size="small"

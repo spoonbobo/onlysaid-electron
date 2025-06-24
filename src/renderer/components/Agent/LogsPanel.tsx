@@ -16,7 +16,6 @@ import {
   ToggleButtonGroup,
   Tooltip,
   Badge,
-  Collapse,
   Button,
   Menu,
   MenuItem,
@@ -662,7 +661,7 @@ export const LogsPanel: React.FC<LogsPanelProps> = ({
                       />
                     </Divider>
                     
-                    <Collapse in={isExpanded}>
+                    {isExpanded && (
                       <Stack spacing={1}>
                         {sectionLogs.map((log) => {
                           const logTypeProps = getLogTypeProps(log.type);
@@ -680,16 +679,13 @@ export const LogsPanel: React.FC<LogsPanelProps> = ({
                                   ? alpha(theme.palette.success.main, 0.2) 
                                   : 'divider',
                                 borderRadius: 2,
-                                transition: 'all 0.2s ease',
                                 '&:hover': {
                                   backgroundColor: log.isLive 
                                     ? alpha(theme.palette.success.main, 0.08) 
                                     : alpha(theme.palette.action.hover, 0.04),
                                   borderColor: log.isLive 
                                     ? alpha(theme.palette.success.main, 0.3) 
-                                    : alpha(theme.palette.action.hover, 0.2),
-                                  transform: 'translateY(-1px)',
-                                  boxShadow: theme.shadows[2]
+                                    : alpha(theme.palette.action.hover, 0.2)
                                 }
                               }}
                             >
@@ -736,33 +732,18 @@ export const LogsPanel: React.FC<LogsPanelProps> = ({
                                     />
                                     
                                     {log.isLive && (
-                                      <Badge 
+                                      <Chip 
+                                        label={intl.formatMessage({ id: 'agent.logs.live', defaultMessage: 'Live' })} 
+                                        size="small" 
                                         color="success" 
-                                        variant="dot" 
+                                        variant="filled" 
                                         sx={{ 
-                                          '& .MuiBadge-badge': { 
-                                            animation: 'pulse 2s infinite',
-                                            '@keyframes pulse': {
-                                              '0%': { opacity: 1 },
-                                              '50%': { opacity: 0.5 },
-                                              '100%': { opacity: 1 }
-                                            }
-                                          }
-                                        }}
-                                      >
-                                        <Chip 
-                                          label={intl.formatMessage({ id: 'agent.logs.live', defaultMessage: 'Live' })} 
-                                          size="small" 
-                                          color="success" 
-                                          variant="filled" 
-                                          sx={{ 
-                                            fontSize: '0.6rem', 
-                                            height: 16, 
-                                            fontWeight: 'bold',
-                                            '& .MuiChip-label': { px: 0.5 }
-                                          }} 
-                                        />
-                                      </Badge>
+                                          fontSize: '0.6rem', 
+                                          height: 16, 
+                                          fontWeight: 'bold',
+                                          '& .MuiChip-label': { px: 0.5 }
+                                        }} 
+                                      />
                                     )}
                                     
                                     {log.agentRole && !isCompactView && (
@@ -818,7 +799,7 @@ export const LogsPanel: React.FC<LogsPanelProps> = ({
                           );
                         })}
                       </Stack>
-                    </Collapse>
+                    )}
                   </Box>
                 );
               })}

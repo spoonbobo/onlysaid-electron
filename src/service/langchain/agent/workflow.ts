@@ -1,17 +1,8 @@
 import { StateGraph, Annotation, START, END, MemorySaver, Command } from "@langchain/langgraph";
-import { interrupt } from "@langchain/langgraph";
-import { AgentExecutionResult, ToolApprovalRequest, ToolExecution } from './state';
-import { AgentRegistry } from './registry';
-import { AgentFactory } from '../factory/factory';
-import { LangChainServiceFactory } from '../factory/factory';
-import { HumanMessage, AIMessage, BaseMessage } from "@langchain/core/messages";
+import { AgentExecutionResult, ToolApprovalRequest } from './state';
+import { BaseMessage } from "@langchain/core/messages";
 import { AgentCard } from '@/../../types/Agent/AgentCard';
 import { LangChainAgentOptions } from '../agent';
-import { 
-  HumanInteractionRequest, 
-  HumanInteractionResponse 
-} from '../human_in_the_loop/renderer/human_in_the_loop';
-
 // Import nodes
 import {
   MasterCoordinatorNode,
@@ -27,15 +18,6 @@ import {
   WorkflowState
 } from '../nodes';
 
-// ✅ Enhanced ToolApprovalRequest to include timing information
-interface TimedToolApprovalRequest extends ToolApprovalRequest {
-  approvalStartTime?: number;
-  executionStartTime?: number;
-  executionEndTime?: number;
-  totalDuration?: number;
-}
-
-// ✅ Enhanced state to include timing tracking
 const OSSwarmStateAnnotation = Annotation.Root({
   originalTask: Annotation<string>,
   messages: Annotation<BaseMessage[]>({
@@ -276,14 +258,14 @@ export class LangGraphOSSwarmWorkflow {
           LangGraphOSSwarmWorkflow.activeWorkflows.delete(threadId);
           console.log(`[LangGraph-WORKFLOW] Workflow completed, cleaned up thread: ${threadId}`);
           
-          const result = finalResult?.synthesizedResult ||
-          Object.values(finalResult?.agentResults || {})
-                .map((r: any) => r.result)
-                .join('\n\n') ||
-          `Task "${task}" completed.`;
-          
-          // ✅ FIX: Update execution status on completion via IPC
+          // ✅ ADD: Clear agent store state on completion
           if (webContents && options.executionId) {
+            // Clear the agent task state
+            webContents.send('agent:clear_task_state', {
+              taskId: 'current',
+              executionId: options.executionId
+            });
+            
             webContents.send('agent:update_execution_status', {
               executionId: options.executionId,
               status: 'completed',
@@ -296,6 +278,12 @@ export class LangGraphOSSwarmWorkflow {
               message: 'Workflow execution completed successfully'
             });
           }
+          
+          const result = finalResult?.synthesizedResult ||
+          Object.values(finalResult?.agentResults || {})
+                .map((r: any) => r.result)
+                .join('\n\n') ||
+          `Task "${task}" completed.`;
           
           return {
             success: true,

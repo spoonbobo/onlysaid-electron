@@ -105,12 +105,12 @@ export const AgentCards: React.FC<AgentCardsProps> = ({
   }, [agents]);
 
   return (
-    <Box sx={{ p: 2 }}>
+    <Box sx={{ p: 2, height: '100%', display: 'flex', flexDirection: 'column' }}>
       {/* Header */}
       <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 3 }}>
         <Box>
           <Typography variant="h5" fontWeight={600}>
-            {intl.formatMessage({ id: 'agents.title' })}
+            {intl.formatMessage({ id: 'agents.title', defaultMessage: 'Agents' })}
           </Typography>
           <Typography variant="body2" color="text.secondary">
             {filteredAgents.length} of {agents.length} agents
@@ -119,7 +119,7 @@ export const AgentCards: React.FC<AgentCardsProps> = ({
 
         <Stack direction="row" spacing={1}>
           {onRefresh && (
-            <Tooltip title={intl.formatMessage({ id: 'common.refresh' })}>
+            <Tooltip title={intl.formatMessage({ id: 'common.refresh', defaultMessage: 'Refresh' })}>
               <IconButton onClick={onRefresh}>
                 <Refresh />
               </IconButton>
@@ -128,7 +128,7 @@ export const AgentCards: React.FC<AgentCardsProps> = ({
 
           {onViewModeChange && (
             <Stack direction="row" spacing={0}>
-              <Tooltip title={intl.formatMessage({ id: 'view.grid' })}>
+              <Tooltip title={intl.formatMessage({ id: 'view.grid', defaultMessage: 'Grid View' })}>
                 <IconButton
                   onClick={() => onViewModeChange('grid')}
                   color={viewMode === 'grid' ? 'primary' : 'default'}
@@ -136,7 +136,7 @@ export const AgentCards: React.FC<AgentCardsProps> = ({
                   <ViewModule />
                 </IconButton>
               </Tooltip>
-              <Tooltip title={intl.formatMessage({ id: 'view.list' })}>
+              <Tooltip title={intl.formatMessage({ id: 'view.list', defaultMessage: 'List View' })}>
                 <IconButton
                   onClick={() => onViewModeChange('list')}
                   color={viewMode === 'list' ? 'primary' : 'default'}
@@ -153,7 +153,7 @@ export const AgentCards: React.FC<AgentCardsProps> = ({
               startIcon={<Add />}
               onClick={onCreateAgent}
             >
-              {intl.formatMessage({ id: 'agents.create' })}
+              {intl.formatMessage({ id: 'agents.create', defaultMessage: 'Create Agent' })}
             </Button>
           )}
         </Stack>
@@ -162,26 +162,26 @@ export const AgentCards: React.FC<AgentCardsProps> = ({
       {/* Status Overview */}
       <Paper sx={{ p: 2, mb: 3, bgcolor: alpha(theme.palette.primary.main, 0.02) }}>
         <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 1 }}>
-          {intl.formatMessage({ id: 'agents.statusOverview' })}
+          {intl.formatMessage({ id: 'agents.statusOverview', defaultMessage: 'Status Overview' })}
         </Typography>
         <Stack direction="row" spacing={2} flexWrap="wrap" useFlexGap>
           <Chip
-            label={`${intl.formatMessage({ id: 'status.idle' })}: ${statusCounts.idle || 0}`}
+            label={`${intl.formatMessage({ id: 'status.idle', defaultMessage: 'Idle' })}: ${statusCounts.idle || 0}`}
             size="small"
             sx={{ bgcolor: alpha(theme.palette.grey[500], 0.1) }}
           />
           <Chip
-            label={`${intl.formatMessage({ id: 'status.busy' })}: ${statusCounts.busy || 0}`}
+            label={`${intl.formatMessage({ id: 'status.busy', defaultMessage: 'Busy' })}: ${statusCounts.busy || 0}`}
             size="small"
             sx={{ bgcolor: alpha(theme.palette.warning.main, 0.1) }}
           />
           <Chip
-            label={`${intl.formatMessage({ id: 'status.completed' })}: ${statusCounts.completed || 0}`}
+            label={`${intl.formatMessage({ id: 'status.completed', defaultMessage: 'Completed' })}: ${statusCounts.completed || 0}`}
             size="small"
             sx={{ bgcolor: alpha(theme.palette.success.main, 0.1) }}
           />
           <Chip
-            label={`${intl.formatMessage({ id: 'status.failed' })}: ${statusCounts.failed || 0}`}
+            label={`${intl.formatMessage({ id: 'status.failed', defaultMessage: 'Failed' })}: ${statusCounts.failed || 0}`}
             size="small"
             sx={{ bgcolor: alpha(theme.palette.error.main, 0.1) }}
           />
@@ -193,11 +193,11 @@ export const AgentCards: React.FC<AgentCardsProps> = ({
         {/* Search */}
         {onSearchChange && (
           <TextField
-            placeholder={intl.formatMessage({ id: 'agents.search.placeholder' })}
+            placeholder={intl.formatMessage({ id: 'agents.search.placeholder', defaultMessage: 'Search agents...' })}
             value={searchQuery}
             onChange={(e) => onSearchChange(e.target.value)}
             size="small"
-            sx={{ minWidth: 250 }}
+            sx={{ minWidth: 250, flexGrow: 1 }}
             InputProps={{
               startAdornment: (
                 <InputAdornment position="start">
@@ -211,18 +211,18 @@ export const AgentCards: React.FC<AgentCardsProps> = ({
         {/* Status Filter */}
         {onStatusFilterChange && (
           <FormControl size="small" sx={{ minWidth: 120 }}>
-            <InputLabel>{intl.formatMessage({ id: 'filter.status' })}</InputLabel>
+            <InputLabel>{intl.formatMessage({ id: 'filter.status', defaultMessage: 'Status' })}</InputLabel>
             <Select
               value={statusFilter}
-              label={intl.formatMessage({ id: 'filter.status' })}
+              label={intl.formatMessage({ id: 'filter.status', defaultMessage: 'Status' })}
               onChange={(e) => onStatusFilterChange(e.target.value)}
             >
               <MenuItem value="all">
-                {intl.formatMessage({ id: 'filter.all' })}
+                {intl.formatMessage({ id: 'filter.all', defaultMessage: 'All' })}
               </MenuItem>
               {availableStatuses.map(status => (
                 <MenuItem key={status} value={status}>
-                  {intl.formatMessage({ id: `status.${status}` })}
+                  {intl.formatMessage({ id: `status.${status}`, defaultMessage: status })}
                 </MenuItem>
               ))}
             </Select>
@@ -232,14 +232,14 @@ export const AgentCards: React.FC<AgentCardsProps> = ({
         {/* Role Filter */}
         {onRoleFilterChange && (
           <FormControl size="small" sx={{ minWidth: 120 }}>
-            <InputLabel>{intl.formatMessage({ id: 'filter.role' })}</InputLabel>
+            <InputLabel>{intl.formatMessage({ id: 'filter.role', defaultMessage: 'Role' })}</InputLabel>
             <Select
               value={roleFilter}
-              label={intl.formatMessage({ id: 'filter.role' })}
+              label={intl.formatMessage({ id: 'filter.role', defaultMessage: 'Role' })}
               onChange={(e) => onRoleFilterChange(e.target.value)}
             >
               <MenuItem value="all">
-                {intl.formatMessage({ id: 'filter.all' })}
+                {intl.formatMessage({ id: 'filter.all', defaultMessage: 'All' })}
               </MenuItem>
               {availableRoles.map(role => (
                 <MenuItem key={role} value={role}>
@@ -252,49 +252,50 @@ export const AgentCards: React.FC<AgentCardsProps> = ({
       </Stack>
 
       {/* Agents Grid/List */}
-      {loading ? (
-        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 3 }}>
-          {Array.from({ length: 6 }).map((_, index) => (
-            <Skeleton key={index} variant="rectangular" width={300} height={200} />
-          ))}
-        </Box>
-      ) : filteredAgents.length === 0 ? (
-        <Paper sx={{ p: 4, textAlign: 'center' }}>
-          <Typography variant="h6" color="text.secondary">
-            {intl.formatMessage({ id: 'agents.noAgents' })}
-          </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-            {searchQuery || statusFilter !== 'all' || roleFilter !== 'all'
-              ? intl.formatMessage({ id: 'agents.noMatchingAgents' })
-              : intl.formatMessage({ id: 'agents.noAgentsDescription' })
-            }
-          </Typography>
-        </Paper>
-      ) : (
-        <Box 
-          sx={{ 
-            display: 'flex',
-            flexWrap: 'wrap',
-            gap: viewMode === 'grid' ? 3 : 2,
-            '& > *': {
-              flex: viewMode === 'grid' ? '1 1 300px' : '1 1 100%',
-              minWidth: viewMode === 'grid' ? '300px' : 'auto',
-              maxWidth: viewMode === 'grid' ? '400px' : 'none'
-            }
-          }}
-        >
-          {filteredAgents.map((agent) => (
-            <Box key={agent.runtimeId || agent.name}>
-              <AgentCard
-                agentCard={agent}
-                compact={viewMode === 'list'}
-                onSelect={onAgentSelect}
-                onAction={onAgentAction}
-              />
-            </Box>
-          ))}
-        </Box>
-      )}
+      <Box sx={{ flexGrow: 1, overflow: 'auto' }}>
+        {loading ? (
+          <Grid container spacing={3}>
+            {Array.from({ length: 6 }).map((_, index) => (
+              <Grid size={{ xs: 12, sm: 6, md: 4 }} key={index}>
+                <Skeleton variant="rectangular" height={200} sx={{ borderRadius: 2 }} />
+              </Grid>
+            ))}
+          </Grid>
+        ) : filteredAgents.length === 0 ? (
+          <Paper sx={{ p: 4, textAlign: 'center' }}>
+            <Typography variant="h6" color="text.secondary">
+              {intl.formatMessage({ id: 'agents.noAgents', defaultMessage: 'No Agents Found' })}
+            </Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+              {searchQuery || statusFilter !== 'all' || roleFilter !== 'all'
+                ? intl.formatMessage({ id: 'agents.noMatchingAgents', defaultMessage: 'No agents match your current filters' })
+                : intl.formatMessage({ id: 'agents.noAgentsDescription', defaultMessage: 'No agents are currently available' })
+              }
+            </Typography>
+          </Paper>
+        ) : (
+          <Grid container spacing={viewMode === 'grid' ? 3 : 2}>
+            {filteredAgents.map((agent) => (
+              <Grid 
+                size={{ 
+                  xs: 12, 
+                  sm: viewMode === 'grid' ? 6 : 12, 
+                  md: viewMode === 'grid' ? 4 : 12, 
+                  lg: viewMode === 'grid' ? 3 : 12 
+                }}
+                key={agent.runtimeId || agent.name}
+              >
+                <AgentCard
+                  agentCard={agent}
+                  compact={viewMode === 'list'}
+                  onSelect={onAgentSelect}
+                  onAction={onAgentAction}
+                />
+              </Grid>
+            ))}
+          </Grid>
+        )}
+      </Box>
     </Box>
   );
 };

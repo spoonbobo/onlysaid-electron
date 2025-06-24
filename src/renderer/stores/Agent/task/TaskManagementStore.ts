@@ -42,51 +42,74 @@ export const useTaskManagementStore = create<TaskManagementState>((set, get) => 
         throw new Error(`Execution ${executionId} does not exist. Cannot create task.`);
       }
 
-      // ✅ FIX: Handle multiple agent ID formats
+      // ✅ IMPROVED: Better agent ID resolution logic
       let dbAgentId = agentId;
       
-      // Handle registry-{role} format
+      console.log('[TaskManagementStore] Resolving agent ID:', { originalAgentId: agentId, executionId });
+      
+      // Handle different agent ID formats
       if (agentId.startsWith('registry-')) {
+        // Handle registry-{role} format
         const role = agentId.replace('registry-', '');
         const agentCheck = await window.electron.db.query({
-          query: `SELECT id FROM ${DBTABLES.OSSWARM_AGENTS} WHERE execution_id = @execution_id AND role = @role`,
+          query: `SELECT id FROM ${DBTABLES.OSSWARM_AGENTS} WHERE execution_id = @execution_id AND role = @role ORDER BY created_at DESC LIMIT 1`,
           params: { execution_id: executionId, role: role }
         });
         
         if (agentCheck && agentCheck.length > 0) {
           dbAgentId = agentCheck[0].id;
-          console.log(`[TaskManagementStore] Mapped ${agentId} to database ID: ${dbAgentId}`);
+          console.log('[TaskManagementStore] ✅ Mapped registry format:', { from: agentId, to: dbAgentId });
         } else {
           throw new Error(`Agent with role ${role} not found in execution ${executionId}. Cannot create task.`);
         }
-      }
-      // Handle langgraph-{role}-{timestamp} format
+      } 
       else if (agentId.startsWith('langgraph-')) {
+        // Handle langgraph-{role}-{timestamp} format
         const agentCheck = await window.electron.db.query({
-          query: `SELECT id FROM ${DBTABLES.OSSWARM_AGENTS} WHERE execution_id = @execution_id AND agent_id = @agent_id`,
+          query: `SELECT id FROM ${DBTABLES.OSSWARM_AGENTS} WHERE execution_id = @execution_id AND agent_id = @agent_id ORDER BY created_at DESC LIMIT 1`,
           params: { execution_id: executionId, agent_id: agentId }
         });
         
         if (agentCheck && agentCheck.length > 0) {
           dbAgentId = agentCheck[0].id;
-          console.log(`[TaskManagementStore] Mapped ${agentId} to database ID: ${dbAgentId}`);
+          console.log('[TaskManagementStore] ✅ Mapped langgraph format:', { from: agentId, to: dbAgentId });
         } else {
-          throw new Error(`Agent with agent_id ${agentId} not found in execution ${executionId}. Cannot create task.`);
+          // Try to find by role extracted from langgraph ID
+          const roleMatch = agentId.match(/langgraph-(.+?)-\d+/);
+          if (roleMatch) {
+            const role = roleMatch[1];
+            const roleBasedCheck = await window.electron.db.query({
+              query: `SELECT id FROM ${DBTABLES.OSSWARM_AGENTS} WHERE execution_id = @execution_id AND role = @role ORDER BY created_at DESC LIMIT 1`,
+              params: { execution_id: executionId, role: role }
+            });
+            
+            if (roleBasedCheck && roleBasedCheck.length > 0) {
+              dbAgentId = roleBasedCheck[0].id;
+              console.log('[TaskManagementStore] ✅ Mapped by extracted role:', { from: agentId, role, to: dbAgentId });
+            } else {
+              throw new Error(`Agent with ID ${agentId} or role ${role} not found in execution ${executionId}. Cannot create task.`);
+            }
+          } else {
+            throw new Error(`Agent with ID ${agentId} not found in execution ${executionId}. Cannot create task.`);
+          }
         }
       } 
-      // Handle direct database ID
       else {
+        // Handle direct database ID or UUID format
         const agentCheck = await window.electron.db.query({
-          query: `SELECT id FROM ${DBTABLES.OSSWARM_AGENTS} WHERE id = @id`,
-          params: { id: agentId }
+          query: `SELECT id FROM ${DBTABLES.OSSWARM_AGENTS} WHERE (id = @id OR agent_id = @agent_id) AND execution_id = @execution_id ORDER BY created_at DESC LIMIT 1`,
+          params: { id: agentId, agent_id: agentId, execution_id: executionId }
         });
 
-        if (!agentCheck || agentCheck.length === 0) {
-          throw new Error(`Agent ${agentId} does not exist. Cannot create task.`);
+        if (agentCheck && agentCheck.length > 0) {
+          dbAgentId = agentCheck[0].id;
+          console.log('[TaskManagementStore] ✅ Found direct agent ID:', { from: agentId, to: dbAgentId });
+        } else {
+          throw new Error(`Agent ${agentId} does not exist in execution ${executionId}. Cannot create task.`);
         }
       }
 
-      // Create the task
+      // ✅ Create the task with resolved agent ID
       await window.electron.db.query({
         query: `
           INSERT INTO ${DBTABLES.OSSWARM_TASKS}
@@ -127,10 +150,10 @@ export const useTaskManagementStore = create<TaskManagementState>((set, get) => 
         tasks: [...state.tasks, newTask]
       }));
 
-      console.log(`[TaskManagementStore] Task created successfully: ${taskId}`);
+      console.log('[TaskManagementStore] ✅ Task created successfully:', { taskId, dbAgentId, executionId });
       return taskId;
     } catch (error: any) {
-      console.error('[TaskManagementStore] Error creating task:', error);
+      console.error('[TaskManagementStore] ❌ Error creating task:', error);
       set({ error: error.message });
       throw error;
     }

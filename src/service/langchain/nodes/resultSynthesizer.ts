@@ -70,6 +70,25 @@ export class ResultSynthesizerNode extends BaseWorkflowNode {
       }
     });
     
+    if (webContents && state.executionId) {
+      webContents.send('agent:clear_task_state', {
+        taskId: 'current',
+        executionId: state.executionId
+      });
+      
+      webContents.send('agent:update_execution_status', {
+        executionId: state.executionId,
+        status: 'completed',
+        result: synthesizedResult
+      });
+      
+      webContents.send('agent:add_log_to_db', {
+        executionId: state.executionId,
+        logType: 'info',
+        message: 'Task completed - clearing agent states'
+      });
+    }
+    
     return {
       synthesizedResult,
       currentPhase: 'validation',

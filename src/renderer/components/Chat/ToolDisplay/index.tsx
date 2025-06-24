@@ -5,9 +5,9 @@ import { useIntl } from 'react-intl';
 import { useLLMStore, IToolLog } from "@/renderer/stores/LLM/LLMStore";
 import ToolLogDialog from "@/renderer/components/Dialog/MCP/ToolLog";
 import ToolResultDialog from "@/renderer/components/Dialog/MCP/ToolResult";
-import { useToolDisplayLogic } from './ToolDisplay/hooks/useToolDisplayLogic';
-import { ToolCallItem } from './ToolDisplay/components/ToolCallItem';
-import { ReferencesSection } from './ToolDisplay/components/ReferencesSection';
+import { useToolDisplayLogic } from './hooks/useToolDisplayLogic';
+import { ToolCallItem } from './components/ToolCallItem';
+import { ReferencesSection } from './components/ReferencesSection';
 
 interface ToolDisplayProps {
   toolCalls: IChatMessageToolCall[];
@@ -124,4 +124,4 @@ const ToolDisplay = memo(({ toolCalls, chatId, messageId }: ToolDisplayProps) =>
   );
 });
 
-export default ToolDisplay;
+export default ToolDisplay; 

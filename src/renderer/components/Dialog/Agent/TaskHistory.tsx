@@ -298,14 +298,9 @@ export const TaskHistory: React.FC<TaskHistoryProps> = ({
                   sx={{
                     borderRadius: 2,
                     cursor: 'pointer',
-                    transition: 'all 0.2s ease-in-out',
-                    position: 'relative',
-                    zIndex: 1,
                     '&:hover': {
                       boxShadow: theme.shadows[4],
-                      borderColor: 'primary.main',
-                      transform: 'translateY(-2px)',
-                      zIndex: 10
+                      borderColor: 'primary.main'
                     }
                   }}
                   onClick={() => onSelectExecution(execution.id)}

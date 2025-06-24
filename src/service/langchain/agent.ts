@@ -3,8 +3,7 @@ import { ChatOllama } from '@langchain/ollama';
 import { HumanMessage, SystemMessage, AIMessage } from '@langchain/core/messages';
 import { ChatPromptTemplate } from '@langchain/core/prompts';
 import { AgentExecutor, createOpenAIFunctionsAgent } from 'langchain/agents';
-import { DynamicStructuredTool } from '@langchain/core/tools';
-import { z } from 'zod';
+
 import type { BaseMessage } from '@langchain/core/messages';
 import type { BaseChatModel } from '@langchain/core/language_models/chat_models';
 import type OpenAI from 'openai';

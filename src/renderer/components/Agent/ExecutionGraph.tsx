@@ -34,8 +34,7 @@ import {
   Close
 } from '@mui/icons-material';
 import { useIntl } from 'react-intl';
-import { ExecutionGraph } from '@/renderer/stores/Agent/AgentTaskStore';
-import { useAgentTaskStore } from '@/renderer/stores/Agent/AgentTaskStore';
+import { ExecutionGraph } from '@/renderer/stores/Agent/task';
 
 interface Node {
   id: string;
@@ -265,6 +264,19 @@ export const ExecutionGraphComponent: React.FC<ExecutionGraphProps> = ({
 
   // Enhanced node and edge calculation with better positioning
   const { nodes, edges, stats } = useMemo(() => {
+    // ✅ Add timestamp to reduce excessive logging
+    const now = Date.now();
+    if (!(window as any).lastGraphLog || now - (window as any).lastGraphLog > 1000) {
+      console.log('[ExecutionGraph] Recalculating graph with:', {
+        hasGraph: !!graph,
+        agentCount: graph?.agents?.length || 0,
+        taskCount: graph?.tasks?.length || 0,
+        toolCount: graph?.toolExecutions?.length || 0,
+        agentStatuses: graph?.agents?.map(a => ({ id: a.id, role: a.role, status: a.status })) || []
+      });
+      (window as any).lastGraphLog = now;
+    }
+    
     if (!graph) return { nodes: [], edges: [], stats: { total: 0, completed: 0, failed: 0, running: 0 } };
 
     const nodes: Node[] = [];
@@ -293,23 +305,27 @@ export const ExecutionGraphComponent: React.FC<ExecutionGraphProps> = ({
     };
     nodes.push(executionNode);
 
-    // Create agent nodes in a circle with better spacing
+    // ✅ FIX: Better agent node positioning and status handling
     const agentRadius = Math.min(containerDimensions.width, containerDimensions.height) * 0.25;
     const agentCount = graph.agents.length;
     
     graph.agents.forEach((agent, index) => {
       const angle = (2 * Math.PI * index) / agentCount - Math.PI / 2;
+      
+      // ✅ FIX: Handle agent status properly
+      const agentStatus = agent.status || 'idle';
+      
       const agentNode: Node = {
         id: agent.id,
         type: 'agent',
         label: `${agent.role}`,
-        status: agent.status,
+        status: agentStatus,
         x: centerX + Math.cos(angle) * agentRadius,
         y: centerY + Math.sin(angle) * agentRadius,
         width: nodeTypes.agent.width,
         height: nodeTypes.agent.height,
-        color: statusColors[agent.status as keyof typeof statusColors]?.bg || theme.palette.grey[100],
-        borderColor: statusColors[agent.status as keyof typeof statusColors]?.border || theme.palette.grey[400],
+        color: statusColors[agentStatus as keyof typeof statusColors]?.bg || theme.palette.grey[100],
+        borderColor: statusColors[agentStatus as keyof typeof statusColors]?.border || theme.palette.grey[400],
         metadata: agent,
         connections: [graph.execution.id],
       };
@@ -320,21 +336,46 @@ export const ExecutionGraphComponent: React.FC<ExecutionGraphProps> = ({
         from: graph.execution.id,
         to: agent.id,
         type: 'creates',
-        animated: agent.status === 'busy',
-        color: agent.status === 'busy' ? theme.palette.primary.main : theme.palette.grey[400],
-        width: agent.status === 'busy' ? 3 : 2
+        animated: ['busy', 'running', 'executing'].includes(agentStatus),
+        color: ['busy', 'running', 'executing'].includes(agentStatus) ? theme.palette.primary.main : theme.palette.grey[400],
+        width: ['busy', 'running', 'executing'].includes(agentStatus) ? 3 : 2
       });
     });
 
-    // Create task nodes around their agents
+    // ✅ FIX: Better task node handling with improved agent matching
     graph.tasks.forEach((task) => {
-      const agentNode = nodes.find(n => n.metadata?.agent_id === task.agent_id);
-      if (!agentNode) return;
+      // ✅ IMPROVED: Better agent node matching logic
+      const agentNode = nodes.find(n => {
+        if (!n.metadata) return false;
+        
+        // Try multiple matching strategies
+        return n.metadata.id === task.agent_id ||           // Direct ID match
+               n.metadata.agent_id === task.agent_id ||      // Agent ID field match
+               n.metadata.role === task.agent_id ||          // Role-based match
+               n.id === task.agent_id;                       // Node ID match
+      });
+      
+      if (!agentNode) {
+        console.warn('[ExecutionGraph] No agent node found for task:', {
+          taskId: task.id,
+          agentId: task.agent_id,
+          availableAgents: nodes.filter(n => n.type === 'agent').map(n => ({
+            id: n.id,
+            metadataId: n.metadata?.id,
+            agentId: n.metadata?.agent_id,
+            role: n.metadata?.role
+          }))
+        });
+        return;
+      }
 
       const tasksForAgent = graph.tasks.filter(t => t.agent_id === task.agent_id);
       const indexInAgent = tasksForAgent.findIndex(t => t.id === task.id);
       const taskRadius = 100;
-      const taskAngle = (2 * Math.PI * indexInAgent) / tasksForAgent.length;
+      const taskAngle = tasksForAgent.length > 1 ? (2 * Math.PI * indexInAgent) / tasksForAgent.length : 0;
+
+      // ✅ FIX: Handle task status properly  
+      const taskStatus = task.status || 'pending';
 
       const taskNode: Node = {
         id: task.id,
@@ -342,13 +383,13 @@ export const ExecutionGraphComponent: React.FC<ExecutionGraphProps> = ({
         label: task.task_description.length > 25 
           ? task.task_description.substring(0, 22) + '...'
           : task.task_description,
-        status: task.status,
+        status: taskStatus,
         x: agentNode.x + Math.cos(taskAngle) * taskRadius,
         y: agentNode.y + Math.sin(taskAngle) * taskRadius,
         width: nodeTypes.task.width,
         height: nodeTypes.task.height,
-        color: statusColors[task.status as keyof typeof statusColors]?.bg || theme.palette.grey[100],
-        borderColor: statusColors[task.status as keyof typeof statusColors]?.border || theme.palette.grey[400],
+        color: statusColors[taskStatus as keyof typeof statusColors]?.bg || theme.palette.grey[100],
+        borderColor: statusColors[taskStatus as keyof typeof statusColors]?.border || theme.palette.grey[400],
         metadata: task,
         connections: [agentNode.id],
       };
@@ -359,38 +400,56 @@ export const ExecutionGraphComponent: React.FC<ExecutionGraphProps> = ({
         from: agentNode.id,
         to: task.id,
         type: 'executes',
-        animated: task.status === 'running',
-        color: task.status === 'running' ? theme.palette.success.main : theme.palette.success.light,
-        width: task.status === 'running' ? 3 : 2
+        animated: ['running', 'executing'].includes(taskStatus),
+        color: ['running', 'executing'].includes(taskStatus) ? theme.palette.success.main : theme.palette.success.light,
+        width: ['running', 'executing'].includes(taskStatus) ? 3 : 2
       });
     });
 
-    // Create tool execution nodes
+    // ✅ IMPROVED: Better tool execution nodes logic with improved parent matching
     graph.toolExecutions.forEach((toolExec) => {
+      // ✅ IMPROVED: Better parent node matching
       const parentNode = toolExec.task_id 
-        ? nodes.find(n => n.id === toolExec.task_id)
-        : nodes.find(n => n.metadata?.id === toolExec.agent_id);
+        ? nodes.find(n => n.id === toolExec.task_id || n.metadata?.id === toolExec.task_id)
+        : nodes.find(n => {
+            if (!n.metadata) return false;
+            return n.metadata.id === toolExec.agent_id ||
+                   n.metadata.agent_id === toolExec.agent_id ||
+                   n.id === toolExec.agent_id;
+          });
       
-      if (!parentNode) return;
+      if (!parentNode) {
+        console.warn('[ExecutionGraph] No parent node found for tool execution:', {
+          toolId: toolExec.id,
+          toolName: toolExec.tool_name,
+          taskId: toolExec.task_id,
+          agentId: toolExec.agent_id,
+          availableNodes: nodes.map(n => ({ id: n.id, type: n.type, metadataId: n.metadata?.id }))
+        });
+        return;
+      }
 
       const toolsForParent = graph.toolExecutions.filter(t => 
         toolExec.task_id ? t.task_id === toolExec.task_id : t.agent_id === toolExec.agent_id
       );
       const indexInParent = toolsForParent.findIndex(t => t.id === toolExec.id);
       const toolRadius = 65;
-      const toolAngle = (2 * Math.PI * indexInParent) / toolsForParent.length;
+      const toolAngle = toolsForParent.length > 1 ? (2 * Math.PI * indexInParent) / toolsForParent.length : 0;
+
+      // ✅ FIX: Handle tool execution status properly
+      const toolStatus = toolExec.status || 'pending';
 
       const toolNode: Node = {
         id: toolExec.id,
         type: 'tool',
         label: toolExec.tool_name,
-        status: toolExec.status,
+        status: toolStatus,
         x: parentNode.x + Math.cos(toolAngle) * toolRadius,
         y: parentNode.y + Math.sin(toolAngle) * toolRadius,
         width: nodeTypes.tool.width,
         height: nodeTypes.tool.height,
-        color: statusColors[toolExec.status as keyof typeof statusColors]?.bg || theme.palette.grey[100],
-        borderColor: statusColors[toolExec.status as keyof typeof statusColors]?.border || theme.palette.grey[400],
+        color: statusColors[toolStatus as keyof typeof statusColors]?.bg || theme.palette.grey[100],
+        borderColor: statusColors[toolStatus as keyof typeof statusColors]?.border || theme.palette.grey[400],
         metadata: toolExec,
         connections: [parentNode.id],
       };
@@ -401,19 +460,19 @@ export const ExecutionGraphComponent: React.FC<ExecutionGraphProps> = ({
         from: parentNode.id,
         to: toolExec.id,
         type: 'uses',
-        animated: toolExec.status === 'executing',
-        color: toolExec.status === 'executing' ? theme.palette.warning.main : theme.palette.warning.light,
-        width: toolExec.status === 'executing' ? 3 : 2
+        animated: ['executing', 'running'].includes(toolStatus),
+        color: ['executing', 'running'].includes(toolStatus) ? theme.palette.warning.main : theme.palette.warning.light,
+        width: ['executing', 'running'].includes(toolStatus) ? 3 : 2
       });
     });
 
-    // Calculate stats
+    // ✅ FIX: Better stats calculation
     const allNodes = [...graph.agents, ...graph.tasks, ...graph.toolExecutions];
     const stats = {
       total: allNodes.length,
       completed: allNodes.filter(n => n.status === 'completed').length,
       failed: allNodes.filter(n => n.status === 'failed').length,
-      running: allNodes.filter(n => ['running', 'busy', 'executing'].includes(n.status)).length
+      running: allNodes.filter(n => ['running', 'busy', 'executing'].includes(n.status || '')).length
     };
 
     return { nodes, edges, stats };

@@ -2,13 +2,20 @@ import { useEffect, useCallback } from 'react';
 import { useChatStore } from '@/renderer/stores/Chat/ChatStore';
 import { useLLMStore } from '@/renderer/stores/LLM/LLMStore';
 import { useMCPClientStore } from '@/renderer/stores/MCP/MCPClient';
-import { useAgentTaskStore } from '@/renderer/stores/Agent/AgentTaskStore';
 import { useToastStore } from '@/renderer/stores/Notification/ToastStore';
 import { IChatMessage, IChatMessageToolCall } from "@/../../types/Chat/Message";
 import { getUserFromStore } from "@/utils/user";
 import { toast } from "@/utils/toast";
-import { useExecutionStore } from '@/renderer/stores/Agent/task/ExecutionStore';
 import { useHistoryStore } from '@/renderer/stores/Agent/task/HistoryStore';
+import { useAgentStore } from './stores/Agent/AgentStore';
+import { 
+  useAgentManagementStore, 
+  useTaskManagementStore, 
+  useToolExecutionStore, 
+  useExecutionStore, 
+  useLogStore, 
+  useAgentTaskOrchestrator
+} from '@/renderer/stores/Agent/task';
 
 // ✅ LangGraph Interaction interface
 interface LangGraphInteraction {
@@ -702,7 +709,7 @@ export const useIPCListeners = ({
       console.log('[IPCListeners-Global-IPC] 🔥 Received save agent request:', data);
       
       try {
-        const dbAgentId = await useAgentTaskStore.getState().createAgent(
+        const dbAgentId = await useAgentManagementStore.getState().createAgent(
           data.executionId,
           data.agentId,
           data.role,
@@ -720,7 +727,7 @@ export const useIPCListeners = ({
       console.log('[IPCListeners-Global-IPC] 🔥 Received save task request:', data);
       
       try {
-        const taskId = await useAgentTaskStore.getState().createTask(
+        const taskId = await useTaskManagementStore.getState().createTask(
           data.executionId,
           data.agentId,
           data.taskDescription,
@@ -746,7 +753,7 @@ export const useIPCListeners = ({
       console.log('[IPCListeners-Global-IPC] 🔥 Received save tool execution request:', data);
       
       try {
-        const toolExecutionId = await useAgentTaskStore.getState().createToolExecution(
+        const toolExecutionId = await useToolExecutionStore.getState().createToolExecution(
           data.executionId,
           data.agentId,
           data.toolName,
@@ -767,7 +774,7 @@ export const useIPCListeners = ({
       console.log('[IPCListeners-Global-IPC] 🔥 Received update execution status request:', data);
       
       try {
-        await useAgentTaskStore.getState().updateExecutionStatus(
+        await useExecutionStore.getState().updateExecutionStatus(
           data.executionId,
           data.status as any,
           data.result,
@@ -793,7 +800,7 @@ export const useIPCListeners = ({
       console.log('[IPCListeners-Global-IPC] 🔥 Received add log request:', data);
       
       try {
-        await useAgentTaskStore.getState().addLog(
+        await useLogStore.getState().addLog(
           data.executionId,
           data.logType as any,
           data.message,
@@ -878,6 +885,66 @@ export const useIPCListeners = ({
       }
     };
 
+    const handleUpdateAgentStatus = async (event: any, ...args: unknown[]) => {
+      const data = args[0] as { agentId: string; status: string; currentTask?: string; executionId: string };
+      console.log('[IPCListeners-Global-IPC] 🔥 Received update agent status request:', data);
+      
+      try {
+        await useAgentManagementStore.getState().updateAgentStatus(
+          data.agentId,
+          data.status as any,
+          data.currentTask
+        );
+        
+        console.log('[IPCListeners-Global-IPC] ✅ Agent status updated in database');
+      } catch (error) {
+        console.error('[IPCListeners-Global-IPC] ❌ Error updating agent status in database:', error);
+      }
+    };
+
+    const handleUpdateTaskStatus = async (event: any, ...args: unknown[]) => {
+      const data = args[0] as { taskId: string; status: string; result?: string; error?: string; executionId: string };
+      console.log('[IPCListeners-Global-IPC] 🔥 Received update task status request:', data);
+      
+      try {
+        await useTaskManagementStore.getState().updateTaskStatus(
+          data.taskId,
+          data.status as any,
+          data.result,
+          data.error
+        );
+        
+        console.log('[IPCListeners-Global-IPC] ✅ Task status updated in database');
+      } catch (error) {
+        console.error('[IPCListeners-Global-IPC] ❌ Error updating task status in database:', error);
+      }
+    };
+
+    const handleClearTaskState = async (event: any, ...args: unknown[]) => {
+      const data = args[0] as { taskId: string; executionId: string };
+      console.log('[IPCListeners-Global-IPC] 🔥 Received clear task state request:', data);
+      
+      try {
+        // ✅ Clear AgentStore state
+        const { clearAgentTaskState } = useAgentStore.getState();
+        if (clearAgentTaskState) {
+          clearAgentTaskState(data.taskId);
+          console.log('[IPCListeners-Global-IPC] ✅ AgentStore task state cleared for:', data.taskId);
+        }
+        
+        // ✅ ALSO clear orchestrator state
+        const { clearCurrentExecution } = useAgentTaskOrchestrator.getState();
+        if (clearCurrentExecution) {
+          clearCurrentExecution();
+          console.log('[IPCListeners-Global-IPC] ✅ Agent task orchestrator execution cleared');
+        }
+        
+        console.log('[IPCListeners-Global-IPC] ✅ All agent task states cleared for:', data.taskId);
+      } catch (error) {
+        console.error('[IPCListeners-Global-IPC] ❌ Error clearing agent task state:', error);
+      }
+    };
+
     // ==================== GOOGLE SERVICES LISTENERS ====================
     
     const handleGoogleServicesReady = () => {
@@ -895,6 +962,20 @@ export const useIPCListeners = ({
       // Still mark as ready to continue initialization
       setGoogleServicesReady(true);
     };
+
+    // ==================== ADD: Real-time update listeners for GraphPanel ====================
+    
+    const unsubscribeAgentUpdated = window.electron?.ipcRenderer?.on?.('agent:agent_updated', (event, data) => {
+      console.log('[IPCListeners] Real-time agent update received:', data);
+    });
+
+    const unsubscribeTaskUpdated = window.electron?.ipcRenderer?.on?.('agent:task_updated', (event, data) => {
+      console.log('[IPCListeners] Real-time task update received:', data);
+    });
+
+    const unsubscribeExecutionUpdated = window.electron?.ipcRenderer?.on?.('agent:execution_updated', (event, data) => {
+      console.log('[IPCListeners] Real-time execution update received:', data);
+    });
 
     // ==================== REGISTER ALL LISTENERS ====================
     
@@ -915,6 +996,9 @@ export const useIPCListeners = ({
     const unsubscribeGlobalUpdateStatus = window.electron?.ipcRenderer?.on?.('agent:update_execution_status', handleUpdateExecutionStatus);
     const unsubscribeGlobalAddLog = window.electron?.ipcRenderer?.on?.('agent:add_log_to_db', handleAddLogToDb);
     const unsubscribeCreateExecution = window.electron?.ipcRenderer?.on?.('agent:create_execution_record', handleCreateExecutionRecord);
+    const unsubscribeUpdateAgentStatus = window.electron?.ipcRenderer?.on?.('agent:update_agent_status', handleUpdateAgentStatus);
+    const unsubscribeUpdateTaskStatus = window.electron?.ipcRenderer?.on?.('agent:update_task_status', handleUpdateTaskStatus);
+    const unsubscribeClearTaskState = window.electron?.ipcRenderer?.on?.('agent:clear_task_state', handleClearTaskState);
 
     // Google services listeners
     const removeReadyListener = window.electron.ipcRenderer.on('google-services:ready', handleGoogleServicesReady);
@@ -944,10 +1028,18 @@ export const useIPCListeners = ({
       unsubscribeGlobalUpdateStatus?.();
       unsubscribeGlobalAddLog?.();
       unsubscribeCreateExecution?.();
+      unsubscribeUpdateAgentStatus?.();
+      unsubscribeUpdateTaskStatus?.();
+      unsubscribeClearTaskState?.();
       
       // Google services listeners
       removeReadyListener();
       removeErrorListener();
+
+      // ✅ ADD: Real-time update listeners for GraphPanel
+      unsubscribeAgentUpdated?.();
+      unsubscribeTaskUpdated?.();
+      unsubscribeExecutionUpdated?.();
     };
   }, [activeChatId, workspaceId, agent, appendMessage, updateMessage, osswarmToolRequests, setOSSwarmToolRequests, langGraphInteractions, setLangGraphInteractions, resumeLangGraphWorkflow, setGoogleServicesReady]);
 

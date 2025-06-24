@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { AgentCard } from '@/../../types/Agent/AgentCard';
-import { useAgentTaskStore } from '@/renderer/stores/Agent/AgentTaskStore';
+import { useAgentManagementStore, useExecutionGraphStore } from '@/renderer/stores/Agent/task';
 
 export interface UseAgentCardsOptions {
   executionId?: string;
@@ -14,7 +14,8 @@ export function useAgentCards(options: UseAgentCardsOptions = {}) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const { getAgentCards, getAgentCardsByExecution, currentGraph } = useAgentTaskStore();
+  const { getAgentCards, getAgentCardsByExecution } = useAgentManagementStore();
+  const { currentGraph } = useExecutionGraphStore();
 
   const fetchAgentCards = useCallback(async () => {
     setLoading(true);

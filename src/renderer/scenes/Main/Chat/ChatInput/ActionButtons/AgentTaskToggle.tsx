@@ -8,7 +8,7 @@ import {
   TimelineOutlined
 } from '@mui/icons-material';
 import { useAgentStore } from '@/renderer/stores/Agent/AgentStore';
-import { useAgentTaskStore } from '@/renderer/stores/Agent/AgentTaskStore';
+import { useExecutionStore, useExecutionGraphStore } from '@/renderer/stores/Agent/task';
 
 interface AgentTaskToggleProps {
   disabled?: boolean;
@@ -29,22 +29,31 @@ export default function AgentTaskToggle({
     agentTaskUpdates 
   } = useAgentStore();
   
-  const { 
-    currentExecution,
-    currentGraph 
-  } = useAgentTaskStore();
+  const { currentExecution } = useExecutionStore();
+  const { currentGraph } = useExecutionGraphStore();
 
   useEffect(() => {
     setIsActive(isOverlayVisible);
   }, [isOverlayVisible]);
 
-  // Check if there's any Agent Task activity
-  const hasActiveTask = Object.values(activeAgentTasks).some(active => active);
-  const hasRunningTask = Object.values(agentTaskStatus).some(status => 
-    ['initializing', 'running', 'completing'].includes(status)
+  // ✅ Add debugging to see actual values
+  useEffect(() => {
+    console.log('[AgentTaskToggle] Store state debug:', {
+      activeAgentTasks,
+      agentTaskStatus,
+      agentTaskUpdates,
+      currentExecution,
+      currentGraph
+    });
+  }, [activeAgentTasks, agentTaskStatus, agentTaskUpdates, currentExecution, currentGraph]);
+
+  // ✅ Fixed logic with proper null checks and debugging
+  const hasActiveTask = activeAgentTasks && Object.keys(activeAgentTasks).length > 0 && Object.values(activeAgentTasks).some(active => active === true);
+  const hasRunningTask = agentTaskStatus && Object.keys(agentTaskStatus).length > 0 && Object.values(agentTaskStatus).some(status => 
+    status && ['initializing', 'running', 'completing'].includes(status)
   );
-  const hasRecentUpdates = Object.values(agentTaskUpdates).some(updates => 
-    updates && updates.length > 0
+  const hasRecentUpdates = agentTaskUpdates && Object.keys(agentTaskUpdates).length > 0 && Object.values(agentTaskUpdates).some(updates => 
+    Array.isArray(updates) && updates.length > 0
   );
   const hasCurrentExecution = currentExecution !== null;
   const hasGraph = currentGraph !== null;
@@ -53,8 +62,25 @@ export default function AgentTaskToggle({
   const isRunning = hasActiveTask || hasRunningTask;
   const hasActivity = hasRecentUpdates || hasCurrentExecution || hasGraph;
 
+  // ✅ Add debugging for calculated states
+  useEffect(() => {
+    console.log('[AgentTaskToggle] Calculated states:', {
+      hasActiveTask,
+      hasRunningTask,
+      hasRecentUpdates,
+      hasCurrentExecution,
+      hasGraph,
+      isRunning,
+      hasActivity
+    });
+  }, [hasActiveTask, hasRunningTask, hasRecentUpdates, hasCurrentExecution, hasGraph, isRunning, hasActivity]);
+
   // Get status color
   const getStatusColor = () => {
+    if (!agentTaskStatus || Object.keys(agentTaskStatus).length === 0) {
+      return 'text.secondary';
+    }
+    
     const currentTaskStatus = agentTaskStatus['current'];
     
     if (currentTaskStatus === 'failed') return 'error.main';

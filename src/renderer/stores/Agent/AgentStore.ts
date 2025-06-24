@@ -18,7 +18,6 @@ import { calculateExperienceForLevel } from "@/utils/agent";
 import { summarizeToolCallResults } from "@/renderer/stores/Agent/mode/Ask";
 import { v4 as uuidv4 } from 'uuid';
 import { getCurrentWorkspaceId } from "@/utils/workspace";
-import { useAgentTaskStore } from "@/renderer/stores/Agent/AgentTaskStore";
 import { getHumanInTheLoopManager, requestApproval, HumanInteractionResponse, HumanInteractionRequest } from '@/service/langchain/human_in_the_loop/renderer/human_in_the_loop';
 
 const rendererIpcTracker = new Map<string, { count: number; timestamps: number[] }>();
@@ -143,6 +142,8 @@ interface AgentState {
     result?: string;
     error?: string;
   }>;
+
+  clearAgentTaskState: (taskId: string) => void;
 }
 
 // Helper function to create guest agent
@@ -1078,6 +1079,23 @@ export const useAgentStore = create<AgentState>()(
             set({ isProcessingResponse: false, error: error.message });
             return { success: false, error };
           }
+        },
+
+        clearAgentTaskState: (taskId: string) => {
+          set((state) => ({
+            activeAgentTasks: {
+              ...state.activeAgentTasks,
+              [taskId]: false
+            },
+            agentTaskStatus: {
+              ...state.agentTaskStatus,
+              [taskId]: 'idle'
+            },
+            agentTaskUpdates: {
+              ...state.agentTaskUpdates,
+              [taskId]: []
+            }
+          }));
         },
       };
     },
