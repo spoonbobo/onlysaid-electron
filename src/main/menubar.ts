@@ -190,6 +190,12 @@ export function setupMenuBarHandlers(mainWindow: BrowserWindow) {
         console.warn('Unknown window action:', action);
     }
   });
+
+  // ✅ Add handler to get current window state
+  ipcMain.handle('window:is-maximized', async (event) => {
+    if (!mainWindow) return false;
+    return mainWindow.isMaximized();
+  });
 }
 
 // Export function to unregister shortcuts (useful for app cleanup)

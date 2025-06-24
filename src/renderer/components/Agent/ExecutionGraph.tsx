@@ -70,6 +70,29 @@ interface ExecutionGraphProps {
   fullscreen?: boolean;
   onFullscreenToggle?: () => void;
   onRefresh?: () => void;
+  debug?: boolean;
+}
+
+// Add these new interfaces for better task and tool display
+interface TaskDetails {
+  description: string;
+  assignedAgent: string;
+  priority: number;
+  iterations: number;
+  maxIterations: number;
+  result?: string;
+  logs: number;
+}
+
+interface ToolDetails {
+  name: string;
+  arguments: any;
+  mcpServer: string;
+  executionTime?: number;
+  result?: string;
+  error?: string;
+  humanApproved: boolean;
+  logs: number;
 }
 
 // ✅ MUI-friendly status colors using theme
@@ -136,7 +159,8 @@ export const ExecutionGraphComponent: React.FC<ExecutionGraphProps> = ({
   onNodeSelect,
   fullscreen = false,
   onFullscreenToggle,
-  onRefresh
+  onRefresh,
+  debug = false
 }) => {
   const theme = useTheme();
   const intl = useIntl();
@@ -264,17 +288,25 @@ export const ExecutionGraphComponent: React.FC<ExecutionGraphProps> = ({
 
   // Enhanced node and edge calculation with better positioning
   const { nodes, edges, stats } = useMemo(() => {
-    // ✅ Add timestamp to reduce excessive logging
-    const now = Date.now();
-    if (!(window as any).lastGraphLog || now - (window as any).lastGraphLog > 1000) {
-      console.log('[ExecutionGraph] Recalculating graph with:', {
-        hasGraph: !!graph,
-        agentCount: graph?.agents?.length || 0,
-        taskCount: graph?.tasks?.length || 0,
-        toolCount: graph?.toolExecutions?.length || 0,
-        agentStatuses: graph?.agents?.map(a => ({ id: a.id, role: a.role, status: a.status })) || []
-      });
-      (window as any).lastGraphLog = now;
+    // ✅ FIXED: Better logging with debug flag
+    if (debug) {
+      const now = Date.now();
+      if (!(window as any).lastGraphLog || now - (window as any).lastGraphLog > 2000) {
+        console.log('[ExecutionGraph] Recalculating graph with:', {
+          hasGraph: !!graph,
+          agentCount: graph?.agents?.length || 0,
+          taskCount: graph?.tasks?.length || 0,
+          toolCount: graph?.toolExecutions?.length || 0,
+          agentStatuses: graph?.agents?.map(a => ({ 
+            id: a.id, 
+            role: a.role, 
+            status: a.status,
+            agent_id: a.agent_id,
+            last_updated: a.last_updated 
+          })) || []
+        });
+        (window as any).lastGraphLog = now;
+      }
     }
     
     if (!graph) return { nodes: [], edges: [], stats: { total: 0, completed: 0, failed: 0, running: 0 } };
@@ -305,20 +337,33 @@ export const ExecutionGraphComponent: React.FC<ExecutionGraphProps> = ({
     };
     nodes.push(executionNode);
 
-    // ✅ FIX: Better agent node positioning and status handling
+    // ✅ IMPROVED: Better agent node positioning and status handling
     const agentRadius = Math.min(containerDimensions.width, containerDimensions.height) * 0.25;
     const agentCount = graph.agents.length;
     
     graph.agents.forEach((agent, index) => {
       const angle = (2 * Math.PI * index) / agentCount - Math.PI / 2;
       
-      // ✅ FIX: Handle agent status properly
+      // ✅ IMPROVED: Better agent status handling with fallback
       const agentStatus = agent.status || 'idle';
+      
+      // ✅ IMPROVED: Better agent identification
+      const agentLabel = agent.role || `Agent ${index + 1}`;
+      
+      if (debug) {
+        console.log(`[ExecutionGraph] Creating agent node:`, {
+          id: agent.id,
+          agent_id: agent.agent_id,
+          role: agent.role,
+          status: agentStatus,
+          last_updated: agent.last_updated
+        });
+      }
       
       const agentNode: Node = {
         id: agent.id,
         type: 'agent',
-        label: `${agent.role}`,
+        label: agentLabel,
         status: agentStatus,
         x: centerX + Math.cos(angle) * agentRadius,
         y: centerY + Math.sin(angle) * agentRadius,
@@ -331,41 +376,54 @@ export const ExecutionGraphComponent: React.FC<ExecutionGraphProps> = ({
       };
       nodes.push(agentNode);
 
+      // ✅ IMPROVED: Better edge animation based on status
+      const isActiveStatus = ['busy', 'running', 'executing', 'completed'].includes(agentStatus);
+      
       edges.push({
         id: `exec-${agent.id}`,
         from: graph.execution.id,
         to: agent.id,
         type: 'creates',
-        animated: ['busy', 'running', 'executing'].includes(agentStatus),
-        color: ['busy', 'running', 'executing'].includes(agentStatus) ? theme.palette.primary.main : theme.palette.grey[400],
-        width: ['busy', 'running', 'executing'].includes(agentStatus) ? 3 : 2
+        animated: isActiveStatus && isLive,
+        color: isActiveStatus ? theme.palette.primary.main : theme.palette.grey[400],
+        width: isActiveStatus ? 3 : 2
       });
     });
 
-    // ✅ FIX: Better task node handling with improved agent matching
+    // ✅ IMPROVED: Better task node handling with enhanced agent matching
     graph.tasks.forEach((task) => {
-      // ✅ IMPROVED: Better agent node matching logic
+      // ✅ ENHANCED: Multiple strategies for finding parent agent node
       const agentNode = nodes.find(n => {
-        if (!n.metadata) return false;
+        if (!n.metadata || n.type !== 'agent') return false;
         
         // Try multiple matching strategies
-        return n.metadata.id === task.agent_id ||           // Direct ID match
-               n.metadata.agent_id === task.agent_id ||      // Agent ID field match
-               n.metadata.role === task.agent_id ||          // Role-based match
-               n.id === task.agent_id;                       // Node ID match
+        const matchStrategies = [
+          n.metadata.id === task.agent_id,                    // Direct ID match
+          n.metadata.agent_id === task.agent_id,              // Agent ID field match
+          n.id === task.agent_id,                             // Node ID match
+          n.metadata.role === task.agent_id,                  // Role-based match
+          // ✅ NEW: Try matching by role if agent_id looks like a role
+          task.agent_id && typeof task.agent_id === 'string' && 
+          task.agent_id.toLowerCase().includes(n.metadata.role?.toLowerCase() || '')
+        ];
+        
+        return matchStrategies.some(Boolean);
       });
       
       if (!agentNode) {
-        console.warn('[ExecutionGraph] No agent node found for task:', {
-          taskId: task.id,
-          agentId: task.agent_id,
-          availableAgents: nodes.filter(n => n.type === 'agent').map(n => ({
-            id: n.id,
-            metadataId: n.metadata?.id,
-            agentId: n.metadata?.agent_id,
-            role: n.metadata?.role
-          }))
-        });
+        if (debug) {
+          console.warn('[ExecutionGraph] No agent node found for task:', {
+            taskId: task.id,
+            agentId: task.agent_id,
+            taskDescription: task.task_description?.substring(0, 50),
+            availableAgents: nodes.filter(n => n.type === 'agent').map(n => ({
+              id: n.id,
+              metadataId: n.metadata?.id,
+              agentId: n.metadata?.agent_id,
+              role: n.metadata?.role
+            }))
+          });
+        }
         return;
       }
 
@@ -374,15 +432,15 @@ export const ExecutionGraphComponent: React.FC<ExecutionGraphProps> = ({
       const taskRadius = 100;
       const taskAngle = tasksForAgent.length > 1 ? (2 * Math.PI * indexInAgent) / tasksForAgent.length : 0;
 
-      // ✅ FIX: Handle task status properly  
+      // ✅ IMPROVED: Handle task status properly with fallback
       const taskStatus = task.status || 'pending';
 
       const taskNode: Node = {
         id: task.id,
         type: 'task',
-        label: task.task_description.length > 25 
+        label: task.task_description?.length > 25 
           ? task.task_description.substring(0, 22) + '...'
-          : task.task_description,
+          : task.task_description || `Task ${task.id}`,
         status: taskStatus,
         x: agentNode.x + Math.cos(taskAngle) * taskRadius,
         y: agentNode.y + Math.sin(taskAngle) * taskRadius,
@@ -395,37 +453,58 @@ export const ExecutionGraphComponent: React.FC<ExecutionGraphProps> = ({
       };
       nodes.push(taskNode);
 
+      const isActiveTaskStatus = ['running', 'executing'].includes(taskStatus);
+
       edges.push({
         id: `agent-${task.id}`,
         from: agentNode.id,
         to: task.id,
         type: 'executes',
-        animated: ['running', 'executing'].includes(taskStatus),
-        color: ['running', 'executing'].includes(taskStatus) ? theme.palette.success.main : theme.palette.success.light,
-        width: ['running', 'executing'].includes(taskStatus) ? 3 : 2
+        animated: isActiveTaskStatus && isLive,
+        color: isActiveTaskStatus ? theme.palette.success.main : theme.palette.success.light,
+        width: isActiveTaskStatus ? 3 : 2
       });
     });
 
-    // ✅ IMPROVED: Better tool execution nodes logic with improved parent matching
+    // ✅ IMPROVED: Better tool execution nodes logic with enhanced parent matching
     graph.toolExecutions.forEach((toolExec) => {
-      // ✅ IMPROVED: Better parent node matching
-      const parentNode = toolExec.task_id 
-        ? nodes.find(n => n.id === toolExec.task_id || n.metadata?.id === toolExec.task_id)
-        : nodes.find(n => {
-            if (!n.metadata) return false;
-            return n.metadata.id === toolExec.agent_id ||
-                   n.metadata.agent_id === toolExec.agent_id ||
-                   n.id === toolExec.agent_id;
-          });
+      // ✅ ENHANCED: Better parent node matching with multiple strategies
+      let parentNode = null;
+      
+      // Strategy 1: Try to find by task_id first (most specific)
+      if (toolExec.task_id) {
+        parentNode = nodes.find(n => 
+          n.id === toolExec.task_id || 
+          (n.metadata && n.metadata.id === toolExec.task_id)
+        );
+      }
+      
+      // Strategy 2: Fall back to agent_id if no task found
+      if (!parentNode && toolExec.agent_id) {
+        parentNode = nodes.find(n => {
+          if (!n.metadata) return false;
+          return n.metadata.id === toolExec.agent_id ||
+                 n.metadata.agent_id === toolExec.agent_id ||
+                 n.id === toolExec.agent_id ||
+                 (n.metadata.role && n.metadata.role === toolExec.agent_id);
+        });
+      }
       
       if (!parentNode) {
-        console.warn('[ExecutionGraph] No parent node found for tool execution:', {
-          toolId: toolExec.id,
-          toolName: toolExec.tool_name,
-          taskId: toolExec.task_id,
-          agentId: toolExec.agent_id,
-          availableNodes: nodes.map(n => ({ id: n.id, type: n.type, metadataId: n.metadata?.id }))
-        });
+        if (debug) {
+          console.warn('[ExecutionGraph] No parent node found for tool execution:', {
+            toolId: toolExec.id,
+            toolName: toolExec.tool_name,
+            taskId: toolExec.task_id,
+            agentId: toolExec.agent_id,
+            availableNodes: nodes.map(n => ({ 
+              id: n.id, 
+              type: n.type, 
+              metadataId: n.metadata?.id,
+              role: n.metadata?.role 
+            }))
+          });
+        }
         return;
       }
 
@@ -436,13 +515,13 @@ export const ExecutionGraphComponent: React.FC<ExecutionGraphProps> = ({
       const toolRadius = 65;
       const toolAngle = toolsForParent.length > 1 ? (2 * Math.PI * indexInParent) / toolsForParent.length : 0;
 
-      // ✅ FIX: Handle tool execution status properly
+      // ✅ IMPROVED: Handle tool execution status properly with fallback
       const toolStatus = toolExec.status || 'pending';
 
       const toolNode: Node = {
         id: toolExec.id,
         type: 'tool',
-        label: toolExec.tool_name,
+        label: toolExec.tool_name || 'Unknown Tool',
         status: toolStatus,
         x: parentNode.x + Math.cos(toolAngle) * toolRadius,
         y: parentNode.y + Math.sin(toolAngle) * toolRadius,
@@ -455,19 +534,26 @@ export const ExecutionGraphComponent: React.FC<ExecutionGraphProps> = ({
       };
       nodes.push(toolNode);
 
+      const isActiveToolStatus = ['executing', 'running'].includes(toolStatus);
+
       edges.push({
         id: `parent-${toolExec.id}`,
         from: parentNode.id,
         to: toolExec.id,
         type: 'uses',
-        animated: ['executing', 'running'].includes(toolStatus),
-        color: ['executing', 'running'].includes(toolStatus) ? theme.palette.warning.main : theme.palette.warning.light,
-        width: ['executing', 'running'].includes(toolStatus) ? 3 : 2
+        animated: isActiveToolStatus && isLive,
+        color: isActiveToolStatus ? theme.palette.warning.main : theme.palette.warning.light,
+        width: isActiveToolStatus ? 3 : 2
       });
     });
 
-    // ✅ FIX: Better stats calculation
-    const allNodes = [...graph.agents, ...graph.tasks, ...graph.toolExecutions];
+    // ✅ IMPROVED: Better stats calculation with proper null handling
+    const allNodes = [
+      ...(graph.agents || []), 
+      ...(graph.tasks || []), 
+      ...(graph.toolExecutions || [])
+    ];
+    
     const stats = {
       total: allNodes.length,
       completed: allNodes.filter(n => n.status === 'completed').length,
@@ -475,8 +561,16 @@ export const ExecutionGraphComponent: React.FC<ExecutionGraphProps> = ({
       running: allNodes.filter(n => ['running', 'busy', 'executing'].includes(n.status || '')).length
     };
 
+    if (debug) {
+      console.log('[ExecutionGraph] Graph calculation complete:', {
+        nodeCount: nodes.length,
+        edgeCount: edges.length,
+        stats
+      });
+    }
+
     return { nodes, edges, stats };
-  }, [graph, containerDimensions, statusColors, theme]);
+  }, [graph, containerDimensions, statusColors, theme, isLive, debug]);
 
   // Animation logic (keeping the same as before but with theme colors)
   const animate = useCallback(() => {
@@ -1093,7 +1187,7 @@ export const ExecutionGraphComponent: React.FC<ExecutionGraphProps> = ({
                     minHeight: 0
                   }}>
                     <Stack spacing={fullscreen ? 2 : 1}>
-                      {/* Keeping all the existing metadata display logic */}
+                      {/* Enhanced Execution Details */}
                       {selectedNode.type === 'execution' && (
                         <>
                           <Typography variant="caption" display="block">
@@ -1109,6 +1203,22 @@ export const ExecutionGraphComponent: React.FC<ExecutionGraphProps> = ({
                               <strong>{intl.formatMessage({ id: 'agent.graph.completed' })}:</strong> {new Date(selectedNode.metadata.completed_at).toLocaleString()}
                             </Typography>
                           )}
+                          
+                          {/* ✅ NEW: Show execution summary */}
+                          <Divider sx={{ my: 1 }} />
+                          <Typography variant="caption" display="block" sx={{ fontWeight: 600 }}>
+                            <strong>Execution Summary:</strong>
+                          </Typography>
+                          <Typography variant="caption" display="block">
+                            <strong>Agents:</strong> {selectedNode.metadata.total_agents || graph?.agents.length || 0}
+                          </Typography>
+                          <Typography variant="caption" display="block">
+                            <strong>Tasks:</strong> {selectedNode.metadata.total_tasks || graph?.tasks.length || 0}
+                          </Typography>
+                          <Typography variant="caption" display="block">
+                            <strong>Tool Executions:</strong> {selectedNode.metadata.total_tool_executions || graph?.toolExecutions.length || 0}
+                          </Typography>
+                          
                           {graph && graph.logs && (
                             <Stack spacing={1}>
                               <Typography variant="caption" display="block">
@@ -1145,14 +1255,24 @@ export const ExecutionGraphComponent: React.FC<ExecutionGraphProps> = ({
                         </>
                       )}
                       
+                      {/* Enhanced Agent Details */}
                       {selectedNode.type === 'agent' && (
                         <>
                           <Typography variant="caption" display="block">
                             <strong>{intl.formatMessage({ id: 'agent.graph.role' })}:</strong> {selectedNode.metadata.role}
                           </Typography>
+                          <Typography variant="caption" display="block">
+                            <strong>Agent ID:</strong> {selectedNode.metadata.agent_id || selectedNode.metadata.id}
+                          </Typography>
                           {selectedNode.metadata.expertise && (
                             <Typography variant="caption" display="block">
-                              <strong>{intl.formatMessage({ id: 'agent.graph.expertise' })}:</strong> {JSON.parse(selectedNode.metadata.expertise).join(', ')}
+                              <strong>{intl.formatMessage({ id: 'agent.graph.expertise' })}:</strong> {
+                                typeof selectedNode.metadata.expertise === 'string' 
+                                  ? JSON.parse(selectedNode.metadata.expertise).join(', ')
+                                  : Array.isArray(selectedNode.metadata.expertise) 
+                                    ? selectedNode.metadata.expertise.join(', ')
+                                    : selectedNode.metadata.expertise
+                              }
                             </Typography>
                           )}
                           {selectedNode.metadata.current_task && (
@@ -1160,6 +1280,67 @@ export const ExecutionGraphComponent: React.FC<ExecutionGraphProps> = ({
                               <strong>{intl.formatMessage({ id: 'agent.graph.currentTask' })}:</strong> {selectedNode.metadata.current_task}
                             </Typography>
                           )}
+                          
+                          {/* ✅ NEW: Show agent's tasks */}
+                          {graph && graph.tasks && (
+                            <>
+                              <Divider sx={{ my: 1 }} />
+                              <Typography variant="caption" display="block" sx={{ fontWeight: 600 }}>
+                                <strong>Assigned Tasks ({graph.tasks.filter(t => t.agent_id === selectedNode.metadata.id).length}):</strong>
+                              </Typography>
+                              {graph.tasks.filter(t => t.agent_id === selectedNode.metadata.id).map((task, index) => (
+                                <Paper 
+                                  key={task.id} 
+                                  variant="outlined" 
+                                  sx={{ p: 1, mb: 1, bgcolor: alpha(theme.palette.background.default, 0.5) }}
+                                >
+                                  <Typography variant="caption" display="block" sx={{ fontWeight: 500 }}>
+                                    Task {index + 1}: {task.task_description}
+                                  </Typography>
+                                  <Typography variant="caption" display="block" color="text.secondary">
+                                    Status: <Chip label={task.status} size="small" sx={{ height: 16, fontSize: '0.6rem' }} />
+                                    {task.priority && ` • Priority: ${task.priority}`}
+                                  </Typography>
+                                  {task.result && (
+                                    <Typography variant="caption" display="block" sx={{ mt: 0.5, fontStyle: 'italic' }}>
+                                      Result: {task.result.substring(0, 100)}{task.result.length > 100 ? '...' : ''}
+                                    </Typography>
+                                  )}
+                                </Paper>
+                              ))}
+                            </>
+                          )}
+                          
+                          {/* ✅ NEW: Show agent's tool executions */}
+                          {graph && graph.toolExecutions && (
+                            <>
+                              <Divider sx={{ my: 1 }} />
+                              <Typography variant="caption" display="block" sx={{ fontWeight: 600 }}>
+                                <strong>Tool Executions ({graph.toolExecutions.filter(t => t.agent_id === selectedNode.metadata.id).length}):</strong>
+                              </Typography>
+                              {graph.toolExecutions.filter(t => t.agent_id === selectedNode.metadata.id).map((tool, index) => (
+                                <Paper 
+                                  key={tool.id} 
+                                  variant="outlined" 
+                                  sx={{ p: 1, mb: 1, bgcolor: alpha(theme.palette.background.default, 0.5) }}
+                                >
+                                  <Typography variant="caption" display="block" sx={{ fontWeight: 500 }}>
+                                    {tool.tool_name}
+                                  </Typography>
+                                  <Typography variant="caption" display="block" color="text.secondary">
+                                    Status: <Chip label={tool.status} size="small" sx={{ height: 16, fontSize: '0.6rem' }} />
+                                    {tool.mcp_server && ` • Server: ${tool.mcp_server}`}
+                                  </Typography>
+                                  {tool.execution_time && (
+                                    <Typography variant="caption" display="block" color="text.secondary">
+                                      Execution Time: {tool.execution_time}s
+                                    </Typography>
+                                  )}
+                                </Paper>
+                              ))}
+                            </>
+                          )}
+                          
                           {graph && graph.logs && (
                             <Typography variant="caption" display="block">
                               <strong>{intl.formatMessage({ id: 'agent.graph.agentLogs' })}:</strong> {graph.logs.filter(l => l.agent_id === selectedNode.metadata.id).length}
@@ -1168,19 +1349,81 @@ export const ExecutionGraphComponent: React.FC<ExecutionGraphProps> = ({
                         </>
                       )}
                       
+                      {/* Enhanced Task Details */}
                       {selectedNode.type === 'task' && (
                         <>
+                          <Typography variant="caption" display="block" sx={{ fontWeight: 600 }}>
+                            <strong>Task Description:</strong>
+                          </Typography>
+                          <Paper 
+                            variant="outlined" 
+                            sx={{ p: 1, mb: 1, bgcolor: alpha(theme.palette.background.default, 0.5) }}
+                          >
+                            <Typography variant="caption" display="block" sx={{ wordBreak: 'break-word' }}>
+                              {selectedNode.metadata.task_description}
+                            </Typography>
+                          </Paper>
+                          
                           <Typography variant="caption" display="block">
                             <strong>{intl.formatMessage({ id: 'agent.graph.priority' })}:</strong> {selectedNode.metadata.priority}
                           </Typography>
                           <Typography variant="caption" display="block">
                             <strong>{intl.formatMessage({ id: 'agent.graph.iterations' })}:</strong> {selectedNode.metadata.iterations}/{selectedNode.metadata.max_iterations}
                           </Typography>
-                          {selectedNode.metadata.result && (
-                            <Typography variant="caption" display="block" sx={{ wordBreak: 'break-word' }}>
-                              <strong>{intl.formatMessage({ id: 'agent.graph.result' })}:</strong> {selectedNode.metadata.result.substring(0, fullscreen ? 300 : 150)}{selectedNode.metadata.result.length > (fullscreen ? 300 : 150) ? '...' : ''}
-                            </Typography>
+                          
+                          {/* ✅ NEW: Show assigned agent info */}
+                          {graph && graph.agents && (
+                            <>
+                              <Typography variant="caption" display="block">
+                                <strong>Assigned Agent:</strong> {
+                                  graph.agents.find(a => a.id === selectedNode.metadata.agent_id)?.role || 'Unknown'
+                                }
+                              </Typography>
+                            </>
                           )}
+                          
+                          {selectedNode.metadata.result && (
+                            <>
+                              <Divider sx={{ my: 1 }} />
+                              <Typography variant="caption" display="block" sx={{ fontWeight: 600 }}>
+                                <strong>Task Result:</strong>
+                              </Typography>
+                              <Paper 
+                                variant="outlined" 
+                                sx={{ p: 1, mb: 1, bgcolor: alpha(theme.palette.success.light, 0.1) }}
+                              >
+                                <Typography variant="caption" display="block" sx={{ wordBreak: 'break-word' }}>
+                                  {selectedNode.metadata.result.substring(0, fullscreen ? 400 : 200)}
+                                  {selectedNode.metadata.result.length > (fullscreen ? 400 : 200) ? '...' : ''}
+                                </Typography>
+                              </Paper>
+                            </>
+                          )}
+                          
+                          {/* ✅ NEW: Show related tool executions */}
+                          {graph && graph.toolExecutions && (
+                            <>
+                              <Divider sx={{ my: 1 }} />
+                              <Typography variant="caption" display="block" sx={{ fontWeight: 600 }}>
+                                <strong>Related Tools ({graph.toolExecutions.filter(t => t.task_id === selectedNode.metadata.id).length}):</strong>
+                              </Typography>
+                              {graph.toolExecutions.filter(t => t.task_id === selectedNode.metadata.id).map((tool, index) => (
+                                <Paper 
+                                  key={tool.id} 
+                                  variant="outlined" 
+                                  sx={{ p: 1, mb: 1, bgcolor: alpha(theme.palette.background.default, 0.5) }}
+                                >
+                                  <Typography variant="caption" display="block" sx={{ fontWeight: 500 }}>
+                                    {tool.tool_name}
+                                  </Typography>
+                                  <Typography variant="caption" display="block" color="text.secondary">
+                                    Status: <Chip label={tool.status} size="small" sx={{ height: 16, fontSize: '0.6rem' }} />
+                                  </Typography>
+                                </Paper>
+                              ))}
+                            </>
+                          )}
+                          
                           {graph && graph.logs && (
                             <Typography variant="caption" display="block">
                               <strong>{intl.formatMessage({ id: 'agent.graph.taskLogs' })}:</strong> {graph.logs.filter(l => l.task_id === selectedNode.metadata.id).length}
@@ -1189,8 +1432,12 @@ export const ExecutionGraphComponent: React.FC<ExecutionGraphProps> = ({
                         </>
                       )}
                       
+                      {/* Enhanced Tool Details */}
                       {selectedNode.type === 'tool' && (
                         <>
+                          <Typography variant="caption" display="block" sx={{ fontWeight: 600 }}>
+                            <strong>Tool Information:</strong>
+                          </Typography>
                           <Typography variant="caption" display="block">
                             <strong>{intl.formatMessage({ id: 'agent.graph.tool' })}:</strong> {selectedNode.metadata.tool_name}
                           </Typography>
@@ -1199,14 +1446,121 @@ export const ExecutionGraphComponent: React.FC<ExecutionGraphProps> = ({
                               <strong>{intl.formatMessage({ id: 'agent.graph.mcpServer' })}:</strong> {selectedNode.metadata.mcp_server}
                             </Typography>
                           )}
+                          
+                          {/* ✅ NEW: Show tool arguments */}
+                          {selectedNode.metadata.tool_arguments && (
+                            <>
+                              <Typography variant="caption" display="block" sx={{ fontWeight: 600, mt: 1 }}>
+                                <strong>Arguments:</strong>
+                              </Typography>
+                              <Paper 
+                                variant="outlined" 
+                                sx={{ p: 1, mb: 1, bgcolor: alpha(theme.palette.background.default, 0.5) }}
+                              >
+                                <Typography 
+                                  variant="caption" 
+                                  display="block" 
+                                  sx={{ 
+                                    fontFamily: 'monospace', 
+                                    fontSize: '0.65rem',
+                                    wordBreak: 'break-all',
+                                    whiteSpace: 'pre-wrap'
+                                  }}
+                                >
+                                  {typeof selectedNode.metadata.tool_arguments === 'string' 
+                                    ? selectedNode.metadata.tool_arguments 
+                                    : JSON.stringify(JSON.parse(selectedNode.metadata.tool_arguments || '{}'), null, 2)
+                                  }
+                                </Typography>
+                              </Paper>
+                            </>
+                          )}
+                          
+                          {/* ✅ NEW: Show execution details */}
+                          <Divider sx={{ my: 1 }} />
+                          <Typography variant="caption" display="block" sx={{ fontWeight: 600 }}>
+                            <strong>{intl.formatMessage({ id: 'agent.graph.humanApproved' })}:</strong> {selectedNode.metadata.human_approved ? intl.formatMessage({ id: 'common.yes' }) : intl.formatMessage({ id: 'common.no' })}
+                          </Typography>
                           {selectedNode.metadata.execution_time && (
                             <Typography variant="caption" display="block">
                               <strong>{intl.formatMessage({ id: 'agent.graph.executionTime' })}:</strong> {selectedNode.metadata.execution_time}s
                             </Typography>
                           )}
-                          <Typography variant="caption" display="block">
-                            <strong>{intl.formatMessage({ id: 'agent.graph.humanApproved' })}:</strong> {selectedNode.metadata.human_approved ? intl.formatMessage({ id: 'common.yes' }) : intl.formatMessage({ id: 'common.no' })}
-                          </Typography>
+                          
+                          {/* ✅ NEW: Show tool result */}
+                          {selectedNode.metadata.result && (
+                            <>
+                              <Typography variant="caption" display="block" sx={{ fontWeight: 600, mt: 1 }}>
+                                <strong>Result:</strong>
+                              </Typography>
+                              <Paper 
+                                variant="outlined" 
+                                sx={{ p: 1, mb: 1, bgcolor: alpha(theme.palette.success.light, 0.1) }}
+                              >
+                                <Typography 
+                                  variant="caption" 
+                                  display="block" 
+                                  sx={{ 
+                                    wordBreak: 'break-word',
+                                    maxHeight: 100,
+                                    overflow: 'auto'
+                                  }}
+                                >
+                                  {selectedNode.metadata.result.substring(0, fullscreen ? 300 : 150)}
+                                  {selectedNode.metadata.result.length > (fullscreen ? 300 : 150) ? '...' : ''}
+                                </Typography>
+                              </Paper>
+                            </>
+                          )}
+                          
+                          {/* ✅ NEW: Show tool error */}
+                          {selectedNode.metadata.error && (
+                            <>
+                              <Typography variant="caption" display="block" sx={{ fontWeight: 600, mt: 1 }}>
+                                <strong>Error:</strong>
+                              </Typography>
+                              <Paper 
+                                variant="outlined" 
+                                sx={{ p: 1, mb: 1, bgcolor: alpha(theme.palette.error.light, 0.1) }}
+                              >
+                                <Typography 
+                                  variant="caption" 
+                                  display="block" 
+                                  sx={{ 
+                                    wordBreak: 'break-word',
+                                    color: 'error.main'
+                                  }}
+                                >
+                                  {selectedNode.metadata.error}
+                                </Typography>
+                              </Paper>
+                            </>
+                          )}
+                          
+                          {/* ✅ NEW: Show related task and agent */}
+                          {graph && (
+                            <>
+                              <Divider sx={{ my: 1 }} />
+                              <Typography variant="caption" display="block" sx={{ fontWeight: 600 }}>
+                                <strong>Context:</strong>
+                              </Typography>
+                              {selectedNode.metadata.task_id && graph.tasks && (
+                                <Typography variant="caption" display="block">
+                                  <strong>Task:</strong> {
+                                    graph.tasks.find(t => t.id === selectedNode.metadata.task_id)?.task_description?.substring(0, 50) + '...' || 'Unknown'
+                                  }
+                                </Typography>
+                              )}
+                              {selectedNode.metadata.agent_id && graph.agents && (
+                                <Typography variant="caption" display="block">
+                                  <strong>Agent:</strong> {
+                                    graph.agents.find(a => a.id === selectedNode.metadata.agent_id)?.role || 'Unknown'
+                                  }
+                                </Typography>
+                              )}
+                            </>
+                          )}
+                          
                           {graph && graph.logs && (
                             <Typography variant="caption" display="block">
                               <strong>{intl.formatMessage({ id: 'agent.graph.toolLogs' })}:</strong> {graph.logs.filter(l => l.tool_execution_id === selectedNode.metadata.id).length}

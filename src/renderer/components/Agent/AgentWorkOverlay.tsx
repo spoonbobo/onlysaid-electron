@@ -52,8 +52,6 @@ import { LogsPanel } from './LogsPanel';
 import { GraphPanel } from './GraphPanel';
 import { StatsFooter } from './StatsFooter';
 import TaskHistory from '../Dialog/Agent/TaskHistory';
-import AgentCards from './AgentCards';
-import { AgentCard as IAgentCard } from '@/../../types/Agent/AgentCard';
 
 interface AgentWorkOverlayProps {
   visible?: boolean;
@@ -91,7 +89,6 @@ export default function AgentWorkOverlay({
   const { currentExecution } = useExecutionStore();
   const { currentGraph } = useExecutionGraphStore();
   const { executions, loadExecutionHistory } = useHistoryStore();
-  const { getAgentCards, getAgentCardsByExecution } = useAgentManagementStore();
   const { 
     setCurrentExecution, 
     deleteExecutionCompletely, 
@@ -106,13 +103,6 @@ export default function AgentWorkOverlay({
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showHistoryDialog, setShowHistoryDialog] = useState(false);
   const [parentBounds, setParentBounds] = useState<DOMRect | null>(null);
-  
-  // ✅ Add agent cards state
-  const [showAgentCards, setShowAgentCards] = useState(false);
-  const [agentViewMode, setAgentViewMode] = useState<'grid' | 'list'>('grid');
-  const [agentSearchQuery, setAgentSearchQuery] = useState('');
-  const [agentStatusFilter, setAgentStatusFilter] = useState('all');
-  const [agentRoleFilter, setAgentRoleFilter] = useState('all');
 
   // Get current Agent Task state
   const currentTaskUpdates = agentTaskUpdates['current'] || [];
@@ -139,14 +129,6 @@ export default function AgentWorkOverlay({
   // ✅ Determine if viewing current execution (not historical)
   const isViewingCurrentExecution = !currentExecution || 
                                    (currentExecution?.id === currentGraph?.execution?.id);
-
-  // ✅ Memoize agent cards
-  const agentCards = useMemo(() => {
-    if (currentGraph?.execution?.id) {
-      return getAgentCardsByExecution(currentGraph.execution.id);
-    }
-    return getAgentCards();
-  }, [currentGraph, getAgentCards, getAgentCardsByExecution]);
 
   // Calculate parent container bounds when fullscreen and respectParentBounds is enabled
   useEffect(() => {
@@ -329,40 +311,6 @@ export default function AgentWorkOverlay({
 
   const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
     setCurrentTab(newValue);
-    
-    // ✅ Show agent cards when switching to agents tab
-    if (newValue === 2) { // Assuming agents tab is index 2
-      setShowAgentCards(true);
-    }
-  };
-
-  // ✅ Add agent card handlers
-  const handleAgentSelect = (agentCard: IAgentCard) => {
-    console.log('[AgentWorkOverlay] Agent selected:', agentCard);
-    // Could navigate to agent details or show agent-specific info
-  };
-
-  const handleAgentAction = (action: string, agentCard: IAgentCard) => {
-    console.log('[AgentWorkOverlay] Agent action:', action, agentCard);
-    
-    switch (action) {
-      case 'pause':
-        // Implement pause agent logic
-        break;
-      case 'start':
-        // Implement start agent logic
-        break;
-      case 'menu':
-        // Show agent context menu
-        break;
-      default:
-        console.warn('Unknown agent action:', action);
-    }
-  };
-
-  const handleRefreshAgents = () => {
-    // Refresh agent data
-    loadExecutionHistory(20);
   };
 
   // ✅ Enhanced status info with better logic prioritization
@@ -475,7 +423,6 @@ export default function AgentWorkOverlay({
 
   const statusInfo = getStatusInfo();
 
-
   // Calculate positioning for fullscreen mode
   const getFullscreenStyles = () => {
     if (!isFullscreen) return {};
@@ -570,7 +517,7 @@ export default function AgentWorkOverlay({
             height: '100%',
             bgcolor: 'background.paper'
           }}>
-            {/* ✅ Updated Tabs with Agents tab */}
+            {/* Updated Tabs without Agents tab */}
             <Paper 
               square 
               elevation={0} 
@@ -608,12 +555,6 @@ export default function AgentWorkOverlay({
                   iconPosition="start"
                   disabled={!hasExecutionGraph}
                 />
-                {/* ✅ Add Agents tab */}
-                <Tab 
-                  icon={<Person />} 
-                  label={intl.formatMessage({ id: 'agent.tabs.agents' })}
-                  iconPosition="start"
-                />
               </Tabs>
             </Paper>
 
@@ -648,31 +589,6 @@ export default function AgentWorkOverlay({
                   onFullscreenToggle={handleFullscreenToggle}
                   onShowHistory={() => setShowHistoryDialog(true)}
                 />
-              )}
-
-              {/* ✅ Agents Panel */}
-              {currentTab === 2 && (
-                <Box sx={{ 
-                  flexGrow: 1, 
-                  overflow: 'auto',
-                  bgcolor: alpha(theme.palette.background.default, 0.3)
-                }}>
-                  <AgentCards
-                    agents={agentCards}
-                    loading={isTaskActive || isTaskRunning}
-                    viewMode={agentViewMode}
-                    onViewModeChange={setAgentViewMode}
-                    onAgentSelect={handleAgentSelect}
-                    onAgentAction={handleAgentAction}
-                    onRefresh={handleRefreshAgents}
-                    searchQuery={agentSearchQuery}
-                    onSearchChange={setAgentSearchQuery}
-                    statusFilter={agentStatusFilter}
-                    onStatusFilterChange={setAgentStatusFilter}
-                    roleFilter={agentRoleFilter}
-                    onRoleFilterChange={setAgentRoleFilter}
-                  />
-                </Box>
               )}
             </Box>
           </Box>

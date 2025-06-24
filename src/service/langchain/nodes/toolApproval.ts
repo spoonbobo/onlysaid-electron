@@ -1,6 +1,6 @@
 import { interrupt } from "@langchain/langgraph";
 import { BaseWorkflowNode } from './base';
-import { WorkflowState, WorkflowNodeResult, EnhancedHumanInteractionResponse } from './types';
+import { WorkflowState, WorkflowNodeResult } from './types';
 import { ToolApprovalRequest } from '../agent/state';
 import { HumanInteractionRequest } from '../human_in_the_loop/renderer/human_in_the_loop';
 
@@ -120,29 +120,47 @@ export class ToolApprovalNode extends BaseWorkflowNode {
       if (approvedTools.length > 0) {
         console.log('[LangGraph-Timer] Found approved tools, moving to tool execution...');
         
-        // ✅ ADD: Save tool executions to database via IPC
+        // ✅ ADD: Save tool executions to database via IPC with detailed information
         const webContents = (global as any).osswarmWebContents;
         
         if (webContents && approvedTools.length > 0) {
           for (const approval of approvedTools) {
             try {
-              console.log('[ToolApproval] Saving tool execution to database via IPC:', approval.toolCall.function?.name);
+              console.log('[ToolApproval] Saving detailed tool execution to database via IPC:', approval.toolCall.function?.name);
+              
+              // ✅ NEW: Parse and validate tool arguments
+              let parsedArguments = {};
+              try {
+                parsedArguments = typeof approval.toolCall.function?.arguments === 'string' 
+                  ? JSON.parse(approval.toolCall.function.arguments)
+                  : approval.toolCall.function?.arguments || {};
+              } catch (parseError) {
+                console.warn('[ToolApproval] Failed to parse tool arguments:', parseError);
+                parsedArguments = { raw: approval.toolCall.function?.arguments };
+              }
               
               webContents.send('agent:save_tool_execution_to_db', {
                 executionId: state.executionId,
                 agentId: approval.agentCard.runtimeId || 'default',
                 toolName: approval.toolCall.function?.name || 'unknown',
-                toolArguments: approval.toolCall.function?.arguments,
+                toolArguments: parsedArguments, // ✅ Use parsed arguments
                 approvalId: approval.id,
-                taskId: null,
+                taskId: null, // ✅ TODO: Link to specific task if available
                 mcpServer: approval.mcpServer
               });
               
+              // ✅ NEW: Enhanced logging with tool details
               webContents.send('agent:add_log_to_db', {
                 executionId: state.executionId,
                 logType: 'tool_request',
-                message: `Tool execution approved: ${approval.toolCall.function?.name}`,
-                metadata: { approval }
+                message: `Tool execution approved: ${approval.toolCall.function?.name} from ${approval.mcpServer} with arguments: ${JSON.stringify(parsedArguments)}`,
+                agentId: approval.agentCard.runtimeId,
+                metadata: { 
+                  approval,
+                  toolName: approval.toolCall.function?.name,
+                  mcpServer: approval.mcpServer,
+                  arguments: parsedArguments
+                }
               });
               
             } catch (error) {

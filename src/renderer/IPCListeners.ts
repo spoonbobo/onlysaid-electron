@@ -909,6 +909,31 @@ export const useIPCListeners = ({
       }
     };
 
+    const handleClearAllTaskState = async (event: any, ...args: unknown[]) => {
+      const data = args[0] as { executionId: string };
+      console.log('[IPCListeners-Global-IPC] 🔥 Received clear all task state request:', data);
+      
+      try {
+        // Clear AgentStore state completely
+        const { clearAllAgentTaskState } = useAgentStore.getState();
+        if (clearAllAgentTaskState) {
+          clearAllAgentTaskState();
+          console.log('[IPCListeners-Global-IPC] ✅ All AgentStore task state cleared');
+        }
+        
+        // Clear orchestrator state
+        const { clearCurrentExecution } = useAgentTaskOrchestrator.getState();
+        if (clearCurrentExecution) {
+          clearCurrentExecution();
+          console.log('[IPCListeners-Global-IPC] ✅ Agent task orchestrator cleared');
+        }
+        
+        console.log('[IPCListeners-Global-IPC] ✅ All agent task states cleared for execution:', data.executionId);
+      } catch (error) {
+        console.error('[IPCListeners-Global-IPC] ❌ Error clearing all agent task state:', error);
+      }
+    };
+
     // ==================== GOOGLE SERVICES LISTENERS ====================
     
     const handleGoogleServicesReady = () => {
@@ -963,6 +988,7 @@ export const useIPCListeners = ({
     const unsubscribeUpdateAgentStatus = window.electron?.ipcRenderer?.on?.('agent:update_agent_status', handleUpdateAgentStatus);
     const unsubscribeUpdateTaskStatus = window.electron?.ipcRenderer?.on?.('agent:update_task_status', handleUpdateTaskStatus);
     const unsubscribeClearTaskState = window.electron?.ipcRenderer?.on?.('agent:clear_task_state', handleClearTaskState);
+    const unsubscribeClearAllTaskState = window.electron?.ipcRenderer?.on?.('agent:clear_all_task_state', handleClearAllTaskState);
 
     // Google services listeners
     const removeReadyListener = window.electron.ipcRenderer.on('google-services:ready', handleGoogleServicesReady);
@@ -995,6 +1021,7 @@ export const useIPCListeners = ({
       unsubscribeUpdateAgentStatus?.();
       unsubscribeUpdateTaskStatus?.();
       unsubscribeClearTaskState?.();
+      unsubscribeClearAllTaskState?.();
       
       // Google services listeners
       removeReadyListener();

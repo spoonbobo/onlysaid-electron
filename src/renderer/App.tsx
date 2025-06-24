@@ -27,7 +27,6 @@ function App() {
   const { getAllConfiguredServers, initializeClient, getServiceTypeMapping } = useMCPStore();
   const [initProgress, setInitProgress] = useState(0);
   const [initToastId, setInitToastId] = useState<string | null>(null);
-  const [googleServicesReady, setGoogleServicesReady] = useState(false);
   const { user } = useUserStore();
   const { agent, createGuestAgent, resumeLangGraphWorkflow } = useAgentStore();
   const { initialize: initializeSocket, close: closeSocket } = useSocketStore();
@@ -51,6 +50,7 @@ function App() {
   const workspaceId = selectedContext?.id || '';
 
   // ✅ Use the IPC listeners hook
+  const [googleServicesReady, setGoogleServicesReady] = useState(false);
   const { handleHumanInteractionResponse } = useIPCListeners({
     activeChatId,
     workspaceId,
@@ -65,17 +65,25 @@ function App() {
     setGoogleServicesReady
   });
 
-  // ✅ Simplified progress tracking - only 5 main steps
+  // ✅ FIXED: Corrected progress tracking - 4 main steps with proper percentage calculation
   const sendInitProgress = (step: string, currentStep: number, totalSteps: number, mcpProgress?: { current: number, total: number }) => {
     let percentage: number;
     
-    if (mcpProgress) {
-      // For MCP step (step 4), calculate progress within that step
-      const stepProgress = currentStep / totalSteps;
-      const mcpStepProgress = (mcpProgress.current / mcpProgress.total) / totalSteps;
-      percentage = Math.round((stepProgress + mcpStepProgress) * 100);
+    if (mcpProgress && currentStep === totalSteps) {
+      // For MCP step (final step), calculate progress within that step
+      // Previous steps take up 75% (3/4), MCP step takes up the remaining 25%
+      const previousStepsProgress = ((currentStep - 1) / totalSteps) * 100; // 75%
+      const mcpStepProgress = (mcpProgress.current / mcpProgress.total) * (100 / totalSteps); // 0-25%
+      percentage = Math.round(previousStepsProgress + mcpStepProgress);
     } else {
-      percentage = Math.round((currentStep / totalSteps) * 100);
+      // For non-MCP steps, calculate normally but don't reach 100% until the very end
+      if (currentStep === totalSteps && !mcpProgress) {
+        // This is the final step without MCP progress - show 100%
+        percentage = 100;
+      } else {
+        // For steps 1-3, show 0%, 25%, 50%, 75%
+        percentage = Math.round(((currentStep - 1) / totalSteps) * 100);
+      }
     }
     
     // Use window function with MCP progress info
@@ -100,7 +108,7 @@ function App() {
     console.log('[App Init] Initialization complete');
   };
 
-  // ✅ Enhanced MCP Services initialization with better logging
+  // ✅ Enhanced MCP Services initialization with corrected progress calls
   const initializeMCPServices = async () => {
     const servers = getAllConfiguredServers();
     const serviceTypeMap = getServiceTypeMapping();
@@ -121,15 +129,12 @@ function App() {
 
     console.log(`[App] Starting MCP initialization: ${total} services to initialize`);
 
-    // ✅ Show initial MCP progress
-    sendInitProgress('Initializing MCP services', 4, 5, { current: 0, total });
+    // ✅ Show initial MCP progress (75% + 0% of remaining 25%)
+    sendInitProgress('Initializing MCP services', 4, 4, { current: 0, total });
 
     for (const { key, serviceType } of servicesToInit) {
       try {
         console.log(`[App] Initializing service ${completed + 1}/${total}: ${serviceType}`);
-        
-        // ✅ Update progress before starting each service
-        sendInitProgress('Initializing MCP services', 4, 5, { current: completed, total });
         
         await initializeClient(serviceType);
         completed++;
@@ -137,14 +142,14 @@ function App() {
         console.log(`[App] Successfully initialized ${serviceType} (${completed}/${total})`);
         
         // ✅ Update progress after completing each service
-        sendInitProgress('Initializing MCP services', 4, 5, { current: completed, total });
+        sendInitProgress('Initializing MCP services', 4, 4, { current: completed, total });
         
       } catch (error) {
         console.error(`[App] Failed to initialize ${serviceType}:`, error);
         completed++; // Still count as completed to maintain progress
         
         // ✅ Update progress even on failure
-        sendInitProgress('Initializing MCP services', 4, 5, { current: completed, total });
+        sendInitProgress('Initializing MCP services', 4, 4, { current: completed, total });
       }
     }
 
@@ -152,55 +157,37 @@ function App() {
     sendStepComplete('MCP Services');
   };
 
-  // ✅ Simplified initialization flow - only 5 steps
+  // ✅ SIMPLIFIED: Remove Google services dependency
   useEffect(() => {
     const initializeApp = async () => {
       try {
         console.log('[App] Starting initialization...');
         
         // Step 1: Preload essential assets
-        sendInitProgress('Loading essential assets', 1, 5);
+        sendInitProgress('Loading essential assets', 1, 4); // Changed to 4 steps
         console.log('[App] Loading essential assets...');
         await preloadAssets(['icon.png']);
         sendStepComplete('Essential Assets');
         
         // Step 2: Setup authentication listeners
-        sendInitProgress('Setting up authentication', 2, 5);
+        sendInitProgress('Setting up authentication', 2, 4);
         console.log('[App] Setting up authentication...');
         setupDeeplinkAuthListener();
         sendStepComplete('Authentication');
         
-        // Step 3: Initialize calendar listeners
-        sendInitProgress('Setting up calendar listeners', 3, 5);
+        // Step 3: Initialize calendar listeners (non-blocking)
+        sendInitProgress('Setting up calendar listeners', 3, 4);
         console.log('[App] Setting up calendar listeners...');
         const cleanupGoogle = initializeGoogleCalendarListeners();
         const cleanupMicrosoft = initializeMicrosoftCalendarListeners();
         sendStepComplete('Calendar Listeners');
         
-        // Step 4: Wait for Google services and initialize MCP services
-        sendInitProgress('Waiting for Google services', 4, 5);
-        console.log('[App] Waiting for Google services...');
-        await new Promise<void>((resolve) => {
-          if (googleServicesReady) {
-            resolve();
-          } else {
-            const checkReady = () => {
-              if (googleServicesReady) {
-                resolve();
-              } else {
-                setTimeout(checkReady, 100);
-              }
-            };
-            checkReady();
-          }
-        });
-        
-        // Initialize MCP services (will show progress as 4/5 with sub-progress)
+        // Step 4: Initialize MCP services (no waiting for Google services)
+        sendInitProgress('Initializing MCP services', 4, 4);
         console.log('[App] Initializing MCP services...');
         await initializeMCPServices();
         
-        // Step 5: Ready!
-        sendInitProgress('Ready to start', 5, 5);
+        // Ready!
         sendInitComplete();
         
         // Hide EJS loading after showing completion
@@ -225,7 +212,7 @@ function App() {
     };
 
     initializeApp();
-  }, [preloadAssets, googleServicesReady, initializeGoogleCalendarListeners, initializeMicrosoftCalendarListeners]);
+  }, [preloadAssets, initializeGoogleCalendarListeners, initializeMicrosoftCalendarListeners]);
 
   useEffect(() => {
     if (!selectedContext && contexts.length > 0) {

@@ -3,7 +3,7 @@ import HomeIcon from "@mui/icons-material/Home";
 import AddIcon from "@mui/icons-material/Add";
 import GroupIcon from "@mui/icons-material/Group";
 import CalendarTodayIcon from "@mui/icons-material/CalendarToday";
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import AddTeamDialog from "@/renderer/components/Dialog/Workspace/AddWorkspace";
 import ExitWorkspaceDialog from "@/renderer/components/Dialog/Workspace/ExitWorkspace";
 import { getUserFromStore, getUserTokenFromStore } from "@/utils/user";
@@ -35,8 +35,19 @@ function SidebarTabs() {
   const intl = useIntl();
   const previousUserRef = useRef(user);
   const [renderKey, setRenderKey] = useState(0);
-  const [tooltipKey, setTooltipKey] = useState(0);
-  const { workspaceIcons, getWorkspaceIcon } = useWorkspaceIcons(workspaces);
+  
+  // Memoize and stabilize workspaces reference to prevent unnecessary icon refetching
+  const stableWorkspaces = useMemo(() => {
+    // Create a stable reference that only changes when workspace IDs or key properties change
+    return workspaces.map(w => ({
+      id: w.id,
+      name: w.name,
+      image: w.image,
+      // Only include properties that affect icon loading
+    }));
+  }, [workspaces.map(w => `${w.id}-${w.name}-${w.image}`).join(',')]);
+  
+  const { workspaceIcons, getWorkspaceIcon } = useWorkspaceIcons(stableWorkspaces as IWorkspace[]);
 
   const homeContext = useMemo(() => {
     const foundContext = contexts.find(context => context.name === "home" && context.type === "home");
@@ -302,30 +313,6 @@ function SidebarTabs() {
     });
   };
 
-  useEffect(() => {
-    if (process.env.NODE_ENV === 'development') {
-      const handleVisibilityChange = () => {
-        setTimeout(() => {
-          setShowAddTeamDialog(prev => prev);
-        }, 50);
-      };
-
-      document.addEventListener('visibilitychange', handleVisibilityChange);
-      return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (process.env.NODE_ENV === 'development') {
-      const handleResize = () => {
-        setTooltipKey(prev => prev + 1);
-      };
-
-      window.addEventListener('resize', handleResize);
-      return () => window.removeEventListener('resize', handleResize);
-    }
-  }, []);
-
   return (
     <>
       <Box
@@ -343,7 +330,6 @@ function SidebarTabs() {
         }}
       >
         <Tooltip
-          key={`home-tooltip-${tooltipKey}`}
           title="Home"
           placement="right"
         >
@@ -390,7 +376,7 @@ function SidebarTabs() {
 
           return (
             <Tooltip
-              key={`workspace-tooltip-${tooltipKey}-${workspaceContext.id || workspaceContext.name}`}
+              key={`workspace-${workspaceContext.id || workspaceContext.name}`}
               title={`${intl.formatMessage({ id: "workspace.title", defaultMessage: "Workspace" })}: ${workspaceContext.name}${workspaceContext.id ? ` (${workspaceContext.id.slice(0, 8)})` : ''}`}
               placement="right"
             >
@@ -444,7 +430,6 @@ function SidebarTabs() {
 
         {user && (
           <Tooltip
-            key={`add-workspace-tooltip-${tooltipKey}`}
             title={intl.formatMessage({ id: "workspace.create.title", defaultMessage: "Add Workspace" })}
             placement="right"
           >
@@ -462,7 +447,6 @@ function SidebarTabs() {
 
         {user && (
           <Tooltip
-            key={`calendar-tooltip-${tooltipKey}`}
             title={intl.formatMessage({ id: "calendar.title", defaultMessage: "Calendar" })}
             placement="right"
           >

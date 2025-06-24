@@ -264,6 +264,47 @@ const createWindow = async () => {
   // Disable the native application menu completely
   Menu.setApplicationMenu(null);
 
+  // ✅ Add window state change listeners for the main window
+  mainWindow.on('maximize', () => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('window:state-changed', {
+        windowId: 'main',
+        isMaximized: true,
+        isMinimized: false
+      });
+    }
+  });
+
+  mainWindow.on('unmaximize', () => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('window:state-changed', {
+        windowId: 'main',
+        isMaximized: false,
+        isMinimized: false
+      });
+    }
+  });
+
+  mainWindow.on('minimize', () => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('window:state-changed', {
+        windowId: 'main',
+        isMaximized: false,
+        isMinimized: true
+      });
+    }
+  });
+
+  mainWindow.on('restore', () => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('window:state-changed', {
+        windowId: 'main',
+        isMaximized: false,
+        isMinimized: false
+      });
+    }
+  });
+
   setupSocketHandlers(mainWindow);
   setupMenuBarHandlers(mainWindow);
   setupInitializationHandlers(mainWindow);

@@ -1,10 +1,11 @@
 import { Box, Typography, Divider, IconButton, Badge, Avatar, TextField, Autocomplete, Chip, InputAdornment, useMediaQuery, useTheme } from '@mui/material';
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Menu as MuiMenu, MenuItem } from '@mui/material';
 import {
   Close,
   Remove,
   CropSquare,
+  FilterNone,
   Undo,
   Redo,
   ContentCut,
@@ -39,6 +40,10 @@ import { toast } from '@/utils/toast';
 import { createNotificationsForUnreadMessages } from '@/utils/notifications';
 import CollapsedMenu from './CollapsedMenu';
 
+// Modern titlebar height standards
+const TITLEBAR_HEIGHT = 44; // Increased from 32px to 44px for better usability
+const COLLAPSE_BREAKPOINT = 800;
+
 const TitleBar = () => {
   const intl = useIntl();
   const theme = useTheme();
@@ -49,10 +54,12 @@ const TitleBar = () => {
   const [showDisclaimer, setShowDisclaimer] = useState(false);
   const [appIcon, setAppIcon] = useState<string | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
-  const [windowWidth, setWindowWidth] = useState(window.innerWidth);
+  
+  // ✅ Add window state tracking
+  const [isWindowMaximized, setIsWindowMaximized] = useState(false);
 
-  // Define breakpoint for collapsed menu (similar to VS Code)
-  const isCollapsed = windowWidth < 800; // Collapse when window is less than 800px wide
+  // Use media query instead of manual resize handling for better performance
+  const isCollapsed = useMediaQuery(`(max-width:${COLLAPSE_BREAKPOINT}px)`);
 
   // Subscribe to notification store to get live updates
   const totalNotificationCount = useNotificationStore((state) =>
@@ -69,9 +76,12 @@ const TitleBar = () => {
   const addToHistory = useTopicStore((state) => state.addToHistory);
   const getWorkspaceById = useWorkspaceStore((state) => state.getWorkspaceById);
 
-  // Get workspaces and user info
+  // Get workspaces and user info with stable references
   const { workspaces } = useWorkspaceStore();
-  const { getWorkspaceIcon } = useWorkspaceIcons(workspaces);
+  const stableWorkspaces = useMemo(() => workspaces, [
+    workspaces.map(w => `${w.id}-${w.name}-${w.image}`).join(',')
+  ]);
+  const { getWorkspaceIcon } = useWorkspaceIcons(stableWorkspaces);
   const user = useUserStore((state) => state.user);
 
   // Add app assets hook
@@ -81,17 +91,7 @@ const TitleBar = () => {
   const showDisclaimerFromStore = useUserStore((state) => state.showDisclaimer);
   const setShowDisclaimerInStore = useUserStore((state) => state.setShowDisclaimer);
 
-  // Listen to window resize events
-  useEffect(() => {
-    const handleResize = () => {
-      setWindowWidth(window.innerWidth);
-    };
-
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
-
-  // Define available contexts for search with sections
+  // Define available contexts for search with sections - memoized for performance
   const availableContexts = useMemo(() => {
     const contexts: Array<{
       name: string;
@@ -140,7 +140,7 @@ const TitleBar = () => {
     return contexts;
   }, [intl, user, workspaces, getWorkspaceIcon]);
 
-  // Group contexts by section
+  // Group contexts by section - memoized
   const groupedContexts = useMemo(() => {
     const groups = availableContexts.reduce((acc, context) => {
       if (!acc[context.section]) {
@@ -169,8 +169,99 @@ const TitleBar = () => {
     loadAppIcon();
   }, [getAsset]);
 
-  // Function to get current topic display name
-  const getCurrentTopicInfo = () => {
+  // ✅ Add window state listener
+  useEffect(() => {
+    const handleWindowStateChange = (event: any, ...args: unknown[]) => {
+      const data = args[0] as { isMaximized: boolean; isMinimized: boolean };
+      console.log('[TitleBar] Window state changed:', data);
+      setIsWindowMaximized(data.isMaximized);
+    };
+
+    // Listen for window state changes
+    const unsubscribe = window.electron?.ipcRenderer?.on?.('window:state-changed', handleWindowStateChange);
+
+    // Get initial window state
+    const checkInitialState = async () => {
+      try {
+        const isMaximized = await window.electron?.window?.isMaximized?.();
+        if (typeof isMaximized === 'boolean') {
+          setIsWindowMaximized(isMaximized);
+        }
+      } catch (error) {
+        console.warn('[TitleBar] Could not get initial window state:', error);
+      }
+    };
+
+    checkInitialState();
+
+    return () => {
+      unsubscribe?.();
+    };
+  }, []);
+
+  // Optimized event handlers with useCallback
+  const handleMenuClick = useCallback((event: React.MouseEvent<HTMLElement>, menuType: string) => {
+    setAnchorEl(event.currentTarget);
+    setActiveMenu(menuType);
+  }, []);
+
+  const handleClose = useCallback(() => {
+    setAnchorEl(null);
+    setActiveMenu(null);
+  }, []);
+
+  const handleMenuAction = useCallback((action: string) => {
+    if (action === 'help:about') {
+      setShowAbout(true);
+    } else if (action === 'help:disclaimer') {
+      setShowDisclaimer(true);
+    } else {
+      window.electron.ipcRenderer.invoke('menu-action', action);
+    }
+    handleClose();
+  }, [handleClose]);
+
+  // ✅ Update handleWindowAction to handle maximize/restore logic
+  const handleWindowAction = useCallback((action: string) => {
+    if (action === 'maximize') {
+      // The main process will handle the toggle logic (maximize if not maximized, restore if maximized)
+      window.electron.ipcRenderer.invoke('window-action', 'maximize');
+    } else {
+      window.electron.ipcRenderer.invoke('window-action', action);
+    }
+  }, []);
+
+  const handleNotificationClick = useCallback(() => {
+    setShowNotifications(true);
+  }, []);
+
+  const handleCloseNotifications = useCallback(() => {
+    setShowNotifications(false);
+  }, []);
+
+  const handleCloseAbout = useCallback(() => {
+    setShowAbout(false);
+  }, []);
+
+  const handleGoBack = useCallback(() => {
+    goBack();
+  }, [goBack]);
+
+  const handleGoForward = useCallback(() => {
+    goForward();
+  }, [goForward]);
+
+  const handleContextChange = useCallback((event: any, newValue: any) => {
+    if (newValue && newValue.value) {
+      const contextToSet = newValue.value;
+      setSelectedContext(contextToSet);
+      addToHistory(contextToSet);
+      setSearchOpen(false);
+    }
+  }, [setSelectedContext, addToHistory]);
+
+  // Function to get current topic display name - memoized
+  const getCurrentTopicInfo = useMemo(() => {
     if (!selectedContext) {
       return {
         name: intl.formatMessage({ id: 'titleBar.topic.home' }),
@@ -228,48 +319,18 @@ const TitleBar = () => {
           icon: null
         };
     }
-  };
+  }, [selectedContext, getWorkspaceById, getWorkspaceIcon, intl]);
 
-  const currentTopicInfo = getCurrentTopicInfo();
-
-  const handleMenuClick = (event: React.MouseEvent<HTMLElement>, menuType: string) => {
-    setAnchorEl(event.currentTarget);
-    setActiveMenu(menuType);
-  };
-
-  const handleClose = () => {
-    setAnchorEl(null);
-    setActiveMenu(null);
-  };
-
-  const handleMenuAction = (action: string) => {
-    if (action === 'help:about') {
-      setShowAbout(true);
-    } else if (action === 'help:disclaimer') {
-      setShowDisclaimer(true);
-    } else {
-      window.electron.ipcRenderer.invoke('menu-action', action);
+  const getCurrentContextOption = useCallback(() => {
+    if (selectedContext?.type === 'workspace' && selectedContext?.id) {
+      return availableContexts.find(ctx => 
+        ctx.type === 'workspace' && ctx.workspaceId === selectedContext.id
+      ) || undefined;
     }
-    handleClose();
-  };
+    return availableContexts.find(ctx => ctx.type === selectedContext?.type) || availableContexts[0] || undefined;
+  }, [selectedContext, availableContexts]);
 
-  const handleWindowAction = (action: string) => {
-    window.electron.ipcRenderer.invoke('window-action', action);
-  };
-
-  const handleNotificationClick = () => {
-    setShowNotifications(true);
-  };
-
-  const handleCloseNotifications = () => {
-    setShowNotifications(false);
-  };
-
-  const handleCloseAbout = () => {
-    setShowAbout(false);
-  };
-
-  const handleDisclaimerAccept = () => {
+  const handleDisclaimerAccept = useCallback(() => {
     setShowDisclaimerInStore(false);
     setShowDisclaimer(false);
     
@@ -306,9 +367,9 @@ const TitleBar = () => {
       const userName = user.username || 'User';
       toast.success(intl.formatMessage({ id: 'toast.welcome' }, { name: userName }));
     }
-  };
+  }, [setShowDisclaimerInStore, user, setSelectedContext, intl]);
 
-  const handleDisclaimerDecline = () => {
+  const handleDisclaimerDecline = useCallback(() => {
     setShowDisclaimerInStore(false);
     setShowDisclaimer(false);
     
@@ -316,33 +377,7 @@ const TitleBar = () => {
     const { logout } = useUserStore.getState();
     logout();
     toast.info(intl.formatMessage({ id: 'disclaimer.declined' }));
-  };
-
-  const handleGoBack = () => {
-    goBack();
-  };
-
-  const handleGoForward = () => {
-    goForward();
-  };
-
-  const handleContextChange = (event: any, newValue: any) => {
-    if (newValue && newValue.value) {
-      const contextToSet = newValue.value;
-      setSelectedContext(contextToSet);
-      addToHistory(contextToSet);
-      setSearchOpen(false);
-    }
-  };
-
-  const getCurrentContextOption = () => {
-    if (selectedContext?.type === 'workspace' && selectedContext?.id) {
-      return availableContexts.find(ctx => 
-        ctx.type === 'workspace' && ctx.workspaceId === selectedContext.id
-      ) || undefined;
-    }
-    return availableContexts.find(ctx => ctx.type === selectedContext?.type) || availableContexts[0] || undefined;
-  };
+  }, [setShowDisclaimerInStore, intl]);
 
   // If window is too small, show collapsed menu
   if (isCollapsed) {
@@ -354,6 +389,7 @@ const TitleBar = () => {
           onNotificationClick={handleNotificationClick}
           onWindowAction={handleWindowAction}
           onMenuAction={handleMenuAction}
+          isWindowMaximized={isWindowMaximized}
         />
 
         <NotificationView
@@ -380,7 +416,7 @@ const TitleBar = () => {
     <>
       <Box
         sx={{
-          height: 32,
+          height: TITLEBAR_HEIGHT,
           display: 'flex',
           alignItems: 'center',
           bgcolor: 'background.paper',
@@ -392,14 +428,14 @@ const TitleBar = () => {
         }}
       >
         {/* App Icon (leftmost) */}
-        <Box sx={{ display: 'flex', alignItems: 'center', pl: 1, WebkitAppRegion: 'no-drag' }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', pl: 1.5, WebkitAppRegion: 'no-drag' }}>
           {appIcon && (
             <Avatar 
               src={appIcon} 
               sx={{ 
-                width: 20, 
-                height: 20,
-                mr: 1
+                width: 24, 
+                height: 24,
+                mr: 1.5
               }}
             />
           )}
@@ -410,8 +446,8 @@ const TitleBar = () => {
           {/* File Menu */}
           <Box
             sx={{
-              px: 1,
-              py: 0.5,
+              px: 1.5,
+              py: 1,
               cursor: 'pointer',
               borderRadius: 1,
               '&:hover': { bgcolor: 'action.hover' },
@@ -419,15 +455,15 @@ const TitleBar = () => {
             }}
             onClick={(e) => handleMenuClick(e, 'file')}
           >
-            <Typography variant="body2" sx={{ fontSize: '13px' }}>
+            <Typography variant="body2" sx={{ fontSize: '14px', fontWeight: 500 }}>
               {intl.formatMessage({ id: 'titleBar.menu.file' })}
             </Typography>
           </Box>
 
           <Box
             sx={{
-              px: 1,
-              py: 0.5,
+              px: 1.5,
+              py: 1,
               cursor: 'pointer',
               borderRadius: 1,
               '&:hover': { bgcolor: 'action.hover' },
@@ -435,15 +471,15 @@ const TitleBar = () => {
             }}
             onClick={(e) => handleMenuClick(e, 'edit')}
           >
-            <Typography variant="body2" sx={{ fontSize: '13px' }}>
+            <Typography variant="body2" sx={{ fontSize: '14px', fontWeight: 500 }}>
               {intl.formatMessage({ id: 'titleBar.menu.edit' })}
             </Typography>
           </Box>
 
           <Box
             sx={{
-              px: 1,
-              py: 0.5,
+              px: 1.5,
+              py: 1,
               cursor: 'pointer',
               borderRadius: 1,
               '&:hover': { bgcolor: 'action.hover' },
@@ -451,15 +487,15 @@ const TitleBar = () => {
             }}
             onClick={(e) => handleMenuClick(e, 'view')}
           >
-            <Typography variant="body2" sx={{ fontSize: '13px' }}>
+            <Typography variant="body2" sx={{ fontSize: '14px', fontWeight: 500 }}>
               {intl.formatMessage({ id: 'titleBar.menu.view' })}
             </Typography>
           </Box>
 
           <Box
             sx={{
-              px: 1,
-              py: 0.5,
+              px: 1.5,
+              py: 1,
               cursor: 'pointer',
               borderRadius: 1,
               '&:hover': { bgcolor: 'action.hover' },
@@ -467,14 +503,14 @@ const TitleBar = () => {
             }}
             onClick={(e) => handleMenuClick(e, 'help')}
           >
-            <Typography variant="body2" sx={{ fontSize: '13px' }}>
+            <Typography variant="body2" sx={{ fontSize: '14px', fontWeight: 500 }}>
               {intl.formatMessage({ id: 'titleBar.menu.help' })}
             </Typography>
           </Box>
         </Box>
 
         {/* Draggable spacer */}
-        <Box sx={{ width: 20, WebkitAppRegion: 'drag' }} />
+        <Box sx={{ width: 24, WebkitAppRegion: 'drag' }} />
 
         {/* Navigation Arrows and Search Bar (center) - with specific drag regions */}
         <Box sx={{ 
@@ -512,8 +548,8 @@ const TitleBar = () => {
                 onClick={handleGoBack}
                 disabled={!canGoBack}
                 sx={{
-                  width: 24,
-                  height: 24,
+                  width: 28,
+                  height: 28,
                   mr: 0.5,
                   '&:hover': { bgcolor: 'action.hover' },
                   '&.Mui-disabled': {
@@ -522,15 +558,15 @@ const TitleBar = () => {
                 }}
                 title={intl.formatMessage({ id: 'titleBar.navigation.back' })}
               >
-                <ArrowBack sx={{ fontSize: 12 }} />
+                <ArrowBack sx={{ fontSize: 14 }} />
               </IconButton>
               <IconButton
                 size="small"
                 onClick={handleGoForward}
                 disabled={!canGoForward}
                 sx={{
-                  width: 24,
-                  height: 24,
+                  width: 28,
+                  height: 28,
                   mr: 1,
                   '&:hover': { bgcolor: 'action.hover' },
                   '&.Mui-disabled': {
@@ -539,7 +575,7 @@ const TitleBar = () => {
                 }}
                 title={intl.formatMessage({ id: 'titleBar.navigation.forward' })}
               >
-                <ArrowForward sx={{ fontSize: 12 }} />
+                <ArrowForward sx={{ fontSize: 14 }} />
               </IconButton>
             </Box>
 
@@ -565,12 +601,12 @@ const TitleBar = () => {
                        option.name === value.name;
               }}
               sx={{
-                minWidth: 250,
-                maxWidth: 350,
+                minWidth: 280,
+                maxWidth: 380,
                 '& .MuiOutlinedInput-root': {
-                  height: 24,
-                  fontSize: '13px',
-                  paddingLeft: '8px',
+                  height: 28,
+                  fontSize: '14px',
+                  paddingLeft: '10px',
                   '& .MuiOutlinedInput-notchedOutline': {
                     border: 'none'
                   },
@@ -584,18 +620,18 @@ const TitleBar = () => {
                   }
                 },
                 '& .MuiAutocomplete-input': {
-                  fontSize: '13px',
+                  fontSize: '14px',
                   fontWeight: 500,
                   color: 'text.primary',
                   textAlign: 'center',
                   cursor: 'pointer',
-                  paddingLeft: '4px !important'
+                  paddingLeft: '6px !important'
                 },
                 '& .MuiAutocomplete-endAdornment': {
                   display: 'none'
                 },
                 '& .MuiInputAdornment-root': {
-                  marginRight: '4px'
+                  marginRight: '6px'
                 }
               }}
               renderInput={(params) => (
@@ -611,7 +647,7 @@ const TitleBar = () => {
                           <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
                             <Search 
                               sx={{ 
-                                fontSize: 14, 
+                                fontSize: 16, 
                                 color: 'text.secondary',
                                 opacity: searchOpen ? 0.8 : 0.6
                               }} 
@@ -620,9 +656,9 @@ const TitleBar = () => {
                               <Avatar 
                                 src={getCurrentContextOption()?.icon || ''} 
                                 sx={{ 
-                                  width: 14, 
-                                  height: 14,
-                                  fontSize: '8px'
+                                  width: 16, 
+                                  height: 16,
+                                  fontSize: '10px'
                                 }}
                               >
                                 {getCurrentContextOption()?.name[0]?.toUpperCase()}
@@ -651,7 +687,7 @@ const TitleBar = () => {
                       fontWeight: 600,
                       color: 'text.secondary',
                       backgroundColor: 'action.hover',
-                      fontSize: '11px',
+                      fontSize: '12px',
                       textTransform: 'uppercase',
                       letterSpacing: '0.5px'
                     }}
@@ -667,15 +703,15 @@ const TitleBar = () => {
                     <Avatar 
                       src={option.icon} 
                       sx={{ 
-                        width: 16, 
-                        height: 16,
-                        fontSize: '10px'
+                        width: 18, 
+                        height: 18,
+                        fontSize: '11px'
                       }}
                     >
                       {option.name[0]?.toUpperCase()}
                     </Avatar>
                   )}
-                  <Typography variant="body2" sx={{ fontSize: '13px' }}>
+                  <Typography variant="body2" sx={{ fontSize: '14px' }}>
                     {option.name}
                   </Typography>
                 </Box>
@@ -685,25 +721,25 @@ const TitleBar = () => {
         </Box>
 
         {/* Draggable spacer */}
-        <Box sx={{ width: 20, WebkitAppRegion: 'drag' }} />
+        <Box sx={{ width: 24, WebkitAppRegion: 'drag' }} />
 
         {/* Window Controls (right side) */}
-        <Box sx={{ display: 'flex', alignItems: 'center', WebkitAppRegion: 'no-drag', pr: 1 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', WebkitAppRegion: 'no-drag', pr: 1.5 }}>
           {/* Notification Button with proper spacing */}
-          <Box sx={{ mr: 1 }}>
+          <Box sx={{ mr: 1.5 }}>
             <Badge
               badgeContent={totalNotificationCount}
               color="error"
               max={99}
               sx={{
                 '& .MuiBadge-badge': {
-                  fontSize: '0.65rem',
-                  height: 14,
-                  minWidth: 14,
-                  padding: '0 3px',
-                  top: 6,
-                  right: 6,
-                  borderRadius: '7px'
+                  fontSize: '0.7rem',
+                  height: 16,
+                  minWidth: 16,
+                  padding: '0 4px',
+                  top: 7,
+                  right: 7,
+                  borderRadius: '8px'
                 }
               }}
             >
@@ -711,13 +747,13 @@ const TitleBar = () => {
                 size="small"
                 onClick={handleNotificationClick}
                 sx={{
-                  width: 28,
-                  height: 28,
+                  width: 32,
+                  height: 32,
                   '&:hover': { bgcolor: 'action.hover' },
                 }}
                 title={intl.formatMessage({ id: 'titleBar.notifications' })}
               >
-                <Notifications sx={{ fontSize: 16 }} />
+                <Notifications sx={{ fontSize: 18 }} />
               </IconButton>
             </Badge>
           </Box>
@@ -725,48 +761,60 @@ const TitleBar = () => {
           {/* Window Control Buttons */}
           <Box
             sx={{
-              width: 32,
-              height: 32,
+              width: 36,
+              height: 36,
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               cursor: 'pointer',
+              borderRadius: 1,
               '&:hover': { bgcolor: 'action.hover' },
             }}
             onClick={() => handleWindowAction('minimize')}
             title={intl.formatMessage({ id: 'titleBar.minimize' })}
           >
-            <Remove sx={{ fontSize: 16 }} />
+            <Remove sx={{ fontSize: 18 }} />
           </Box>
+          
+          {/* ✅ Updated maximize/restore button with conditional icon */}
           <Box
             sx={{
-              width: 32,
-              height: 32,
+              width: 36,
+              height: 36,
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               cursor: 'pointer',
+              borderRadius: 1,
               '&:hover': { bgcolor: 'action.hover' },
             }}
             onClick={() => handleWindowAction('maximize')}
-            title={intl.formatMessage({ id: 'titleBar.maximize' })}
+            title={intl.formatMessage({ 
+              id: isWindowMaximized ? 'titleBar.restore' : 'titleBar.maximize' 
+            })}
           >
-            <CropSquare sx={{ fontSize: 14 }} />
+            {isWindowMaximized ? (
+              <FilterNone sx={{ fontSize: 16 }} />
+            ) : (
+              <CropSquare sx={{ fontSize: 16 }} />
+            )}
           </Box>
+          
           <Box
             sx={{
-              width: 32,
-              height: 32,
+              width: 36,
+              height: 36,
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               cursor: 'pointer',
+              borderRadius: 1,
               '&:hover': { bgcolor: 'error.main', color: 'error.contrastText' },
             }}
             onClick={() => handleWindowAction('close')}
             title={intl.formatMessage({ id: 'titleBar.close' })}
           >
-            <Close sx={{ fontSize: 16 }} />
+            <Close sx={{ fontSize: 18 }} />
           </Box>
         </Box>
 

@@ -37,35 +37,30 @@ If no tools or agent coordination is needed, provide a direct response.
   `.trim();
 };
 
-// Helper function to get system prompt with fallback and rules
 const getSystemPrompt = (user: IUser, agent: IUser, kbIds?: string[]): string => {
   const { agentModeSystemPrompt: customPrompt } = useLLMConfigurationStore.getState();
   
   let systemPrompt = '';
   if (customPrompt && customPrompt.trim()) {
-    // Replace placeholders in custom prompt
     systemPrompt = customPrompt
       .replace(/\{agent\.username\}/g, agent.username)
       .replace(/\{user\.username\}/g, user.username)
       .replace(/\{agent_username\}/g, agent.username)
       .replace(/\{user_username\}/g, user.username);
       
-    // Add KB info if available
     if (kbIds && kbIds.length > 0) {
       systemPrompt += `\n\nYou have access to the following Knowledge Base(s): [${kbIds.join(', ')}]. Use them when relevant to provide more accurate and contextual responses.`;
     }
   } else {
-    // Fallback to default prompt
     systemPrompt = agentModeSystemPrompt(user, agent, kbIds);
   }
   
-  // Append rules for agent mode
   return appendRulesToSystemPrompt(systemPrompt, 'agent');
 };
 
 interface ProcessAgentModeAIResponseParams {
   activeChatId: string;
-  workspaceId?: string; // Add workspaceId parameter
+  workspaceId?: string;
   userMessageText: string;
   agent?: IUser | null;
   currentUser: IUser | null;
@@ -88,31 +83,15 @@ export async function processAgentModeAIResponse({
   setStreamingState,
   markStreamAsCompleted,
 }: ProcessAgentModeAIResponseParams): Promise<{ success: boolean; responseText?: string; assistantMessageId?: string; error?: any; toolCalls?: OpenAI.Chat.Completions.ChatCompletionMessageToolCall[]; aborted?: boolean }> {
-  // ✅ Use consistent thread ID pattern
   const threadId = `agent_mode_${activeChatId}_${Date.now()}`;
-  
-  console.log("[AgentMode] Starting with thread ID:", threadId);
-
-  // Initialize human-in-the-loop manager instead of abort controller
   const humanInTheLoopManager = getHumanInTheLoopManager();
-
-  // Use provided agent or get from store
   const assistantSender = agent || getAgentFromStore();
   const assistantSenderId = assistantSender?.id || "agent-master";
 
-  if (!assistantSender) {
-    console.warn("[AgentMode] No agent available, using fallback ID for Agent master.");
-  }
-
-  // ========== REUSE EXISTING AGENT TASK LOGIC ==========
-  console.log("[AgentMode DEBUG] Delegating to existing Agent Task infrastructure...");
-
-  // Get the executeAgentTask function from AgentStore
   const { executeAgentTask } = useAgentStore.getState();
   const { selectedMcpServerIds } = useMCPSettingsStore.getState();
   const { selectedKbIds } = useKBSettingsStore.getState();
   
-  // Get LLM configuration
   const {
     provider,
     modelId,
@@ -124,19 +103,15 @@ export async function processAgentModeAIResponse({
   } = useLLMConfigurationStore.getState();
 
   if (!provider || !modelId) {
-    const errMsg = "No model or provider selected for Agent Task.";
-    console.error(`[AgentMode DEBUG] ${errMsg}`);
-    return { success: false, error: errMsg };
+    return { success: false, error: "No model or provider selected for Agent Task." };
   }
 
-  // Collect MCP tools with server information
   let allSelectedToolsFromMCPs: (OpenAI.Chat.Completions.ChatCompletionTool & { mcpServer?: string })[] = [];
   
   if (selectedMcpServerIds && selectedMcpServerIds.length > 0) {
     try {
       selectedMcpServerIds.forEach(serverId => {
         const storedTools = getServiceTools(serverId);
-        console.log(`[AgentMode DEBUG] Loading tools for server ${serverId}:`, storedTools?.length || 0);
 
         if (storedTools && storedTools.length > 0) {
           const toolsFromServer = storedTools
@@ -152,7 +127,7 @@ export async function processAgentModeAIResponse({
                   description: tool.description || "No description available.",
                   parameters: tool.inputSchema,
                 },
-                mcpServer: serverId // ✅ Store the original MCP server
+                mcpServer: serverId
               };
               return formattedTool;
             });
@@ -161,7 +136,6 @@ export async function processAgentModeAIResponse({
         }
       });
 
-      // Remove duplicates but preserve MCP server info
       const uniqueToolsMap = new Map<string, OpenAI.Chat.Completions.ChatCompletionTool & { mcpServer?: string }>();
       allSelectedToolsFromMCPs.forEach(tool => {
         if (tool.function && tool.function.name && !uniqueToolsMap.has(tool.function.name)) {
@@ -169,21 +143,16 @@ export async function processAgentModeAIResponse({
         }
       });
       allSelectedToolsFromMCPs = Array.from(uniqueToolsMap.values());
-
-      console.log(`[AgentMode DEBUG] Total unique tools available for Agent Task: ${allSelectedToolsFromMCPs.length}`);
-      console.log(`[AgentMode DEBUG] Final tools being passed to Agent Task:`, allSelectedToolsFromMCPs);
     } catch (error) {
-      console.error("[AgentMode DEBUG] Error processing tools from MCPStore:", error);
+      console.error("Error processing tools from MCPStore:", error);
     }
   }
 
-  // Get system prompt with KB integration
   let systemPromptText = "";
   if (currentUser && assistantSender) {
     systemPromptText = getSystemPrompt(currentUser, assistantSender, selectedKbIds.length > 0 ? selectedKbIds : undefined);
   }
 
-  // Format conversation context
   const recentMessages = existingMessages.slice(-10);
   const formattedMessagesContext = formatMessagesForContext(recentMessages, currentUser);
   
@@ -192,12 +161,10 @@ export async function processAgentModeAIResponse({
     taskDescription = `Context: ${formattedMessagesContext}\n\nCurrent request: ${userMessageText}`;
   }
 
-  // Add KB context if available
   if (selectedKbIds.length > 0) {
     taskDescription += `\n\nNote: You have access to Knowledge Base(s): [${selectedKbIds.join(', ')}]. Consider using them if they contain relevant information for this request.`;
   }
 
-  // Prepare Agent Task options with explicit thread ID
   const agentOptions = {
     model: modelId,
     provider: provider,
@@ -213,7 +180,7 @@ export async function processAgentModeAIResponse({
     tools: allSelectedToolsFromMCPs,
     systemPrompt: systemPromptText,
     humanInTheLoop: true,
-    threadId: threadId, // ✅ Explicitly pass thread ID
+    threadId: threadId,
     knowledgeBases: selectedKbIds.length > 0 && workspaceId ? {
       enabled: true,
       selectedKbIds: selectedKbIds,
@@ -221,87 +188,53 @@ export async function processAgentModeAIResponse({
     } : undefined,
   };
 
-  console.log("[AgentMode DEBUG] Agent Task configuration:");
-  console.log("[AgentMode DEBUG] - Tools count:", agentOptions.tools?.length || 0);
-  console.log("[AgentMode DEBUG] - Knowledge Bases:", selectedKbIds.length > 0 ? selectedKbIds : "None selected");
-  console.log("[AgentMode DEBUG] - Workspace ID:", workspaceId || "Not provided");
-  console.log("[AgentMode DEBUG] - Tools details:", agentOptions.tools?.map(t => ({
-    name: t.function?.name,
-    hasParams: !!t.function?.parameters,
-    mcpServer: (t as any).mcpServer
-  })));
-  console.log("[AgentMode DEBUG] - Full agentOptions:", agentOptions);
+  console.log("Agent Task configuration:", {
+    toolsCount: agentOptions.tools?.length || 0,
+    knowledgeBases: selectedKbIds.length > 0 ? selectedKbIds : "None selected",
+    workspaceId: workspaceId || "Not provided",
+    toolsDetails: agentOptions.tools?.map(t => ({
+      name: t.function?.name,
+      hasParams: !!t.function?.parameters,
+      mcpServer: (t as any).mcpServer
+    })),
+    fullAgentOptions: agentOptions
+  });
 
   try {
-    console.log('[AgentMode] Calling executeAgentTask with thread ID:', threadId);
-
     const result = await executeAgentTask(
       taskDescription,
-      agentOptions, // This now includes threadId
+      agentOptions,
       activeChatId,
       workspaceId
     );
 
-    console.log('[AgentMode] executeAgentTask result:', {
-      success: result.success,
-      hasResult: !!result.result,
-      hasError: !!result.error,
-      resultType: typeof result.result,
-      errorMessage: result.error,
-      requiresHumanInteraction: result.requiresHumanInteraction
-    });
-
-    // Handle human interaction requirements
     if (result.requiresHumanInteraction) {
-      console.log("[AgentMode] Task requires human interaction - workflow will be handled by IPC listeners");
-      // The human interaction will be handled by the AgentStore IPC listeners
-      // and the LangGraph workflow will handle the interrupt/resume cycle
       return {
         success: true,
         responseText: "Workflow paused for human interaction"
       };
     }
 
-    // ✅ FIX: Skip creating duplicate message for completed LangGraph workflows
-    // The synthesis result will be delivered via the 'agent:result_synthesized' IPC event
     if (result.success && result.result && !result.requiresHumanInteraction) {
-      console.log("[AgentMode] ✅ LangGraph workflow completed - synthesis message will be handled by IPC listener");
-      console.log("[AgentMode] Skipping duplicate message creation to prevent double display");
-      
-      // Return success but don't create the assistant message here
-      // The handleResultSynthesized in IPCListeners will create the message
       return {
         success: true,
         responseText: result.result,
-        // Don't return assistantMessageId since we're not creating the message here
       };
     }
 
-    // Handle error cases
     if (!result.success) {
       const errorMsg = result.error || "Agent task execution failed without specific error.";
-      console.error("[AgentMode] Agent task execution failed:", {
-        error: errorMsg,
-        fullResult: result
-      });
-      
       return { success: false, error: errorMsg };
     }
 
-    // Fallback case (shouldn't reach here normally)
-    console.warn("[AgentMode] Unexpected result state:", result);
     return { success: false, error: "Unexpected workflow result state" };
 
   } catch (error: any) {
-    // Clean up human interactions on error
     humanInTheLoopManager.clearInteractions(threadId);
-    
-    console.error("[AgentMode] Error in agent processing:", error);
     return { success: false, error: error.message };
   } finally {
-    // Clean up human interactions when done
     setTimeout(() => {
       humanInTheLoopManager.clearInteractions(threadId);
-    }, 30000); // Clean up after 30 seconds
+    }, 30000);
   }
 }

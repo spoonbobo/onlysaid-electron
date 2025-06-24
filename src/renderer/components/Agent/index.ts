@@ -5,5 +5,4 @@ export { LogsPanel } from './LogsPanel';
 export { GraphPanel } from './GraphPanel';
 export { StatsFooter } from './StatsFooter';
 export { default as AgentCard } from './AgentCard';
-export { default as AgentCards } from './AgentCards';
 export type { AgentCard as IAgentCard } from '@/../../types/Agent/AgentCard'; 

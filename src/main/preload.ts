@@ -129,8 +129,20 @@ type MicrosoftAuthChannels = 'microsoft-auth:request-calendar' | 'microsoft-auth
 
 type OneasiaChannels = 'oneasia:authenticate' | 'oneasia:get-models';
 
-// Add these new channel types
-type MenuBarChannels = 'menu-action' | 'window-action';
+// ✅ Updated MenuBarChannels to include window state channels
+type MenuBarChannels = 'menu-action' | 'window-action' | 'window:is-maximized';
+
+// ✅ Add WindowChannels for window state management
+type WindowChannels = 
+  | 'window:state-changed' 
+  | 'window:bounds-changed' 
+  | 'window:init'
+  | 'window:create-window'
+  | 'window:close-window'
+  | 'window:focus-window'
+  | 'window:focus-tab'
+  | 'window:sync-state'
+  | 'window:tab-focused';
 
 // Add this new type near the other type definitions (around line 7-15)
 type AppChannels = 'app:get-version' | 'app:get-build-time' | 'app:get-device-id' | 'app:get-device-info' | 'app:open-account-management';
@@ -160,6 +172,7 @@ type AgentChannels =
   | 'agent:resume_workflow'
   | 'agent:tool_execution_start'
   | 'agent:tool_execution_complete'
+  | 'agent:tool_execution_updated'
   | 'agent:execute_mcp_tool'
   | 'agent:clear_interactions'
   | 'agent:get_pending_interactions'
@@ -175,7 +188,8 @@ type AgentChannels =
   | 'agent:create_execution_record'
   | 'agent:update_agent_status'
   | 'agent:update_task_status'
-  | 'agent:clear_task_state';
+  | 'agent:clear_task_state'
+  | 'agent:clear_all_task_state';
 
 // Add this new type around line 130 with other channel types
 type InitializationChannels = 'init:progress-update' | 'init:step-complete' | 'init:complete';
@@ -189,6 +203,7 @@ export type Channels =
   | ApiChannels
   | MenuChannels
   | MenuBarChannels
+  | WindowChannels // ✅ Add WindowChannels to the union
   | MiscChannels
   | SystemChannels
   | SSEChannels
@@ -453,8 +468,10 @@ const electronHandler = {
   menuBar: {
     action: (action: string) => ipcRenderer.invoke('menu-action', action),
   },
+  // ✅ Updated window handler with new methods
   window: {
     action: (action: string) => ipcRenderer.invoke('window-action', action),
+    isMaximized: () => ipcRenderer.invoke('window:is-maximized'),
   },
   app: {
     getName: () => ipcRenderer.invoke('app:get-name'),

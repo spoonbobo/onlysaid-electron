@@ -5,6 +5,7 @@ import {
   Close,
   Remove,
   CropSquare,
+  FilterNone,
   Undo,
   Redo,
   ContentCut,
@@ -28,6 +29,7 @@ interface CollapsedMenuProps {
   onNotificationClick: () => void;
   onWindowAction: (action: string) => void;
   onMenuAction: (action: string) => void;
+  isWindowMaximized?: boolean;
 }
 
 const CollapsedMenu = ({ 
@@ -35,7 +37,8 @@ const CollapsedMenu = ({
   totalNotificationCount, 
   onNotificationClick, 
   onWindowAction, 
-  onMenuAction 
+  onMenuAction,
+  isWindowMaximized = false
 }: CollapsedMenuProps) => {
   const intl = useIntl();
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
@@ -160,9 +163,15 @@ const CollapsedMenu = ({
               '&:hover': { bgcolor: 'action.hover' },
             }}
             onClick={() => onWindowAction('maximize')}
-            title={intl.formatMessage({ id: 'titleBar.maximize' })}
+            title={intl.formatMessage({ 
+              id: isWindowMaximized ? 'titleBar.restore' : 'titleBar.maximize' 
+            })}
           >
-            <CropSquare sx={{ fontSize: 14 }} />
+            {isWindowMaximized ? (
+              <FilterNone sx={{ fontSize: 14 }} />
+            ) : (
+              <CropSquare sx={{ fontSize: 14 }} />
+            )}
           </Box>
           <Box
             sx={{

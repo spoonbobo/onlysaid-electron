@@ -979,5 +979,24 @@
   "loading.finalizing": "正在完成初始化...",
   "loading.ready": "準備就緒！",
   "loading.startingApp": "正在啟動應用程式...",
-  "loading.completed": "已完成"
+  "loading.completed": "已完成",
+
+  "agent.graph.taskDescription": "任務描述",
+  "agent.graph.assignedAgent": "指派代理",
+  "agent.graph.relatedTools": "相關工具",
+  "agent.graph.toolArguments": "工具參數",
+  "agent.graph.toolResult": "工具結果",
+  "agent.graph.toolError": "工具錯誤",
+  "agent.graph.executionContext": "執行上下文",
+  "agent.graph.assignedTasks": "指派任務",
+  "agent.graph.toolExecutions": "工具執行",
+  "agent.graph.executionSummary": "執行摘要",
+  "agent.graph.taskResult": "任務結果",
+  "agent.graph.toolInformation": "工具資訊",
+  "agent.graph.executionDetails": "執行詳情",
+  "agent.graph.agentId": "代理 ID",
+  "agent.graph.arguments": "參數",
+  "agent.graph.context": "上下文",
+  "agent.graph.server": "伺服器",
+  "agent.graph.args": "參數"
 }

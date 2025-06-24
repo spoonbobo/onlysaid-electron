@@ -15,13 +15,6 @@ export function setupLangChainHandlers() {
 
   // Main LangChain completion handler
   ipcMain.handle('ai:get_completion_langchain', async (event, { messages, options }) => {
-    console.log('[LangChain] ai:get_completion_langchain received:', {
-      messageCount: messages?.length,
-      provider: options?.provider,
-      model: options?.model,
-      hasTools: options?.tools && options.tools.length > 0,
-    });
-
     try {
       const {
         model,
@@ -98,49 +91,20 @@ export function setupLangChainHandlers() {
 
   // Enhanced execute_task handler
   ipcMain.handle('agent:execute_task', async (event, { task, options, limits, chatId, workspaceId }) => {
-    console.log(`🔍 [MAIN-IPC] ==================== EXECUTE TASK START ====================`);
-    console.log(`🔍 [MAIN-IPC] IPC agent:execute_task received:`, {
-      task: task?.substring(0, 100) + '...',
-      provider: options?.provider,
-      model: options?.model,
-      toolsCount: options?.tools?.length || 0,
-      hasKnowledgeBases: !!options?.knowledgeBases,
-      chatId,
-      workspaceId,
-      executionId: options?.executionId,
-      threadId: options?.threadId,
-      humanInTheLoop: options?.humanInTheLoop
-    });
-
     try {
-      console.log(`🔍 [MAIN-IPC] Step 1: Setting up global webContents...`);
       (global as any).osswarmWebContents = event.sender;
-      console.log(`🔍 [MAIN-IPC] ✅ WebContents stored globally`);
 
-      console.log(`🔍 [MAIN-IPC] Step 2: Creating LangGraph workflow...`);
       const workflow = new LangGraphOSSwarmWorkflow(options);
-      console.log(`🔍 [MAIN-IPC] ✅ Workflow instance created`);
-
       const threadId = options?.threadId || `thread_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-      console.log(`🔍 [MAIN-IPC] Thread ID: ${threadId}`);
       
-      console.log(`🔍 [MAIN-IPC] Step 3: Executing workflow...`);
       const result = await workflow.executeWorkflow(task, threadId, {
         executionId: options?.executionId || uuidv4(),
         chatId,
         workspaceId,
         streamCallback: (update: string) => {
-          console.log(`🔍 [MAIN-IPC] Stream update:`, update.substring(0, 100) + '...');
           event.sender.send('agent:stream_update', { update });
         },
         ...options
-      });
-
-      console.log(`🔍 [MAIN-IPC] ✅ Workflow execution completed:`, { 
-        success: result.success, 
-        hasResult: !!result.result,
-        requiresHumanInteraction: result.requiresHumanInteraction,
-        error: 'error' in result ? result.error : undefined
       });
 
       const response = {
@@ -151,122 +115,60 @@ export function setupLangChainHandlers() {
         error: 'error' in result ? result.error : undefined
       };
 
-      console.log(`🔍 [MAIN-IPC] Returning response:`, response);
       return response;
 
     } catch (error: any) {
-      console.error(`🔍 [MAIN-IPC] ❌ Critical error in agent:execute_task:`, {
-        message: error.message,
-        stack: error.stack,
-        name: error.name
-      });
+      console.error('Error in agent:execute_task:', error);
       return { success: false, error: error.message || 'Unknown error occurred' };
-    } finally {
-      console.log(`🔍 [MAIN-IPC] ==================== EXECUTE TASK END ====================`);
     }
   });
 
   // Enhanced resume workflow handler
   ipcMain.handle('agent:resume_workflow', async (event, { threadId, response, workflowType }) => {
-    console.log(`🔍 [MAIN-IPC] ==================== RESUME WORKFLOW START ====================`);
-    console.log(`🔍 [MAIN-IPC] IPC agent:resume_workflow received:`, { 
-      threadId, 
-      approved: response?.approved,
-      responseId: response?.id,
-      workflowType,
-      timestamp: response?.timestamp
-    });
-    
     try {
-      console.log(`🔍 [MAIN-IPC] Step 1: Loading LangGraph workflow class...`);
-      
-      // ✅ Add debugging for active workflows
-      console.log(`🔍 [MAIN-IPC] Active workflows before resume:`, LangGraphOSSwarmWorkflow.listActiveWorkflows());
-      
-      console.log(`🔍 [MAIN-IPC] Step 2: Calling static resumeWorkflow method...`);
       const result = await LangGraphOSSwarmWorkflow.resumeWorkflow(threadId, response);
-
-      console.log(`🔍 [MAIN-IPC] ✅ Resume workflow completed:`, {
-        success: result.success,
-        completed: result.completed,
-        requiresHumanInteraction: result.requiresHumanInteraction,
-        error: result.error
-      });
-
-      console.log(`🔍 [MAIN-IPC] Returning resume result:`, result);
       return result;
-
     } catch (error: any) {
-      console.error(`🔍 [MAIN-IPC] ❌ Error in agent:resume_workflow:`, {
-        message: error.message,
-        stack: error.stack,
-        threadId,
-        responseId: response?.id
-      });
+      console.error('Error in agent:resume_workflow:', error);
       return { success: false, error: error.message };
-    } finally {
-      console.log(`🔍 [MAIN-IPC] ==================== RESUME WORKFLOW END ====================`);
     }
   });
 
   // Enhanced MCP tool execution handler
   ipcMain.on('agent:execute_mcp_tool', async (event, { executionId, serverName, toolName, arguments: toolArgs, responseChannel }) => {
-    console.log(`🔍 [MAIN-MCP] ==================== MCP TOOL EXECUTION START ====================`);
-    console.log(`🔍 [MAIN-MCP] MCP tool execution request:`, {
-      executionId,
-      serverName,
-      toolName,
-      hasArguments: !!toolArgs,
-      argumentsType: typeof toolArgs,
-      responseChannel,
-      argumentsKeys: toolArgs ? Object.keys(toolArgs) : []
-    });
-
     try {
-      console.log(`🔍 [MAIN-MCP] Step 1: Loading MCP clients...`);
       const { activeClients } = require('../main/mcp');
-      console.log(`🔍 [MAIN-MCP] Available MCP clients:`, Object.keys(activeClients));
       
-      console.log(`🔍 [MAIN-MCP] Step 2: Finding MCP client for server: ${serverName}`);
       const client = serverName === 'default' 
         ? Object.values(activeClients)[0] 
         : activeClients[serverName];
         
       if (!client) {
-        console.error(`🔍 [MAIN-MCP] ❌ No active MCP client found for server: ${serverName}`);
-        console.log(`🔍 [MAIN-MCP] Available servers:`, Object.keys(activeClients));
         throw new Error(`No active MCP client found for server: ${serverName}`);
       }
       
-      console.log(`🔍 [MAIN-MCP] ✅ Found MCP client for server: ${serverName}`);
-      console.log(`🔍 [MAIN-MCP] Client details:`, {
-        hasCallTool: typeof client.callTool === 'function',
-        clientType: client.constructor?.name,
-        clientMethods: Object.getOwnPropertyNames(Object.getPrototypeOf(client))
+      event.sender.send('agent:tool_execution_updated', {
+        executionId: executionId,
+        toolExecutionId: executionId,
+        status: 'executing',
+        toolName: toolName,
+        serverName: serverName
       });
       
-      console.log(`🔍 [MAIN-MCP] Step 3: Preparing tool arguments...`);
       let finalArgs = toolArgs;
       
-      // Ensure arguments are properly formatted
       if (typeof toolArgs === 'string') {
         try {
           finalArgs = JSON.parse(toolArgs);
-          console.log(`🔍 [MAIN-MCP] Parsed string arguments successfully`);
         } catch (parseError) {
-          console.warn(`🔍 [MAIN-MCP] Failed to parse arguments, using as-is:`, parseError);
           finalArgs = {};
         }
       }
       
       if (!finalArgs || typeof finalArgs !== 'object' || Array.isArray(finalArgs)) {
-        console.log(`🔍 [MAIN-MCP] Using empty arguments object`);
         finalArgs = {};
       }
       
-      console.log(`🔍 [MAIN-MCP] Final arguments:`, finalArgs);
-      
-      console.log(`🔍 [MAIN-MCP] Step 4: Executing tool: ${toolName}`);
       const startTime = Date.now();
       
       const result = await client.callTool({
@@ -275,14 +177,29 @@ export function setupLangChainHandlers() {
       });
       
       const executionTime = Date.now() - startTime;
-      
-      console.log(`🔍 [MAIN-MCP] ✅ MCP tool execution completed:`, {
-        executionId,
-        success: !!result,
-        hasData: !!result,
-        resultType: typeof result,
-        dataLength: result ? JSON.stringify(result).length : 0,
-        executionTime: `${executionTime}ms`
+
+      event.sender.send('agent:tool_execution_updated', {
+        executionId: executionId,
+        toolExecutionId: executionId,
+        status: 'completed',
+        result: JSON.stringify(result),
+        executionTime: Math.round(executionTime / 1000),
+        toolName: toolName,
+        serverName: serverName
+      });
+
+      event.sender.send('agent:add_log_to_db', {
+        executionId: executionId,
+        logType: 'tool_result',
+        message: `Tool ${toolName} executed successfully from ${serverName}. Result: ${JSON.stringify(result).substring(0, 200)}...`,
+        toolExecutionId: executionId,
+        metadata: {
+          toolName,
+          serverName,
+          arguments: finalArgs,
+          executionTime,
+          resultLength: JSON.stringify(result).length
+        }
       });
 
       const response = {
@@ -294,18 +211,31 @@ export function setupLangChainHandlers() {
         executionTime
       };
 
-      console.log(`🔍 [MAIN-MCP] Step 5: Sending result back via channel: ${responseChannel}`);
       event.sender.send(responseChannel, response);
-      console.log(`🔍 [MAIN-MCP] ✅ Response sent successfully`);
       
     } catch (error: any) {
-      console.error(`🔍 [MAIN-MCP] ❌ MCP tool execution failed:`, {
-        message: error.message,
-        stack: error.stack,
-        executionId,
-        toolName,
-        serverName,
-        errorType: error.constructor?.name
+      console.error('MCP tool execution failed:', error);
+      
+      event.sender.send('agent:tool_execution_updated', {
+        executionId: executionId,
+        toolExecutionId: executionId,
+        status: 'failed',
+        error: error.message,
+        toolName: toolName,
+        serverName: serverName
+      });
+      
+      event.sender.send('agent:add_log_to_db', {
+        executionId: executionId,
+        logType: 'error',
+        message: `Tool ${toolName} execution failed: ${error.message}`,
+        toolExecutionId: executionId,
+        metadata: {
+          toolName,
+          serverName,
+          arguments: toolArgs,
+          error: error.message
+        }
       });
       
       const errorResponse = { 
@@ -317,10 +247,7 @@ export function setupLangChainHandlers() {
         errorType: error.constructor?.name
       };
       
-      console.log(`🔍 [MAIN-MCP] Sending error response via channel: ${responseChannel}`);
       event.sender.send(responseChannel, errorResponse);
-    } finally {
-      console.log(`🔍 [MAIN-MCP] ==================== MCP TOOL EXECUTION END ====================`);
     }
   });
 
@@ -353,27 +280,21 @@ export function setupLangChainHandlers() {
 
   // ✅ ADD: Database operation handlers
   ipcMain.handle('agent:save_agent_to_db', async (event, { executionId, agentId, role, expertise }) => {
-    console.log('[IPC-DB] Saving agent to database:', { executionId, agentId, role });
-    
     try {
-      // Send to renderer to save to database
       event.sender.send('agent:save_agent_to_db', {
         executionId,
         agentId,
         role,
         expertise
       });
-      
       return { success: true };
     } catch (error: any) {
-      console.error('[IPC-DB] Error saving agent:', error);
+      console.error('Error saving agent:', error);
       return { success: false, error: error.message };
     }
   });
 
   ipcMain.handle('agent:save_task_to_db', async (event, { executionId, agentId, taskDescription, priority }) => {
-    console.log('[IPC-DB] Saving task to database:', { executionId, agentId, taskDescription });
-    
     try {
       event.sender.send('agent:save_task_to_db', {
         executionId,
@@ -381,17 +302,14 @@ export function setupLangChainHandlers() {
         taskDescription,
         priority
       });
-      
       return { success: true };
     } catch (error: any) {
-      console.error('[IPC-DB] Error saving task:', error);
+      console.error('Error saving task:', error);
       return { success: false, error: error.message };
     }
   });
 
   ipcMain.handle('agent:save_tool_execution_to_db', async (event, { executionId, agentId, toolName, toolArguments, approvalId, taskId, mcpServer }) => {
-    console.log('[IPC-DB] Saving tool execution to database:', { executionId, agentId, toolName });
-    
     try {
       event.sender.send('agent:save_tool_execution_to_db', {
         executionId,
@@ -402,17 +320,14 @@ export function setupLangChainHandlers() {
         taskId,
         mcpServer
       });
-      
       return { success: true };
     } catch (error: any) {
-      console.error('[IPC-DB] Error saving tool execution:', error);
+      console.error('Error saving tool execution:', error);
       return { success: false, error: error.message };
     }
   });
 
   ipcMain.handle('agent:update_execution_status', async (event, { executionId, status, result, error }) => {
-    console.log('[IPC-DB] Updating execution status:', { executionId, status });
-    
     try {
       event.sender.send('agent:update_execution_status', {
         executionId,
@@ -420,17 +335,14 @@ export function setupLangChainHandlers() {
         result,
         error
       });
-      
       return { success: true };
     } catch (error: any) {
-      console.error('[IPC-DB] Error updating execution status:', error);
+      console.error('Error updating execution status:', error);
       return { success: false, error: error.message };
     }
   });
 
   ipcMain.handle('agent:add_log_to_db', async (event, { executionId, logType, message, agentId, taskId, toolExecutionId, metadata }) => {
-    console.log('[IPC-DB] Adding log to database:', { executionId, logType, message });
-    
     try {
       event.sender.send('agent:add_log_to_db', {
         executionId,
@@ -441,17 +353,14 @@ export function setupLangChainHandlers() {
         toolExecutionId,
         metadata
       });
-      
       return { success: true };
     } catch (error: any) {
-      console.error('[IPC-DB] Error adding log:', error);
+      console.error('Error adding log:', error);
       return { success: false, error: error.message };
     }
   });
 
   ipcMain.handle('agent:update_agent_status', async (event, { agentId, status, currentTask, executionId }) => {
-    console.log('[IPC-DB] Updating agent status:', { agentId, status, currentTask, executionId });
-    
     try {
       event.sender.send('agent:update_agent_status', {
         agentId,
@@ -460,24 +369,23 @@ export function setupLangChainHandlers() {
         executionId
       });
       
-      // ✅ ALSO: Send real-time update to UI
       event.sender.send('agent:agent_updated', {
-        agentCard: { id: agentId },
+        executionId: executionId,
+        agentId: agentId,
+        agentCard: { id: agentId, role: currentTask },
         status,
         currentTask,
-        executionId
+        timestamp: Date.now()
       });
       
       return { success: true };
     } catch (error: any) {
-      console.error('[IPC-DB] Error updating agent status:', error);
+      console.error('Error updating agent status:', error);
       return { success: false, error: error.message };
     }
   });
 
   ipcMain.handle('agent:update_task_status', async (event, { taskId, status, result, error, executionId }) => {
-    console.log('[IPC-DB] Updating task status:', { taskId, status, executionId });
-    
     try {
       event.sender.send('agent:update_task_status', {
         taskId,
@@ -487,25 +395,23 @@ export function setupLangChainHandlers() {
         executionId
       });
       
-      // ✅ ALSO: Send real-time update to UI
       event.sender.send('agent:task_updated', {
+        executionId: executionId,
         taskId,
         status,
         result,
         error,
-        executionId
+        timestamp: Date.now()
       });
       
       return { success: true };
     } catch (error: any) {
-      console.error('[IPC-DB] Error updating task status:', error);
+      console.error('Error updating task status:', error);
       return { success: false, error: error.message };
     }
   });
 
   ipcMain.handle('agent:create_execution_record', async (event, { executionId, taskDescription, chatId, workspaceId }) => {
-    console.log('[IPC-DB] Creating execution record:', { executionId, taskDescription, chatId, workspaceId });
-    
     try {
       event.sender.send('agent:create_execution_record', {
         executionId,
@@ -514,7 +420,6 @@ export function setupLangChainHandlers() {
         workspaceId
       });
       
-      // ✅ ALSO: Send real-time update to UI
       event.sender.send('agent:execution_updated', {
         executionId,
         status: 'pending',
@@ -523,7 +428,20 @@ export function setupLangChainHandlers() {
       
       return { success: true };
     } catch (error: any) {
-      console.error('[IPC-DB] Error creating execution record:', error);
+      console.error('Error creating execution record:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  // Add a new handler for clearing all agent task state:
+  ipcMain.handle('agent:clear_all_task_state', async (event, { executionId }) => {
+    try {
+      event.sender.send('agent:clear_all_task_state', {
+        executionId
+      });
+      return { success: true };
+    } catch (error: any) {
+      console.error('Error clearing all agent task state:', error);
       return { success: false, error: error.message };
     }
   });

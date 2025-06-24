@@ -144,6 +144,7 @@ interface AgentState {
   }>;
 
   clearAgentTaskState: (taskId: string) => void;
+  clearAllAgentTaskState: () => void;
 }
 
 // Helper function to create guest agent
@@ -1082,19 +1083,55 @@ export const useAgentStore = create<AgentState>()(
         },
 
         clearAgentTaskState: (taskId: string) => {
+          console.log('[AgentStore] Clearing agent task state for:', taskId);
+          
+          set((state) => {
+            // ✅ IMPROVED: Completely remove the task entries instead of setting to default values
+            const newActiveAgentTasks = { ...state.activeAgentTasks };
+            const newAgentTaskStatus = { ...state.agentTaskStatus };
+            const newAgentTaskUpdates = { ...state.agentTaskUpdates };
+            const newPendingHumanInteractions = { ...state.pendingHumanInteractions };
+            const newHumanInteractionCallbacks = { ...state.humanInteractionCallbacks };
+            
+            // Remove the specific task
+            delete newActiveAgentTasks[taskId];
+            delete newAgentTaskStatus[taskId];
+            delete newAgentTaskUpdates[taskId];
+            
+            // ✅ NEW: Also clear any related human interactions
+            Object.keys(newPendingHumanInteractions).forEach(key => {
+              if (key.includes(taskId)) {
+                delete newPendingHumanInteractions[key];
+              }
+            });
+            
+            Object.keys(newHumanInteractionCallbacks).forEach(key => {
+              if (key.includes(taskId)) {
+                delete newHumanInteractionCallbacks[key];
+              }
+            });
+            
+            return {
+              activeAgentTasks: newActiveAgentTasks,
+              agentTaskStatus: newAgentTaskStatus,
+              agentTaskUpdates: newAgentTaskUpdates,
+              pendingHumanInteractions: newPendingHumanInteractions,
+              humanInteractionCallbacks: newHumanInteractionCallbacks
+            };
+          });
+        },
+
+        // ✅ NEW: Add a method to clear all agent task state
+        clearAllAgentTaskState: () => {
+          console.log('[AgentStore] Clearing all agent task state');
+          
           set((state) => ({
-            activeAgentTasks: {
-              ...state.activeAgentTasks,
-              [taskId]: false
-            },
-            agentTaskStatus: {
-              ...state.agentTaskStatus,
-              [taskId]: 'idle'
-            },
-            agentTaskUpdates: {
-              ...state.agentTaskUpdates,
-              [taskId]: []
-            }
+            activeAgentTasks: {},
+            agentTaskStatus: {},
+            agentTaskUpdates: {},
+            pendingHumanInteractions: {},
+            humanInteractionCallbacks: {},
+            activeLangGraphWorkflows: {}
           }));
         },
       };

@@ -169,6 +169,25 @@ export class AgentExecutorNode extends BaseWorkflowNode {
     try {
       console.log(`[LangGraph] executeAgentWithApproval starting for ${role} agent at ${new Date(startTime).toLocaleTimeString()}`);
       
+      const webContents = (global as any).osswarmWebContents;
+      const taskDescription = `${role} agent execution: ${state.originalTask}`;
+      
+      if (webContents && state.executionId) {
+        webContents.send('agent:save_task_to_db', {
+          executionId: state.executionId,
+          agentId: agentCard.runtimeId || agentCard.role,
+          taskDescription: taskDescription,
+          priority: 1
+        });
+        
+        webContents.send('agent:add_log_to_db', {
+          executionId: state.executionId,
+          logType: 'info',
+          message: `Task created for ${role} agent: ${taskDescription}`,
+          agentId: agentCard.runtimeId
+        });
+      }
+      
       const config = AgentRegistry.getAgentConfig(role);
       if (!config) {
         throw new Error(`Configuration not found for role: ${role}`);
@@ -187,7 +206,7 @@ export class AgentExecutorNode extends BaseWorkflowNode {
         data: {
           agentCard: { ...agentCard, status: 'executing' },
           status: 'executing',
-          currentTask: `Executing ${role} logic...`
+          currentTask: taskDescription
         }
       });
       
@@ -215,6 +234,21 @@ export class AgentExecutorNode extends BaseWorkflowNode {
           
           console.log(`[LangGraph-Timer] Creating pending approval for tool: ${toolName} from ${mcpServer} at ${new Date(currentTime).toLocaleTimeString()}`);
           
+          if (webContents && state.executionId) {
+            webContents.send('agent:add_log_to_db', {
+              executionId: state.executionId,
+              logType: 'tool_request',
+              message: `${role} agent requested tool: ${toolName} with arguments: ${JSON.stringify(toolCall.function?.arguments || {})}`,
+              agentId: agentCard.runtimeId,
+              metadata: {
+                toolName,
+                mcpServer,
+                arguments: toolCall.function?.arguments,
+                risk
+              }
+            });
+          }
+          
           const approvalRequest: ToolApprovalRequest = {
             id: toolId,
             agentCard: agentCard,
@@ -240,6 +274,15 @@ export class AgentExecutorNode extends BaseWorkflowNode {
           startTime,
           pendingApprovals
         };
+      }
+      
+      if (webContents && state.executionId) {
+        webContents.send('agent:add_log_to_db', {
+          executionId: state.executionId,
+          logType: 'info',
+          message: `${role} agent completed successfully: ${output.substring(0, 100)}...`,
+          agentId: agentCard.runtimeId
+        });
       }
       
       return {

@@ -440,7 +440,14 @@ export const useUserStore = create<UserStore>()(
           return;
         }
 
-        set({ isDevicesLoading: true, devicesError: null });
+        // Only show loading for initial fetch or when no devices exist
+        const currentDevices = get().devices;
+        const shouldShowLoading = currentDevices.length === 0;
+        
+        set({ 
+          isDevicesLoading: shouldShowLoading, 
+          devicesError: null 
+        });
 
         try {
           const response = await window.electron.user.listDevices({ token });

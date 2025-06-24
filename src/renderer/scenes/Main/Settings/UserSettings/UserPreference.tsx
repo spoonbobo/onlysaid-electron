@@ -1,4 +1,4 @@
-import { TextField, Switch, Button, FormControlLabel, Typography, Box, List, ListItem, ListItemText, ListItemIcon, Chip, IconButton, CircularProgress } from "@mui/material";
+import { TextField, Switch, Button, FormControlLabel, Typography, Box, List, ListItem, ListItemText, ListItemIcon, Chip, IconButton, CircularProgress, Skeleton } from "@mui/material";
 import { useState, useEffect } from "react";
 import { FormattedMessage, useIntl as useReactIntl } from "react-intl";
 import SettingsSection from "@/renderer/components/Settings/SettingsSection";
@@ -56,6 +56,7 @@ function UserPreferences() {
   const [currentDeviceInfo, setCurrentDeviceInfo] = useState<DeviceInfo | null>(null);
   const [currentDeviceId, setCurrentDeviceId] = useState<string>("");
   const [hasRegisteredCurrentDevice, setHasRegisteredCurrentDevice] = useState(false);
+  const [hasInitiallyLoaded, setHasInitiallyLoaded] = useState(false);
 
   useEffect(() => {
     // Update language preference when locale changes
@@ -118,6 +119,13 @@ function UserPreferences() {
       setHasRegisteredCurrentDevice(true);
     }
   }, [user, currentDeviceId, currentDeviceInfo, devices, isDevicesLoading, hasRegisteredCurrentDevice, registerDevice, updateDeviceLastSeenOnStartup]);
+
+  useEffect(() => {
+    // Track initial load state
+    if (!isDevicesLoading && user && !hasInitiallyLoaded) {
+      setHasInitiallyLoaded(true);
+    }
+  }, [isDevicesLoading, user, hasInitiallyLoaded]);
 
   const formatPlatform = (platform: string) => {
     const platformMap: Record<string, string> = {
@@ -297,78 +305,108 @@ function UserPreferences() {
               </Typography>
             )}
             
-            <List sx={{ bgcolor: 'background.paper', borderRadius: 1, border: '1px solid', borderColor: 'divider' }}>
-              {devices.length === 0 && !isDevicesLoading ? (
-                <ListItem>
-                  <ListItemText
-                    primary={<FormattedMessage id="settings.noDevicesFound" />}
-                    secondary={<FormattedMessage id="settings.noDevicesFoundDescription" />}
-                  />
-                </ListItem>
-              ) : (
-                devices.map((device, index) => {
-                  const isCurrentDevice = device.device_id === currentDeviceId;
-                  return (
-                    <ListItem 
-                      key={device.device_id} 
-                      divider={index < devices.length - 1}
-                      secondaryAction={
-                        !isCurrentDevice && (
-                          <IconButton 
-                            edge="end" 
-                            aria-label="delete"
-                            onClick={() => handleRemoveDevice(device.device_id)}
-                            size="small"
-                          >
-                            <Delete />
-                          </IconButton>
-                        )
-                      }
-                    >
+            <Box sx={{ 
+              bgcolor: 'background.paper', 
+              borderRadius: 1, 
+              border: '1px solid', 
+              borderColor: 'divider',
+              minHeight: 120 // Consistent minimum height
+            }}>
+              {!hasInitiallyLoaded || (isDevicesLoading && devices.length === 0) ? (
+                // Loading state - show skeletons
+                <List>
+                  {Array.from({ length: 2 }).map((_, index) => (
+                    <ListItem key={`skeleton-${index}`} divider={index === 0}>
                       <ListItemIcon>
-                        {getDeviceIcon(device.device_name || 'computer')}
+                        <Skeleton variant="circular" width={24} height={24} />
                       </ListItemIcon>
                       <ListItemText
-                        primary={
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                            <Typography variant="subtitle2">
-                              {device.device_name || 'Unknown Device'}
-                            </Typography>
-                            {isCurrentDevice && (
-                              <Chip 
-                                label={<FormattedMessage id="settings.currentDevice" />}
-                                size="small" 
-                                color="primary" 
-                                variant="outlined"
-                              />
-                            )}
-                          </Box>
-                        }
+                        primary={<Skeleton variant="text" width="60%" height={20} />}
                         secondary={
-                          <>
-                            <Typography variant="caption" color="text.secondary" component="span">
-                              <FormattedMessage 
-                                id="settings.deviceId" 
-                                values={{ id: device.device_id }}
-                              />
-                            </Typography>
-                            <br />
-                            <Typography variant="caption" color="text.secondary" component="span">
-                              <FormattedMessage 
-                                id="settings.lastSeen" 
-                                values={{ 
-                                  time: new Date(device.last_seen).toLocaleString(locale)
-                                }}
-                              />
-                            </Typography>
-                          </>
+                          <Box>
+                            <Skeleton variant="text" width="80%" height={14} />
+                            <Skeleton variant="text" width="50%" height={14} />
+                          </Box>
                         }
                       />
                     </ListItem>
-                  );
-                })
+                  ))}
+                </List>
+              ) : (
+                <List>
+                  {devices.length === 0 ? (
+                    <ListItem>
+                      <ListItemText
+                        primary={<FormattedMessage id="settings.noDevicesFound" />}
+                        secondary={<FormattedMessage id="settings.noDevicesFoundDescription" />}
+                      />
+                    </ListItem>
+                  ) : (
+                    devices.map((device, index) => {
+                      const isCurrentDevice = device.device_id === currentDeviceId;
+                      return (
+                        <ListItem 
+                          key={device.device_id} 
+                          divider={index < devices.length - 1}
+                          secondaryAction={
+                            !isCurrentDevice && (
+                              <IconButton 
+                                edge="end" 
+                                aria-label="delete"
+                                onClick={() => handleRemoveDevice(device.device_id)}
+                                size="small"
+                              >
+                                <Delete />
+                              </IconButton>
+                            )
+                          }
+                        >
+                          <ListItemIcon>
+                            {getDeviceIcon(device.device_name || 'computer')}
+                          </ListItemIcon>
+                          <ListItemText
+                            primary={
+                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                <Typography variant="subtitle2">
+                                  {device.device_name || 'Unknown Device'}
+                                </Typography>
+                                {isCurrentDevice && (
+                                  <Chip 
+                                    label={<FormattedMessage id="settings.currentDevice" />}
+                                    size="small" 
+                                    color="primary" 
+                                    variant="outlined"
+                                  />
+                                )}
+                              </Box>
+                            }
+                            secondary={
+                              <>
+                                <Typography variant="caption" color="text.secondary" component="span">
+                                  <FormattedMessage 
+                                    id="settings.deviceId" 
+                                    values={{ id: device.device_id }}
+                                  />
+                                </Typography>
+                                <br />
+                                <Typography variant="caption" color="text.secondary" component="span">
+                                  <FormattedMessage 
+                                    id="settings.lastSeen" 
+                                    values={{ 
+                                      time: new Date(device.last_seen).toLocaleString(locale)
+                                    }}
+                                  />
+                                </Typography>
+                              </>
+                            }
+                          />
+                        </ListItem>
+                      );
+                    })
+                  )}
+                </List>
               )}
-            </List>
+            </Box>
           </Box>
         </SettingsSection>
       )}

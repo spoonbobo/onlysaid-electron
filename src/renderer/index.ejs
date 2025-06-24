@@ -9,8 +9,8 @@
     <title id="app-window-title">Loading...<% if (typeof isDevelopment !== 'undefined' && isDevelopment) { %> - Development<% } %></title>
     <meta name="description" content="Onlysaid - AI-powered chat application" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Remove Google Fonts link and use system fonts for loading -->
     
     <style>
       :root {
@@ -34,11 +34,14 @@
       }
 
       body {
-        font-family: 'Inter', 'Source Sans Pro', 'Roboto', 'Arial', sans-serif;
+        /* Use system fonts that match Inter fallbacks */
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
         background-color: var(--bg-light);
         color: var(--text-primary-light);
         overflow: hidden;
         transition: background-color 0.3s ease, color 0.3s ease;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
       }
 
       /* Dark mode */
@@ -361,7 +364,7 @@
           'loading.initializing': '正在初始化應用程式...',
           'loading.loadingAssets': '正在載入必要資源...',
           'loading.settingUpAuth': '正在設定身份驗證...',
-          'loading.settingUpCalendars': '正在設定日曆監聽器...',
+          'loading.settingUpCalendars': '正在設定日曆...',
           'loading.waitingGoogleServices': '正在等待 Google 服務...',
           'loading.initializingMCP': '正在初始化 MCP 服務 (%CURRENT%/%TOTAL%)...',
           'loading.readyToStart': '準備就緒！',
@@ -449,7 +452,7 @@
       // ✅ Step mapping with direct string formatting
       const getStepTranslationKey = (stepName, mcpProgress = null) => {
         // Handle MCP progress with proper parameter passing
-        if (mcpProgress && mcpProgress.current !== undefined && mcpProgress.total !== undefined) {
+        if (stepName === 'Initializing MCP services' && mcpProgress && mcpProgress.current !== undefined && mcpProgress.total !== undefined) {
           return { 
             key: 'loading.initializingMCP', 
             params: { 
@@ -463,7 +466,6 @@
           'Loading essential assets': 'loading.loadingAssets',
           'Setting up authentication': 'loading.settingUpAuth',
           'Setting up calendar listeners': 'loading.settingUpCalendars',
-          'Waiting for Google services': 'loading.waitingGoogleServices',
           'Initializing MCP services': 'loading.initializingMCP',
           'Ready to start': 'loading.readyToStart'
         };

@@ -1,6 +1,4 @@
 // Shared types for OSSwarm task management
-import { AgentCard } from '@/../../types/Agent/AgentCard';
-
 export interface OSSwarmExecution {
   id: string;
   task_description: string;
@@ -30,6 +28,7 @@ export interface OSSwarmAgent {
   started_at?: string;
   completed_at?: string;
   current_task?: string;
+  last_updated?: string;
 }
 
 export interface OSSwarmTask {

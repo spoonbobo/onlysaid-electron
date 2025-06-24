@@ -89,10 +89,8 @@ export const LogsPanel: React.FC<LogsPanelProps> = ({
   const [streamUpdates, setStreamUpdates] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedLogLevel, setSelectedLogLevel] = useState<LogLevel>('all');
-  const [isCompactView, setIsCompactView] = useState(false);
   const [autoScroll, setAutoScroll] = useState(true);
   const [filterMenuAnchor, setFilterMenuAnchor] = useState<null | HTMLElement>(null);
-  const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set(['live', 'historical']));
 
   const executionId = currentExecution?.id || currentExecution?.executionId;
 
@@ -374,16 +372,6 @@ export const LogsPanel: React.FC<LogsPanelProps> = ({
     URL.revokeObjectURL(url);
   }, [filteredLogs, executionId]);
 
-  const toggleSection = useCallback((section: string) => {
-    const newExpanded = new Set(expandedSections);
-    if (newExpanded.has(section)) {
-      newExpanded.delete(section);
-    } else {
-      newExpanded.add(section);
-    }
-    setExpandedSections(newExpanded);
-  }, [expandedSections]);
-
   const getTranslatedAgentRole = useCallback((role?: string) => {
     if (!role) return null;
     
@@ -561,24 +549,6 @@ export const LogsPanel: React.FC<LogsPanelProps> = ({
                     : getLogTypeProps(selectedLogLevel).label
                   }
                 </Button>
-                
-                <ToggleButtonGroup
-                  size="small"
-                  value={isCompactView}
-                  exclusive
-                  onChange={(_, value) => setIsCompactView(value)}
-                >
-                  <ToggleButton value={false}>
-                    <Tooltip title="Detailed View">
-                      <ExpandMore fontSize="small" />
-                    </Tooltip>
-                  </ToggleButton>
-                  <ToggleButton value={true}>
-                    <Tooltip title="Compact View">
-                      <ExpandLess fontSize="small" />
-                    </Tooltip>
-                  </ToggleButton>
-                </ToggleButtonGroup>
               </Stack>
 
               {Object.keys(logTypeCounts).length > 0 && (
@@ -625,184 +595,270 @@ export const LogsPanel: React.FC<LogsPanelProps> = ({
             }}
           >
             <Stack spacing={1}>
-              {['database', 'live'].map(section => {
-                const sectionLogs = filteredLogs.filter(log => {
-                  if (section === 'live') {
-                    return log.isLive;
-                  } else {
-                    return !log.isLive;
-                  }
-                });
-                
-                if (sectionLogs.length === 0) return null;
-                
-                const isExpanded = expandedSections.has(section);
-                const sectionTitle = section === 'live' 
-                  ? intl.formatMessage({ id: 'agent.logs.liveUpdates', defaultMessage: 'Live Updates' })
-                  : intl.formatMessage({ id: 'agent.logs.historicalLogs', defaultMessage: 'Historical Logs' });
+              {(() => {
+                const historicalLogs = filteredLogs.filter(log => !log.isLive);
+                if (historicalLogs.length === 0) return null;
                 
                 return (
-                  <Box key={section}>
+                  <Box>
                     <Divider sx={{ my: 2 }}>
                       <Chip
-                        icon={isExpanded ? <ExpandLess /> : <ExpandMore />}
-                        label={`${sectionTitle} (${sectionLogs.length})`}
+                        label={`${intl.formatMessage({ id: 'agent.logs.historicalLogs', defaultMessage: 'Historical Logs' })} (${historicalLogs.length})`}
                         size="small"
-                        color={section === 'live' ? 'success' : 'primary'}
-                        variant={section === 'live' ? 'filled' : 'outlined'}
-                        clickable
-                        onClick={() => toggleSection(section)}
+                        color="primary"
+                        variant="outlined"
                         sx={{ 
                           fontSize: '0.75rem',
                           fontWeight: 600,
                           textTransform: 'uppercase',
-                          letterSpacing: 0.5
+                          letterSpacing: 0.5,
+                          cursor: 'default'
                         }}
                       />
                     </Divider>
                     
-                    {isExpanded && (
-                      <Stack spacing={1}>
-                        {sectionLogs.map((log) => {
-                          const logTypeProps = getLogTypeProps(log.type);
-                          
-                          return (
-                            <Paper
-                              key={log.id}
-                              variant="outlined"
-                              sx={{ 
-                                p: 0,
-                                backgroundColor: log.isLive 
-                                  ? alpha(theme.palette.success.main, 0.03) 
-                                  : 'background.paper',
-                                borderColor: log.isLive 
-                                  ? alpha(theme.palette.success.main, 0.2) 
-                                  : 'divider',
-                                borderRadius: 2,
-                                '&:hover': {
-                                  backgroundColor: log.isLive 
-                                    ? alpha(theme.palette.success.main, 0.08) 
-                                    : alpha(theme.palette.action.hover, 0.04),
-                                  borderColor: log.isLive 
-                                    ? alpha(theme.palette.success.main, 0.3) 
-                                    : alpha(theme.palette.action.hover, 0.2)
-                                }
-                              }}
-                            >
-                              <Box sx={{ display: 'flex', width: '100%' }}>
-                                <Box 
-                                  sx={{ 
-                                    width: isCompactView ? 120 : 180,
-                                    flexShrink: 0,
-                                    p: isCompactView ? 1 : 1.5,
-                                    borderRight: 1,
-                                    borderColor: 'divider',
-                                    bgcolor: alpha(theme.palette.background.default, 0.3)
-                                  }}
-                                >
-                                  <Stack spacing={0.5} alignItems="flex-start">
-                                    <Typography 
-                                      variant="caption" 
-                                      sx={{ 
-                                        fontSize: isCompactView ? '0.65rem' : '0.7rem',
-                                        fontFamily: 'monospace',
-                                        color: 'text.secondary',
-                                        fontWeight: 500,
-                                        bgcolor: alpha(theme.palette.background.paper, 0.8),
-                                        px: 0.5,
-                                        py: 0.25,
-                                        borderRadius: 0.5
-                                      }}
-                                    >
-                                      {log.timestamp}
-                                    </Typography>
-                                    
-                                    <Chip 
-                                      icon={logTypeProps.icon}
-                                      label={logTypeProps.label} 
-                                      size="small" 
-                                      color={logTypeProps.color}
-                                      variant="outlined"
-                                      sx={{ 
-                                        fontSize: isCompactView ? '0.6rem' : '0.65rem',
-                                        height: isCompactView ? 16 : 20,
-                                        '& .MuiChip-label': { px: 0.5 },
-                                        '& .MuiChip-icon': { fontSize: '0.8rem' }
-                                      }} 
-                                    />
-                                    
-                                    {log.isLive && (
-                                      <Chip 
-                                        label={intl.formatMessage({ id: 'agent.logs.live', defaultMessage: 'Live' })} 
-                                        size="small" 
-                                        color="success" 
-                                        variant="filled" 
-                                        sx={{ 
-                                          fontSize: '0.6rem', 
-                                          height: 16, 
-                                          fontWeight: 'bold',
-                                          '& .MuiChip-label': { px: 0.5 }
-                                        }} 
-                                      />
-                                    )}
-                                    
-                                    {log.agentRole && !isCompactView && (
-                                      <Chip 
-                                        label={getTranslatedAgentRole(log.agentRole) || log.agentRole} 
-                                        size="small" 
-                                        variant="outlined" 
-                                        color="secondary"
-                                        sx={{ 
-                                          fontSize: '0.6rem', 
-                                          height: 18,
-                                          maxWidth: '100%',
-                                          '& .MuiChip-label': { 
-                                            px: 0.5,
-                                            overflow: 'hidden',
-                                            textOverflow: 'ellipsis'
-                                          }
-                                        }} 
-                                      />
-                                    )}
-                                  </Stack>
-                                </Box>
-                                
-                                <Box sx={{ flexGrow: 1, p: isCompactView ? 1 : 1.5 }}>
-                                  <Typography
-                                    variant="body2"
+                    <Stack spacing={1}>
+                      {historicalLogs.map((log) => {
+                        const logTypeProps = getLogTypeProps(log.type);
+                        
+                        return (
+                          <Paper
+                            key={log.id}
+                            variant="outlined"
+                            sx={{ 
+                              p: 0,
+                              backgroundColor: 'background.paper',
+                              borderColor: 'divider',
+                              borderRadius: 2,
+                              '&:hover': {
+                                backgroundColor: alpha(theme.palette.action.hover, 0.04),
+                                borderColor: alpha(theme.palette.action.hover, 0.2)
+                              }
+                            }}
+                          >
+                            <Box sx={{ display: 'flex', width: '100%' }}>
+                              <Box 
+                                sx={{ 
+                                  width: 160,
+                                  flexShrink: 0,
+                                  p: 1.5,
+                                  borderRight: 1,
+                                  borderColor: 'divider',
+                                  bgcolor: alpha(theme.palette.background.default, 0.3)
+                                }}
+                              >
+                                <Stack spacing={0.5} alignItems="flex-start">
+                                  <Typography 
+                                    variant="caption" 
                                     sx={{ 
-                                      wordBreak: 'break-word',
-                                      lineHeight: isCompactView ? 1.3 : 1.5,
-                                      fontSize: isCompactView ? '0.8rem' : '0.875rem',
-                                      color: 'text.primary'
+                                      fontSize: '0.7rem',
+                                      fontFamily: 'monospace',
+                                      color: 'text.secondary',
+                                      fontWeight: 500,
+                                      bgcolor: alpha(theme.palette.background.paper, 0.8),
+                                      px: 0.5,
+                                      py: 0.25,
+                                      borderRadius: 0.5
                                     }}
                                   >
-                                    {log.message}
+                                    {log.timestamp}
                                   </Typography>
                                   
-                                  {isCompactView && log.agentRole && (
-                                    <Typography
-                                      variant="caption"
+                                  <Chip 
+                                    icon={logTypeProps.icon}
+                                    label={logTypeProps.label} 
+                                    size="small" 
+                                    color={logTypeProps.color}
+                                    variant="outlined"
+                                    sx={{ 
+                                      fontSize: '0.65rem',
+                                      height: 20,
+                                      '& .MuiChip-label': { px: 0.5 },
+                                      '& .MuiChip-icon': { fontSize: '0.8rem' }
+                                    }} 
+                                  />
+                                  
+                                  {log.agentRole && (
+                                    <Chip 
+                                      label={getTranslatedAgentRole(log.agentRole) || log.agentRole} 
+                                      size="small" 
+                                      variant="outlined" 
+                                      color="secondary"
                                       sx={{ 
-                                        display: 'block',
-                                        mt: 0.5,
-                                        color: 'text.secondary',
-                                        fontSize: '0.65rem'
-                                      }}
-                                    >
-                                      Agent: {getTranslatedAgentRole(log.agentRole) || log.agentRole}
-                                    </Typography>
+                                        fontSize: '0.6rem', 
+                                        height: 18,
+                                        maxWidth: '100%',
+                                        '& .MuiChip-label': { 
+                                          px: 0.5,
+                                          overflow: 'hidden',
+                                          textOverflow: 'ellipsis'
+                                        }
+                                      }} 
+                                    />
                                   )}
-                                </Box>
+                                </Stack>
                               </Box>
-                            </Paper>
-                          );
-                        })}
-                      </Stack>
-                    )}
+                              
+                              <Box sx={{ flexGrow: 1, p: 1.5 }}>
+                                <Typography
+                                  variant="body2"
+                                  sx={{ 
+                                    wordBreak: 'break-word',
+                                    lineHeight: 1.5,
+                                    fontSize: '0.875rem',
+                                    color: 'text.primary'
+                                  }}
+                                >
+                                  {log.message}
+                                </Typography>
+                              </Box>
+                            </Box>
+                          </Paper>
+                        );
+                      })}
+                    </Stack>
                   </Box>
                 );
-              })}
+              })()}
+
+              {(() => {
+                const liveLogs = filteredLogs.filter(log => log.isLive);
+                if (liveLogs.length === 0) return null;
+                
+                return (
+                  <Box>
+                    <Divider sx={{ my: 2 }}>
+                      <Chip
+                        label={`${intl.formatMessage({ id: 'agent.logs.liveUpdates', defaultMessage: 'Live Updates' })} (${liveLogs.length})`}
+                        size="small"
+                        color="success"
+                        variant="filled"
+                        sx={{ 
+                          fontSize: '0.75rem',
+                          fontWeight: 600,
+                          textTransform: 'uppercase',
+                          letterSpacing: 0.5,
+                          cursor: 'default'
+                        }}
+                      />
+                    </Divider>
+                    
+                    <Stack spacing={1}>
+                      {liveLogs.map((log) => {
+                        const logTypeProps = getLogTypeProps(log.type);
+                        
+                        return (
+                          <Paper
+                            key={log.id}
+                            variant="outlined"
+                            sx={{ 
+                              p: 0,
+                              backgroundColor: alpha(theme.palette.success.main, 0.03),
+                              borderColor: alpha(theme.palette.success.main, 0.2),
+                              borderRadius: 2,
+                              '&:hover': {
+                                backgroundColor: alpha(theme.palette.success.main, 0.08),
+                                borderColor: alpha(theme.palette.success.main, 0.3)
+                              }
+                            }}
+                          >
+                            <Box sx={{ display: 'flex', width: '100%' }}>
+                              <Box 
+                                sx={{ 
+                                  width: 160,
+                                  flexShrink: 0,
+                                  p: 1.5,
+                                  borderRight: 1,
+                                  borderColor: 'divider',
+                                  bgcolor: alpha(theme.palette.background.default, 0.3)
+                                }}
+                              >
+                                <Stack spacing={0.5} alignItems="flex-start">
+                                  <Typography 
+                                    variant="caption" 
+                                    sx={{ 
+                                      fontSize: '0.7rem',
+                                      fontFamily: 'monospace',
+                                      color: 'text.secondary',
+                                      fontWeight: 500,
+                                      bgcolor: alpha(theme.palette.background.paper, 0.8),
+                                      px: 0.5,
+                                      py: 0.25,
+                                      borderRadius: 0.5
+                                    }}
+                                  >
+                                    {log.timestamp}
+                                  </Typography>
+                                  
+                                  <Chip 
+                                    icon={logTypeProps.icon}
+                                    label={logTypeProps.label} 
+                                    size="small" 
+                                    color={logTypeProps.color}
+                                    variant="outlined"
+                                    sx={{ 
+                                      fontSize: '0.65rem',
+                                      height: 20,
+                                      '& .MuiChip-label': { px: 0.5 },
+                                      '& .MuiChip-icon': { fontSize: '0.8rem' }
+                                    }} 
+                                  />
+                                  
+                                  <Chip 
+                                    label={intl.formatMessage({ id: 'agent.logs.live', defaultMessage: 'Live' })} 
+                                    size="small" 
+                                    color="success" 
+                                    variant="filled" 
+                                    sx={{ 
+                                      fontSize: '0.6rem', 
+                                      height: 16, 
+                                      fontWeight: 'bold',
+                                      '& .MuiChip-label': { px: 0.5 }
+                                    }} 
+                                  />
+                                  
+                                  {log.agentRole && (
+                                    <Chip 
+                                      label={getTranslatedAgentRole(log.agentRole) || log.agentRole} 
+                                      size="small" 
+                                      variant="outlined" 
+                                      color="secondary"
+                                      sx={{ 
+                                        fontSize: '0.6rem', 
+                                        height: 18,
+                                        maxWidth: '100%',
+                                        '& .MuiChip-label': { 
+                                          px: 0.5,
+                                          overflow: 'hidden',
+                                          textOverflow: 'ellipsis'
+                                        }
+                                      }} 
+                                    />
+                                  )}
+                                </Stack>
+                              </Box>
+                              
+                              <Box sx={{ flexGrow: 1, p: 1.5 }}>
+                                <Typography
+                                  variant="body2"
+                                  sx={{ 
+                                    wordBreak: 'break-word',
+                                    lineHeight: 1.5,
+                                    fontSize: '0.875rem',
+                                    color: 'text.primary'
+                                  }}
+                                >
+                                  {log.message}
+                                </Typography>
+                              </Box>
+                            </Box>
+                          </Paper>
+                        );
+                      })}
+                    </Stack>
+                  </Box>
+                );
+              })()}
             </Stack>
           </Box>
         </Stack>

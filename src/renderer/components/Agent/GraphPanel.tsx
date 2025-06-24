@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState, useMemo } from 'react';
 import {
   Box,
   Typography,
@@ -16,8 +16,7 @@ import {
   ExecutionGraph, 
   useExecutionStore, 
   useExecutionGraphStore,
-  useAgentManagementStore,
-  useTaskManagementStore
+  useRealtimeStore
 } from '@/renderer/stores/Agent/task';
 
 interface GraphPanelProps {
@@ -46,10 +45,9 @@ export const GraphPanel: React.FC<GraphPanelProps> = ({
   // Store hooks
   const { currentExecution } = useExecutionStore();
   const { refreshCurrentExecutionGraph } = useExecutionGraphStore();
-  const { updateAgentStatus } = useAgentManagementStore();
-  const { updateTaskStatus } = useTaskManagementStore();
+  const { handleAgentUpdate, handleTaskUpdate, handleExecutionUpdate, handleToolExecutionUpdate } = useRealtimeStore();
 
-  // ✅ Set up real-time graph updates
+  // ✅ FIXED: Real-time updates similar to LogsPanel approach
   useEffect(() => {
     if (!currentGraph) {
       setLiveGraph(null);
@@ -59,80 +57,149 @@ export const GraphPanel: React.FC<GraphPanelProps> = ({
     // Start with current graph
     setLiveGraph(currentGraph);
 
-    // Set up real-time listeners for agent, task, and tool updates
-    const handleAgentUpdate = (data: any) => {
-      console.log('[GraphPanel] Agent update received:', data);
-      setLiveGraph(prev => {
-        if (!prev) return prev;
+    console.log('[GraphPanel] Setting up real-time listeners for execution:', currentGraph.execution.id);
+
+    // ✅ FIXED: Direct real-time update handlers (similar to LogsPanel)
+    const handleAgentUpdateLocal = (data: any) => {
+      console.log('[GraphPanel] 🤖 Real-time agent update received:', {
+        agentCard: data.agentCard,
+        status: data.status,
+        executionId: data.executionId
+      });
+      
+      // ✅ FIXED: Better agent ID extraction from agentCard
+      let agentId = data.agentId;
+      if (!agentId && data.agentCard) {
+        // Try to match by role first, then by id/name
+        const matchingAgent = currentGraph.agents.find(agent => 
+          agent.role === data.agentCard.role ||
+          agent.agent_id === data.agentCard.id ||
+          agent.id === data.agentCard.id ||
+          agent.role === data.agentCard.name
+        );
+        agentId = matchingAgent?.id;
         
-        return {
+        console.log('[GraphPanel] 🔍 Agent ID lookup:', {
+          searchRole: data.agentCard.role,
+          searchId: data.agentCard.id,
+          searchName: data.agentCard.name,
+          foundAgentId: agentId,
+          availableAgents: currentGraph.agents.map(a => ({ id: a.id, role: a.role, agent_id: a.agent_id }))
+        });
+      }
+      
+      if (!agentId) {
+        console.warn('[GraphPanel] ❌ Could not determine agent ID from update:', data);
+        return;
+      }
+      
+      // ✅ Update centralized store first
+      handleAgentUpdate({
+        executionId: data.executionId || currentGraph.execution.id,
+        agentId: agentId,
+        status: data.status,
+        currentTask: data.currentTask
+      });
+
+      // ✅ FIXED: Update live graph immediately (like LogsPanel accumulates logs)
+      setLiveGraph(prev => {
+        if (!prev || prev.execution.id !== (data.executionId || currentGraph.execution.id)) {
+          return prev;
+        }
+        
+        console.log('[GraphPanel] 🔄 Updating live graph state...');
+        const updatedGraph = {
           ...prev,
           agents: prev.agents.map(agent => {
-            // ✅ FIX: Better agent matching logic
-            const isMatch = agent.id === data.agentCard?.id || 
-                           agent.agent_id === data.agentCard?.id ||
-                           agent.id === data.executionId ||
-                           (data.agentCard?.role && agent.role === data.agentCard.role);
-            
-            if (isMatch) {
-              console.log('[GraphPanel] ✅ Updating agent in graph:', {
+            // ✅ IMPROVED: Use the resolved agent ID for matching
+            if (agent.id === agentId) {
+              console.log('[GraphPanel] ✅ Updating agent in live graph:', {
                 agentId: agent.id,
+                agentRole: agent.role,
                 oldStatus: agent.status,
                 newStatus: data.status,
                 currentTask: data.currentTask
-              });
-
-              // ✅ ADD: Persist the live update to database
-              updateAgentStatus(agent.id, data.status, data.currentTask).catch(error => {
-                console.error('[GraphPanel] Failed to persist agent status update:', error);
               });
               
               return { 
                 ...agent, 
                 status: data.status || agent.status,
-                current_task: data.currentTask || agent.current_task
+                current_task: data.currentTask || agent.current_task,
+                // ✅ Add timestamp to track update freshness
+                last_updated: new Date().toISOString()
               };
             }
             return agent;
           })
         };
+        
+        return updatedGraph;
       });
     };
 
-    const handleExecutionUpdate = (data: any) => {
-      console.log('[GraphPanel] Execution update received:', data);
+    const handleExecutionUpdateLocal = (data: any) => {
+      console.log('[GraphPanel] ⚡ Real-time execution update received:', data);
+      
+      // ✅ Update centralized store first
+      handleExecutionUpdate({
+        executionId: data.executionId,
+        status: data.status,
+        result: data.result,
+        error: data.error
+      });
+
+      // ✅ FIXED: Update live graph immediately
       setLiveGraph(prev => {
-        if (!prev || prev.execution.id !== data.executionId) return prev;
+        if (!prev || prev.execution.id !== data.executionId) {
+          return prev;
+        }
         
         return {
           ...prev,
           execution: {
             ...prev.execution,
-            status: data.status || prev.execution.status
+            status: data.status || prev.execution.status,
+            result: data.result || prev.execution.result,
+            error: data.error || prev.execution.error,
+            // ✅ Add completion timestamp
+            completed_at: (data.status === 'completed' || data.status === 'failed') 
+              ? new Date().toISOString() 
+              : prev.execution.completed_at
           }
         };
       });
     };
 
-    const handleTaskUpdate = (data: any) => {
-      console.log('[GraphPanel] Task update received:', data);
+    const handleTaskUpdateLocal = (data: any) => {
+      console.log('[GraphPanel] 📋 Real-time task update received:', data);
+      
+      // ✅ Update centralized store first
+      handleTaskUpdate({
+        executionId: data.executionId || currentGraph.execution.id,
+        taskId: data.taskId,
+        status: data.status,
+        result: data.result,
+        error: data.error
+      });
+
+      // ✅ FIXED: Update live graph immediately
       setLiveGraph(prev => {
-        if (!prev) return prev;
+        if (!prev || prev.execution.id !== (data.executionId || currentGraph.execution.id)) {
+          return prev;
+        }
         
         return {
           ...prev,
           tasks: prev.tasks.map(task => {
             if (task.id === data.taskId) {
-              // ✅ ADD: Persist the live update to database
-              updateTaskStatus(task.id, data.status, data.result, data.error).catch(error => {
-                console.error('[GraphPanel] Failed to persist task status update:', error);
-              });
-
               return { 
                 ...task, 
                 status: data.status || task.status,
                 result: data.result || task.result,
-                error: data.error || task.error
+                error: data.error || task.error,
+                completed_at: (data.status === 'completed' || data.status === 'failed') 
+                  ? new Date().toISOString() 
+                  : task.completed_at
               };
             }
             return task;
@@ -141,93 +208,118 @@ export const GraphPanel: React.FC<GraphPanelProps> = ({
       });
     };
 
+    const handleToolExecutionUpdateLocal = (data: any) => {
+      console.log('[GraphPanel] 🔧 Real-time tool execution update received:', data);
+      
+      // ✅ Update centralized store first
+      handleToolExecutionUpdate({
+        executionId: data.executionId || currentGraph.execution.id,
+        toolExecutionId: data.toolExecutionId,
+        status: data.status,
+        result: data.result,
+        error: data.error,
+        executionTime: data.executionTime
+      });
+
+      // ✅ FIXED: Update live graph immediately
+      setLiveGraph(prev => {
+        if (!prev || prev.execution.id !== (data.executionId || currentGraph.execution.id)) {
+          return prev;
+        }
+        
+        return {
+          ...prev,
+          toolExecutions: prev.toolExecutions.map(toolExec => {
+            if (toolExec.id === data.toolExecutionId) {
+              return { 
+                ...toolExec, 
+                status: data.status || toolExec.status,
+                result: data.result || toolExec.result,
+                error: data.error || toolExec.error,
+                execution_time: data.executionTime || toolExec.execution_time,
+                completed_at: (data.status === 'completed' || data.status === 'failed') 
+                  ? new Date().toISOString() 
+                  : toolExec.completed_at
+              };
+            }
+            return toolExec;
+          })
+        };
+      });
+    };
+
     // ✅ Register IPC listeners for real-time updates
     const unsubscribeAgentUpdate = window.electron?.ipcRenderer?.on?.('agent:agent_updated', (event, data) => {
-      handleAgentUpdate(data);
+      handleAgentUpdateLocal(data);
     });
 
     const unsubscribeExecutionUpdate = window.electron?.ipcRenderer?.on?.('agent:execution_updated', (event, data) => {
-      handleExecutionUpdate(data);
+      handleExecutionUpdateLocal(data);
     });
 
     const unsubscribeTaskUpdate = window.electron?.ipcRenderer?.on?.('agent:task_updated', (event, data) => {
-      handleTaskUpdate(data);
+      handleTaskUpdateLocal(data);
     });
 
-    // ✅ Set up periodic refresh for live data
+    const unsubscribeToolUpdate = window.electron?.ipcRenderer?.on?.('agent:tool_execution_updated', (event, data) => {
+      handleToolExecutionUpdateLocal(data);
+    });
+
+    // ✅ FIXED: COMPLETELY DISABLE auto-refresh during active execution
+    // Only allow manual refresh
     let refreshInterval: NodeJS.Timeout | null = null;
-    if (isTaskRunning || isTaskActive) {
-      refreshInterval = setInterval(() => {
-        if (currentExecution?.id) {
-          // ✅ FIX: Only refresh database data, don't overwrite live graph
-          console.log('[GraphPanel] Periodic refresh - fetching fresh database data...');
-          refreshCurrentExecutionGraph();
-          // Don't immediately update liveGraph here - let the useEffect handle it
-        }
-      }, 5000); // ✅ Increase interval to 5 seconds to reduce conflicts
-    }
 
     return () => {
+      console.log('[GraphPanel] Cleaning up real-time listeners');
       unsubscribeAgentUpdate?.();
       unsubscribeExecutionUpdate?.();
       unsubscribeTaskUpdate?.();
+      unsubscribeToolUpdate?.();
       if (refreshInterval) {
         clearInterval(refreshInterval);
       }
     };
-  }, [currentGraph, isTaskRunning, isTaskActive, currentExecution, refreshCurrentExecutionGraph, updateAgentStatus, updateTaskStatus]);
+  }, [currentGraph, handleAgentUpdate, handleTaskUpdate, handleExecutionUpdate, handleToolExecutionUpdate]);
 
-  // ✅ Update live graph when currentGraph changes, but preserve live agent statuses
+  // ✅ FIXED: Only sync with database on initial load, not during live updates
   useEffect(() => {
     if (!currentGraph) {
       setLiveGraph(null);
       return;
     }
 
-    // ✅ FIX: Merge database data with live updates instead of overwriting
+    // ✅ FIXED: Only set initial graph, don't overwrite during live updates
     setLiveGraph(prev => {
       if (!prev) {
         console.log('[GraphPanel] Setting initial graph from database');
         return currentGraph;
       }
 
-      // ✅ Preserve live agent statuses when merging database updates
-      const mergedGraph = {
-        ...currentGraph,
-        agents: currentGraph.agents.map(dbAgent => {
-          // Find corresponding live agent
-          const liveAgent = prev.agents.find(live => 
-            live.id === dbAgent.id || 
-            live.agent_id === dbAgent.agent_id ||
-            live.role === dbAgent.role
-          );
+      // ✅ FIXED: Only merge if execution has changed (viewing different execution)
+      if (prev.execution.id !== currentGraph.execution.id) {
+        console.log('[GraphPanel] Execution changed, loading new graph:', {
+          oldId: prev.execution.id,
+          newId: currentGraph.execution.id
+        });
+        return currentGraph;
+      }
 
-          // If live agent has a more recent status update, keep it
-          if (liveAgent && ['busy', 'running', 'executing', 'completed'].includes(liveAgent.status || '')) {
-            console.log('[GraphPanel] Preserving live agent status:', {
-              agentId: liveAgent.id,
-              liveStatus: liveAgent.status,
-              dbStatus: dbAgent.status
-            });
-            return {
-              ...dbAgent,
-              status: liveAgent.status,
-              current_task: liveAgent.current_task || dbAgent.current_task
-            };
-          }
+      // ✅ FIXED: During live execution, keep live graph and ignore database updates
+      if (isTaskRunning || isTaskActive) {
+        console.log('[GraphPanel] 🔒 Execution is active - preserving live graph state');
+        return prev;
+      }
 
-          return dbAgent;
-        })
-      };
-
-      console.log('[GraphPanel] Merged database update with live data');
-      return mergedGraph;
+      // ✅ Only merge completed executions from database
+      console.log('[GraphPanel] Merging completed execution data from database');
+      return currentGraph;
     });
-  }, [currentGraph]);
+  }, [currentGraph, isTaskRunning, isTaskActive]);
 
+  // ✅ Manual refresh only
   const handleRefresh = useCallback(() => {
     if (currentExecution?.id) {
-      console.log('[GraphPanel] Refreshing execution graph for:', currentExecution.id);
+      console.log('[GraphPanel] 🔄 Manual refresh - fetching execution graph for:', currentExecution.id);
       refreshCurrentExecutionGraph();
     } else {
       console.warn('[GraphPanel] No current execution to refresh');
@@ -255,6 +347,8 @@ export const GraphPanel: React.FC<GraphPanelProps> = ({
             fullscreen={isFullscreen}
             onFullscreenToggle={onFullscreenToggle}
             onRefresh={handleRefresh}
+            // ✅ Add debug prop to help with troubleshooting
+            debug={process.env.NODE_ENV === 'development'}
           />
         </Box>
       ) : (
