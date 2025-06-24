@@ -18,6 +18,8 @@ export class MasterCoordinatorNode extends BaseWorkflowNode {
       }
     });
     
+    console.log('[LangGraph] Master coordinator created agent cards:', availableAgentCards.map(c => c.role));
+    
     return {
       availableAgentCards,
       currentPhase: 'decomposition',

@@ -965,5 +965,19 @@
   "agent.role.security": "安全",
   "toolDisplay.viewResult": "查看結果",
   "toolDisplay.viewError": "查看錯誤",
-  "titleBar.menu": "選單"
+  "titleBar.menu": "選單",
+  "loading.appTitle": "Onlysaid",
+  "loading.subtitle": "AI 驅動的協作平台",
+  "loading.initializing": "正在初始化應用程式...",
+  "loading.loadingAssets": "正在載入必要資源...",
+  "loading.settingUpAuth": "正在設定身份驗證...",
+  "loading.settingUpCalendars": "正在設定日曆監聽器...",
+  "loading.waitingGoogleServices": "正在等待 Google 服務...",
+  "loading.initializingMCP": "正在初始化 MCP 服務...",
+  "loading.initializingService": "正在初始化 {service}...",
+  "loading.initializedService": "已初始化 {service}",
+  "loading.finalizing": "正在完成初始化...",
+  "loading.ready": "準備就緒！",
+  "loading.startingApp": "正在啟動應用程式...",
+  "loading.completed": "已完成"
 }

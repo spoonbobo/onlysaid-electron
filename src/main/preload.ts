@@ -177,6 +177,9 @@ type AgentChannels =
   | 'agent:update_task_status'
   | 'agent:clear_task_state';
 
+// Add this new type around line 130 with other channel types
+type InitializationChannels = 'init:progress-update' | 'init:step-complete' | 'init:complete';
+
 export type Channels =
   | AuthChannels
   | GoogleAuthChannels
@@ -200,7 +203,8 @@ export type Channels =
   | AppChannels
   | CryptoChannels
   | HealthCheckChannels
-  | AgentChannels;
+  | AgentChannels
+  | InitializationChannels;
 
 const electronHandler = {
   ipcRenderer: {
@@ -453,6 +457,8 @@ const electronHandler = {
     action: (action: string) => ipcRenderer.invoke('window-action', action),
   },
   app: {
+    getName: () => ipcRenderer.invoke('app:get-name'),
+    getProductName: () => ipcRenderer.invoke('app:get-product-name'),
     getVersion: () => ipcRenderer.invoke('app:get-version'),
     getBuildTime: () => ipcRenderer.invoke('app:get-build-time'),
     getDeviceId: () => ipcRenderer.invoke('app:get-device-id'),

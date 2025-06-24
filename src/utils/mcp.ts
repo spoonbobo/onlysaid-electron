@@ -1,27 +1,10 @@
 import { useMCPStore } from "@/renderer/stores/MCP/MCPStore";
 
-export const SERVICE_TYPE_MAPPING: Record<string, string> = {
-  tavily: 'tavily',
-  weather: 'weather',
-  location: 'location',
-  weatherForecast: 'weather-forecast',
-  nearbySearch: 'nearby-search',
-  web3Research: 'web3-research',
-  doorDash: 'doordash',
-  whatsApp: 'whatsapp',
-  github: 'github',
-  ipLocation: 'ip-location',
-  airbnb: 'airbnb',
-  linkedIn: 'linkedin',
-  googleCalendar: 'google-calendar',
-  ms365: 'ms365',
-  msTeams: 'ms-teams',
-  lara: 'lara-translate',
-  chess: 'chess'
-};
+export const SERVICE_TYPE_MAPPING = useMCPStore.getState().getServiceTypeMapping();
 
 export const getServiceTools = (serverKey: string) => {
-  const serviceKey = SERVICE_TYPE_MAPPING[serverKey] || serverKey;
+  const mapping = useMCPStore.getState().getServiceTypeMapping();
+  const serviceKey = mapping[serverKey] || serverKey;
   return useMCPStore.getState().getServiceTools(serviceKey);
 };
 

@@ -64,10 +64,20 @@ export class AgentExecutorNode extends BaseWorkflowNode {
       if (result.pendingApprovals && result.pendingApprovals.length > 0) {
         console.log(`[LangGraph] Agent ${nextRole} generated ${result.pendingApprovals.length} pending approvals`);
         
+        const awaitingAgentCard = { ...updatedAgentCard, status: 'awaiting_approval' as const };
+        await this.sendRendererUpdate(state, {
+          type: 'agent_status',
+          data: {
+            agentCard: awaitingAgentCard,
+            status: 'awaiting_approval',
+            currentTask: `Waiting for approval of ${result.pendingApprovals.length} tools`
+          }
+        });
+        
         return {
           activeAgentCards: {
             ...state.activeAgentCards,
-            [nextRole]: { ...updatedAgentCard, status: 'busy' }
+            [nextRole]: awaitingAgentCard
           },
           pendingApprovals: [...(state.pendingApprovals || []), ...result.pendingApprovals],
           waitingForHumanResponse: false,
@@ -122,6 +132,15 @@ export class AgentExecutorNode extends BaseWorkflowNode {
         status: 'failed'
       };
       
+      await this.sendRendererUpdate(state, {
+        type: 'agent_status',
+        data: {
+          agentCard: failedAgentCard,
+          status: 'failed',
+          error: error.message
+        }
+      });
+      
       return {
         activeAgentCards: {
           ...state.activeAgentCards,
@@ -162,6 +181,15 @@ export class AgentExecutorNode extends BaseWorkflowNode {
       };
       
       const agentService = LangChainServiceFactory.createAgent(agentOptions);
+      
+      await this.sendRendererUpdate(state, {
+        type: 'agent_status',
+        data: {
+          agentCard: { ...agentCard, status: 'executing' },
+          status: 'executing',
+          currentTask: `Executing ${role} logic...`
+        }
+      });
       
       console.log(`[LangGraph] Calling agent service with prompt...`);
       const response = await agentService.getCompletion([{

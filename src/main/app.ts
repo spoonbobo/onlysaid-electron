@@ -6,6 +6,18 @@ import { createHash } from 'crypto';
 
 // Setup all app-related IPC handlers
 export function setupAppHandlers() {
+  // Get app name
+  ipcMain.handle('app:get-name', () => {
+    // Check environment variable first, then fall back to package.json
+    return process.env.APP_NAME || process.env.ELECTRON_APP_NAME || app.getName();
+  });
+
+  // Get product name
+  ipcMain.handle('app:get-product-name', () => {
+    // For product name, we can use a different env var or the same logic
+    return process.env.PRODUCT_NAME || process.env.APP_PRODUCT_NAME || app.getName();
+  });
+
   // Get app version
   ipcMain.handle('app:get-version', async () => {
     try {

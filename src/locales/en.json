@@ -841,5 +841,19 @@
   
   "common.yes": "Yes",
   "common.no": "No",
-  "common.refresh": "Refresh"
+  "common.refresh": "Refresh",
+
+  "loading.subtitle": "AI-powered collaboration platform",
+  "loading.initializing": "Initializing application...",
+  "loading.loadingAssets": "Loading essential assets...",
+  "loading.settingUpAuth": "Setting up authentication...",
+  "loading.settingUpCalendars": "Setting up calendar listeners...",
+  "loading.waitingGoogleServices": "Waiting for Google services...",
+  "loading.initializingMCP": "Initializing MCP services...",
+  "loading.initializingService": "Initializing {service}...",
+  "loading.initializedService": "Initialized {service}",
+  "loading.finalizing": "Finalizing initialization...",
+  "loading.ready": "Ready!",
+  "loading.startingApp": "Starting application...",
+  "loading.completed": "completed"
 }

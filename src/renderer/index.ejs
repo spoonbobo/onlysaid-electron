@@ -6,7 +6,7 @@
       http-equiv="Content-Security-Policy"
       content="script-src 'self' 'unsafe-inline'"
     />
-    <title>Onlysaid<% if (typeof isDevelopment !== 'undefined' && isDevelopment) { %> - Development<% } %></title>
+    <title id="app-window-title">Loading...<% if (typeof isDevelopment !== 'undefined' && isDevelopment) { %> - Development<% } %></title>
     <meta name="description" content="Onlysaid - AI-powered chat application" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -263,12 +263,16 @@
     <div id="ejs-loading" class="ejs-loading-screen">
       <div class="loading-container">
         <div class="logo-container">
-          <img id="app-logo" class="app-logo" alt="Onlysaid" />
+          <img id="app-logo" class="app-logo" alt="App Logo" />
           <svg class="logo-fallback" width="32" height="32" viewBox="0 0 32 32" fill="currentColor">
             <path d="M16 2C8.268 2 2 8.268 2 16s6.268 14 14 14 14-6.268 14-14S23.732 2 16 2zm0 25c-6.065 0-11-4.935-11-11S9.935 5 16 5s11 4.935 11 11-4.935 11-11 11z"/>
             <path d="M16 8c-1.104 0-2 .896-2 2s.896 2 2 2 2-.896 2-2-.896-2-2-2zm-2 6v8h4v-8h-4z"/>
           </svg>
         </div>
+        
+        <h1 class="app-title" id="app-title">Loading...</h1>
+        <p class="app-subtitle" id="app-subtitle">AI-powered collaboration platform</p>
+        <p class="app-subtitle" id="loading-text">Initializing application...</p>
         
         <div class="progress-container">
           <div class="progress-bar">
@@ -288,18 +292,215 @@
         buildTime: new Date().toISOString()
       };
 
-      // Immediately try to load the logo with better error handling
-      (async function loadLogo() {
+      // ✅ Dynamic App Configuration
+      let appConfig = {
+        name: 'Onlysaid',
+        productName: 'Onlysaid',
+        version: '1.0.0',
+        subtitle: 'AI-powered collaboration platform'
+      };
+
+      // ✅ Function to get app info from environment/package.json
+      const getAppInfo = async () => {
         try {
-          // Wait for electron APIs to be available
+          if (window.electron && window.electron.app) {
+            const [appName] = await Promise.all([
+              window.electron.app.getName?.()
+            ]);
+            
+            if (appName) {
+              appConfig.name = appName;
+              appConfig.productName = appName;
+              console.log('[EJS] Got app name from electron:', appName);
+            }
+          }
+        } catch (error) {
+          console.warn('[EJS] Could not get app info from electron APIs:', error);
+        }
+
+        // Update all UI elements
+        const windowTitle = document.getElementById('app-window-title');
+        const appTitle = document.getElementById('app-title');
+        
+        if (windowTitle) {
+          windowTitle.textContent = `${appConfig.productName}<% if (typeof isDevelopment !== 'undefined' && isDevelopment) { %> - Development<% } %>`;
+        }
+        if (appTitle) {
+          appTitle.textContent = appConfig.productName;
+        }
+
+        return appConfig;
+      };
+
+      // ✅ Simplified Localization with proper string formatting
+      const translations = {
+        'en': {
+          'loading.subtitle': 'AI-powered collaboration platform',
+          'loading.initializing': 'Initializing application...',
+          'loading.loadingAssets': 'Loading essential assets...',
+          'loading.settingUpAuth': 'Setting up authentication...',
+          'loading.settingUpCalendars': 'Setting up calendar listeners...',
+          'loading.waitingGoogleServices': 'Waiting for Google services...',
+          'loading.initializingMCP': 'Initializing MCP services (%CURRENT%/%TOTAL%)...',
+          'loading.readyToStart': 'Ready to start!',
+          'loading.completed': 'completed'
+        },
+        'ja': {
+          'loading.subtitle': 'AI搭載コラボレーションプラットフォーム',
+          'loading.initializing': 'アプリケーションを初期化中...',
+          'loading.loadingAssets': '必須アセットを読み込み中...',
+          'loading.settingUpAuth': '認証を設定中...',
+          'loading.settingUpCalendars': 'カレンダーリスナーを設定中...',
+          'loading.waitingGoogleServices': 'Googleサービスを待機中...',
+          'loading.initializingMCP': 'MCPサービスを初期化中 (%CURRENT%/%TOTAL%)...',
+          'loading.readyToStart': '開始準備完了！',
+          'loading.completed': '完了'
+        },
+        'zh-hk': {
+          'loading.subtitle': 'AI 驅動的協作平台',
+          'loading.initializing': '正在初始化應用程式...',
+          'loading.loadingAssets': '正在載入必要資源...',
+          'loading.settingUpAuth': '正在設定身份驗證...',
+          'loading.settingUpCalendars': '正在設定日曆監聽器...',
+          'loading.waitingGoogleServices': '正在等待 Google 服務...',
+          'loading.initializingMCP': '正在初始化 MCP 服務 (%CURRENT%/%TOTAL%)...',
+          'loading.readyToStart': '準備就緒！',
+          'loading.completed': '已完成'
+        }
+      };
+
+      // ✅ Locale detection (unchanged)
+      let currentLocale = 'zh-hk';
+
+      const getStoredLocale = () => {
+        try {
+          const stored = localStorage.getItem('locale');
+          return stored && translations[stored] ? stored : null;
+        } catch (e) {
+          return null;
+        }
+      };
+
+      const getBrowserLocale = () => {
+        const browserLang = navigator.language.toLowerCase();
+        if (browserLang.startsWith('zh')) {
+          return 'zh-hk';
+        } else if (browserLang.startsWith('ja')) {
+          return 'ja';
+        } else if (browserLang.startsWith('en')) {
+          return 'en';
+        }
+        return 'zh-hk';
+      };
+
+      const detectLocale = () => {
+        const stored = getStoredLocale();
+        if (stored) return stored;
+        return getBrowserLocale();
+      };
+
+      currentLocale = detectLocale();
+
+      // ✅ Fixed translation function with proper string replacement
+      const t = (key, params = {}) => {
+        let translation = translations[currentLocale]?.[key] || translations['en']?.[key] || key;
+        
+        // Replace %CURRENT% and %TOTAL% patterns (more reliable than {})
+        if (params.current !== undefined) {
+          translation = translation.replace(/%CURRENT%/g, params.current);
+        }
+        if (params.total !== undefined) {
+          translation = translation.replace(/%TOTAL%/g, params.total);
+        }
+        
+        // Also support {current} and {total} for backward compatibility
+        translation = translation.replace(/\{current\}/g, params.current || '{current}');
+        translation = translation.replace(/\{total\}/g, params.total || '{total}');
+        
+        return translation;
+      };
+
+      // ✅ Update UI text with localized content
+      const updateLocalizedText = () => {
+        const appTitle = document.getElementById('app-title');
+        const appSubtitle = document.getElementById('app-subtitle');
+        const loadingText = document.getElementById('loading-text');
+
+        if (appTitle) appTitle.textContent = appConfig.productName;
+        if (appSubtitle) appSubtitle.textContent = t('loading.subtitle');
+        if (loadingText) loadingText.textContent = t('loading.initializing');
+      };
+
+      // ✅ Progress tracking
+      let currentProgress = 0;
+      const progressFill = document.querySelector('.progress-fill');
+      const loadingText = document.getElementById('loading-text');
+      
+      const updateProgress = (percentage, textKey, params = {}) => {
+        currentProgress = percentage;
+        if (progressFill) {
+          progressFill.style.width = percentage + '%';
+        }
+        if (loadingText) {
+          loadingText.textContent = t(textKey, params);
+        }
+      };
+
+      // ✅ Step mapping with direct string formatting
+      const getStepTranslationKey = (stepName, mcpProgress = null) => {
+        // Handle MCP progress with proper parameter passing
+        if (mcpProgress && mcpProgress.current !== undefined && mcpProgress.total !== undefined) {
+          return { 
+            key: 'loading.initializingMCP', 
+            params: { 
+              current: mcpProgress.current, 
+              total: mcpProgress.total 
+            } 
+          };
+        }
+
+        const stepMap = {
+          'Loading essential assets': 'loading.loadingAssets',
+          'Setting up authentication': 'loading.settingUpAuth',
+          'Setting up calendar listeners': 'loading.settingUpCalendars',
+          'Waiting for Google services': 'loading.waitingGoogleServices',
+          'Initializing MCP services': 'loading.initializingMCP',
+          'Ready to start': 'loading.readyToStart'
+        };
+
+        return { key: stepMap[stepName] || 'loading.initializing', params: {} };
+      };
+
+      // ✅ Exposed functions for React with better parameter handling
+      window.updateEJSProgress = (percentage, stepName, mcpProgress = null) => {
+        console.log('[EJS] updateEJSProgress called:', { percentage, stepName, mcpProgress });
+        const { key, params } = getStepTranslationKey(stepName, mcpProgress);
+        updateProgress(percentage, key, params);
+      };
+
+      window.setEJSLoadingText = (stepName, mcpProgress = null) => {
+        console.log('[EJS] setEJSLoadingText called:', { stepName, mcpProgress });
+        const { key, params } = getStepTranslationKey(stepName, mcpProgress);
+        if (loadingText) {
+          loadingText.textContent = t(key, params);
+        }
+      };
+
+      // ✅ Initialize everything
+      (async function initialize() {
+        try {
           let attempts = 0;
-          const maxAttempts = 50; // 5 seconds max
+          const maxAttempts = 50;
           
           while (!window.electron && attempts < maxAttempts) {
             await new Promise(resolve => setTimeout(resolve, 100));
             attempts++;
           }
           
+          await getAppInfo(); // Get both name and version
+          updateLocalizedText();
+
+          // Load logo
           if (window.electron && window.electron.fileSystem) {
             try {
               const logoData = await window.electron.fileSystem.getLocalAsset('icon.png');
@@ -308,9 +509,9 @@
                 const logoFallback = document.querySelector('.logo-fallback');
                 
                 if (logoImg) {
-                  // Add error handler for the image
+                  logoImg.alt = `${appConfig.productName} Logo`;
+                  
                   logoImg.onerror = function() {
-                    console.warn('EJS Logo image failed to load, keeping fallback visible');
                     logoImg.style.display = 'none';
                     if (logoFallback) {
                       logoFallback.style.display = 'block';
@@ -328,19 +529,16 @@
                 }
               }
             } catch (assetError) {
-              console.warn('Failed to load asset in production:', assetError);
-              // Keep fallback icon visible
+              console.warn('Failed to load asset:', assetError);
               const logoFallback = document.querySelector('.logo-fallback');
               if (logoFallback) {
                 logoFallback.style.display = 'block';
               }
             }
-          } else {
-            console.warn('Electron APIs not available, using fallback icon');
           }
+          
         } catch (error) {
-          console.warn('Failed to load logo in EJS loading screen:', error);
-          // Ensure fallback is visible
+          console.warn('Failed to initialize EJS loading:', error);
           const logoFallback = document.querySelector('.logo-fallback');
           if (logoFallback) {
             logoFallback.style.display = 'block';
@@ -348,64 +546,27 @@
         }
       })();
 
-      // Real progress tracking based on main.ts initialization
-      let progress = 0;
-      const progressFill = document.querySelector('.progress-fill');
-      
-      // Actual initialization steps from main.ts
-      const initSteps = [
-        { name: 'Setting up development environment', duration: 200 },
-        { name: 'Initializing database', duration: 800 },
-        { name: 'Setting up application window', duration: 300 },
-        { name: 'Setting up socket handlers', duration: 200 },
-        { name: 'Setting up menubar handlers', duration: 150 },
-        { name: 'Loading application interface', duration: 400 },
-        { name: 'Finalizing window setup', duration: 1000 } // Includes Google services ready
-      ];
-      
-      let currentStep = 0;
-      const totalSteps = initSteps.length;
-      
-      const updateProgress = () => {
-        progress = ((currentStep + 1) / totalSteps) * 100;
-        if (progressFill) {
-          progressFill.style.width = progress + '%';
-        }
-      };
-      
-      // Execute steps with realistic timing
-      const executeSteps = async () => {
-        for (let i = 0; i < initSteps.length; i++) {
-          currentStep = i;
-          updateProgress();
-          
-          // Wait for the realistic duration of each step
-          await new Promise(resolve => setTimeout(resolve, initSteps[i].duration));
+      // ✅ Hide function
+      window.hideEJSLoading = function() {
+        if (loadingText) {
+          loadingText.textContent = t('loading.readyToStart');
         }
         
-        // Final step - complete
-        currentStep = totalSteps;
-        updateProgress();
-      };
-      
-      // Start initialization simulation
-      executeSteps();
-
-      // Function to hide EJS loading screen (called by React)
-      window.hideEJSLoading = function() {
-        const ejsLoading = document.getElementById('ejs-loading');
-        if (ejsLoading) {
-          ejsLoading.classList.add('hidden');
-          setTimeout(() => {
-            ejsLoading.style.display = 'none';
-          }, 300);
-        }
+        setTimeout(() => {
+          const ejsLoading = document.getElementById('ejs-loading');
+          if (ejsLoading) {
+            ejsLoading.classList.add('hidden');
+            setTimeout(() => {
+              ejsLoading.style.display = 'none';
+            }, 300);
+          }
+        }, 800);
       };
     </script>
 
     <% if (typeof isDevelopment !== 'undefined' && isDevelopment) { %>
     <script>
-      console.log('%c🚀 Onlysaid Development Mode', 'color: #4f5bd5; font-size: 16px; font-weight: bold;');
+      console.log('%c🚀 Development Mode', 'color: #4f5bd5; font-size: 16px; font-weight: bold;');
     </script>
     <% } %>
   </body>

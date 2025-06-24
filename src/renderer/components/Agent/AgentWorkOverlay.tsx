@@ -475,13 +475,6 @@ export default function AgentWorkOverlay({
 
   const statusInfo = getStatusInfo();
 
-  console.log('Debug status sources:', {
-    currentGraph: currentGraph?.execution?.status,
-    currentTaskStatus,
-    isTaskActive,
-    agentTaskStatus: agentTaskStatus['current'],
-    activeAgentTasks: activeAgentTasks['current']
-  });
 
   // Calculate positioning for fullscreen mode
   const getFullscreenStyles = () => {

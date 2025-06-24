@@ -40,6 +40,7 @@ import { setupN8nHandlers } from './n8n';
 import { setupHealthCheckHandlers, cleanupHealthCheck } from './healthcheck';
 import { setupLangChainHandlers } from '../service/langchain';
 import { setupHumanInTheLoopHandlers } from '../service/langchain/human_in_the_loop/ipc/human_in_the_loop';
+import { setupInitializationHandlers } from './initialization';
 
 // Load environment variables
 dotenv.config();
@@ -179,6 +180,28 @@ ipcMain.handle('dialog:showSaveDialog', async (event, options) => {
   }
 });
 
+// ✅ Add initialization progress handlers
+ipcMain.on('init:progress-update', (event, data) => {
+  // Forward progress updates to all renderer processes
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('init:progress-update', data);
+  }
+});
+
+ipcMain.on('init:step-complete', (event, data) => {
+  // Forward step completion to all renderer processes
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('init:step-complete', data);
+  }
+});
+
+ipcMain.on('init:complete', (event, data) => {
+  // Forward completion to all renderer processes
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('init:complete', data);
+  }
+});
+
 if (isDebug) {
   require('electron-debug').default();
 }
@@ -243,6 +266,7 @@ const createWindow = async () => {
 
   setupSocketHandlers(mainWindow);
   setupMenuBarHandlers(mainWindow);
+  setupInitializationHandlers(mainWindow);
   
   // ✅ Setup human-in-the-loop handlers with main window reference
   setupHumanInTheLoopHandlers(mainWindow);

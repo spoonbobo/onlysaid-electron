@@ -35,33 +35,33 @@ export class AgentSelectorNode extends BaseWorkflowNode {
       }
     });
     
-    // ✅ FIX: Save agents to database via IPC using the activeAgentCards with runtimeId
-    const webContents = (global as any).osswarmWebContents;
-    
-    if (webContents && Object.keys(activeAgentCards).length > 0) {
-      for (const [role, agentCard] of Object.entries(activeAgentCards)) {
-        try {
-          console.log('[AgentSelector] Saving agent to database via IPC:', role, 'with runtimeId:', agentCard.runtimeId);
-          
-          // Use the runtimeId from activeAgentCards, not the original selectedAgentCards
+    for (const [role, agentCard] of Object.entries(activeAgentCards)) {
+      try {
+        console.log('[AgentSelector] Creating agent:', role, 'with runtimeId:', agentCard.runtimeId);
+        
+        const webContents = (global as any).osswarmWebContents;
+        if (webContents && !webContents.isDestroyed()) {
           webContents.send('agent:save_agent_to_db', {
             executionId: state.executionId,
-            agentId: agentCard.runtimeId, // ✅ This now has the correct runtimeId
+            agentId: agentCard.runtimeId,
             role: agentCard.role,
             expertise: agentCard.expertise
           });
-          
-          // Also add log
-          webContents.send('agent:add_log_to_db', {
-            executionId: state.executionId,
-            logType: 'info',
-            message: `Agent selected: ${agentCard.role} (${agentCard.runtimeId})`,
-            metadata: { agentCard }
-          });
-          
-        } catch (error) {
-          console.error('[AgentSelector] Error emitting save agent IPC:', error);
         }
+        
+        await this.sendRendererUpdate(state, {
+          type: 'agent_status',
+          data: {
+            agentCard: agentCard,
+            status: 'idle',
+            currentTask: 'Agent selected and ready'
+          }
+        });
+        
+        console.log(`[AgentSelector] ✅ Agent ${role} created and status emitted`);
+        
+      } catch (error) {
+        console.error('[AgentSelector] Error creating agent:', error);
       }
     }
     

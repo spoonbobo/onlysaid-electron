@@ -247,41 +247,38 @@ export async function processAgentModeAIResponse({
       hasResult: !!result.result,
       hasError: !!result.error,
       resultType: typeof result.result,
-      errorMessage: result.error
+      errorMessage: result.error,
+      requiresHumanInteraction: result.requiresHumanInteraction
     });
 
     // Handle human interaction requirements
     if (result.requiresHumanInteraction) {
-      console.log("[AgentMode] Task requires human interaction");
+      console.log("[AgentMode] Task requires human interaction - workflow will be handled by IPC listeners");
       // The human interaction will be handled by the AgentStore IPC listeners
       // and the LangGraph workflow will handle the interrupt/resume cycle
+      return {
+        success: true,
+        responseText: "Workflow paused for human interaction"
+      };
     }
 
-    if (result.success && result.result) {
-      // Create assistant message using Agent Task result
-      const assistantMessage: IChatMessage = {
-        id: uuidv4(),
-        chat_id: activeChatId,
-        sender: assistantSenderId,
-        sender_object: assistantSender as IUser,
-        text: result.result,
-        created_at: new Date().toISOString(),
-        sent_at: new Date().toISOString(),
-        status: "completed",
-      };
-
-      appendMessage(activeChatId, assistantMessage);
-      markStreamAsCompleted(activeChatId, result.result, assistantMessage.id);
-
-      console.log("[AgentMode DEBUG] Agent task completed successfully via existing infrastructure with KB integration");
-
+    // ✅ FIX: Skip creating duplicate message for completed LangGraph workflows
+    // The synthesis result will be delivered via the 'agent:result_synthesized' IPC event
+    if (result.success && result.result && !result.requiresHumanInteraction) {
+      console.log("[AgentMode] ✅ LangGraph workflow completed - synthesis message will be handled by IPC listener");
+      console.log("[AgentMode] Skipping duplicate message creation to prevent double display");
+      
+      // Return success but don't create the assistant message here
+      // The handleResultSynthesized in IPCListeners will create the message
       return {
         success: true,
         responseText: result.result,
-        assistantMessageId: assistantMessage.id,
+        // Don't return assistantMessageId since we're not creating the message here
       };
+    }
 
-    } else {
+    // Handle error cases
+    if (!result.success) {
       const errorMsg = result.error || "Agent task execution failed without specific error.";
       console.error("[AgentMode] Agent task execution failed:", {
         error: errorMsg,
@@ -290,6 +287,10 @@ export async function processAgentModeAIResponse({
       
       return { success: false, error: errorMsg };
     }
+
+    // Fallback case (shouldn't reach here normally)
+    console.warn("[AgentMode] Unexpected result state:", result);
+    return { success: false, error: "Unexpected workflow result state" };
 
   } catch (error: any) {
     // Clean up human interactions on error

@@ -7,6 +7,8 @@ declare global {
       nodeEnv: string;
       buildTime: string;
     };
+    updateEJSProgress?: (percentage: number, stepName: string, mcpProgress?: { current: number, total: number }) => void;
+    setEJSLoadingText?: (stepName: string, mcpProgress?: { current: number, total: number }) => void;
   }
 }
 

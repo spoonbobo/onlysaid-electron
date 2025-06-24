@@ -62,9 +62,10 @@ export class AgentCompletionNode extends BaseWorkflowNode {
           return resultStr;
         }).join('\n\n');
         
-        updatedAgentCards[role] = { ...updatedAgentCards[role], status: newStatus };
+        const completedAgentCard = { ...updatedAgentCards[role], status: newStatus as 'completed' | 'failed' };
+        updatedAgentCards[role] = completedAgentCard;
         updatedAgentResults[role] = {
-          agentCard: updatedAgentCards[role],
+          agentCard: completedAgentCard,
           result: toolResults || `Agent ${role} completed with ${agentTools.length} tools`,
           toolExecutions: [],
           status: newStatus,
@@ -72,11 +73,11 @@ export class AgentCompletionNode extends BaseWorkflowNode {
           endTime: Date.now()
         };
 
-        // Notify renderer so ToolDisplay & chat UI refresh immediately with timing
+        // ✅ IMPROVED: Emit agent status update with enhanced data
         await this.sendRendererUpdate(state, {
           type: 'agent_status',
           data: {
-            agentCard: updatedAgentCards[role],
+            agentCard: completedAgentCard,
             status: newStatus,
             result: updatedAgentResults[role].result,
             toolTimings: agentTools.reduce((acc, tool) => {
@@ -88,7 +89,28 @@ export class AgentCompletionNode extends BaseWorkflowNode {
           }
         });
         
-        console.log(`[LangGraph-Timer] Agent ${role} completed with status: ${newStatus}, ${agentTools.length} tools with timing`);
+        console.log(`[LangGraph-Timer] ✅ Agent ${role} completed with status: ${newStatus}, ${agentTools.length} tools with timing`);
+        anyAgentUpdated = true;
+      }
+    }
+    
+    // ✅ NEW: Also check for agents that need status updates even without tools
+    for (const [role, agentCard] of Object.entries(state.activeAgentCards)) {
+      if (!updatedAgentResults[role] && agentCard.status === 'busy') {
+        // Agent was busy but has no tools - mark as completed
+        const completedAgentCard = { ...agentCard, status: 'completed' as const };
+        updatedAgentCards[role] = completedAgentCard;
+        
+        await this.sendRendererUpdate(state, {
+          type: 'agent_status',
+          data: {
+            agentCard: completedAgentCard,
+            status: 'completed',
+            result: `Agent ${role} completed without tools`
+          }
+        });
+        
+        console.log(`[LangGraph-Timer] ✅ Agent ${role} marked as completed (no tools)`);
         anyAgentUpdated = true;
       }
     }

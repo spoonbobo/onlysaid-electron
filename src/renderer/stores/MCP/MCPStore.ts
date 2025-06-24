@@ -75,7 +75,7 @@ const SERVER_REGISTRY = {
   playwright: createPlaywrightServer,
 };
 
-const SERVICE_TYPE_MAPPING: Record<string, string> = {
+export const SERVICE_TYPE_MAPPING: Record<string, string> = {
   'weather': 'weather',
   'location': 'location',
   'weather-forecast': 'weatherForecast',
@@ -142,6 +142,9 @@ interface MCPState extends
   getServiceTools: (serviceType: string) => IMCPTool[];
   getServerIdByToolName: (toolName: string) => string | null;
   formatServerName: (serverId: string) => string;
+
+  // New method to access the mapping
+  getServiceTypeMapping: () => Record<string, string>;
 }
 
 export const useMCPStore = create<MCPState>()(
@@ -299,6 +302,9 @@ export const useMCPStore = create<MCPState>()(
             .replace(/Category$/, '')
             .trim();
         },
+
+        // New method to access the mapping
+        getServiceTypeMapping: () => SERVICE_TYPE_MAPPING,
       } as MCPState;
     },
     {

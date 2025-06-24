@@ -24,7 +24,7 @@ function App() {
   const [isAppReady, setIsAppReady] = useState(false);
   const [initializationComplete, setInitializationComplete] = useState(false);
   const { selectedContext, contexts, setSelectedContext } = useTopicStore();
-  const { getAllConfiguredServers, initializeClient } = useMCPStore();
+  const { getAllConfiguredServers, initializeClient, getServiceTypeMapping } = useMCPStore();
   const [initProgress, setInitProgress] = useState(0);
   const [initToastId, setInitToastId] = useState<string | null>(null);
   const [googleServicesReady, setGoogleServicesReady] = useState(false);
@@ -65,26 +65,120 @@ function App() {
     setGoogleServicesReady
   });
 
-  // Initialize app
+  // ✅ Simplified progress tracking - only 5 main steps
+  const sendInitProgress = (step: string, currentStep: number, totalSteps: number, mcpProgress?: { current: number, total: number }) => {
+    let percentage: number;
+    
+    if (mcpProgress) {
+      // For MCP step (step 4), calculate progress within that step
+      const stepProgress = currentStep / totalSteps;
+      const mcpStepProgress = (mcpProgress.current / mcpProgress.total) / totalSteps;
+      percentage = Math.round((stepProgress + mcpStepProgress) * 100);
+    } else {
+      percentage = Math.round((currentStep / totalSteps) * 100);
+    }
+    
+    // Use window function with MCP progress info
+    if (window.updateEJSProgress) {
+      window.updateEJSProgress(percentage, step, mcpProgress);
+    }
+    
+    console.log(`[App Init] ${step}: ${currentStep}/${totalSteps} (${percentage}%)`);
+  };
+
+  const sendStepComplete = (step: string) => {
+    if (window.setEJSLoadingText) {
+      window.setEJSLoadingText(`${step} completed`);
+    }
+    console.log(`[App Init] Completed: ${step}`);
+  };
+
+  const sendInitComplete = () => {
+    if (window.updateEJSProgress) {
+      window.updateEJSProgress(100, 'Ready to start');
+    }
+    console.log('[App Init] Initialization complete');
+  };
+
+  // ✅ Enhanced MCP Services initialization with better logging
+  const initializeMCPServices = async () => {
+    const servers = getAllConfiguredServers();
+    const serviceTypeMap = getServiceTypeMapping();
+
+    const servicesToInit = Object.entries(servers)
+      .filter(([_, service]) => service.enabled && service.configured)
+      .map(([key]) => ({ key, serviceType: serviceTypeMap[key] }))
+      .filter(({ serviceType }) => serviceType);
+
+    if (servicesToInit.length === 0) {
+      console.log('[App] No MCP services to initialize');
+      sendStepComplete('MCP Services');
+      return;
+    }
+
+    const total = servicesToInit.length;
+    let completed = 0;
+
+    console.log(`[App] Starting MCP initialization: ${total} services to initialize`);
+
+    // ✅ Show initial MCP progress
+    sendInitProgress('Initializing MCP services', 4, 5, { current: 0, total });
+
+    for (const { key, serviceType } of servicesToInit) {
+      try {
+        console.log(`[App] Initializing service ${completed + 1}/${total}: ${serviceType}`);
+        
+        // ✅ Update progress before starting each service
+        sendInitProgress('Initializing MCP services', 4, 5, { current: completed, total });
+        
+        await initializeClient(serviceType);
+        completed++;
+        
+        console.log(`[App] Successfully initialized ${serviceType} (${completed}/${total})`);
+        
+        // ✅ Update progress after completing each service
+        sendInitProgress('Initializing MCP services', 4, 5, { current: completed, total });
+        
+      } catch (error) {
+        console.error(`[App] Failed to initialize ${serviceType}:`, error);
+        completed++; // Still count as completed to maintain progress
+        
+        // ✅ Update progress even on failure
+        sendInitProgress('Initializing MCP services', 4, 5, { current: completed, total });
+      }
+    }
+
+    console.log(`[App] MCP initialization complete: ${completed}/${total} services processed`);
+    sendStepComplete('MCP Services');
+  };
+
+  // ✅ Simplified initialization flow - only 5 steps
   useEffect(() => {
     const initializeApp = async () => {
       try {
         console.log('[App] Starting initialization...');
         
         // Step 1: Preload essential assets
+        sendInitProgress('Loading essential assets', 1, 5);
         console.log('[App] Loading essential assets...');
         await preloadAssets(['icon.png']);
+        sendStepComplete('Essential Assets');
         
         // Step 2: Setup authentication listeners
+        sendInitProgress('Setting up authentication', 2, 5);
         console.log('[App] Setting up authentication...');
         setupDeeplinkAuthListener();
+        sendStepComplete('Authentication');
         
         // Step 3: Initialize calendar listeners
+        sendInitProgress('Setting up calendar listeners', 3, 5);
         console.log('[App] Setting up calendar listeners...');
         const cleanupGoogle = initializeGoogleCalendarListeners();
         const cleanupMicrosoft = initializeMicrosoftCalendarListeners();
+        sendStepComplete('Calendar Listeners');
         
-        // Step 4: Wait for Google services to be ready
+        // Step 4: Wait for Google services and initialize MCP services
+        sendInitProgress('Waiting for Google services', 4, 5);
         console.log('[App] Waiting for Google services...');
         await new Promise<void>((resolve) => {
           if (googleServicesReady) {
@@ -101,23 +195,27 @@ function App() {
           }
         });
         
-        // Step 5: Initialize MCP services
+        // Initialize MCP services (will show progress as 4/5 with sub-progress)
         console.log('[App] Initializing MCP services...');
         await initializeMCPServices();
         
-        console.log('[App] App initialization complete');
+        // Step 5: Ready!
+        sendInitProgress('Ready to start', 5, 5);
+        sendInitComplete();
         
-        // Hide EJS loading and immediately mark as complete
-        if (window.hideEJSLoading) {
-          window.hideEJSLoading();
-        }
+        // Hide EJS loading after showing completion
+        setTimeout(() => {
+          if (window.hideEJSLoading) {
+            window.hideEJSLoading();
+          }
+        }, 1000);
         
-        // Set both states immediately to skip React loading screen
         setIsAppReady(true);
         setInitializationComplete(true);
         
       } catch (error) {
         console.error('App initialization failed:', error);
+        sendInitComplete();
         if (window.hideEJSLoading) {
           window.hideEJSLoading();
         }
@@ -128,49 +226,6 @@ function App() {
 
     initializeApp();
   }, [preloadAssets, googleServicesReady, initializeGoogleCalendarListeners, initializeMicrosoftCalendarListeners]);
-
-  // MCP Services initialization function
-  const initializeMCPServices = async () => {
-    const servers = getAllConfiguredServers();
-
-    const serviceTypeMap: Record<string, string> = {
-      tavily: 'tavily',
-      weather: 'weather',
-      location: 'location',
-      weatherForecast: 'weather-forecast',
-      nearbySearch: 'nearby-search',
-      web3Research: 'web3-research',
-      doorDash: 'doordash',
-      whatsApp: 'whatsapp',
-      github: 'github',
-      ipLocation: 'ip-location',
-      airbnb: 'airbnb',
-      linkedIn: 'linkedin'
-    };
-
-    const servicesToInit = Object.entries(servers)
-      .filter(([_, service]) => service.enabled && service.configured)
-      .map(([key]) => serviceTypeMap[key])
-      .filter(Boolean);
-
-    if (servicesToInit.length === 0) return;
-
-    let completed = 0;
-    for (const [key, service] of Object.entries(servers)) {
-      if (service.enabled && service.configured) {
-        const serviceType = serviceTypeMap[key];
-        if (serviceType) {
-          try {
-            console.log(`Initializing service: ${serviceType}`);
-            await initializeClient(serviceType);
-            completed++;
-          } catch (error) {
-            console.error(`Failed to initialize ${serviceType}:`, error);
-          }
-        }
-      }
-    }
-  };
 
   useEffect(() => {
     if (!selectedContext && contexts.length > 0) {

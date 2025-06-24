@@ -49,7 +49,7 @@ export interface AgentExecutionResult {
   agentCard: AgentCard;
   result: string;
   toolExecutions: ToolExecution[];
-  status: 'idle' | 'busy' | 'completed' | 'failed';
+  status: 'idle' | 'busy' | 'completed' | 'failed' | 'awaiting_approval';
   startTime: number;
   endTime?: number;
 }

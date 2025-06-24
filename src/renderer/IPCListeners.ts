@@ -90,43 +90,7 @@ export const useIPCListeners = ({
       
       // ✅ Handle workflow completion here
       if (resumeResult.success && resumeResult.completed && resumeResult.result && activeChatId) {
-        console.log('[IPCListeners] Workflow completed, creating final AI response...');
-        
-        if (agent) {
-          const finalResponseMessage: IChatMessage = {
-            id: `langgraph-final-${Date.now()}`,
-            chat_id: activeChatId,
-            sender: agent.id || '',
-            sender_object: agent,
-            text: resumeResult.result,
-            created_at: new Date().toISOString(),
-            sent_at: new Date().toISOString(),
-            status: 'completed',
-            workspace_id: workspaceId
-          };
-          
-          // Add to UI and save to database
-          appendMessage(activeChatId, finalResponseMessage);
-          
-          try {
-            await window.electron.db.query({
-              query: `INSERT INTO messages (id, chat_id, sender, text, created_at, sent_at, status, workspace_id) VALUES (@id, @chat_id, @sender, @text, @created_at, @sent_at, @status, @workspace_id)`,
-              params: {
-                id: finalResponseMessage.id,
-                chat_id: activeChatId,
-                sender: agent.id,
-                text: finalResponseMessage.text,
-                created_at: finalResponseMessage.created_at,
-                sent_at: finalResponseMessage.sent_at,
-                status: 'completed',
-                workspace_id: workspaceId || null,
-              }
-            });
-            toast.success('Workflow completed successfully!');
-          } catch (dbError) {
-            console.error('[IPCListeners] Failed to save final response:', dbError);
-          }
-        }
+        console.log('[IPCListeners] Workflow completed, result will be handled by synthesis event');
       }
       
       // Only update message if messageId exists (not for silent approvals)
