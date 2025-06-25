@@ -22,6 +22,7 @@ import { createMoodleServer } from "./Servers/MoodleMCPServer";
 import { createOTRSServer } from "./Servers/OTRSServer";
 import { createN8nServer } from "./Servers/N8nServer";
 import { createPlaywrightServer } from "./Servers/PlaywrightServer";
+import { createOnlysaidKBServer } from "./Servers/OnlysaidKBServer";
 import type { IMCPTool } from "@/../../types/MCP/tool";
 import type {
   ITavilyState,
@@ -45,7 +46,8 @@ import type {
   IOTRSState,
   IN8nState,
   IPlaywrightState,
-  IServerModule
+  IServerModule,
+  IOnlysaidKBState
 } from "@/../../types/MCP/server";
 import type { IChessState } from "./Servers/ChessMCPServer";
 
@@ -73,6 +75,7 @@ const SERVER_REGISTRY = {
   otrs: createOTRSServer,
   n8n: createN8nServer,
   playwright: createPlaywrightServer,
+  onlysaidkb: createOnlysaidKBServer,
 };
 
 export const SERVICE_TYPE_MAPPING: Record<string, string> = {
@@ -98,6 +101,7 @@ export const SERVICE_TYPE_MAPPING: Record<string, string> = {
   'otrs': 'otrs',
   'n8n': 'n8n',
   'playwright': 'playwright',
+  'onlysaidkb': 'onlysaidkb',
 };
 
 interface MCPState extends
@@ -122,7 +126,8 @@ interface MCPState extends
   IMoodleState,
   IOTRSState,
   IN8nState,
-  IPlaywrightState {
+  IPlaywrightState,
+  IOnlysaidKBState {
 
   serviceTools: Record<string, IMCPTool[]>;
   servers: Record<string, IServerModule>;

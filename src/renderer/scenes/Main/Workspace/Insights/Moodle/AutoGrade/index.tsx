@@ -29,7 +29,9 @@ import {
   ListItemText,
   ListItemButton,
   LinearProgress,
-  Divider
+  Divider,
+  Card,
+  CardContent
 } from '@mui/material';
 import {
   Upload as UploadIcon,
@@ -50,7 +52,7 @@ import {
 } from '@mui/icons-material';
 import { useIntl } from 'react-intl';
 import { useWorkspaceSettingsStore } from '@/renderer/stores/Workspace/WorkspaceSettingsStore';
-import { useDeepGradeStore, useMarkingScheme, useSelectedAssignment } from '@/renderer/stores/Moodle/DeepGradeStore';
+import { useAutoGradeStore, useMarkingScheme, useSelectedAssignment, useExecuteAutoGrade } from '@/renderer/stores/Insight/AutoGradeStore';
 import { useKBStore } from '@/renderer/stores/KB/KBStore';
 import { getUserTokenFromStore } from '@/utils/user';
 import { toast } from '@/utils/toast';
@@ -61,6 +63,7 @@ import MarkingSchemeControls from './MarkingSchemeControls';
 import AvailableSchemes from './AvailableSchemes';
 import AssignmentInfo from './AssignmentInfo';
 import StudentTable from './StudentTable';
+import MarkingSchemePicker from '@/renderer/components/Dialog/Insight/MarkingSchemePicker';
 
 // Import types
 import {
@@ -86,9 +89,10 @@ const readFileAsDataURL = (file: File): Promise<string> => {
 export default function AutoGrade({ workspaceId }: AutoGradeProps) {
   const intl = useIntl();
   const { getSettingsFromStore } = useWorkspaceSettingsStore();
-  const { setMarkingScheme: setMarkingSchemeInStore, removeMarkingScheme, setSelectedAssignment } = useDeepGradeStore();
+  const { setMarkingScheme: setMarkingSchemeInStore, removeMarkingScheme, setSelectedAssignment } = useAutoGradeStore();
   const { getKnowledgeBaseDetailsList } = useKBStore();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const executeAutoGrade = useExecuteAutoGrade();
 
   // State
   const [assignments, setAssignments] = useState<Assignment[]>([]);
@@ -112,14 +116,18 @@ export default function AutoGrade({ workspaceId }: AutoGradeProps) {
   const selectedAssignment = useSelectedAssignment(workspaceId);
   const currentMarkingScheme = useMarkingScheme(selectedAssignment);
 
-  // Calculate submission statistics
-  const submissionStats = React.useMemo(() => {
+  // Calculate submission and grading statistics based on published state
+  const stats = React.useMemo(() => {
     if (!studentData.length) {
       return {
         totalStudents: 0,
         submitted: 0,
         pending: 0,
-        draft: 0
+        draft: 0,
+        graded: 0,
+        ungraded: 0,
+        published: 0,
+        unpublished: 0
       };
     }
 
@@ -127,8 +135,13 @@ export default function AutoGrade({ workspaceId }: AutoGradeProps) {
     let submitted = 0;
     let pending = 0;
     let draft = 0;
+    let graded = 0;
+    let ungraded = 0;
+    let published = 0;
+    let unpublished = 0;
 
     studentData.forEach(data => {
+      // Submission status
       if (!data.submission) {
         pending++;
       } else {
@@ -145,15 +158,37 @@ export default function AutoGrade({ workspaceId }: AutoGradeProps) {
             break;
         }
       }
+
+      // Grading status based on published state
+      if (data.grade && data.grade.grade > 0) {
+        // Grade is published in Moodle
+        published++;
+        graded++;
+      } else if (data.currentGrade && data.currentGrade !== '0' && data.currentGrade !== '') {
+        // Grade exists but not published yet
+        unpublished++;
+        graded++;
+      } else {
+        // No grade assigned
+        ungraded++;
+      }
     });
 
     return {
       totalStudents,
       submitted,
       pending,
-      draft
+      draft,
+      graded,
+      ungraded,
+      published,
+      unpublished
     };
   }, [studentData]);
+
+  // Calculate progress percentages - grading progress now based on published grades
+  const submissionProgress = stats.totalStudents > 0 ? (stats.submitted / stats.totalStudents) * 100 : 0;
+  const gradingProgress = stats.totalStudents > 0 ? (stats.published / stats.totalStudents) * 100 : 0;
 
   // Effects
   useEffect(() => {
@@ -287,7 +322,7 @@ export default function AutoGrade({ workspaceId }: AutoGradeProps) {
           submission,
           grade,
           currentGrade: grade ? grade.grade.toString() : '',
-          aiGrade: undefined, // Add aiGrade field
+          aiGrade: undefined,
           feedback: '',
           isEditing: false
         };
@@ -552,6 +587,119 @@ export default function AutoGrade({ workspaceId }: AutoGradeProps) {
     }
   };
 
+  const handlePublishGrade = async (studentId: string) => {
+    if (!selectedAssignment || !apiToken || !courseId) return;
+
+    const studentDataItem = studentData.find(data => data.student.id === studentId);
+    if (!studentDataItem || !studentDataItem.currentGrade) {
+      toast.error('No grade to publish');
+      return;
+    }
+
+    try {
+      const baseUrl = await getMoodleConfig();
+      const response = await window.electron.moodleApi.updateAssignmentGrade({
+        baseUrl,
+        apiKey: apiToken,
+        assignmentId: selectedAssignment,
+        userId: studentId,
+        grade: parseFloat(studentDataItem.currentGrade) || 0,
+        feedback: studentDataItem.feedback,
+        courseId: courseId // Include course ID for validation
+      });
+
+      if (response.success) {
+        // Update the store with the published grade information
+        const { setGradeSubmission } = useAutoGradeStore.getState();
+        const submissionKey = `${selectedAssignment}-${studentId}`;
+        setGradeSubmission(submissionKey, {
+          studentId,
+          assignmentId: selectedAssignment,
+          courseId,
+          grade: parseFloat(studentDataItem.currentGrade),
+          feedback: studentDataItem.feedback,
+          timestamp: new Date().toISOString(),
+          published: true
+        });
+
+        toast.success(`Grade published for ${studentDataItem.student.fullname}`);
+        console.log('Grade published successfully:', response.data);
+        
+        // Reload assignment data to update the grade status
+        loadAssignmentData();
+      } else {
+        toast.error(response.error || 'Failed to publish grade');
+        console.error('Failed to publish grade:', response.error);
+      }
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to publish grade');
+      console.error('Error publishing grade:', err);
+    }
+  };
+
+  // New function to publish multiple grades at once
+  const handlePublishGradesBatch = async (studentIds: string[]) => {
+    if (!selectedAssignment || !apiToken || !courseId) return;
+
+    const gradesToPublish = studentIds
+      .map(studentId => {
+        const studentDataItem = studentData.find(data => data.student.id === studentId);
+        if (!studentDataItem || !studentDataItem.currentGrade) return null;
+        
+        return {
+          userId: studentId,
+          grade: parseFloat(studentDataItem.currentGrade) || 0,
+          feedback: studentDataItem.feedback
+        };
+      })
+      .filter((grade): grade is NonNullable<typeof grade> => grade !== null);
+
+    if (gradesToPublish.length === 0) {
+      toast.error('No grades to publish');
+      return;
+    }
+
+    try {
+      const baseUrl = await getMoodleConfig();
+      const response = await window.electron.moodleApi.publishGradesBatch({
+        baseUrl,
+        apiKey: apiToken,
+        courseId,
+        assignmentId: selectedAssignment,
+        grades: gradesToPublish
+      });
+
+      if (response.success) {
+        const { setGradeSubmission } = useAutoGradeStore.getState();
+        
+        // Update store for all successfully published grades
+        gradesToPublish.forEach(grade => {
+          const submissionKey = `${selectedAssignment}-${grade.userId}`;
+          setGradeSubmission(submissionKey, {
+            studentId: grade.userId,
+            assignmentId: selectedAssignment,
+            courseId,
+            grade: grade.grade,
+            feedback: grade.feedback,
+            timestamp: new Date().toISOString(),
+            published: true
+          });
+        });
+
+        toast.success(`${response.data.successCount} grades published successfully`);
+        if (response.data.errorCount > 0) {
+          toast.warning(`${response.data.errorCount} grades failed to publish`);
+        }
+        
+        loadAssignmentData();
+      } else {
+        toast.error(response.error || 'Failed to publish grades');
+      }
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to publish grades');
+    }
+  };
+
   const handleAdoptAiGrade = (studentId: string) => {
     const studentDataItem = studentData.find(data => data.student.id === studentId);
     if (!studentDataItem || !studentDataItem.aiGrade) return;
@@ -563,6 +711,63 @@ export default function AutoGrade({ workspaceId }: AutoGradeProps) {
     ));
 
     toast.success(`AI grade adopted for ${studentDataItem.student.fullname}`);
+  };
+
+  const handleResetAiGrade = (studentId: string) => {
+    const studentDataItem = studentData.find(data => data.student.id === studentId);
+    if (!studentDataItem) return;
+
+    setStudentData(prev => prev.map(data => 
+      data.student.id === studentId 
+        ? { ...data, aiGrade: undefined }
+        : data
+    ));
+
+    toast.success(`AI grade reset for ${studentDataItem.student.fullname}`);
+  };
+
+  // Handle executeAutoGrade using the store action
+  const handleExecuteAutoGrade = async (studentId: string) => {
+    const studentDataItem = studentData.find(data => data.student.id === studentId);
+    if (!studentDataItem) {
+      toast.error('Student data not found');
+      return;
+    }
+
+    if (!currentMarkingScheme) {
+      toast.error('No marking scheme selected. Please select a marking scheme first.');
+      return;
+    }
+
+    try {
+      // Show loading state
+      toast.info(`Starting auto-grading for ${studentDataItem.student.fullname}...`);
+
+      // Execute auto-grading using the store action
+      const result = await executeAutoGrade(
+        studentDataItem,
+        currentMarkingScheme,
+        selectedAssignmentData,
+        workspaceId
+      );
+
+      // Update the student data with the result
+      setStudentData(prev => prev.map(data => 
+        data.student.id === studentId 
+          ? { 
+              ...data, 
+              aiGrade: result.aiGrade,
+              feedback: result.feedback
+            }
+          : data
+      ));
+
+      const maxGrade = selectedAssignmentData?.grade || 100;
+      toast.success(`Auto-grading completed for ${studentDataItem.student.fullname}! AI Grade: ${result.aiGrade}/${maxGrade}`);
+    } catch (error: any) {
+      console.error('Error executing auto-grade:', error);
+      toast.error(`Auto-grading failed for ${studentDataItem.student.fullname}`);
+    }
   };
 
   // Update assignment selection handler
@@ -595,30 +800,115 @@ export default function AutoGrade({ workspaceId }: AutoGradeProps) {
         {intl.formatMessage({ id: "workspace.insights.moodle.autograde.title", defaultMessage: "AutoGrade" })}
       </Typography>
 
-      <AssignmentSelector
-        assignments={assignments}
-        selectedAssignment={selectedAssignment}
-        onAssignmentChange={handleAssignmentChange}
-        knowledgeBases={knowledgeBases}
-        selectedKbId={selectedKbId}
-        onKbChange={setSelectedKbId}
-        loadingKBs={loadingKBs}
-        submissionStats={submissionStats}
-      />
+      {/* Compact Configuration Section */}
+      <Card sx={{ mb: 2 }}>
+        <CardContent sx={{ py: 1.5 }}>
+          <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', mb: 2 }}>
+            {/* Assignment and KB Selection */}
+            <Box sx={{ flex: 1 }}>
+              <AssignmentSelector
+                assignments={assignments}
+                selectedAssignment={selectedAssignment}
+                onAssignmentChange={handleAssignmentChange}
+                knowledgeBases={knowledgeBases}
+                selectedKbId={selectedKbId}
+                onKbChange={setSelectedKbId}
+                loadingKBs={loadingKBs}
+              />
+            </Box>
+            
+            {/* Progress Bars */}
+            {selectedAssignment && stats.totalStudents > 0 && (
+              <Box sx={{ 
+                minWidth: 300,
+                p: 1.5,
+                bgcolor: 'action.hover',
+                borderRadius: 1,
+              }}>
+                {/* Submission Progress */}
+                <Box sx={{ mb: 1.5 }}>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
+                    <Typography variant="caption" color="text.secondary">
+                      {intl.formatMessage({ id: "workspace.insights.moodle.autograde.submissionStatus", defaultMessage: "Submissions" })}
+                    </Typography>
+                    <Typography variant="caption" color="text.primary" fontWeight="medium">
+                      {stats.submitted}/{stats.totalStudents}
+                    </Typography>
+                  </Box>
+                  <LinearProgress 
+                    variant="determinate" 
+                    value={submissionProgress} 
+                    sx={{ 
+                      height: 6, 
+                      borderRadius: 3,
+                      backgroundColor: 'action.selected',
+                      '& .MuiLinearProgress-bar': {
+                        borderRadius: 3,
+                        backgroundColor: 'success.main'
+                      }
+                    }} 
+                  />
+                </Box>
 
-      <MarkingSchemeControls
-        selectedAssignment={selectedAssignment}
-        selectedKbId={selectedKbId}
-        currentMarkingScheme={currentMarkingScheme}
-        uploading={uploading}
-        onLoadScheme={handleOpenMarkingSchemeDialog}
-        onUploadScheme={handleUploadMarkingScheme}
-        onDownloadScheme={handleDownloadMarkingScheme}
-        onRemoveScheme={handleRemoveMarkingScheme}
-      />
+                {/* Grading Progress - Now based on published grades */}
+                <Box>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
+                    <Typography variant="caption" color="text.secondary">
+                      {intl.formatMessage({ id: "workspace.insights.moodle.autograde.publishedGrades", defaultMessage: "Published Grades" })}
+                    </Typography>
+                    <Typography variant="caption" color="text.primary" fontWeight="medium">
+                      {stats.published}/{stats.totalStudents}
+                    </Typography>
+                  </Box>
+                  <LinearProgress 
+                    variant="determinate" 
+                    value={gradingProgress} 
+                    sx={{ 
+                      height: 6, 
+                      borderRadius: 3,
+                      backgroundColor: 'action.selected',
+                      '& .MuiLinearProgress-bar': {
+                        borderRadius: 3,
+                        backgroundColor: 'primary.main'
+                      }
+                    }} 
+                  />
+                  
+                  {/* Additional info for pending grades */}
+                  {stats.unpublished > 0 && (
+                    <Box sx={{ mt: 0.5 }}>
+                      <Typography variant="caption" color="warning.main" fontSize="0.7rem">
+                        {intl.formatMessage(
+                          { 
+                            id: "workspace.insights.moodle.autograde.pendingGrades", 
+                            defaultMessage: "{count} grades pending publication" 
+                          },
+                          { count: stats.unpublished }
+                        )}
+                      </Typography>
+                    </Box>
+                  )}
+                </Box>
+              </Box>
+            )}
+          </Box>
 
-      <AvailableSchemes
-        show={showAvailableSchemes}
+          {/* Marking Scheme Controls */}
+          <MarkingSchemeControls
+            selectedAssignment={selectedAssignment}
+            selectedKbId={selectedKbId}
+            currentMarkingScheme={currentMarkingScheme}
+            uploading={uploading}
+            onLoadScheme={handleOpenMarkingSchemeDialog}
+            onUploadScheme={handleUploadMarkingScheme}
+            onDownloadScheme={handleDownloadMarkingScheme}
+            onRemoveScheme={handleRemoveMarkingScheme}
+          />
+        </CardContent>
+      </Card>
+
+      <MarkingSchemePicker
+        open={showAvailableSchemes}
         onClose={() => setShowAvailableSchemes(false)}
         loadingSchemes={loadingSchemes}
         availableSchemes={availableSchemes}
@@ -628,15 +918,18 @@ export default function AutoGrade({ workspaceId }: AutoGradeProps) {
         onSelectScheme={handleSelectMarkingScheme}
       />
 
+      {/* Main Focus: Student Table */}
       {selectedAssignment && (
-        <>
+        <Box sx={{ mt: 1 }}>
+          {/* Assignment Info - Compact */}
           <AssignmentInfo
             assignment={selectedAssignmentData}
             currentMarkingScheme={currentMarkingScheme}
             knowledgeBases={knowledgeBases}
-            submissionStats={submissionStats}
+            stats={stats}
           />
 
+          {/* Student Table - Main Focus */}
           <StudentTable
             studentData={studentData}
             selectedAssignmentData={selectedAssignmentData}
@@ -647,8 +940,11 @@ export default function AutoGrade({ workspaceId }: AutoGradeProps) {
             onToggleEdit={toggleEditMode}
             onSaveGrade={saveGrade}
             onAdoptAiGrade={handleAdoptAiGrade}
+            onResetAiGrade={handleResetAiGrade}
+            onExecuteAutoGrade={handleExecuteAutoGrade}
+            onPublishGrade={handlePublishGrade}
           />
-        </>
+        </Box>
       )}
 
       <input

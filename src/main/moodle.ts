@@ -450,7 +450,7 @@ export function setupMoodleApiHandlers() {
     }
   });
 
-  // Update assignment grade
+  // Update assignment grade - Enhanced with course validation
   ipcMain.handle('moodle:update-assignment-grade', async (event, args: { 
     baseUrl: string; 
     apiKey: string; 
@@ -458,40 +458,222 @@ export function setupMoodleApiHandlers() {
     userId: string; 
     grade: number; 
     feedback?: string;
+    courseId?: string; // Optional for validation
   }) => {
+    console.log('[Moodle API] Updating assignment grade:', {
+      assignmentId: args.assignmentId,
+      userId: args.userId,
+      grade: args.grade,
+      courseId: args.courseId,
+      hasFeedback: !!args.feedback
+    });
+
     try {
-      const response = await axios.post(`${args.baseUrl}/webservice/rest/server.php`, null, {
-        params: {
-          wstoken: args.apiKey,
-          wsfunction: 'mod_assign_save_grade',
-          moodlewsrestformat: 'json',
-          assignmentid: args.assignmentId,
-          userid: args.userId,
-          grade: args.grade,
-          plugindata: JSON.stringify({
-            assignfeedbackcomments_editor: {
-              text: args.feedback || '',
-              format: 1
-            }
-          })
+      // First, validate that the assignment belongs to the course (if courseId provided)
+      if (args.courseId) {
+        const assignmentResponse = await axios.get(`${args.baseUrl}/webservice/rest/server.php`, {
+          params: {
+            wstoken: args.apiKey,
+            wsfunction: 'mod_assign_get_assignments',
+            moodlewsrestformat: 'json',
+            'courseids[0]': args.courseId,
+          }
+        });
+
+        if (assignmentResponse.data && assignmentResponse.data.courses) {
+          const assignments = assignmentResponse.data.courses.flatMap((course: any) => course.assignments || []);
+          const targetAssignment = assignments.find((assignment: any) => assignment.id.toString() === args.assignmentId);
+          
+          if (!targetAssignment) {
+            return {
+              success: false,
+              error: `Assignment ${args.assignmentId} not found in course ${args.courseId}`
+            };
+          }
+          
+          console.log('[Moodle API] Assignment validation passed:', targetAssignment.name);
         }
+      }
+
+      // Prepare the grade update request
+      const params: any = {
+        wstoken: args.apiKey,
+        wsfunction: 'mod_assign_save_grade',
+        moodlewsrestformat: 'json',
+        assignmentid: args.assignmentId,
+        userid: args.userId,
+        grade: args.grade
+      };
+
+      // Add feedback if provided
+      if (args.feedback) {
+        params.plugindata = JSON.stringify({
+          assignfeedbackcomments_editor: {
+            text: args.feedback,
+            format: 1 // HTML format
+          }
+        });
+      }
+
+      console.log('[Moodle API] Sending grade update request with params:', {
+        ...params,
+        wstoken: `${params.wstoken.substring(0, 10)}...`,
+        plugindata: params.plugindata ? 'feedback included' : 'no feedback'
       });
+
+      const response = await axios.post(`${args.baseUrl}/webservice/rest/server.php`, null, { params });
+
+      console.log('[Moodle API] Grade update response:', response.data);
 
       if (response.data && !response.data.exception) {
         return {
           success: true,
-          data: response.data
+          data: {
+            assignmentId: args.assignmentId,
+            userId: args.userId,
+            grade: args.grade,
+            feedback: args.feedback,
+            courseId: args.courseId,
+            timestamp: new Date().toISOString(),
+            moodleResponse: response.data
+          }
         };
       } else {
         return {
           success: false,
-          error: response.data?.message || 'Failed to update grade'
+          error: response.data?.message || response.data?.debuginfo || 'Failed to update grade'
         };
       }
     } catch (error: any) {
+      console.error('[Moodle API] Error updating assignment grade:', error);
+      console.error('[Moodle API] Error details:', {
+        message: error.message,
+        response: error.response?.data,
+        status: error.response?.status
+      });
+      
       return {
         success: false,
-        error: error.message || 'Failed to update assignment grade'
+        error: error.response?.data?.message || error.message || 'Failed to update assignment grade'
+      };
+    }
+  });
+
+  // New handler: Publish multiple grades at once
+  ipcMain.handle('moodle:publish-grades-batch', async (event, args: {
+    baseUrl: string;
+    apiKey: string;
+    courseId: string;
+    assignmentId: string;
+    grades: Array<{
+      userId: string;
+      grade: number;
+      feedback?: string;
+    }>;
+  }) => {
+    console.log('[Moodle API] Publishing batch grades:', {
+      courseId: args.courseId,
+      assignmentId: args.assignmentId,
+      gradeCount: args.grades.length
+    });
+
+    const results = [];
+    const errors = [];
+
+    for (const gradeData of args.grades) {
+      try {
+        const result = await new Promise((resolve) => {
+          // Reuse the single grade update function
+          ipcMain.emit('moodle:update-assignment-grade', event, {
+            baseUrl: args.baseUrl,
+            apiKey: args.apiKey,
+            assignmentId: args.assignmentId,
+            userId: gradeData.userId,
+            grade: gradeData.grade,
+            feedback: gradeData.feedback,
+            courseId: args.courseId
+          });
+        });
+
+        results.push({
+          userId: gradeData.userId,
+          success: true,
+          grade: gradeData.grade
+        });
+      } catch (error: any) {
+        errors.push({
+          userId: gradeData.userId,
+          error: error.message
+        });
+      }
+    }
+
+    return {
+      success: errors.length === 0,
+      data: {
+        successful: results,
+        failed: errors,
+        total: args.grades.length,
+        successCount: results.length,
+        errorCount: errors.length
+      }
+    };
+  });
+
+  // New handler: Get detailed grade information for an assignment
+  ipcMain.handle('moodle:get-assignment-grade-details', async (event, args: {
+    baseUrl: string;
+    apiKey: string;
+    assignmentId: string;
+    userId?: string;
+  }) => {
+    try {
+      const response = await axios.get(`${args.baseUrl}/webservice/rest/server.php`, {
+        params: {
+          wstoken: args.apiKey,
+          wsfunction: 'mod_assign_get_grades',
+          moodlewsrestformat: 'json',
+          assignmentids: [args.assignmentId]
+        }
+      });
+
+      if (response.data && response.data.assignments && response.data.assignments.length > 0) {
+        let grades = response.data.assignments[0].grades || [];
+        
+        // Filter by user if specified
+        if (args.userId) {
+          grades = grades.filter((grade: any) => grade.userid.toString() === args.userId);
+        }
+
+        // Enhance grade data with additional info
+        const enhancedGrades = grades.map((grade: any) => ({
+          id: grade.id,
+          userid: grade.userid,
+          grade: grade.grade,
+          grader: grade.grader,
+          timemodified: grade.timemodified,
+          timecreated: grade.timecreated,
+          feedback: grade.plugindata?.assignfeedbackcomments_editor?.text || '',
+          feedbackformat: grade.plugindata?.assignfeedbackcomments_editor?.format || 1,
+          assignmentId: args.assignmentId,
+          isPublished: grade.grade > 0 // Consider grade published if > 0
+        }));
+
+        return {
+          success: true,
+          data: enhancedGrades
+        };
+      } else {
+        return {
+          success: true,
+          data: []
+        };
+      }
+    } catch (error: any) {
+      console.error('[Moodle API] Error getting grade details:', error);
+      return {
+        success: false,
+        error: error.message || 'Failed to fetch assignment grade details'
       };
     }
   });

@@ -217,7 +217,9 @@ type MoodleApiChannels =
   | 'moodle:get-assignments'
   | 'moodle:get-assignment-submissions'
   | 'moodle:get-assignment-grades'
-  | 'moodle:update-assignment-grade';
+  | 'moodle:update-assignment-grade'
+  | 'moodle:publish-grades-batch'
+  | 'moodle:get-assignment-grade-details';
 
 export type Channels =
   | AuthChannels
@@ -692,7 +694,25 @@ const electronHandler = {
       userId: string; 
       grade: number; 
       feedback?: string;
+      courseId?: string;
     }) => ipcRenderer.invoke('moodle:update-assignment-grade', args),
+    publishGradesBatch: (args: {
+      baseUrl: string;
+      apiKey: string;
+      courseId: string;
+      assignmentId: string;
+      grades: Array<{
+        userId: string;
+        grade: number;
+        feedback?: string;
+      }>;
+    }) => ipcRenderer.invoke('moodle:publish-grades-batch', args),
+    getAssignmentGradeDetails: (args: {
+      baseUrl: string;
+      apiKey: string;
+      assignmentId: string;
+      userId?: string;
+    }) => ipcRenderer.invoke('moodle:get-assignment-grade-details', args),
   },
   moodleAuth: {
     getPresetUrl: () => ipcRenderer.invoke('moodle:get-preset-url'),

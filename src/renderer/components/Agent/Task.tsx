@@ -143,7 +143,7 @@ const TaskCard: React.FC<TaskCardProps> = ({
             <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
                 <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
-                  {isSubtask ? `Subtask` : `Task`} #{task.priority || 1}
+                  {intl.formatMessage({ id: isSubtask ? 'task.subtask' : 'task.task' })} #{task.priority || 1}
                 </Typography>
                 
                 {task.estimated_complexity && (
@@ -186,7 +186,7 @@ const TaskCard: React.FC<TaskCardProps> = ({
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 1 }}>
                 <Person sx={{ fontSize: 16, color: 'text.secondary' }} />
                 <Typography variant="caption" color="text.secondary">
-                  Assigned to: <strong>{agentName}</strong>
+                  {intl.formatMessage({ id: 'task.assignedTo' })} <strong>{agentName}</strong>
                 </Typography>
               </Box>
             )}
@@ -198,7 +198,7 @@ const TaskCard: React.FC<TaskCardProps> = ({
                   <Box sx={{ mb: 0.5 }}>
                     <Typography variant="caption" color="text.secondary" sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.5 }}>
                       <Psychology sx={{ fontSize: 14 }} />
-                      Required Skills:
+                      {intl.formatMessage({ id: 'task.requiredSkills' })}
                     </Typography>
                     <Stack direction="row" spacing={0.5} sx={{ flexWrap: 'wrap', gap: 0.5 }}>
                       {requiredSkills.map((skill: string, index: number) => (
@@ -218,7 +218,7 @@ const TaskCard: React.FC<TaskCardProps> = ({
                   <Box>
                     <Typography variant="caption" color="text.secondary" sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.5 }}>
                       <Assignment sx={{ fontSize: 14 }} />
-                      Suggested Agents:
+                      {intl.formatMessage({ id: 'task.suggestedAgents' })}
                     </Typography>
                     <Stack direction="row" spacing={0.5} sx={{ flexWrap: 'wrap', gap: 0.5 }}>
                       {suggestedAgentTypes.map((agentType: string, index: number) => (
@@ -240,18 +240,18 @@ const TaskCard: React.FC<TaskCardProps> = ({
             {/* Timing Information */}
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
               <Typography variant="caption" color="text.secondary">
-                Created: {new Date(task.created_at).toLocaleTimeString()}
+                {intl.formatMessage({ id: 'task.created' })} {new Date(task.created_at).toLocaleTimeString()}
               </Typography>
               
               {task.started_at && (
                 <Typography variant="caption" color="text.secondary">
-                  Started: {new Date(task.started_at).toLocaleTimeString()}
+                  {intl.formatMessage({ id: 'task.started' })} {new Date(task.started_at).toLocaleTimeString()}
                 </Typography>
               )}
               
               {task.completed_at && (
                 <Typography variant="caption" color="text.secondary">
-                  Completed: {new Date(task.completed_at).toLocaleTimeString()}
+                  {intl.formatMessage({ id: 'task.completed' })} {new Date(task.completed_at).toLocaleTimeString()}
                 </Typography>
               )}
             </Box>
@@ -260,7 +260,7 @@ const TaskCard: React.FC<TaskCardProps> = ({
             {task.assignment_reason && (
               <Box sx={{ mt: 1, p: 1, backgroundColor: alpha(theme.palette.info.main, 0.05), borderRadius: 1 }}>
                 <Typography variant="caption" color="text.secondary" sx={{ display: 'block', fontStyle: 'italic' }}>
-                  Assignment Reason: {task.assignment_reason}
+                  {intl.formatMessage({ id: 'task.assignmentReason' })} {task.assignment_reason}
                 </Typography>
               </Box>
             )}
@@ -269,7 +269,7 @@ const TaskCard: React.FC<TaskCardProps> = ({
             {task.result && (
               <Box sx={{ mt: 1, p: 1, backgroundColor: alpha(theme.palette.success.main, 0.05), borderRadius: 1 }}>
                 <Typography variant="caption" color="text.secondary" sx={{ display: 'block', fontWeight: 500 }}>
-                  Result:
+                  {intl.formatMessage({ id: 'task.result' })}
                 </Typography>
                 <Typography variant="caption" color="text.primary">
                   {task.result}
@@ -281,7 +281,7 @@ const TaskCard: React.FC<TaskCardProps> = ({
             {task.error && (
               <Box sx={{ mt: 1, p: 1, backgroundColor: alpha(theme.palette.error.main, 0.05), borderRadius: 1 }}>
                 <Typography variant="caption" color="text.secondary" sx={{ display: 'block', fontWeight: 500 }}>
-                  Error:
+                  {intl.formatMessage({ id: 'task.error' })}
                 </Typography>
                 <Typography variant="caption" color="error.main">
                   {task.error}
@@ -297,6 +297,7 @@ const TaskCard: React.FC<TaskCardProps> = ({
 
 const DecomposedTaskCard: React.FC<DecomposedTaskCardProps> = ({ subtask, assignedTask }) => {
   const theme = useTheme();
+  const intl = useIntl();
 
   const getComplexityColor = (complexity: string) => {
     switch (complexity) {
@@ -331,14 +332,14 @@ const DecomposedTaskCard: React.FC<DecomposedTaskCardProps> = ({ subtask, assign
 
               <Chip 
                 size="small" 
-                label={`Priority ${subtask.priority}`}
+                label={`${intl.formatMessage({ id: 'task.priority' })} ${subtask.priority}`}
                 variant="outlined"
               />
 
               {assignedTask && (
                 <Chip 
                   size="small" 
-                  label="Assigned"
+                  label={intl.formatMessage({ id: 'task.assigned' })}
                   color="success"
                   variant="outlined"
                 />
@@ -352,7 +353,7 @@ const DecomposedTaskCard: React.FC<DecomposedTaskCardProps> = ({ subtask, assign
             {subtask.requiredSkills.length > 0 && (
               <Box sx={{ mb: 1 }}>
                 <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
-                  Required Skills:
+                  {intl.formatMessage({ id: 'task.requiredSkills' })}
                 </Typography>
                 <Stack direction="row" spacing={0.5} sx={{ flexWrap: 'wrap', gap: 0.5 }}>
                   {subtask.requiredSkills.map((skill, index) => (
@@ -371,7 +372,7 @@ const DecomposedTaskCard: React.FC<DecomposedTaskCardProps> = ({ subtask, assign
             {subtask.suggestedAgentTypes.length > 0 && (
               <Box sx={{ mb: 1 }}>
                 <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
-                  Suggested Agent Types:
+                  {intl.formatMessage({ id: 'task.suggestedAgentTypes' })}
                 </Typography>
                 <Stack direction="row" spacing={0.5} sx={{ flexWrap: 'wrap', gap: 0.5 }}>
                   {subtask.suggestedAgentTypes.map((agentType, index) => (
@@ -391,7 +392,7 @@ const DecomposedTaskCard: React.FC<DecomposedTaskCardProps> = ({ subtask, assign
             {subtask.coordinationNotes && (
               <Box sx={{ mt: 1, p: 1, backgroundColor: alpha(theme.palette.info.main, 0.05), borderRadius: 1 }}>
                 <Typography variant="caption" color="text.secondary" sx={{ display: 'block', fontStyle: 'italic' }}>
-                  Coordination Notes: {subtask.coordinationNotes}
+                  {intl.formatMessage({ id: 'task.coordinationNotes' })} {subtask.coordinationNotes}
                 </Typography>
               </Box>
             )}
@@ -485,7 +486,7 @@ export const TaskPanel: React.FC<TaskPanelProps> = ({
       <Box sx={{ p: 2 }}>
         <LinearProgress />
         <Typography variant="body2" color="text.secondary" sx={{ mt: 1, textAlign: 'center' }}>
-          Loading tasks...
+          {intl.formatMessage({ id: 'task.loadingTasks' })}
         </Typography>
       </Box>
     );
@@ -513,7 +514,7 @@ export const TaskPanel: React.FC<TaskPanelProps> = ({
         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
           <Typography variant="h6" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <TaskIcon />
-            Task Management
+            {intl.formatMessage({ id: 'task.management' })}
           </Typography>
           
           <IconButton 
@@ -529,12 +530,12 @@ export const TaskPanel: React.FC<TaskPanelProps> = ({
         <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', gap: 1 }}>
           <Chip 
             size="small" 
-            label={`Total: ${stats.total}`}
+            label={`${intl.formatMessage({ id: 'task.total' })} ${stats.total}`}
             variant="outlined"
           />
           <Chip 
             size="small" 
-            label={`Running: ${stats.running}`}
+            label={`${intl.formatMessage({ id: 'task.running' })} ${stats.running}`}
             sx={{ 
               backgroundColor: stats.running > 0 ? alpha(theme.palette.primary.main, 0.1) : 'transparent',
               color: stats.running > 0 ? theme.palette.primary.main : 'text.secondary'
@@ -542,7 +543,7 @@ export const TaskPanel: React.FC<TaskPanelProps> = ({
           />
           <Chip 
             size="small" 
-            label={`Completed: ${stats.completed}`}
+            label={`${intl.formatMessage({ id: 'common.completed' })} ${stats.completed}`}
             sx={{ 
               backgroundColor: stats.completed > 0 ? alpha(theme.palette.success.main, 0.1) : 'transparent',
               color: stats.completed > 0 ? theme.palette.success.main : 'text.secondary'
@@ -550,7 +551,7 @@ export const TaskPanel: React.FC<TaskPanelProps> = ({
           />
           <Chip 
             size="small" 
-            label={`Failed: ${stats.failed}`}
+            label={`${intl.formatMessage({ id: 'task.failed' })} ${stats.failed}`}
             sx={{ 
               backgroundColor: stats.failed > 0 ? alpha(theme.palette.error.main, 0.1) : 'transparent',
               color: stats.failed > 0 ? theme.palette.error.main : 'text.secondary'
@@ -558,7 +559,7 @@ export const TaskPanel: React.FC<TaskPanelProps> = ({
           />
           <Chip 
             size="small" 
-            label={`Pending: ${stats.pending}`}
+            label={`${intl.formatMessage({ id: 'task.pending' })} ${stats.pending}`}
             sx={{ 
               backgroundColor: stats.pending > 0 ? alpha(theme.palette.warning.main, 0.1) : 'transparent',
               color: stats.pending > 0 ? theme.palette.warning.main : 'text.secondary'
@@ -575,107 +576,132 @@ export const TaskPanel: React.FC<TaskPanelProps> = ({
               sx={{ height: 6, borderRadius: 3 }}
             />
             <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
-              {Math.round((stats.completed / stats.total) * 100)}% Complete 
-              ({stats.completed}/{stats.total} tasks)
+              {Math.round((stats.completed / stats.total) * 100)}% {intl.formatMessage({ id: 'task.complete' })} 
+              ({stats.completed}/{stats.total} {intl.formatMessage({ id: 'task.tasks' })})
             </Typography>
           </Box>
         )}
       </Box>
 
-      {/* Content */}
-      <Box sx={{ flexGrow: 1, overflow: 'auto', p: 2 }}>
-        {/* Decomposed Tasks Section */}
-        {decomposedTasks.length > 0 && (
-          <>
-            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
-              <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
-                Decomposed Subtasks
-              </Typography>
-              <Button 
-                size="small" 
-                onClick={() => setShowDecomposed(!showDecomposed)}
-                endIcon={showDecomposed ? <ExpandLess /> : <ExpandMore />}
-              >
-                {showDecomposed ? 'Hide' : 'Show'}
-              </Button>
-            </Box>
-            
-            <Collapse in={showDecomposed}>
-              <Box sx={{ mb: 3 }}>
-                {decomposedTasks.map((subtask) => {
-                  const assignedTask = tasks.find(t => t.subtask_id === subtask.id);
-                  return (
-                    <DecomposedTaskCard 
-                      key={subtask.id}
-                      subtask={subtask}
-                      assignedTask={assignedTask}
-                    />
-                  );
-                })}
+      {/* Content - Enhanced with proper scrolling */}
+      <Box sx={{ 
+        flexGrow: 1, 
+        overflow: 'hidden',
+        display: 'flex',
+        flexDirection: 'column'
+      }}>
+        <Box sx={{ 
+          flexGrow: 1,
+          overflow: 'auto',
+          p: 2,
+          '&::-webkit-scrollbar': {
+            width: '8px',
+          },
+          '&::-webkit-scrollbar-track': {
+            backgroundColor: alpha(theme.palette.divider, 0.1),
+            borderRadius: '4px',
+          },
+          '&::-webkit-scrollbar-thumb': {
+            backgroundColor: alpha(theme.palette.text.secondary, 0.3),
+            borderRadius: '4px',
+            '&:hover': {
+              backgroundColor: alpha(theme.palette.text.secondary, 0.5),
+            },
+          },
+        }}>
+          {/* Decomposed Tasks Section */}
+          {decomposedTasks.length > 0 && (
+            <>
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
+                <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+                  {intl.formatMessage({ id: 'task.decomposedSubtasks' })}
+                </Typography>
+                <Button 
+                  size="small" 
+                  onClick={() => setShowDecomposed(!showDecomposed)}
+                  endIcon={showDecomposed ? <ExpandLess /> : <ExpandMore />}
+                >
+                  {intl.formatMessage({ id: showDecomposed ? 'task.hide' : 'task.show' })}
+                </Button>
               </Box>
-            </Collapse>
-            
-            <Divider sx={{ mb: 2 }} />
-          </>
-        )}
-
-        {/* Assigned Tasks Section */}
-        <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 2 }}>
-          Assigned Tasks
-        </Typography>
-
-        {tasks.length === 0 ? (
-          <Box sx={{ textAlign: 'center', py: 4 }}>
-            <TaskIcon sx={{ fontSize: 48, color: 'text.disabled', mb: 1 }} />
-            <Typography variant="body2" color="text.secondary">
-              No tasks found for this execution
-            </Typography>
-          </Box>
-        ) : (
-          <>
-            {/* Parent Tasks */}
-            {parentTasks.map((task) => {
-              const hasSubtasks = childTasks[task.id]?.length > 0;
-              const isExpanded = expandedTasks.has(task.id);
               
-              return (
-                <Box key={task.id}>
-                  <TaskCard
-                    task={task}
-                    agentName={agentMap[task.agent_id]}
-                    hasSubtasks={hasSubtasks}
-                    subtasksExpanded={isExpanded}
-                    onExpandSubtasks={() => handleToggleSubtasks(task.id)}
-                  />
-                  
-                  {hasSubtasks && (
-                    <Collapse in={isExpanded}>
-                      <Box sx={{ ml: 2, mb: 1 }}>
-                        {childTasks[task.id].map((subtask) => (
-                          <TaskCard
-                            key={subtask.id}
-                            task={subtask}
-                            agentName={agentMap[subtask.agent_id]}
-                            isSubtask
-                          />
-                        ))}
-                      </Box>
-                    </Collapse>
-                  )}
+              <Collapse in={showDecomposed}>
+                <Box sx={{ mb: 3 }}>
+                  {decomposedTasks.map((subtask) => {
+                    const assignedTask = tasks.find(t => t.subtask_id === subtask.id);
+                    return (
+                      <DecomposedTaskCard 
+                        key={subtask.id}
+                        subtask={subtask}
+                        assignedTask={assignedTask}
+                      />
+                    );
+                  })}
                 </Box>
-              );
-            })}
+              </Collapse>
+              
+              <Divider sx={{ mb: 2 }} />
+            </>
+          )}
 
-            {/* Orphaned Tasks (tasks without parent) */}
-            {tasks.filter(t => !t.parent_task_id && !parentTasks.find(p => p.id === t.id)).map((task) => (
-              <TaskCard
-                key={task.id}
-                task={task}
-                agentName={agentMap[task.agent_id]}
-              />
-            ))}
-          </>
-        )}
+          {/* Assigned Tasks Section */}
+          <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 2 }}>
+            {intl.formatMessage({ id: 'task.assignedTasks' })}
+          </Typography>
+
+          {tasks.length === 0 ? (
+            <Box sx={{ textAlign: 'center', py: 4 }}>
+              <TaskIcon sx={{ fontSize: 48, color: 'text.disabled', mb: 1 }} />
+              <Typography variant="body2" color="text.secondary">
+                {intl.formatMessage({ id: 'task.noTasksFound' })}
+              </Typography>
+            </Box>
+          ) : (
+            <>
+              {/* Parent Tasks */}
+              {parentTasks.map((task) => {
+                const hasSubtasks = childTasks[task.id]?.length > 0;
+                const isExpanded = expandedTasks.has(task.id);
+                
+                return (
+                  <Box key={task.id}>
+                    <TaskCard
+                      task={task}
+                      agentName={agentMap[task.agent_id]}
+                      hasSubtasks={hasSubtasks}
+                      subtasksExpanded={isExpanded}
+                      onExpandSubtasks={() => handleToggleSubtasks(task.id)}
+                    />
+                    
+                    {hasSubtasks && (
+                      <Collapse in={isExpanded}>
+                        <Box sx={{ ml: 2, mb: 1 }}>
+                          {childTasks[task.id].map((subtask) => (
+                            <TaskCard
+                              key={subtask.id}
+                              task={subtask}
+                              agentName={agentMap[subtask.agent_id]}
+                              isSubtask
+                            />
+                          ))}
+                        </Box>
+                      </Collapse>
+                    )}
+                  </Box>
+                );
+              })}
+
+              {/* Orphaned Tasks (tasks without parent) */}
+              {tasks.filter(t => !t.parent_task_id && !parentTasks.find(p => p.id === t.id)).map((task) => (
+                <TaskCard
+                  key={task.id}
+                  task={task}
+                  agentName={agentMap[task.agent_id]}
+                />
+              ))}
+            </>
+          )}
+        </Box>
       </Box>
     </Box>
   );

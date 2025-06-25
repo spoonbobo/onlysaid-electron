@@ -32,7 +32,7 @@ import AboutDialog from "@/renderer/components/Dialog/AboutDialog";
 import { useWorkspaceIcons } from '@/renderer/hooks/useWorkspaceIcons';
 import { useAppAssets } from '@/renderer/hooks/useAppAssets';
 import { useUserStore } from '@/renderer/stores/User/UserStore';
-import DisclaimerDialog from "@/renderer/components/Dialog/DisclaimerDialog";
+import DisclaimerDialog from "@/renderer/components/Dialog/Disclaimer/DisclaimerDialog";
 import { useAgentStore } from '@/renderer/stores/Agent/AgentStore';
 import { useUserTokenStore } from '@/renderer/stores/User/UserToken';
 import { useCryptoStore } from '@/renderer/stores/Crypto/CryptoStore';
@@ -90,6 +90,7 @@ const TitleBar = () => {
   // Get user and disclaimer state
   const showDisclaimerFromStore = useUserStore((state) => state.showDisclaimer);
   const setShowDisclaimerInStore = useUserStore((state) => state.setShowDisclaimer);
+  const isFirstLogin = useUserStore((state) => state.isFirstLogin);
 
   // Define available contexts for search with sections - memoized for performance
   const availableContexts = useMemo(() => {
@@ -373,11 +374,22 @@ const TitleBar = () => {
     setShowDisclaimerInStore(false);
     setShowDisclaimer(false);
     
-    // Log out user if they decline
-    const { logout } = useUserStore.getState();
-    logout();
-    toast.info(intl.formatMessage({ id: 'disclaimer.declined' }));
-  }, [setShowDisclaimerInStore, intl]);
+    // Check if user is new or existing
+    const userIsNew = user ? isFirstLogin(user) : true;
+    
+    if (userIsNew) {
+      // Log out user if they decline (only for new users)
+      const { logout } = useUserStore.getState();
+      logout();
+      toast.info(intl.formatMessage({ id: 'disclaimer.declined' }));
+    } else {
+      // For existing users, just close the dialog (they already agreed before)
+      console.log('[TitleBar] Existing user closed disclaimer dialog');
+    }
+  }, [setShowDisclaimerInStore, user, isFirstLogin, intl]);
+
+  // Determine if user is new for disclaimer dialog
+  const userIsNew = user ? isFirstLogin(user) : true;
 
   // If window is too small, show collapsed menu
   if (isCollapsed) {
@@ -406,6 +418,7 @@ const TitleBar = () => {
           open={showDisclaimerFromStore || showDisclaimer}
           onAccept={handleDisclaimerAccept}
           onDecline={handleDisclaimerDecline}
+          isNewUser={userIsNew}
         />
       </>
     );
@@ -1033,6 +1046,7 @@ const TitleBar = () => {
         open={showDisclaimerFromStore || showDisclaimer}
         onAccept={handleDisclaimerAccept}
         onDecline={handleDisclaimerDecline}
+        isNewUser={userIsNew}
       />
     </>
   );
