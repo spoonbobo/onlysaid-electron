@@ -219,7 +219,8 @@ type MoodleApiChannels =
   | 'moodle:get-assignment-grades'
   | 'moodle:update-assignment-grade'
   | 'moodle:publish-grades-batch'
-  | 'moodle:get-assignment-grade-details';
+  | 'moodle:get-assignment-grade-details'
+  | 'moodle:delete-assignment-grade';
 
 export type Channels =
   | AuthChannels
@@ -713,6 +714,13 @@ const electronHandler = {
       assignmentId: string;
       userId?: string;
     }) => ipcRenderer.invoke('moodle:get-assignment-grade-details', args),
+    deleteAssignmentGrade: (args: {
+      baseUrl: string;
+      apiKey: string;
+      assignmentId: string;
+      userId: string;
+      courseId?: string;
+    }) => ipcRenderer.invoke('moodle:delete-assignment-grade', args),
   },
   moodleAuth: {
     getPresetUrl: () => ipcRenderer.invoke('moodle:get-preset-url'),

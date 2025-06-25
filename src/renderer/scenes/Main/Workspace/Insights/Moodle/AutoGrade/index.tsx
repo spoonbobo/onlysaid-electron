@@ -52,7 +52,7 @@ import {
 } from '@mui/icons-material';
 import { useIntl } from 'react-intl';
 import { useWorkspaceSettingsStore } from '@/renderer/stores/Workspace/WorkspaceSettingsStore';
-import { useAutoGradeStore, useMarkingScheme, useSelectedAssignment, useExecuteAutoGrade } from '@/renderer/stores/Insight/AutoGradeStore';
+import { useAutoGradeStore, useMarkingScheme, useSelectedAssignment, useExecuteAutoGrade, useUserGradeInfo, useDeleteUserGrade, useDeleteGradeSubmission, useResetUserGrade, useResetGradeSubmission } from '@/renderer/stores/Insight/AutoGrade/AutoGradeStore';
 import { useKBStore } from '@/renderer/stores/KB/KBStore';
 import { getUserTokenFromStore } from '@/utils/user';
 import { toast } from '@/utils/toast';
@@ -89,10 +89,14 @@ const readFileAsDataURL = (file: File): Promise<string> => {
 export default function AutoGrade({ workspaceId }: AutoGradeProps) {
   const intl = useIntl();
   const { getSettingsFromStore } = useWorkspaceSettingsStore();
-  const { setMarkingScheme: setMarkingSchemeInStore, removeMarkingScheme, setSelectedAssignment } = useAutoGradeStore();
+  const { setMarkingScheme: setMarkingSchemeInStore, removeMarkingScheme, setSelectedAssignment, getUserGradeInfo } = useAutoGradeStore();
   const { getKnowledgeBaseDetailsList } = useKBStore();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const executeAutoGrade = useExecuteAutoGrade();
+  const deleteUserGrade = useDeleteUserGrade();
+  const deleteGradeSubmission = useDeleteGradeSubmission();
+  const resetUserGrade = useResetUserGrade();
+  const resetGradeSubmission = useResetGradeSubmission();
 
   // State
   const [assignments, setAssignments] = useState<Assignment[]>([]);
@@ -284,7 +288,7 @@ export default function AutoGrade({ workspaceId }: AutoGradeProps) {
   };
 
   const loadAssignmentData = async () => {
-    if (!selectedAssignment || !apiToken || students.length === 0) return;
+    if (!selectedAssignment || !apiToken || students.length === 0 || !courseId) return;
 
     try {
       setLoading(true);
@@ -317,18 +321,52 @@ export default function AutoGrade({ workspaceId }: AutoGradeProps) {
         const grade = gradesResponse.success ? 
           gradesResponse.data.find((gr: Grade) => gr.userid === student.id) : undefined;
 
+        // FIXED: Load persisted grade info from hierarchical store
+        const persistedGradeInfo = getUserGradeInfo(workspaceId, courseId, student.id);
+        
+        // FIXED: Also check legacy store for backward compatibility
+        const legacyResult = useAutoGradeStore.getState().getAutoGradeResult(student.id);
+
         return {
           student,
           submission,
           grade,
-          currentGrade: grade ? grade.grade.toString() : '',
-          aiGrade: undefined,
-          feedback: '',
+          currentGrade: grade ? grade.grade.toString() : (persistedGradeInfo?.currentGrade?.toString() || ''),
+          aiGrade: persistedGradeInfo?.aiGrade || legacyResult?.aiGrade || undefined,
+          feedback: persistedGradeInfo?.feedback || legacyResult?.feedback || '',
           isEditing: false
         };
       });
 
-      setStudentData(combinedData);
+      const processGradeData = (gradeData: any) => {
+        // If grade is -1 (deleted), treat it as no grade
+        if (gradeData.grade === -1) {
+          return {
+            ...gradeData,
+            grade: 0, // Convert -1 to 0 for display purposes
+            feedback: gradeData.feedback || ''
+          };
+        }
+        return gradeData;
+      };
+
+      const enhancedStudentData = combinedData.map((data: any) => {
+        const processedGrade = data.grade ? processGradeData(data.grade) : null;
+        
+        // Get the persisted grade info for this student
+        const persistedGradeInfo = getUserGradeInfo(workspaceId, courseId, data.student.id);
+        
+        return {
+          ...data,
+          grade: processedGrade,
+          currentGrade: persistedGradeInfo?.currentGrade?.toString() || (processedGrade?.grade > 0 ? processedGrade.grade.toString() : ''),
+          aiGrade: persistedGradeInfo?.aiGrade || data.aiGrade,
+          feedback: persistedGradeInfo?.feedback || data.feedback,
+          isEditing: false
+        };
+      });
+
+      setStudentData(enhancedStudentData);
     } catch (err: any) {
       setError(err.message || 'Failed to load assignment data');
     } finally {
@@ -543,11 +581,25 @@ export default function AutoGrade({ workspaceId }: AutoGradeProps) {
   };
 
   const handleGradeEdit = (studentId: string, field: 'currentGrade' | 'feedback', value: string) => {
+    if (!courseId) return;
+
     setStudentData(prev => prev.map(data => 
       data.student.id === studentId 
         ? { ...data, [field]: value }
         : data
     ));
+
+    // FIXED: Persist changes to hierarchical store
+    const currentInfo = getUserGradeInfo(workspaceId, courseId, studentId);
+    const updatedInfo = {
+      aiGrade: currentInfo?.aiGrade || '',
+      currentGrade: field === 'currentGrade' ? (parseFloat(value) || null) : (currentInfo?.currentGrade || null),
+      feedback: field === 'feedback' ? value : (currentInfo?.feedback || ''),
+      timestamp: new Date().toISOString(),
+      published: currentInfo?.published || false,
+    };
+
+    useAutoGradeStore.getState().setUserGradeInfo(workspaceId, courseId, studentId, updatedInfo);
   };
 
   const toggleEditMode = (studentId: string) => {
@@ -587,6 +639,30 @@ export default function AutoGrade({ workspaceId }: AutoGradeProps) {
     }
   };
 
+  // NEW: Function to verify grades after publishing
+  const verifyGradeInMoodle = async (assignmentId: string, studentId: string) => {
+    if (!apiToken) return null;
+
+    try {
+      const baseUrl = await getMoodleConfig();
+      const response = await window.electron.moodleApi.getAssignmentGradeDetails({
+        baseUrl,
+        apiKey: apiToken,
+        assignmentId,
+        userId: studentId
+      });
+
+      if (response.success && response.data && response.data.length > 0) {
+        return response.data[0]; // Return the grade data from Moodle
+      }
+      return null;
+    } catch (error) {
+      console.error('Error verifying grade in Moodle:', error);
+      return null;
+    }
+  };
+
+  // UPDATED: Enhanced grade publishing with verification
   const handlePublishGrade = async (studentId: string) => {
     if (!selectedAssignment || !apiToken || !courseId) return;
 
@@ -598,6 +674,8 @@ export default function AutoGrade({ workspaceId }: AutoGradeProps) {
 
     try {
       const baseUrl = await getMoodleConfig();
+      
+      // Step 1: Publish the grade
       const response = await window.electron.moodleApi.updateAssignmentGrade({
         baseUrl,
         apiKey: apiToken,
@@ -605,27 +683,40 @@ export default function AutoGrade({ workspaceId }: AutoGradeProps) {
         userId: studentId,
         grade: parseFloat(studentDataItem.currentGrade) || 0,
         feedback: studentDataItem.feedback,
-        courseId: courseId // Include course ID for validation
+        courseId: courseId
       });
 
       if (response.success) {
-        // Update the store with the published grade information
-        const { setGradeSubmission } = useAutoGradeStore.getState();
-        const submissionKey = `${selectedAssignment}-${studentId}`;
-        setGradeSubmission(submissionKey, {
-          studentId,
-          assignmentId: selectedAssignment,
-          courseId,
-          grade: parseFloat(studentDataItem.currentGrade),
-          feedback: studentDataItem.feedback,
-          timestamp: new Date().toISOString(),
-          published: true
-        });
-
         toast.success(`Grade published for ${studentDataItem.student.fullname}`);
         console.log('Grade published successfully:', response.data);
         
-        // Reload assignment data to update the grade status
+        // Step 2: Verify the grade was actually saved in Moodle
+        const verifiedGrade = await verifyGradeInMoodle(selectedAssignment, studentId);
+        
+        if (verifiedGrade) {
+          // Step 3: Update store with verified grade status
+          const { setGradeSubmission, refreshGradeStatus } = useAutoGradeStore.getState();
+          const submissionKey = `${selectedAssignment}-${studentId}`;
+          
+          setGradeSubmission(submissionKey, {
+            studentId,
+            assignmentId: selectedAssignment,
+            courseId,
+            grade: verifiedGrade.grade,
+            feedback: verifiedGrade.feedback || studentDataItem.feedback,
+            timestamp: new Date().toISOString(),
+            published: true
+          });
+
+          // Also refresh the grade status in store
+          refreshGradeStatus(selectedAssignment, studentId, verifiedGrade, courseId);
+          
+          toast.success(`Grade verified in Moodle: ${verifiedGrade.grade}/${selectedAssignmentData?.grade}`);
+        } else {
+          toast.warning('Grade published but verification failed. Please check Moodle manually.');
+        }
+        
+        // Step 4: Reload assignment data to update the UI
         loadAssignmentData();
       } else {
         toast.error(response.error || 'Failed to publish grade');
@@ -637,7 +728,7 @@ export default function AutoGrade({ workspaceId }: AutoGradeProps) {
     }
   };
 
-  // New function to publish multiple grades at once
+  // UPDATED: Enhanced batch publishing with verification
   const handlePublishGradesBatch = async (studentIds: string[]) => {
     if (!selectedAssignment || !apiToken || !courseId) return;
 
@@ -661,6 +752,8 @@ export default function AutoGrade({ workspaceId }: AutoGradeProps) {
 
     try {
       const baseUrl = await getMoodleConfig();
+      
+      // Step 1: Publish grades in batch
       const response = await window.electron.moodleApi.publishGradesBatch({
         baseUrl,
         apiKey: apiToken,
@@ -670,27 +763,38 @@ export default function AutoGrade({ workspaceId }: AutoGradeProps) {
       });
 
       if (response.success) {
-        const { setGradeSubmission } = useAutoGradeStore.getState();
-        
-        // Update store for all successfully published grades
-        gradesToPublish.forEach(grade => {
-          const submissionKey = `${selectedAssignment}-${grade.userId}`;
-          setGradeSubmission(submissionKey, {
-            studentId: grade.userId,
-            assignmentId: selectedAssignment,
-            courseId,
-            grade: grade.grade,
-            feedback: grade.feedback,
-            timestamp: new Date().toISOString(),
-            published: true
-          });
-        });
-
         toast.success(`${response.data.successCount} grades published successfully`);
         if (response.data.errorCount > 0) {
           toast.warning(`${response.data.errorCount} grades failed to publish`);
         }
         
+        // Step 2: Verify each successful grade in Moodle
+        const { setGradeSubmission, refreshGradeStatus } = useAutoGradeStore.getState();
+        let verifiedCount = 0;
+        
+        for (const successfulGrade of response.data.successful) {
+          const verifiedGrade = await verifyGradeInMoodle(selectedAssignment, successfulGrade.userId);
+          
+          if (verifiedGrade) {
+            const submissionKey = `${selectedAssignment}-${successfulGrade.userId}`;
+            setGradeSubmission(submissionKey, {
+              studentId: successfulGrade.userId,
+              assignmentId: selectedAssignment,
+              courseId,
+              grade: verifiedGrade.grade,
+              feedback: verifiedGrade.feedback || '',
+              timestamp: new Date().toISOString(),
+              published: true
+            });
+            
+            refreshGradeStatus(selectedAssignment, successfulGrade.userId, verifiedGrade, courseId);
+            verifiedCount++;
+          }
+        }
+        
+        toast.success(`${verifiedCount} grades verified in Moodle`);
+        
+        // Step 3: Reload assignment data
         loadAssignmentData();
       } else {
         toast.error(response.error || 'Failed to publish grades');
@@ -701,6 +805,8 @@ export default function AutoGrade({ workspaceId }: AutoGradeProps) {
   };
 
   const handleAdoptAiGrade = (studentId: string) => {
+    if (!courseId) return;
+
     const studentDataItem = studentData.find(data => data.student.id === studentId);
     if (!studentDataItem || !studentDataItem.aiGrade) return;
 
@@ -710,10 +816,23 @@ export default function AutoGrade({ workspaceId }: AutoGradeProps) {
         : data
     ));
 
+    // FIXED: Persist to hierarchical store
+    const currentInfo = getUserGradeInfo(workspaceId, courseId, studentId);
+    const updatedInfo = {
+      aiGrade: currentInfo?.aiGrade || studentDataItem.aiGrade,
+      currentGrade: parseFloat(studentDataItem.aiGrade) || null,
+      feedback: currentInfo?.feedback || '',
+      timestamp: new Date().toISOString(),
+      published: currentInfo?.published || false,
+    };
+    useAutoGradeStore.getState().setUserGradeInfo(workspaceId, courseId, studentId, updatedInfo);
+
     toast.success(`AI grade adopted for ${studentDataItem.student.fullname}`);
   };
 
   const handleResetAiGrade = (studentId: string) => {
+    if (!courseId) return;
+
     const studentDataItem = studentData.find(data => data.student.id === studentId);
     if (!studentDataItem) return;
 
@@ -722,6 +841,17 @@ export default function AutoGrade({ workspaceId }: AutoGradeProps) {
         ? { ...data, aiGrade: undefined }
         : data
     ));
+
+    // FIXED: Clear AI grade from hierarchical store
+    const currentInfo = getUserGradeInfo(workspaceId, courseId, studentId);
+    if (currentInfo) {
+      const updatedInfo = {
+        ...currentInfo,
+        aiGrade: '',
+        timestamp: new Date().toISOString(),
+      };
+      useAutoGradeStore.getState().setUserGradeInfo(workspaceId, courseId, studentId, updatedInfo);
+    }
 
     toast.success(`AI grade reset for ${studentDataItem.student.fullname}`);
   };
@@ -739,6 +869,11 @@ export default function AutoGrade({ workspaceId }: AutoGradeProps) {
       return;
     }
 
+    if (!courseId) {
+      toast.error('Course ID not found');
+      return;
+    }
+
     try {
       // Show loading state
       toast.info(`Starting auto-grading for ${studentDataItem.student.fullname}...`);
@@ -748,10 +883,11 @@ export default function AutoGrade({ workspaceId }: AutoGradeProps) {
         studentDataItem,
         currentMarkingScheme,
         selectedAssignmentData,
-        workspaceId
+        workspaceId,
+        courseId
       );
 
-      // Update the student data with the result
+      // FIXED: Update the student data with the result AND ensure it's persisted
       setStudentData(prev => prev.map(data => 
         data.student.id === studentId 
           ? { 
@@ -761,6 +897,16 @@ export default function AutoGrade({ workspaceId }: AutoGradeProps) {
             }
           : data
       ));
+
+      // FIXED: Explicitly persist to hierarchical store (double-check persistence)
+      const updatedInfo = {
+        aiGrade: result.aiGrade,
+        currentGrade: studentDataItem.currentGrade ? parseFloat(studentDataItem.currentGrade) : null,
+        feedback: result.feedback,
+        timestamp: new Date().toISOString(),
+        published: false,
+      };
+      useAutoGradeStore.getState().setUserGradeInfo(workspaceId, courseId, studentId, updatedInfo);
 
       const maxGrade = selectedAssignmentData?.grade || 100;
       toast.success(`Auto-grading completed for ${studentDataItem.student.fullname}! AI Grade: ${result.aiGrade}/${maxGrade}`);
@@ -773,6 +919,73 @@ export default function AutoGrade({ workspaceId }: AutoGradeProps) {
   // Update assignment selection handler
   const handleAssignmentChange = (assignmentId: string) => {
     setSelectedAssignment(workspaceId, assignmentId);
+  };
+
+  // UPDATED: Handle grade deletion by resetting state
+  const handleDeleteGrade = async (studentId: string) => {
+    if (!selectedAssignment || !apiToken || !courseId) return;
+
+    const studentDataItem = studentData.find(data => data.student.id === studentId);
+    if (!studentDataItem) return;
+
+    // Check if there's anything to delete
+    const hasLocalGrade = studentDataItem.currentGrade && studentDataItem.currentGrade !== '0';
+    const hasLocalFeedback = studentDataItem.feedback && studentDataItem.feedback.trim() !== '';
+    const hasPublishedGrade = studentDataItem.grade && studentDataItem.grade.grade > 0;
+    const hasAiGrade = studentDataItem.aiGrade;
+
+    if (!hasLocalGrade && !hasLocalFeedback && !hasPublishedGrade && !hasAiGrade) {
+      toast.info(`No grade or feedback to delete for ${studentDataItem.student.fullname}`);
+      return;
+    }
+
+    try {
+      const baseUrl = await getMoodleConfig();
+      
+      // Delete from Moodle if there's a published grade
+      if (hasPublishedGrade) {
+        const response = await window.electron.moodleApi.deleteAssignmentGrade({
+          baseUrl,
+          apiKey: apiToken,
+          assignmentId: selectedAssignment,
+          userId: studentId,
+          courseId: courseId
+        });
+
+        if (!response.success) {
+          toast.error(response.error || 'Failed to delete grade from Moodle');
+          return;
+        }
+      }
+
+      // Reset local data to initial state
+      setStudentData(prev => prev.map(data => 
+        data.student.id === studentId 
+          ? { 
+              ...data, 
+              currentGrade: '', 
+              feedback: '',
+              aiGrade: undefined,
+              isEditing: false // Also reset editing state
+            }
+          : data
+      ));
+
+      // Reset state in stores instead of deleting
+      resetUserGrade(workspaceId, courseId, studentId);
+      resetGradeSubmission(selectedAssignment, studentId);
+
+      // Also clear legacy auto grade result
+      useAutoGradeStore.getState().clearAutoGradeResult(studentId);
+
+      toast.success(`Grade and feedback deleted for ${studentDataItem.student.fullname}`);
+      
+      // Reload assignment data to update the UI
+      loadAssignmentData();
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to delete grade');
+      console.error('Error deleting grade:', err);
+    }
   };
 
   // Render
@@ -943,6 +1156,7 @@ export default function AutoGrade({ workspaceId }: AutoGradeProps) {
             onResetAiGrade={handleResetAiGrade}
             onExecuteAutoGrade={handleExecuteAutoGrade}
             onPublishGrade={handlePublishGrade}
+            onDeleteGrade={handleDeleteGrade}
           />
         </Box>
       )}

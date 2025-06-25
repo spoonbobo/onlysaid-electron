@@ -25,6 +25,7 @@ import {
   CheckCircle as CheckCircleIcon,
   RestartAlt as RestartAltIcon,
   Clear as ClearIcon,
+  Delete as DeleteIcon,
 } from '@mui/icons-material';
 import { useIntl } from 'react-intl';
 import { StudentSubmissionData, Assignment, MarkingScheme, Submission } from './types';
@@ -45,6 +46,7 @@ interface StudentTableProps {
   onResetAiGrade: (studentId: string) => void;
   onExecuteAutoGrade: (studentId: string) => void;
   onPublishGrade: (studentId: string) => void;
+  onDeleteGrade: (studentId: string) => void;
 }
 
 // Component to detect if text spans more than 2 lines
@@ -146,11 +148,27 @@ export default function StudentTable({
   onAdoptAiGrade,
   onResetAiGrade,
   onExecuteAutoGrade,
-  onPublishGrade
+  onPublishGrade,
+  onDeleteGrade
 }: StudentTableProps) {
   const intl = useIntl();
   const [feedbackDetailOpen, setFeedbackDetailOpen] = useState(false);
   const [selectedStudentForFeedback, setSelectedStudentForFeedback] = useState<StudentSubmissionData | null>(null);
+
+  // Helper function to format scores to 1 decimal place
+  const formatScore = (score: string | number | undefined | null): string => {
+    if (score === undefined || score === null || score === '') return '';
+    const numScore = typeof score === 'string' ? parseFloat(score) : score;
+    if (isNaN(numScore) || numScore < 0) return ''; // Handle -1 and other negative values
+    return numScore.toFixed(1);
+  };
+
+  // Helper function to check if a grade is valid (not deleted/ungraded)
+  const isValidGrade = (score: string | number | undefined | null): boolean => {
+    if (score === undefined || score === null || score === '') return false;
+    const numScore = typeof score === 'string' ? parseFloat(score) : score;
+    return !isNaN(numScore) && numScore >= 0; // Only positive grades are valid
+  };
 
   const getSubmissionStatus = (submission?: Submission) => {
     if (!submission) return intl.formatMessage({ id: 'workspace.insights.moodle.autograde.status.noSubmission', defaultMessage: 'No submission' });
@@ -175,21 +193,31 @@ export default function StudentTable({
   };
 
   const getGradeStatus = (data: StudentSubmissionData) => {
+    // PRIORITY 1: Check actual Moodle API data (data.grade)
     if (data.grade && data.grade.grade > 0) {
       return intl.formatMessage({ id: 'workspace.insights.moodle.autograde.gradeStatus.published', defaultMessage: 'Published' });
-    } else if (data.currentGrade && data.currentGrade !== '0' && data.currentGrade !== '') {
+    } 
+    // PRIORITY 2: Check if there's a pending grade to be published
+    else if (data.currentGrade && data.currentGrade !== '0' && data.currentGrade !== '' && parseFloat(data.currentGrade) >= 0) {
       return intl.formatMessage({ id: 'workspace.insights.moodle.autograde.gradeStatus.pending', defaultMessage: 'Pending' });
-    } else {
+    } 
+    // PRIORITY 3: No grade at all
+    else {
       return intl.formatMessage({ id: 'workspace.insights.moodle.autograde.gradeStatus.notGraded', defaultMessage: 'Not graded' });
     }
   };
 
   const getGradeStatusColor = (data: StudentSubmissionData) => {
+    // PRIORITY 1: Check actual Moodle API data (data.grade)
     if (data.grade && data.grade.grade > 0) {
       return 'success';
-    } else if (data.currentGrade && data.currentGrade !== '0' && data.currentGrade !== '') {
+    } 
+    // PRIORITY 2: Check if there's a pending grade to be published
+    else if (data.currentGrade && data.currentGrade !== '0' && data.currentGrade !== '' && parseFloat(data.currentGrade) >= 0) {
       return 'warning';
-    } else {
+    } 
+    // PRIORITY 3: No grade at all
+    else {
       return 'error';
     }
   };
@@ -367,9 +395,9 @@ export default function StudentTable({
                 </TableCell>
                 <TableCell>
                   <Typography variant="body2" color="text.primary">
-                    {data.aiGrade || intl.formatMessage({ id: 'workspace.insights.moodle.autograde.aiGradeNotAvailable', defaultMessage: 'Not available' })}
-                    {data.aiGrade && selectedAssignmentData?.grade && 
-                      ` / ${selectedAssignmentData.grade}`}
+                    {isValidGrade(data.aiGrade) ? formatScore(data.aiGrade) : intl.formatMessage({ id: 'workspace.insights.moodle.autograde.aiGradeNotAvailable', defaultMessage: 'Not available' })}
+                    {isValidGrade(data.aiGrade) && selectedAssignmentData?.grade && 
+                      ` / ${formatScore(selectedAssignmentData.grade)}`}
                   </Typography>
                 </TableCell>
                 <TableCell>
@@ -379,7 +407,11 @@ export default function StudentTable({
                       type="number"
                       value={data.currentGrade}
                       onChange={(e) => onGradeEdit(data.student.id, 'currentGrade', e.target.value)}
-                      inputProps={{ min: 0, max: selectedAssignmentData?.grade || 100 }}
+                      inputProps={{ 
+                        min: 0, 
+                        max: selectedAssignmentData?.grade || 100,
+                        step: 0.1
+                      }}
                       sx={{
                         '& .MuiOutlinedInput-root': {
                           color: 'text.primary'
@@ -388,9 +420,9 @@ export default function StudentTable({
                     />
                   ) : (
                     <Typography variant="body2" color="text.primary">
-                      {data.currentGrade || intl.formatMessage({ id: 'workspace.insights.moodle.autograde.notGraded', defaultMessage: 'Not graded' })}
-                      {data.currentGrade && selectedAssignmentData?.grade && 
-                        ` / ${selectedAssignmentData.grade}`}
+                      {isValidGrade(data.currentGrade) ? formatScore(data.currentGrade) : intl.formatMessage({ id: 'workspace.insights.moodle.autograde.notGraded', defaultMessage: 'Not graded' })}
+                      {isValidGrade(data.currentGrade) && selectedAssignmentData?.grade && 
+                        ` / ${formatScore(selectedAssignmentData.grade)}`}
                     </Typography>
                   )}
                 </TableCell>
@@ -529,6 +561,18 @@ export default function StudentTable({
                             <UploadIcon />
                           </IconButton>
                         </Tooltip>
+                        <Tooltip title={intl.formatMessage({ id: 'workspace.insights.moodle.autograde.tooltip.deleteGrade', defaultMessage: 'Delete Grade & Feedback' })}>
+                          <span>
+                            <IconButton
+                              size="small"
+                              color="error"
+                              disabled={!data.currentGrade && !data.feedback && (!data.grade || data.grade.grade <= 0)}
+                              onClick={() => onDeleteGrade(data.student.id)}
+                            >
+                              <DeleteIcon />
+                            </IconButton>
+                          </span>
+                        </Tooltip>
                       </>
                     )}
                   </Box>
@@ -552,7 +596,7 @@ export default function StudentTable({
           feedback={selectedStudentForFeedback.feedback}
           aiGrade={selectedStudentForFeedback.aiGrade}
           currentGrade={selectedStudentForFeedback.currentGrade}
-          maxGrade={selectedAssignmentData?.grade}
+          maxGrade={formatScore(selectedAssignmentData?.grade)}
         />
       )}
     </>

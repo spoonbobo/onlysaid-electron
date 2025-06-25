@@ -25,7 +25,7 @@ interface FeedbackDetailProps {
   feedback: string;
   aiGrade?: string;
   currentGrade?: string;
-  maxGrade?: number;
+  maxGrade?: number | string;
 }
 
 export default function FeedbackDetail({
@@ -39,6 +39,21 @@ export default function FeedbackDetail({
   maxGrade
 }: FeedbackDetailProps) {
   const intl = useIntl();
+
+  // Helper function to format scores to 1 decimal place
+  const formatScore = (score: string | number | undefined | null): string => {
+    if (score === undefined || score === null || score === '') return '';
+    const numScore = typeof score === 'string' ? parseFloat(score) : score;
+    if (isNaN(numScore) || numScore < 0) return ''; // Handle -1 and other negative values
+    return numScore.toFixed(1);
+  };
+
+  // Helper function to check if a grade is valid
+  const isValidGrade = (score: string | number | undefined | null): boolean => {
+    if (score === undefined || score === null || score === '') return false;
+    const numScore = typeof score === 'string' ? parseFloat(score) : score;
+    return !isNaN(numScore) && numScore >= 0;
+  };
 
   return (
     <Dialog
@@ -95,24 +110,24 @@ export default function FeedbackDetail({
           {/* Grade Information */}
           {(aiGrade || currentGrade) && (
             <Box sx={{ display: 'flex', gap: 3, mt: 2 }}>
-              {aiGrade && (
+              {aiGrade && isValidGrade(aiGrade) && (
                 <Box>
                   <Typography variant="caption" color="text.secondary" display="block">
                     {intl.formatMessage({ id: 'workspace.insights.moodle.autograde.table.aiGrade', defaultMessage: 'AI Grade' })}
                   </Typography>
                   <Typography variant="body1" fontWeight="medium" color="secondary.main">
-                    {aiGrade}{maxGrade ? ` / ${maxGrade}` : ''}
+                    {formatScore(aiGrade)}{isValidGrade(maxGrade) ? ` / ${formatScore(maxGrade)}` : ''}
                   </Typography>
                 </Box>
               )}
               
-              {currentGrade && (
+              {currentGrade && isValidGrade(currentGrade) && (
                 <Box>
                   <Typography variant="caption" color="text.secondary" display="block">
                     {intl.formatMessage({ id: 'workspace.insights.moodle.autograde.table.currentGrade', defaultMessage: 'Current Grade' })}
                   </Typography>
                   <Typography variant="body1" fontWeight="medium" color="primary.main">
-                    {currentGrade}{maxGrade ? ` / ${maxGrade}` : ''}
+                    {formatScore(currentGrade)}{isValidGrade(maxGrade) ? ` / ${formatScore(maxGrade)}` : ''}
                   </Typography>
                 </Box>
               )}

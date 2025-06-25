@@ -1210,5 +1210,13 @@
   "workspace.insights.moodle.autograde.gradeStatus.notGraded": "未評分",
   "workspace.insights.moodle.autograde.clickToViewFullFeedback": "點擊查看完整反饋",
   "workspace.insights.moodle.autograde.publishedGrades": "已發布評分",
-  "workspace.insights.moodle.autograde.pendingGrades": "{count} 個評分待發布"
+  "workspace.insights.moodle.autograde.pendingGrades": "{count} 個評分待發布",
+  "workspace.insights.moodle.autograde.tooltip.deleteGrade": "刪除評分和反饋",
+  "workspace.insights.moodle.autograde.deleteGrade.confirmation": "確定要刪除 {studentName} 的評分和反饋嗎？",
+  "workspace.insights.moodle.autograde.deleteGrade.warning": "此操作將從 Moodle 中刪除已發布的評分和反饋，並清除本地數據。此操作無法撤銷。",
+  "workspace.insights.moodle.autograde.deleteGrade.success": "已成功刪除 {studentName} 的評分和反饋",
+  "workspace.insights.moodle.autograde.deleteGrade.noDataToDelete": "沒有評分或反饋可刪除",
+  "workspace.insights.moodle.autograde.deleteGrade.error": "刪除評分失敗：{error}",
+  "workspace.insights.moodle.autograde.deleteGrade.moodleError": "從 Moodle 刪除評分失敗",
+  "workspace.insights.moodle.autograde.deleteGrade.localOnly": "僅清除本地數據（Moodle 中無已發布評分）"
 }

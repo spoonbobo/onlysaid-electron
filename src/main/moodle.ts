@@ -450,7 +450,7 @@ export function setupMoodleApiHandlers() {
     }
   });
 
-  // Update assignment grade - Enhanced with course validation
+  // Update assignment grade - FIXED: Handle null response as success
   ipcMain.handle('moodle:update-assignment-grade', async (event, args: { 
     baseUrl: string; 
     apiKey: string; 
@@ -469,63 +469,45 @@ export function setupMoodleApiHandlers() {
     });
 
     try {
-      // First, validate that the assignment belongs to the course (if courseId provided)
-      if (args.courseId) {
-        const assignmentResponse = await axios.get(`${args.baseUrl}/webservice/rest/server.php`, {
-          params: {
-            wstoken: args.apiKey,
-            wsfunction: 'mod_assign_get_assignments',
-            moodlewsrestformat: 'json',
-            'courseids[0]': args.courseId,
-          }
-        });
-
-        if (assignmentResponse.data && assignmentResponse.data.courses) {
-          const assignments = assignmentResponse.data.courses.flatMap((course: any) => course.assignments || []);
-          const targetAssignment = assignments.find((assignment: any) => assignment.id.toString() === args.assignmentId);
-          
-          if (!targetAssignment) {
-            return {
-              success: false,
-              error: `Assignment ${args.assignmentId} not found in course ${args.courseId}`
-            };
-          }
-          
-          console.log('[Moodle API] Assignment validation passed:', targetAssignment.name);
-        }
-      }
-
-      // Prepare the grade update request
+      // Prepare the grade update request with all required parameters
       const params: any = {
         wstoken: args.apiKey,
         wsfunction: 'mod_assign_save_grade',
         moodlewsrestformat: 'json',
         assignmentid: args.assignmentId,
         userid: args.userId,
-        grade: args.grade
+        grade: args.grade,
+        attemptnumber: -1, // -1 means current attempt
+        addattempt: 0, // 0 = false, don't add new attempt
+        workflowstate: '', // Empty string for default workflow
+        applytoall: 1 // 1 = true, apply to all team members if it's a group assignment
       };
 
-      // Add feedback if provided
+      // Add feedback using correct form parameter format
       if (args.feedback) {
-        params.plugindata = JSON.stringify({
-          assignfeedbackcomments_editor: {
-            text: args.feedback,
-            format: 1 // HTML format
-          }
-        });
+        params['plugindata[assignfeedbackcomments_editor][text]'] = args.feedback;
+        params['plugindata[assignfeedbackcomments_editor][format]'] = 1; // 1 = HTML format
       }
 
       console.log('[Moodle API] Sending grade update request with params:', {
         ...params,
         wstoken: `${params.wstoken.substring(0, 10)}...`,
-        plugindata: params.plugindata ? 'feedback included' : 'no feedback'
+        'plugindata[assignfeedbackcomments_editor][text]': args.feedback ? 'feedback included' : 'no feedback'
       });
 
       const response = await axios.post(`${args.baseUrl}/webservice/rest/server.php`, null, { params });
 
       console.log('[Moodle API] Grade update response:', response.data);
 
-      if (response.data && !response.data.exception) {
+      // FIXED: Handle different success response formats
+      // Moodle's mod_assign_save_grade can return null, empty array, or object on success
+      const isSuccess = response.data === null || 
+                       response.data === '' ||
+                       (Array.isArray(response.data) && response.data.length === 0) ||
+                       (response.data && !response.data.exception);
+
+      if (isSuccess) {
+        console.log('[Moodle API] Grade update successful (response was null/empty, which indicates success)');
         return {
           success: true,
           data: {
@@ -559,7 +541,7 @@ export function setupMoodleApiHandlers() {
     }
   });
 
-  // New handler: Publish multiple grades at once
+  // FIXED: Apply the same fix to batch publishing
   ipcMain.handle('moodle:publish-grades-batch', async (event, args: {
     baseUrl: string;
     apiKey: string;
@@ -580,30 +562,62 @@ export function setupMoodleApiHandlers() {
     const results = [];
     const errors = [];
 
+    // Process each grade individually using the actual update function
     for (const gradeData of args.grades) {
       try {
-        const result = await new Promise((resolve) => {
-          // Reuse the single grade update function
-          ipcMain.emit('moodle:update-assignment-grade', event, {
-            baseUrl: args.baseUrl,
-            apiKey: args.apiKey,
-            assignmentId: args.assignmentId,
-            userId: gradeData.userId,
-            grade: gradeData.grade,
-            feedback: gradeData.feedback,
-            courseId: args.courseId
-          });
-        });
-
-        results.push({
+        console.log('[Moodle API] Updating individual grade:', {
           userId: gradeData.userId,
-          success: true,
           grade: gradeData.grade
         });
+
+        // Prepare the grade update request with all required parameters
+        const params: any = {
+          wstoken: args.apiKey,
+          wsfunction: 'mod_assign_save_grade',
+          moodlewsrestformat: 'json',
+          assignmentid: args.assignmentId,
+          userid: gradeData.userId,
+          grade: gradeData.grade,
+          attemptnumber: -1, // -1 means current attempt
+          addattempt: 0, // 0 = false, don't add new attempt
+          workflowstate: '', // Empty string for default workflow
+          applytoall: 1 // 1 = true, apply to all team members if it's a group assignment
+        };
+
+        // Add feedback using correct form parameter format
+        if (gradeData.feedback) {
+          params['plugindata[assignfeedbackcomments_editor][text]'] = gradeData.feedback;
+          params['plugindata[assignfeedbackcomments_editor][format]'] = 1; // 1 = HTML format
+        }
+
+        const response = await axios.post(`${args.baseUrl}/webservice/rest/server.php`, null, { params });
+
+        // FIXED: Handle different success response formats
+        const isSuccess = response.data === null || 
+                         response.data === '' ||
+                         (Array.isArray(response.data) && response.data.length === 0) ||
+                         (response.data && !response.data.exception);
+
+        if (isSuccess) {
+          results.push({
+            userId: gradeData.userId,
+            success: true,
+            grade: gradeData.grade,
+            response: response.data
+          });
+          console.log('[Moodle API] Successfully updated grade for user:', gradeData.userId);
+        } else {
+          errors.push({
+            userId: gradeData.userId,
+            error: response.data?.message || response.data?.debuginfo || 'Failed to update grade'
+          });
+          console.error('[Moodle API] Failed to update grade for user:', gradeData.userId, response.data);
+        }
       } catch (error: any) {
+        console.error('[Moodle API] Error updating grade for user:', gradeData.userId, error);
         errors.push({
           userId: gradeData.userId,
-          error: error.message
+          error: error.response?.data?.message || error.message || 'Failed to update grade'
         });
       }
     }
@@ -674,6 +688,87 @@ export function setupMoodleApiHandlers() {
       return {
         success: false,
         error: error.message || 'Failed to fetch assignment grade details'
+      };
+    }
+  });
+
+  // NEW: Delete assignment grade and feedback
+  ipcMain.handle('moodle:delete-assignment-grade', async (event, args: {
+    baseUrl: string;
+    apiKey: string;
+    assignmentId: string;
+    userId: string;
+    courseId?: string;
+  }) => {
+    console.log('[Moodle API] Deleting assignment grade:', {
+      assignmentId: args.assignmentId,
+      userId: args.userId,
+      courseId: args.courseId
+    });
+
+    try {
+      // To delete a grade in Moodle, we set grade to -1 (no grade) and clear feedback
+      const params: any = {
+        wstoken: args.apiKey,
+        wsfunction: 'mod_assign_save_grade',
+        moodlewsrestformat: 'json',
+        assignmentid: args.assignmentId,
+        userid: args.userId,
+        grade: -1, // -1 means no grade (delete grade)
+        attemptnumber: -1, // -1 means current attempt
+        addattempt: 0, // 0 = false, don't add new attempt
+        workflowstate: '', // Empty string for default workflow
+        applytoall: 1 // 1 = true, apply to all team members if it's a group assignment
+      };
+
+      // Clear feedback by setting empty text
+      params['plugindata[assignfeedbackcomments_editor][text]'] = '';
+      params['plugindata[assignfeedbackcomments_editor][format]'] = 1; // 1 = HTML format
+
+      console.log('[Moodle API] Sending grade deletion request with params:', {
+        ...params,
+        wstoken: `${params.wstoken.substring(0, 10)}...`
+      });
+
+      const response = await axios.post(`${args.baseUrl}/webservice/rest/server.php`, null, { params });
+
+      console.log('[Moodle API] Grade deletion response:', response.data);
+
+      // Handle different success response formats (same as update grade)
+      const isSuccess = response.data === null || 
+                       response.data === '' ||
+                       (Array.isArray(response.data) && response.data.length === 0) ||
+                       (response.data && !response.data.exception);
+
+      if (isSuccess) {
+        console.log('[Moodle API] Grade deletion successful');
+        return {
+          success: true,
+          data: {
+            assignmentId: args.assignmentId,
+            userId: args.userId,
+            courseId: args.courseId,
+            timestamp: new Date().toISOString(),
+            moodleResponse: response.data
+          }
+        };
+      } else {
+        return {
+          success: false,
+          error: response.data?.message || response.data?.debuginfo || 'Failed to delete grade'
+        };
+      }
+    } catch (error: any) {
+      console.error('[Moodle API] Error deleting assignment grade:', error);
+      console.error('[Moodle API] Error details:', {
+        message: error.message,
+        response: error.response?.data,
+        status: error.response?.status
+      });
+      
+      return {
+        success: false,
+        error: error.response?.data?.message || error.message || 'Failed to delete assignment grade'
       };
     }
   });
