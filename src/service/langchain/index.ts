@@ -4,13 +4,12 @@ export { setupLangChainHandlers } from './ipc_handlers';
 
 // LangGraph OSSwarm exports (replacing old OSSwarm)
 export { 
-  LangGraphOSSwarmFactory, 
   LangGraphOSSwarmWorkflow
-} from './agent';
+} from './agent/workflow';
 
 // Re-export types
 export type { LangChainAgentOptions, OpenAIMessage } from './agent';
-export type { LangGraphOSSwarmState } from './agent';
+export type { LangGraphOSSwarmState } from './agent/state';
 
 // Re-export commonly used LangChain types
 export type { BaseMessage } from '@langchain/core/messages';

@@ -1,13 +1,16 @@
 import Chat from "./Chat";
 import Settings from "./Settings";
-import Default from "./default";
+import Default from "./Default";
 import HomePage from "./HomePage";
+import FileExplorer from "./FileExplorer";
 import { useTopicStore } from "@/renderer/stores/Topic/TopicStore";
 import { Box, Typography } from "@mui/material";
 import Playground from "@/renderer/components/Debug/Playground";
 import Calendar from "@/renderer/scenes/Main/Calendar";
 import Members from "@/renderer/scenes/Main/Workspace/Members/index";
 import KnowledgeBase from "@/renderer/scenes/Main/Settings/KnowledgeBase";
+import WorkspaceSettings from "@/renderer/scenes/Main/Workspace/Settings/index";
+import MoodleInsights from "@/renderer/scenes/Main/Workspace/Insights/Moodle/index";
 
 function Main() {
   const { selectedContext } = useTopicStore();
@@ -28,6 +31,10 @@ function Main() {
         return <Members workspaceId={workspaceId || ""} />;
       case "workspace:knowledgeBase":
         return <KnowledgeBase />;
+      case "workspace:settings":
+        return <WorkspaceSettings />;
+      case "workspace:insights":
+        return <MoodleInsights />;
       default:
         return <Default section={section} />;
     }
@@ -59,6 +66,7 @@ function Main() {
     const menuComponents: Record<string, React.ReactNode> = {
       settings: <Settings />,
       playground: <Playground />,
+      file: <FileExplorer />,
     };
     componentToRender = menuComponents[contextTypeToRender] || <Default section={contextTypeToRender} />;
   }

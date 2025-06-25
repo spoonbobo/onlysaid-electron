@@ -16,6 +16,14 @@ interface AgentTaskToggleProps {
   isOverlayVisible?: boolean;
 }
 
+const extractTimestampFromUpdate = (update: string): number | null => {
+  const timestampMatch = update.match(/\[(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})/);
+  if (timestampMatch) {
+    return new Date(timestampMatch[1]).getTime();
+  }
+  return null;
+};
+
 export default function AgentTaskToggle({ 
   disabled = false, 
   onToggle,
@@ -36,7 +44,6 @@ export default function AgentTaskToggle({
     setIsActive(isOverlayVisible);
   }, [isOverlayVisible]);
 
-  // ✅ IMPROVED: More precise activity detection logic
   const hasActiveTask = useMemo(() => {
     if (!activeAgentTasks || Object.keys(activeAgentTasks).length === 0) return false;
     return Object.values(activeAgentTasks).some(active => active === true);
@@ -52,12 +59,10 @@ export default function AgentTaskToggle({
   const hasRecentUpdates = useMemo(() => {
     if (!agentTaskUpdates || Object.keys(agentTaskUpdates).length === 0) return false;
     
-    // ✅ IMPROVED: Only consider updates from the last 30 seconds as "recent"
     const thirtySecondsAgo = Date.now() - 30000;
     return Object.values(agentTaskUpdates).some(updates => 
       Array.isArray(updates) && updates.length > 0 && 
       updates.some(update => {
-        // If update has timestamp, check if it's recent
         const timestamp = extractTimestampFromUpdate(update);
         return timestamp ? timestamp > thirtySecondsAgo : false;
       })
@@ -67,7 +72,6 @@ export default function AgentTaskToggle({
   const hasCurrentExecution = useMemo(() => {
     if (!currentExecution) return false;
     
-    // ✅ IMPROVED: Only consider as "current" if execution is actually running
     const isRunningExecution = ['pending', 'running'].includes(currentExecution.status);
     const isRecentExecution = currentExecution.created_at && 
       (Date.now() - new Date(currentExecution.created_at).getTime()) < 300000; // 5 minutes
@@ -78,33 +82,20 @@ export default function AgentTaskToggle({
   const hasGraph = useMemo(() => {
     if (!currentGraph) return false;
     
-    // ✅ IMPROVED: Only consider as active if execution is not completed
     const isActiveGraph = currentGraph.execution && 
       !['completed', 'failed', 'aborted'].includes(currentGraph.execution.status);
     
     return isActiveGraph;
   }, [currentGraph]);
 
-  // ✅ IMPROVED: More precise state calculation
   const isRunning = hasActiveTask || hasRunningTask;
   const hasActivity = hasRecentUpdates || hasCurrentExecution || hasGraph;
 
-  // ✅ NEW: Helper function to extract timestamp from update string
-  const extractTimestampFromUpdate = (update: string): number | null => {
-    // Look for timestamp patterns in update messages
-    const timestampMatch = update.match(/\[(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})/);
-    if (timestampMatch) {
-      return new Date(timestampMatch[1]).getTime();
-    }
-    return null;
-  };
-
-  // ✅ NEW: Auto-cleanup stale state after completion
+  // Auto-cleanup stale state after completion
   useEffect(() => {
     const currentTaskStatus = agentTaskStatus['current'];
     
     if (currentTaskStatus === 'completed' || currentTaskStatus === 'failed') {
-      // Clear stale state after 5 seconds for completed/failed tasks
       const timer = setTimeout(() => {
         const agentStore = useAgentStore.getState();
         if (agentStore.clearAgentTaskState) {
@@ -117,21 +108,19 @@ export default function AgentTaskToggle({
     }
   }, [agentTaskStatus]);
 
-  // ✅ NEW: Clear stale execution data
+  // Don't clear execution state when overlay is visible (user might be viewing history)
   useEffect(() => {
-    if (currentExecution?.status === 'completed' && hasActivity) {
-      // If execution is completed but we still detect activity, clear it
+    if (currentExecution?.status === 'completed' && hasActivity && !isOverlayVisible) {
       const timer = setTimeout(() => {
-        console.log('[AgentTaskToggle] Clearing stale execution state');
+        console.log('[AgentTaskToggle] Clearing stale execution state (overlay not visible)');
         const { clearCurrentExecution } = useExecutionStore.getState();
         clearCurrentExecution();
       }, 3000);
       
       return () => clearTimeout(timer);
     }
-  }, [currentExecution, hasActivity]);
+  }, [currentExecution, hasActivity, isOverlayVisible]);
 
-  // Get status color with improved logic
   const getStatusColor = () => {
     if (!agentTaskStatus || Object.keys(agentTaskStatus).length === 0) {
       return 'text.secondary';
@@ -152,7 +141,6 @@ export default function AgentTaskToggle({
     onToggle?.(newActiveState);
   };
 
-  // ✅ IMPROVED: More accurate tooltip messages
   const getTooltipMessage = () => {
     if (isRunning) {
       return "Agent Task is running - Click to view";

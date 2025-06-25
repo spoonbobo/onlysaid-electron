@@ -59,8 +59,8 @@ export class WorkflowRouters {
     );
     
     if (pendingAgent) {
-      console.log(`🔍 [ROUTER-EXEC] ➡️ Found idle agent: ${pendingAgent} - continuing execution`);
-      return 'agent_executor';
+      console.log(`🔍 [ROUTER-EXEC] ➡️ Found idle agent: ${pendingAgent} - continuing swarm execution`);
+      return 'swarm_executor';
     }
     
     // Check if all agents are completed - route to agent_completion (not result_synthesizer directly!)
@@ -82,8 +82,8 @@ export class WorkflowRouters {
       return 'agent_completion';
     }
     
-    console.log(`🔍 [ROUTER-EXEC] ➡️ Uncertain state - staying in executor for safety`);
-    return 'agent_executor';
+    console.log(`🔍 [ROUTER-EXEC] ➡️ Uncertain state - staying in swarm executor for safety`);
+    return 'swarm_executor';
   };
   
   routeAfterCompletion = (state: WorkflowState): string => {
@@ -133,7 +133,7 @@ export class WorkflowRouters {
                  .find(r => state.activeAgentCards[r].status === 'idle');
     if (idle) {
       console.log(`[ROUTER-COMPLETE] ▶ idle agent (${idle}) found`);
-      return 'agent_executor';
+      return 'swarm_executor';
     }
 
     console.log('[ROUTER-COMPLETE] ▶ all work done – synthesising');

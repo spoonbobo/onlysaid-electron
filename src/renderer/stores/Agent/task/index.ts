@@ -82,15 +82,8 @@ export const useAgentTaskOrchestrator = create<AgentTaskOrchestratorState>()(
       },
 
       initializeStores: () => {
-        // Set up store references for real-time coordination
-        useRealtimeStore.getState().setStoreReferences({
-          executionStore: useExecutionStore,
-          agentStore: useAgentManagementStore,
-          taskStore: useTaskManagementStore,
-          toolExecutionStore: useToolExecutionStore,
-          graphStore: useExecutionGraphStore,
-          historyStore: useHistoryStore
-        });
+        // The previous implementation calling `setStoreReferences` was
+        // deprecated. `RealtimeStore` now accesses other stores directly.
       },
 
       createExecutionWithLogging: async (taskDescription: string, chatId?: string, workspaceId?: string) => {

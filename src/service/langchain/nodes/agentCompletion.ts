@@ -1,6 +1,7 @@
 import { BaseWorkflowNode } from './base';
 import { WorkflowState, WorkflowNodeResult } from './types';
 import { ToolApprovalRequest } from '../agent/state';
+import { SubTask } from './taskDecomposer';
 
 export class AgentCompletionNode extends BaseWorkflowNode {
   async execute(state: WorkflowState): WorkflowNodeResult {
@@ -62,11 +63,24 @@ export class AgentCompletionNode extends BaseWorkflowNode {
           return resultStr;
         }).join('\n\n');
         
+        // Enhanced result with subtask context
+        let finalResult = toolResults || `Agent ${role} completed with ${agentTools.length} tools`;
+        
+        // Add context about which subtasks this agent was working on
+        if (state.decomposedSubtasks && state.decomposedSubtasks.length > 0) {
+          const relevantSubtasks = this.getRelevantSubtasks(role, state.decomposedSubtasks);
+          if (relevantSubtasks.length > 0) {
+            finalResult += `\n\n**Subtasks Addressed:**\n${relevantSubtasks.map(task => 
+              `- ${task.description} (Priority: ${task.priority})`
+            ).join('\n')}`;
+          }
+        }
+        
         const completedAgentCard = { ...updatedAgentCards[role], status: newStatus as 'completed' | 'failed' };
         updatedAgentCards[role] = completedAgentCard;
         updatedAgentResults[role] = {
           agentCard: completedAgentCard,
-          result: toolResults || `Agent ${role} completed with ${agentTools.length} tools`,
+          result: finalResult,
           toolExecutions: [],
           status: newStatus,
           startTime: Date.now(),
@@ -85,7 +99,9 @@ export class AgentCompletionNode extends BaseWorkflowNode {
                 acc[tool.id] = state.toolTimings[tool.id];
               }
               return acc;
-            }, {} as Record<string, any>)
+            }, {} as Record<string, any>),
+            subtasksAddressed: state.decomposedSubtasks ? 
+              this.getRelevantSubtasks(role, state.decomposedSubtasks).length : 0
           }
         });
         
@@ -97,16 +113,38 @@ export class AgentCompletionNode extends BaseWorkflowNode {
     // ✅ NEW: Also check for agents that need status updates even without tools
     for (const [role, agentCard] of Object.entries(state.activeAgentCards)) {
       if (!updatedAgentResults[role] && agentCard.status === 'busy') {
-        // Agent was busy but has no tools - mark as completed
+        // Agent was busy but has no tools - mark as completed with subtask context
+        let completionMessage = `Agent ${role} completed without tools`;
+        
+        // Add subtask context for agents without tools
+        if (state.decomposedSubtasks && state.decomposedSubtasks.length > 0) {
+          const relevantSubtasks = this.getRelevantSubtasks(role, state.decomposedSubtasks);
+          if (relevantSubtasks.length > 0) {
+            completionMessage += `\n\n**Assigned Subtasks:**\n${relevantSubtasks.map(task => 
+              `- ${task.description} (Priority: ${task.priority})`
+            ).join('\n')}\n\n*Note: Agent completed without using external tools*`;
+          }
+        }
+        
         const completedAgentCard = { ...agentCard, status: 'completed' as const };
         updatedAgentCards[role] = completedAgentCard;
+        updatedAgentResults[role] = {
+          agentCard: completedAgentCard,
+          result: completionMessage,
+          toolExecutions: [],
+          status: 'completed',
+          startTime: Date.now(),
+          endTime: Date.now()
+        };
         
         await this.sendRendererUpdate(state, {
           type: 'agent_status',
           data: {
             agentCard: completedAgentCard,
             status: 'completed',
-            result: `Agent ${role} completed without tools`
+            result: completionMessage,
+            subtasksAddressed: state.decomposedSubtasks ? 
+              this.getRelevantSubtasks(role, state.decomposedSubtasks).length : 0
           }
         });
         
@@ -127,7 +165,8 @@ export class AgentCompletionNode extends BaseWorkflowNode {
       anyAgentUpdated,
       completedToolsCount: completedTools.length,
       finalApprovalsCount: finalApprovals.length,
-      timingDataAvailable: Object.keys(state.toolTimings).length
+      timingDataAvailable: Object.keys(state.toolTimings).length,
+      subtasksAvailable: state.decomposedSubtasks?.length || 0
     });
     
     return {
@@ -135,5 +174,30 @@ export class AgentCompletionNode extends BaseWorkflowNode {
       agentResults: updatedAgentResults,
       pendingApprovals: finalApprovals as ToolApprovalRequest[]
     };
+  }
+
+  private getRelevantSubtasks(agentRole: string, subtasks: SubTask[]): SubTask[] {
+    return subtasks.filter(task => 
+      task.suggestedAgentTypes.includes(agentRole) || 
+      task.requiredSkills.some(skill => this.agentHasSkill(agentRole, skill))
+    );
+  }
+
+  private agentHasSkill(role: string, skill: string): boolean {
+    // Map common skills to agent types
+    const skillMapping: { [key: string]: string[] } = {
+      'research': ['research', 'data_analysis', 'investigation'],
+      'analysis': ['analysis', 'critical_thinking', 'evaluation'],
+      'creative': ['creativity', 'design', 'marketing', 'content'],
+      'communication': ['writing', 'presentation', 'documentation'],
+      'technical': ['programming', 'development', 'engineering'],
+      'validation': ['testing', 'quality_assurance', 'verification']
+    };
+    
+    const agentSkills = skillMapping[role] || [role];
+    return agentSkills.some(agentSkill => 
+      skill.toLowerCase().includes(agentSkill.toLowerCase()) ||
+      agentSkill.toLowerCase().includes(skill.toLowerCase())
+    );
   }
 } 

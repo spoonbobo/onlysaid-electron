@@ -1,7 +1,7 @@
 import { LangChainAgentService, LangChainAgentOptions } from '../agent';
 import { LangGraphOSSwarmWorkflow } from '../agent/workflow';
 import { AgentCard } from '@/../../types/Agent/AgentCard';
-import { AgentRegistry } from '../agent/registry';
+import { AgentRegistry, SwarmRegistry } from '../agent/registry';
 import { v4 as uuidv4 } from 'uuid';
 
 // Define a simplified agent interface for LangGraph
@@ -332,6 +332,55 @@ export class AgentFactory {
       securitySchemes: undefined,
       security: undefined,
     };
+  }
+
+  /**
+   * Create agent cards that include both individual agents and swarms
+   */
+  static createRegistryAgentCardsWithSwarms(): AgentCard[] {
+    const individualAgents = this.createRegistryAgentCards();
+    const swarms = SwarmRegistry.getAllSwarmsAsAgentCards();
+    
+    return [...swarms, ...individualAgents]; // Put swarms first as they're higher-level concepts
+  }
+
+  /**
+   * Check if a role represents a swarm
+   */
+  static isSwarmRole(role: string): boolean {
+    return role.endsWith('_swarm') || SwarmRegistry.getSwarmConfig(role) !== null;
+  }
+
+  /**
+   * Get agents from a swarm configuration
+   */
+  static getSwarmAgents(swarmRole: string): AgentCard[] {
+    const swarmConfig = SwarmRegistry.getSwarmConfig(swarmRole);
+    if (!swarmConfig) {
+      return [];
+    }
+
+    return swarmConfig.agents.map(agentConfig => ({
+      name: agentConfig.name,
+      description: agentConfig.description,
+      url: `onlysaid://registry/${agentConfig.role}`,
+      version: '1.0.0',
+      capabilities: agentConfig.capabilities,
+      defaultInputModes: ['text/plain'],
+      defaultOutputModes: ['text/plain'],
+      skills: agentConfig.skills,
+      iconUrl: agentConfig.iconUrl,
+      provider: {
+        name: 'OnlySaid',
+        documentationUrl: 'https://docs.onlysaid.com/agents'
+      },
+      documentationUrl: `https://docs.onlysaid.com/agents/${agentConfig.role}`,
+      supportsAuthenticatedExtendedCard: false,
+      status: 'idle',
+      expertise: agentConfig.expertise,
+      runtimeId: `swarm-member-${agentConfig.role}`,
+      role: agentConfig.role,
+    } as AgentCard));
   }
 
   // DEPRECATED: Legacy methods for backward compatibility

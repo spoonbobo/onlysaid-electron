@@ -41,6 +41,7 @@ import { setupHealthCheckHandlers, cleanupHealthCheck } from './healthcheck';
 import { setupLangChainHandlers } from '../service/langchain';
 import { setupHumanInTheLoopHandlers } from '../service/langchain/human_in_the_loop/ipc/human_in_the_loop';
 import { setupInitializationHandlers } from './initialization';
+import { setupMoodleHandlers } from './moodle';
 
 // Load environment variables
 dotenv.config();
@@ -61,6 +62,7 @@ setupFileHandlers();
 setupStorageHandlers();
 setupAppHandlers();
 setupCryptoHandlers();
+setupMoodleHandlers();
 setupN8nHandlers();
 setupHealthCheckHandlers();
 setupLangChainHandlers();

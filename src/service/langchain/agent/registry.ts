@@ -1,5 +1,18 @@
 import { AgentCard, AgentCapabilities, AgentSkill } from '@/../../types/Agent/AgentCard';
 
+export interface SwarmConfig {
+  role: string;
+  name: string;
+  description: string;
+  iconUrl: string;
+  expertise: string[];
+  skills: AgentSkill[];
+  capabilities: AgentCapabilities;
+  systemPrompt: string;
+  supportsKnowledgeBase?: boolean;
+  agents: AgentTypeConfig[];
+}
+
 export interface AgentTypeConfig {
   role: string;
   name: string;
@@ -368,5 +381,99 @@ All tool usage requires human approval.`
   static supportsKnowledgeBase(role: string): boolean {
     const config = this.getAgentConfig(role);
     return config?.supportsKnowledgeBase || config?.capabilities.knowledgeBase || false;
+  }
+}
+
+export class SwarmRegistry {
+  private static swarmTypes: Map<string, SwarmConfig> = new Map();
+
+  static {
+    this.registerSwarmTypes();
+  }
+
+  private static registerSwarmTypes(): void {
+    const researchAgent = AgentRegistry.getAgentConfig('research');
+    const analysisAgent = AgentRegistry.getAgentConfig('analysis');
+    const creativeAgent = AgentRegistry.getAgentConfig('creative');
+    const communicationAgent = AgentRegistry.getAgentConfig('communication');
+
+    if (!researchAgent || !analysisAgent || !creativeAgent || !communicationAgent) {
+      console.error('One or more base agents not found for swarm registration');
+      return;
+    }
+
+    const swarmConfigs: SwarmConfig[] = [
+      {
+        role: 'research_swarm',
+        name: 'Research Swarm',
+        description: 'A dedicated swarm for in-depth research and analysis, combining the strengths of research and analysis agents.',
+        iconUrl: '/icons/swarms/research_swarm.svg',
+        expertise: ['deep_research', 'data_analysis', 'report_generation'],
+        skills: [
+          ...researchAgent.skills,
+          ...analysisAgent.skills,
+        ],
+        capabilities: {
+          ...researchAgent.capabilities,
+          ...analysisAgent.capabilities,
+        },
+        systemPrompt: "You are a Research Swarm, a coordinated group of AI agents specializing in deep research and analysis. Your goal is to provide comprehensive, well-structured reports based on thorough investigation. You have access to both research and analysis agents.",
+        agents: [researchAgent, analysisAgent],
+      },
+      {
+        role: 'creative_swarm',
+        name: 'Creative Swarm',
+        description: 'A swarm focused on brainstorming, content creation, and communication. Ideal for marketing, writing, and creative tasks.',
+        iconUrl: '/icons/swarms/creative_swarm.svg',
+        expertise: ['creative_writing', 'brainstorming', 'content_strategy'],
+        skills: [
+          ...creativeAgent.skills,
+          ...communicationAgent.skills,
+        ],
+        capabilities: {
+          ...creativeAgent.capabilities,
+          ...communicationAgent.capabilities,
+        },
+        systemPrompt: "You are a Creative Swarm, a team of AI agents designed for creative tasks. You combine brainstorming, content creation, and effective communication to produce innovative and engaging materials.",
+        agents: [creativeAgent, communicationAgent],
+      }
+    ];
+
+    swarmConfigs.forEach(config => {
+      this.swarmTypes.set(config.role, config);
+    });
+  }
+
+  static getSwarmConfig(role: string): SwarmConfig | null {
+    return this.swarmTypes.get(role) || null;
+  }
+
+  static getAllSwarmConfigs(): SwarmConfig[] {
+    return Array.from(this.swarmTypes.values());
+  }
+
+  static getAllSwarmsAsAgentCards(): AgentCard[] {
+    const swarmConfigs = this.getAllSwarmConfigs();
+    return swarmConfigs.map(config => ({
+      name: config.name,
+      description: config.description,
+      url: `onlysaid://swarm/${config.role}`,
+      iconUrl: config.iconUrl,
+      provider: {
+        name: 'OnlySaid Swarms',
+        documentationUrl: 'https://docs.onlysaid.com/swarms'
+      },
+      version: '1.0.0',
+      documentationUrl: `https://docs.onlysaid.com/swarms/${config.role}`,
+      capabilities: config.capabilities,
+      defaultInputModes: ['text/plain'],
+      defaultOutputModes: ['text/plain'],
+      skills: config.skills,
+      supportsAuthenticatedExtendedCard: false,
+      status: 'idle',
+      expertise: config.expertise,
+      runtimeId: `swarm-${config.role}`,
+      role: config.role,
+    } as AgentCard));
   }
 } 

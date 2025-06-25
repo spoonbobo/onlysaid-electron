@@ -10,6 +10,7 @@ import { useFileExplorerStore } from "@/renderer/stores/File/FileExplorerStore";
 import { useSocketStore } from "@/renderer/stores/Socket/SocketStore";
 import { useCryptoStore } from '../Crypto/CryptoStore';
 import { useTopicStore } from '@/renderer/stores/Topic/TopicStore';
+import { useWorkspaceSettingsStore } from './WorkspaceSettingsStore';
 
 interface WorkspaceCreateData extends Partial<IWorkspace> {
   name: string;
@@ -210,6 +211,7 @@ export const useWorkspaceStore = create<WorkspaceState>()((set, get) => ({
 
       useKBStore.getState().clearProcessedDocumentsForWorkspace(workspaceId);
       useFileExplorerStore.getState().removeRemoteRootFolderByWorkspaceId(workspaceId);
+      useWorkspaceSettingsStore.getState().clearSettings(workspaceId);
 
       toast.success("Workspace deleted successfully");
     } catch (error: any) {
@@ -293,6 +295,7 @@ export const useWorkspaceStore = create<WorkspaceState>()((set, get) => ({
 
       useKBStore.getState().clearProcessedDocumentsForWorkspace(workspaceId);
       useFileExplorerStore.getState().removeRemoteRootFolderByWorkspaceId(workspaceId);
+      useWorkspaceSettingsStore.getState().clearSettings(workspaceId);
       
       // NEW: Clear remembered chat for this workspace
       useTopicStore.getState().clearWorkspaceSelectedChat(workspaceId);

@@ -18,7 +18,6 @@ import {
   IUserDeviceUpdateArgs,
   IUserDeviceRemoveArgs
 } from '@/../../types/User/UserDevice';
-import type { N8nTestConnectionArgs, N8nTestConnectionResult } from './n8n';
 
 // namespace
 type AuthChannels = 'auth:sign-in' | 'auth:signed-in' | 'auth:cancel';
@@ -42,6 +41,8 @@ type FileSystemChannels =
   | 'file:get-metadata'
   | 'file:get-multiple-metadata'
   | 'file:get-workspace-icon'
+  | 'file:get-files-in-path'
+  | 'file:read-text-file'
   | 'assets:get-local-asset';
 
 // Add dialog channels
@@ -88,7 +89,11 @@ type ApiWorkspaceChannels =
   | 'workspace:update_join_request'
   | 'workspace:leave'
   | 'workspace:get_by_id'
-  | 'workspace:update_user_role';
+  | 'workspace:update_user_role'
+  | 'workspace:get_settings'
+  | 'workspace:create_settings'
+  | 'workspace:update_settings'
+  | 'workspace:delete_settings';
 
 // Add new storage channels
 type ApiStorageChannels = 'storage:list-contents';
@@ -161,7 +166,7 @@ type CryptoChannels =
 // Add health check channels
 type HealthCheckChannels = 'health:start-periodic-check' | 'health:stop-periodic-check' | 'health:check' | 'health:check-failed' | 'health:is-running';
 
-// Add this new type around line 91 with other channel types:
+// ✅ UPDATED: Enhanced AgentChannels with decomposed task support
 type AgentChannels = 
   | 'agent:execute_task' 
   | 'agent:get_status' 
@@ -189,10 +194,30 @@ type AgentChannels =
   | 'agent:update_agent_status'
   | 'agent:update_task_status'
   | 'agent:clear_task_state'
-  | 'agent:clear_all_task_state';
+  | 'agent:clear_all_task_state'
+  | 'agent:save_decomposed_tasks_to_db'
+  | 'agent:create_task_with_decomposition'
+  | 'agent:update_task_assignment'
+  | 'agent:load_task_hierarchy'
+  | 'agent:task_assigned';
 
 // Add this new type around line 130 with other channel types
 type InitializationChannels = 'init:progress-update' | 'init:step-complete' | 'init:complete';
+
+// Add Moodle API channels to the type definitions
+type MoodleApiChannels = 
+  | 'moodle:test-connection'
+  | 'moodle:get-course'
+  | 'moodle:get-enrolled-users'
+  | 'moodle:get-course-contents'
+  | 'moodle:get-grades'
+  | 'moodle:get-user-info'
+  | 'moodle:get-courses'
+  | 'moodle:get-preset-url'
+  | 'moodle:get-assignments'
+  | 'moodle:get-assignment-submissions'
+  | 'moodle:get-assignment-grades'
+  | 'moodle:update-assignment-grade';
 
 export type Channels =
   | AuthChannels
@@ -203,7 +228,7 @@ export type Channels =
   | ApiChannels
   | MenuChannels
   | MenuBarChannels
-  | WindowChannels // ✅ Add WindowChannels to the union
+  | WindowChannels
   | MiscChannels
   | SystemChannels
   | SSEChannels
@@ -219,7 +244,8 @@ export type Channels =
   | CryptoChannels
   | HealthCheckChannels
   | AgentChannels
-  | InitializationChannels;
+  | InitializationChannels
+  | MoodleApiChannels;
 
 const electronHandler = {
   ipcRenderer: {
@@ -308,7 +334,6 @@ const electronHandler = {
     get_invitations: (...args: unknown[]) => ipcRenderer.invoke('workspace:get_invitations', ...args),
     get_user_invitations: (...args: unknown[]) => ipcRenderer.invoke('workspace:get_user_invitations', ...args),
     get_user_join_requests: (...args: unknown[]) => ipcRenderer.invoke('workspace:get_user_join_requests', ...args),
-
     update_invitation: (...args: unknown[]) => ipcRenderer.invoke('workspace:update_invitation', ...args),
     cancel_invitation: (...args: unknown[]) => ipcRenderer.invoke('workspace:cancel_invitation', ...args),
     join_request: (...args: unknown[]) => ipcRenderer.invoke('workspace:join_request', ...args),
@@ -317,6 +342,28 @@ const electronHandler = {
     get_by_id: (...args: unknown[]) => ipcRenderer.invoke('workspace:get_by_id', ...args),
     update_user_role: (...args: unknown[]) => ipcRenderer.invoke('workspace:update_user_role', ...args),
     leave: (...args: unknown[]) => ipcRenderer.invoke('workspace:leave', ...args),
+    
+    // New settings methods
+    get_settings: (args: { token: string; workspaceId: string }) =>
+      ipcRenderer.invoke('workspace:get_settings', args),
+    create_settings: (args: { 
+        token: string; 
+        workspaceId: string; 
+        request: { 
+            moodle_course_id?: string;
+            moodle_api_token?: string;
+        } 
+    }) => ipcRenderer.invoke('workspace:create_settings', args),
+    update_settings: (args: { 
+        token: string; 
+        workspaceId: string; 
+        request: { 
+            moodle_course_id?: string;
+            moodle_api_token?: string;
+        } 
+    }) => ipcRenderer.invoke('workspace:update_settings', args),
+    delete_settings: (args: { token: string; workspaceId: string }) =>
+      ipcRenderer.invoke('workspace:delete_settings', args),
   },
   chat: {
     get: (...args: unknown[]) => ipcRenderer.invoke('chat:get', ...args),
@@ -374,6 +421,13 @@ const electronHandler = {
       ipcRenderer.invoke('file:get-workspace-icon', args),
     getLocalAsset: (assetPath: string) =>
       ipcRenderer.invoke('assets:get-local-asset', assetPath),
+    getFilesInPath: (args: { workspaceId: string; pathPrefix: string; token: string }) =>
+      ipcRenderer.invoke('file:get-files-in-path', args),
+    readTextFile: (args: { workspaceId: string; fileId: string; token: string }) =>
+      ipcRenderer.invoke('file:read-text-file', args),
+  },
+  dialog: {
+    showSaveDialog: (options: any) => ipcRenderer.invoke('dialog:showSaveDialog', options),
   },
   homedir: () => os.homedir(),
   session: {
@@ -521,6 +575,7 @@ const electronHandler = {
       return () => ipcRenderer.removeListener('health:check-failed', callback);
     },
   },
+  // ✅ ENHANCED: Agent handler with decomposed task support
   agent: {
     executeTask: (params: { task: string; options: any; limits?: any }) =>
       ipcRenderer.invoke('agent:execute_task', params),
@@ -589,6 +644,58 @@ const electronHandler = {
       ipcRenderer.invoke('agent:update_agent_status', params),
     updateTaskStatus: (params: { taskId: string; status: string; result?: string; error?: string; executionId: string }) =>
       ipcRenderer.invoke('agent:update_task_status', params),
+    
+    // ✅ NEW: Decomposed task methods
+    saveDecomposedTasksToDb: (params: { 
+      executionId: string; 
+      subtasks: any[]; 
+      taskAnalysis?: string; 
+    }) =>
+      ipcRenderer.invoke('agent:save_decomposed_tasks_to_db', params),
+    createTaskWithDecomposition: (params: any) =>
+      ipcRenderer.invoke('agent:create_task_with_decomposition', params),
+    updateTaskAssignment: (params: { 
+      taskId: string; 
+      agentId: string; 
+      assignmentReason?: string; 
+      executionId: string; 
+    }) =>
+      ipcRenderer.invoke('agent:update_task_assignment', params),
+    loadTaskHierarchy: (params: { executionId: string }) =>
+      ipcRenderer.invoke('agent:load_task_hierarchy', params),
+  },
+  moodleApi: {
+    testConnection: (args: { baseUrl: string; apiKey: string }) => 
+      ipcRenderer.invoke('moodle:test-connection', args),
+    getCourse: (args: { baseUrl: string; apiKey: string; courseId: string }) => 
+      ipcRenderer.invoke('moodle:get-course', args),
+    getEnrolledUsers: (args: { baseUrl: string; apiKey: string; courseId: string }) => 
+      ipcRenderer.invoke('moodle:get-enrolled-users', args),
+    getCourseContents: (args: { baseUrl: string; apiKey: string; courseId: string }) => 
+      ipcRenderer.invoke('moodle:get-course-contents', args),
+    getGrades: (args: { baseUrl: string; apiKey: string; courseId: string }) => 
+      ipcRenderer.invoke('moodle:get-grades', args),
+    getUserInfo: (args: { baseUrl: string; apiKey: string }) => 
+      ipcRenderer.invoke('moodle:get-user-info', args),
+    getCourses: (args: { baseUrl: string; apiKey: string }) => 
+      ipcRenderer.invoke('moodle:get-courses', args),
+    getAssignments: (args: { baseUrl: string; apiKey: string; courseId: string }) => 
+      ipcRenderer.invoke('moodle:get-assignments', args),
+    getAssignmentSubmissions: (args: { baseUrl: string; apiKey: string; assignmentId: string }) => 
+      ipcRenderer.invoke('moodle:get-assignment-submissions', args),
+    getAssignmentGrades: (args: { baseUrl: string; apiKey: string; assignmentId: string }) => 
+      ipcRenderer.invoke('moodle:get-assignment-grades', args),
+    updateAssignmentGrade: (args: { 
+      baseUrl: string; 
+      apiKey: string; 
+      assignmentId: string; 
+      userId: string; 
+      grade: number; 
+      feedback?: string;
+    }) => ipcRenderer.invoke('moodle:update-assignment-grade', args),
+  },
+  moodleAuth: {
+    getPresetUrl: () => ipcRenderer.invoke('moodle:get-preset-url'),
   },
 };
 

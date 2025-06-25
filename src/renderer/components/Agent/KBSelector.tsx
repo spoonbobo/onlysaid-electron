@@ -4,7 +4,6 @@ import { useIntl } from "react-intl";
 import { useKBStore } from "@/renderer/stores/KB/KBStore";
 import { useKBSettingsStore } from "@/renderer/stores/KB/KBSettingStore";
 import { useTopicStore } from "@/renderer/stores/Topic/TopicStore";
-import { useLLMConfigurationStore } from "@/renderer/stores/LLM/LLMConfiguration";
 import { IKnowledgeBase } from "@/../../types/KnowledgeBase/KnowledgeBase";
 import SelectKBDialog from "@/renderer/components/Dialog/KB/SelectKB";
 
@@ -18,37 +17,39 @@ export default function KBSelector({ disabled = false }: KBSelectorProps) {
   const { getKnowledgeBaseDetailsList } = useKBStore();
   const { selectedContext } = useTopicStore();
   const workspaceId = selectedContext?.id;
-  const { aiMode } = useLLMConfigurationStore();
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const intl = useIntl();
   const componentDisabled = disabled;
 
   const [initialSelectAllDone, setInitialSelectAllDone] = useState(false);
+  const [hasLoadedKBs, setHasLoadedKBs] = useState(false);
 
-  // Check if we're in a mode that supports KB selection
-  const isKBSupportedMode = aiMode === "query" || aiMode === "agent";
-
+  // Load KBs when workspaceId changes
   useEffect(() => {
-    if (isKBSupportedMode && workspaceId) {
+    if (workspaceId) {
       loadKBs();
     } else {
       setAvailableKBs([]);
-      clearSelectedKBs();
+      setHasLoadedKBs(false);
       setInitialSelectAllDone(false);
     }
-  }, [workspaceId, aiMode, isKBSupportedMode]);
+  }, [workspaceId]);
 
+  // Only clear selections if we've actually loaded data and confirmed there are no KBs
   useEffect(() => {
-    if (isKBSupportedMode && availableKBs.length > 0) {
-      const currentSelected = selectedKbIds.filter(id => availableKBs.some(kb => kb.id === id));
-      if (currentSelected.length !== selectedKbIds.length) {
-        setSelectedKBs(currentSelected);
+    if (hasLoadedKBs) {
+      if (availableKBs.length > 0) {
+        const currentSelected = selectedKbIds.filter(id => availableKBs.some(kb => kb.id === id));
+        if (currentSelected.length !== selectedKbIds.length) {
+          setSelectedKBs(currentSelected);
+        }
+      } else if (selectedKbIds.length > 0) {
+        // Only clear if we've confirmed there are no available KBs after loading
+        clearSelectedKBs();
       }
-    } else if (isKBSupportedMode && availableKBs.length === 0 && selectedKbIds.length > 0) {
-      clearSelectedKBs();
     }
-  }, [availableKBs, aiMode, selectedKbIds, setSelectedKBs, clearSelectedKBs, isKBSupportedMode]);
+  }, [availableKBs, selectedKbIds, setSelectedKBs, clearSelectedKBs, hasLoadedKBs]);
 
   const loadKBs = async () => {
     if (!workspaceId) return;
@@ -56,6 +57,7 @@ export default function KBSelector({ disabled = false }: KBSelectorProps) {
       const kbs = await getKnowledgeBaseDetailsList(workspaceId);
       const validKBs = kbs || [];
       setAvailableKBs(validKBs);
+      setHasLoadedKBs(true);
 
       if (validKBs.length > 0 && !initialSelectAllDone) {
         setSelectedKBs(validKBs.map(kb => kb.id));
@@ -67,6 +69,7 @@ export default function KBSelector({ disabled = false }: KBSelectorProps) {
     } catch (error) {
       console.error('Failed to load knowledge bases:', error);
       setAvailableKBs([]);
+      setHasLoadedKBs(true);
       clearSelectedKBs();
       setInitialSelectAllDone(false);
     }
@@ -116,11 +119,6 @@ export default function KBSelector({ disabled = false }: KBSelectorProps) {
   }, [selectedKbIds, availableKBs, intl]);
 
   const isAllSelected = availableKBs.length > 0 && selectedKbIds.length === availableKBs.length;
-
-  // Don't render if not in a supported mode
-  if (!isKBSupportedMode) {
-    return null;
-  }
 
   return (
     <>

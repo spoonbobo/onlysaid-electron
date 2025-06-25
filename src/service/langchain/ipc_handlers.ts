@@ -4,7 +4,6 @@ import { LangChainAgentOptions, OpenAIMessage } from './agent';
 import { v4 as uuidv4 } from 'uuid';
 import { LangGraphOSSwarmFactory } from './factory/factory';
 import { LangGraphOSSwarmWorkflow } from './agent/workflow';
-import { getMainHumanInTheLoopManager, HumanInteractionResponse } from '@/service/langchain/human_in_the_loop/ipc/human_in_the_loop';
 
 // Track active tool executions and workflows
 const activeToolExecutions = new Map<string, AbortController>();
@@ -92,6 +91,13 @@ export function setupLangChainHandlers() {
   // Enhanced execute_task handler
   ipcMain.handle('agent:execute_task', async (event, { task, options, limits, chatId, workspaceId }) => {
     try {
+      const ipcSend = (channel: string, ...args: any[]) => {
+        if (!event.sender.isDestroyed()) {
+          event.sender.send(channel, ...args);
+        }
+      };
+
+      // ✅ FIX: Set the global osswarmWebContents reference for workflow nodes
       (global as any).osswarmWebContents = event.sender;
 
       const workflow = new LangGraphOSSwarmWorkflow(options);
@@ -102,10 +108,16 @@ export function setupLangChainHandlers() {
         chatId,
         workspaceId,
         streamCallback: (update: string) => {
-          event.sender.send('agent:stream_update', { update });
+          if (!event.sender.isDestroyed()) {
+            event.sender.send('agent:stream_update', { update });
+          }
         },
+        ipcSend,
         ...options
       });
+
+      // ✅ FIX: Clean up the global reference after workflow completes
+      delete (global as any).osswarmWebContents;
 
       const response = {
         success: result.success,
@@ -119,6 +131,8 @@ export function setupLangChainHandlers() {
 
     } catch (error: any) {
       console.error('Error in agent:execute_task:', error);
+      // ✅ FIX: Clean up the global reference on error
+      delete (global as any).osswarmWebContents;
       return { success: false, error: error.message || 'Unknown error occurred' };
     }
   });
@@ -126,10 +140,27 @@ export function setupLangChainHandlers() {
   // Enhanced resume workflow handler
   ipcMain.handle('agent:resume_workflow', async (event, { threadId, response, workflowType }) => {
     try {
-      const result = await LangGraphOSSwarmWorkflow.resumeWorkflow(threadId, response);
+      const ipcSend = (channel: string, ...args: any[]) => {
+        if (!event.sender.isDestroyed()) {
+          event.sender.send(channel, ...args);
+        }
+      };
+
+      // ✅ FIX: Set the global webContents reference for resumed workflows
+      (global as any).osswarmWebContents = event.sender;
+      
+      const result = await LangGraphOSSwarmWorkflow.resumeWorkflow(threadId, response, ipcSend);
+
+      // ✅ FIX: Clean up the global reference after workflow completes or pauses
+      if (result.completed || !result.requiresHumanInteraction) {
+        delete (global as any).osswarmWebContents;
+      }
+
       return result;
     } catch (error: any) {
       console.error('Error in agent:resume_workflow:', error);
+      // ✅ FIX: Clean up the global reference on error
+      delete (global as any).osswarmWebContents;
       return { success: false, error: error.message };
     }
   });
@@ -446,7 +477,69 @@ export function setupLangChainHandlers() {
     }
   });
 
+  // ✅ ADD: Enhanced task handlers for decomposition support
+  ipcMain.handle('agent:save_decomposed_tasks_to_db', async (event, { executionId, subtasks, taskAnalysis }) => {
+    try {
+      event.sender.send('agent:save_decomposed_tasks_to_db', {
+        executionId,
+        subtasks,
+        taskAnalysis
+      });
+      return { success: true };
+    } catch (error: any) {
+      console.error('Error saving decomposed tasks:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  ipcMain.handle('agent:create_task_with_decomposition', async (event, taskParams) => {
+    try {
+      event.sender.send('agent:create_task_with_decomposition', taskParams);
+      return { success: true };
+    } catch (error: any) {
+      console.error('Error creating task with decomposition data:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  ipcMain.handle('agent:update_task_assignment', async (event, { taskId, agentId, assignmentReason, executionId }) => {
+    try {
+      event.sender.send('agent:update_task_assignment', {
+        taskId,
+        agentId,
+        assignmentReason,
+        executionId
+      });
+      
+      event.sender.send('agent:task_assigned', {
+        executionId,
+        taskId,
+        agentId,
+        assignmentReason,
+        timestamp: Date.now()
+      });
+      
+      return { success: true };
+    } catch (error: any) {
+      console.error('Error updating task assignment:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  ipcMain.handle('agent:load_task_hierarchy', async (event, { executionId }) => {
+    try {
+      event.sender.send('agent:load_task_hierarchy', {
+        executionId
+      });
+      return { success: true };
+    } catch (error: any) {
+      console.error('Error loading task hierarchy:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
   console.log('[LangChain] IPC handlers set up successfully');
+  LangGraphOSSwarmWorkflow.startCleanupCycle();
 }
 
 // Clean up old workflows periodically (prevent memory leaks)

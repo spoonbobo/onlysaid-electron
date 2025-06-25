@@ -753,6 +753,173 @@ export const featureMigrations: IMigration[] = [
     down: `
       -- No rollback needed as this is an application-level fix
     `
+  },
+  {
+    id: 'feature_023',
+    version: '2.5.0',
+    name: 'enhance_osswarm_tasks_for_decomposition',
+    description: 'Enhance OSSwarm tasks table to support task decomposition with subtasks',
+    category: 'feature',
+    dependencies: ['feature_022'],
+    createdAt: '2024-01-17T00:00:00Z',
+    up: `
+      -- Add new columns to osswarm_tasks for task decomposition support
+      ALTER TABLE osswarm_tasks ADD COLUMN subtask_id TEXT;
+      ALTER TABLE osswarm_tasks ADD COLUMN parent_task_id TEXT;
+      ALTER TABLE osswarm_tasks ADD COLUMN required_skills TEXT; -- JSON array
+      ALTER TABLE osswarm_tasks ADD COLUMN suggested_agent_types TEXT; -- JSON array
+      ALTER TABLE osswarm_tasks ADD COLUMN estimated_complexity TEXT DEFAULT 'medium';
+      ALTER TABLE osswarm_tasks ADD COLUMN coordination_notes TEXT;
+      ALTER TABLE osswarm_tasks ADD COLUMN is_decomposed_task BOOLEAN DEFAULT FALSE;
+      ALTER TABLE osswarm_tasks ADD COLUMN task_breakdown_reasoning TEXT;
+      ALTER TABLE osswarm_tasks ADD COLUMN assignment_reason TEXT;
+      
+      -- Create indexes for performance
+      CREATE INDEX IF NOT EXISTS idx_osswarm_tasks_subtask_id ON osswarm_tasks(subtask_id);
+      CREATE INDEX IF NOT EXISTS idx_osswarm_tasks_parent_task_id ON osswarm_tasks(parent_task_id);
+      CREATE INDEX IF NOT EXISTS idx_osswarm_tasks_is_decomposed ON osswarm_tasks(is_decomposed_task);
+      CREATE INDEX IF NOT EXISTS idx_osswarm_tasks_complexity ON osswarm_tasks(estimated_complexity);
+      
+      -- Add foreign key reference for parent tasks
+      -- Note: We can't add a formal foreign key constraint to the same table in SQLite easily,
+      -- but the application layer will enforce this relationship
+    `,
+    down: `
+      -- Drop indexes
+      DROP INDEX IF EXISTS idx_osswarm_tasks_complexity;
+      DROP INDEX IF EXISTS idx_osswarm_tasks_is_decomposed;
+      DROP INDEX IF EXISTS idx_osswarm_tasks_parent_task_id;
+      DROP INDEX IF EXISTS idx_osswarm_tasks_subtask_id;
+      
+      -- SQLite doesn't support DROP COLUMN, so we'd need to recreate the table
+      -- For simplicity, this down migration is informational only
+      -- In practice, you'd backup data and recreate the table without these columns
+    `
+  },
+  {
+    id: 'feature_024',
+    version: '2.5.1',
+    name: 'make_osswarm_tasks_agent_id_nullable',
+    description: 'Make agent_id nullable in osswarm_tasks table to support unassigned decomposed tasks',
+    category: 'feature',
+    dependencies: ['feature_023'],
+    createdAt: '2024-01-17T01:00:00Z',
+    up: `
+      -- SQLite doesn't support ALTER COLUMN directly, so we need to recreate the table
+      -- First, create a backup of existing data
+      CREATE TABLE osswarm_tasks_backup AS SELECT * FROM osswarm_tasks;
+      
+      -- Drop the existing table and its indexes
+      DROP INDEX IF EXISTS idx_osswarm_tasks_execution_id;
+      DROP INDEX IF EXISTS idx_osswarm_tasks_agent_id;
+      DROP INDEX IF EXISTS idx_osswarm_tasks_status;
+      DROP INDEX IF EXISTS idx_osswarm_tasks_subtask_id;
+      DROP INDEX IF EXISTS idx_osswarm_tasks_parent_task_id;
+      DROP INDEX IF EXISTS idx_osswarm_tasks_is_decomposed;
+      DROP INDEX IF EXISTS idx_osswarm_tasks_complexity;
+      DROP TABLE osswarm_tasks;
+      
+      -- Recreate the table with agent_id as nullable
+      CREATE TABLE osswarm_tasks (
+        id TEXT PRIMARY KEY,
+        execution_id TEXT NOT NULL,
+        agent_id TEXT, -- ✅ Made nullable
+        task_description TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'pending',
+        priority INTEGER DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        started_at TIMESTAMP,
+        completed_at TIMESTAMP,
+        result TEXT,
+        error TEXT,
+        iterations INTEGER DEFAULT 0,
+        max_iterations INTEGER DEFAULT 20,
+        subtask_id TEXT,
+        parent_task_id TEXT,
+        required_skills TEXT,
+        suggested_agent_types TEXT,
+        estimated_complexity TEXT DEFAULT 'medium',
+        coordination_notes TEXT,
+        is_decomposed_task BOOLEAN DEFAULT FALSE,
+        task_breakdown_reasoning TEXT,
+        assignment_reason TEXT,
+        FOREIGN KEY (execution_id) REFERENCES osswarm_executions(id) ON DELETE CASCADE
+        -- ✅ Removed the foreign key constraint on agent_id since it can be null
+      );
+      
+      -- Restore data from backup
+      INSERT INTO osswarm_tasks SELECT * FROM osswarm_tasks_backup;
+      
+      -- Drop backup table
+      DROP TABLE osswarm_tasks_backup;
+      
+      -- Recreate indexes
+      CREATE INDEX IF NOT EXISTS idx_osswarm_tasks_execution_id ON osswarm_tasks(execution_id);
+      CREATE INDEX IF NOT EXISTS idx_osswarm_tasks_agent_id ON osswarm_tasks(agent_id);
+      CREATE INDEX IF NOT EXISTS idx_osswarm_tasks_status ON osswarm_tasks(status);
+      CREATE INDEX IF NOT EXISTS idx_osswarm_tasks_subtask_id ON osswarm_tasks(subtask_id);
+      CREATE INDEX IF NOT EXISTS idx_osswarm_tasks_parent_task_id ON osswarm_tasks(parent_task_id);
+      CREATE INDEX IF NOT EXISTS idx_osswarm_tasks_is_decomposed ON osswarm_tasks(is_decomposed_task);
+      CREATE INDEX IF NOT EXISTS idx_osswarm_tasks_complexity ON osswarm_tasks(estimated_complexity);
+    `,
+    down: `
+      -- Recreate the table with agent_id as NOT NULL (original schema)
+      CREATE TABLE osswarm_tasks_backup AS SELECT * FROM osswarm_tasks;
+      
+      -- Drop the existing table and its indexes
+      DROP INDEX IF EXISTS idx_osswarm_tasks_execution_id;
+      DROP INDEX IF EXISTS idx_osswarm_tasks_agent_id;
+      DROP INDEX IF EXISTS idx_osswarm_tasks_status;
+      DROP INDEX IF EXISTS idx_osswarm_tasks_subtask_id;
+      DROP INDEX IF EXISTS idx_osswarm_tasks_parent_task_id;
+      DROP INDEX IF EXISTS idx_osswarm_tasks_is_decomposed;
+      DROP INDEX IF EXISTS idx_osswarm_tasks_complexity;
+      DROP TABLE osswarm_tasks;
+      
+      -- Recreate the table with agent_id as NOT NULL (original)
+      CREATE TABLE osswarm_tasks (
+        id TEXT PRIMARY KEY,
+        execution_id TEXT NOT NULL,
+        agent_id TEXT NOT NULL,
+        task_description TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'pending',
+        priority INTEGER DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        started_at TIMESTAMP,
+        completed_at TIMESTAMP,
+        result TEXT,
+        error TEXT,
+        iterations INTEGER DEFAULT 0,
+        max_iterations INTEGER DEFAULT 20,
+        subtask_id TEXT,
+        parent_task_id TEXT,
+        required_skills TEXT,
+        suggested_agent_types TEXT,
+        estimated_complexity TEXT DEFAULT 'medium',
+        coordination_notes TEXT,
+        is_decomposed_task BOOLEAN DEFAULT FALSE,
+        task_breakdown_reasoning TEXT,
+        assignment_reason TEXT,
+        FOREIGN KEY (execution_id) REFERENCES osswarm_executions(id) ON DELETE CASCADE,
+        FOREIGN KEY (agent_id) REFERENCES osswarm_agents(id) ON DELETE CASCADE
+      );
+      
+      -- Restore data from backup (only records with non-null agent_id)
+      INSERT INTO osswarm_tasks 
+      SELECT * FROM osswarm_tasks_backup WHERE agent_id IS NOT NULL;
+      
+      -- Drop backup table
+      DROP TABLE osswarm_tasks_backup;
+      
+      -- Recreate indexes
+      CREATE INDEX IF NOT EXISTS idx_osswarm_tasks_execution_id ON osswarm_tasks(execution_id);
+      CREATE INDEX IF NOT EXISTS idx_osswarm_tasks_agent_id ON osswarm_tasks(agent_id);
+      CREATE INDEX IF NOT EXISTS idx_osswarm_tasks_status ON osswarm_tasks(status);
+      CREATE INDEX IF NOT EXISTS idx_osswarm_tasks_subtask_id ON osswarm_tasks(subtask_id);
+      CREATE INDEX IF NOT EXISTS idx_osswarm_tasks_parent_task_id ON osswarm_tasks(parent_task_id);
+      CREATE INDEX IF NOT EXISTS idx_osswarm_tasks_is_decomposed ON osswarm_tasks(is_decomposed_task);
+      CREATE INDEX IF NOT EXISTS idx_osswarm_tasks_complexity ON osswarm_tasks(estimated_complexity);
+    `
   }
 ];
 

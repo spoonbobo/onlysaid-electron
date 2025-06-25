@@ -7,7 +7,7 @@ import {
   MasterCoordinatorNode,
   TaskDecomposerNode,
   AgentSelectorNode,
-  AgentExecutorNode,
+  SwarmExecutorNode,
   ToolApprovalNode,
   ToolExecutionNode,
   AgentCompletionNode,
@@ -16,6 +16,7 @@ import {
   EnhancedHumanInteractionResponse,
   WorkflowState
 } from '../nodes';
+import { SafeWebContents, createSafeWebContents } from './state';
 
 const OSSwarmStateAnnotation = Annotation.Root({
   originalTask: Annotation<string>,
@@ -75,10 +76,15 @@ const OSSwarmStateAnnotation = Annotation.Root({
   synthesizedResult: Annotation<string>,
   executionId: Annotation<string>,
   streamCallback: Annotation<((update: string) => void)>(),
+  ipcSend: Annotation<((channel: string, ...args: any[]) => void)>(),
   threadId: Annotation<string>,
   awaitingToolResults: Annotation<boolean>({
     reducer: (x, y) => y ?? x,
     default: () => false,
+  }),
+  webContents: Annotation<SafeWebContents | undefined>({
+    reducer: (x, y) => y ?? x,
+    default: () => undefined,
   }),
 });
 
@@ -89,14 +95,14 @@ export class LangGraphOSSwarmWorkflow {
   private masterCoordinatorNode: MasterCoordinatorNode;
   private taskDecomposerNode: TaskDecomposerNode;
   private agentSelectorNode: AgentSelectorNode;
-  private agentExecutorNode: AgentExecutorNode;
+  private swarmExecutorNode: SwarmExecutorNode;
   private toolApprovalNode: ToolApprovalNode;
   private toolExecutionNode: ToolExecutionNode;
   private agentCompletionNode: AgentCompletionNode;
   private resultSynthesizerNode: ResultSynthesizerNode;
   private routers: WorkflowRouters;
   
-  private static activeWorkflows = new Map<string, any>();
+  private static activeWorkflows = new Map<string, { graph: any, createdAt: number }>();
   
   constructor(agentOptions: LangChainAgentOptions) {
     this.agentOptions = agentOptions;
@@ -104,7 +110,7 @@ export class LangGraphOSSwarmWorkflow {
     this.masterCoordinatorNode = new MasterCoordinatorNode(agentOptions);
     this.taskDecomposerNode = new TaskDecomposerNode(agentOptions);
     this.agentSelectorNode = new AgentSelectorNode(agentOptions);
-    this.agentExecutorNode = new AgentExecutorNode(agentOptions);
+    this.swarmExecutorNode = new SwarmExecutorNode(agentOptions);
     this.toolApprovalNode = new ToolApprovalNode(agentOptions);
     this.toolExecutionNode = new ToolExecutionNode(agentOptions);
     this.agentCompletionNode = new AgentCompletionNode(agentOptions);
@@ -119,7 +125,7 @@ export class LangGraphOSSwarmWorkflow {
       .addNode('master_coordinator', this.createNodeWrapper(this.masterCoordinatorNode))
       .addNode('task_decomposer', this.createNodeWrapper(this.taskDecomposerNode))
       .addNode('agent_selector', this.createNodeWrapper(this.agentSelectorNode))
-      .addNode('agent_executor', this.createNodeWrapper(this.agentExecutorNode))
+      .addNode('swarm_executor', this.createNodeWrapper(this.swarmExecutorNode))
       .addNode('tool_approval', this.createNodeWrapper(this.toolApprovalNode))
       .addNode('tool_execution', this.createNodeWrapper(this.toolExecutionNode))
       .addNode('agent_completion', this.createNodeWrapper(this.agentCompletionNode))
@@ -127,16 +133,16 @@ export class LangGraphOSSwarmWorkflow {
       .addEdge(START, 'master_coordinator')
       .addEdge('master_coordinator', 'task_decomposer')
       .addEdge('task_decomposer', 'agent_selector')
-      .addEdge('agent_selector', 'agent_executor')
-      .addConditionalEdges('agent_executor', this.routers.routeAfterExecution, [
-        'agent_executor',
+      .addEdge('agent_selector', 'swarm_executor')
+      .addConditionalEdges('swarm_executor', this.routers.routeAfterExecution, [
+        'swarm_executor',
         'tool_approval',
         'agent_completion'
       ])
       .addEdge('tool_approval', 'tool_execution')
       .addEdge('tool_execution', 'agent_completion')
       .addConditionalEdges('agent_completion', this.routers.routeAfterCompletion, [
-        'agent_executor',
+        'swarm_executor',
         'tool_approval',
         'tool_execution',
         'result_synthesizer'
@@ -166,10 +172,23 @@ export class LangGraphOSSwarmWorkflow {
   
   public async executeWorkflow(task: string, threadId: string, options: any = {}) {
     try {
-      const webContents = (global as any).osswarmWebContents;
+      const ipcSend = options.ipcSend || ((channel: string, ...args: any[]) => {
+        console.warn(`[LangGraph-WORKFLOW] ipcSend not provided for channel: ${channel}`);
+      });
       
-      if (webContents && options.executionId) {
-        webContents.send('agent:create_execution_record', {
+      const rawWebContents = (global as any).osswarmWebContents;
+      const safeWebContents = rawWebContents ? createSafeWebContents(rawWebContents) : undefined;
+      
+      console.log('[LangGraph-WORKFLOW] WebContents debug:', {
+        hasRawWebContents: !!rawWebContents,
+        hasSafeWebContents: !!safeWebContents,
+        safeWebContentsType: typeof safeWebContents,
+        hasIsValidMethod: safeWebContents ? typeof safeWebContents.isValid === 'function' : false,
+        isValidResult: safeWebContents ? safeWebContents.isValid() : 'N/A'
+      });
+      
+      if (ipcSend && options.executionId) {
+        ipcSend('agent:create_execution_record', {
           executionId: options.executionId,
           taskDescription: task,
           chatId: options.chatId,
@@ -178,12 +197,12 @@ export class LangGraphOSSwarmWorkflow {
         
         await new Promise(resolve => setTimeout(resolve, 100));
         
-        webContents.send('agent:execution_updated', {
+        ipcSend('agent:execution_updated', {
           executionId: options.executionId,
           status: 'running'
         });
         
-        webContents.send('agent:add_log_to_db', {
+        ipcSend('agent:add_log_to_db', {
           executionId: options.executionId,
           logType: 'info',
           message: `Workflow execution started: ${task}`
@@ -205,7 +224,10 @@ export class LangGraphOSSwarmWorkflow {
       console.log(`[LangGraph-WORKFLOW] Workflow compiled successfully`);
       
       console.log(`[LangGraph-WORKFLOW] Storing workflow for thread: ${threadId}`);
-      LangGraphOSSwarmWorkflow.activeWorkflows.set(threadId, compiledGraph);
+      LangGraphOSSwarmWorkflow.activeWorkflows.set(threadId, {
+        graph: compiledGraph,
+        createdAt: Date.now()
+      });
       console.log(`[LangGraph-WORKFLOW] Workflow stored. Total active workflows: ${LangGraphOSSwarmWorkflow.activeWorkflows.size}`);
       
       const initialState = {
@@ -213,13 +235,22 @@ export class LangGraphOSSwarmWorkflow {
         threadId: threadId,
         executionId: options.executionId || `exec_${Date.now()}`,
         streamCallback: options.streamCallback,
+        ipcSend: ipcSend,
+        webContents: safeWebContents,
         availableAgentCards: [],
         activeAgentCards: {},
         agentResults: {},
         errors: [],
         pendingApprovals: [],
         messages: [],
-        currentPhase: 'initialization'
+        currentPhase: 'initialization',
+        swarmLimits: options.swarmLimits || {
+          maxIterations: 15,
+          maxParallelAgents: 8,
+          maxSwarmSize: 4,
+          maxActiveSwarms: 2,
+          maxConversationLength: 50
+        }
       };
       
       const config = { 
@@ -245,23 +276,23 @@ export class LangGraphOSSwarmWorkflow {
           LangGraphOSSwarmWorkflow.activeWorkflows.delete(threadId);
           console.log(`[LangGraph-WORKFLOW] Workflow completed, cleaned up thread: ${threadId}`);
           
-          if (webContents && options.executionId) {
-            webContents.send('agent:clear_task_state', {
+          if (ipcSend && options.executionId) {
+            ipcSend('agent:clear_task_state', {
               taskId: 'current',
               executionId: options.executionId
             });
             
-            webContents.send('agent:clear_all_task_state', {
+            ipcSend('agent:clear_all_task_state', {
               executionId: options.executionId
             });
             
-            webContents.send('agent:execution_updated', {
+            ipcSend('agent:execution_updated', {
               executionId: options.executionId,
               status: 'completed',
               result: finalResult?.synthesizedResult
             });
             
-            webContents.send('agent:add_log_to_db', {
+            ipcSend('agent:add_log_to_db', {
               executionId: options.executionId,
               logType: 'info',
               message: 'Workflow execution completed successfully - clearing all state'
@@ -306,16 +337,16 @@ export class LangGraphOSSwarmWorkflow {
       }
       
     } catch (error: any) {
-      const webContents = (global as any).osswarmWebContents;
+      const ipcSend = options.ipcSend;
       
-      if (webContents && options.executionId) {
-        webContents.send('agent:execution_updated', {
+      if (ipcSend && options.executionId) {
+        ipcSend('agent:execution_updated', {
           executionId: options.executionId,
           status: 'failed',
           error: error.message
         });
         
-        webContents.send('agent:add_log_to_db', {
+        ipcSend('agent:add_log_to_db', {
           executionId: options.executionId,
           logType: 'error',
           message: `Workflow execution failed: ${error.message}`
@@ -327,7 +358,7 @@ export class LangGraphOSSwarmWorkflow {
     }
   }
 
-  public static getActiveWorkflows(): Map<string, any> {
+  public static getActiveWorkflows(): Map<string, { graph: any, createdAt: number }> {
     return LangGraphOSSwarmWorkflow.activeWorkflows;
   }
 
@@ -337,7 +368,8 @@ export class LangGraphOSSwarmWorkflow {
 
   public static async resumeWorkflow(
     threadId: string,
-    humanResponse: EnhancedHumanInteractionResponse
+    humanResponse: EnhancedHumanInteractionResponse,
+    ipcSend: (channel: string, ...args: any[]) => void
   ) {
     console.log(`🔍 [RESUME-Timer] Resuming workflow with enhanced timing support...`);
     console.log(`🔍 [RESUME-Timer] Thread ID: ${threadId}`);
@@ -351,12 +383,16 @@ export class LangGraphOSSwarmWorkflow {
     });
     
     try {
-      const compiledGraph = LangGraphOSSwarmWorkflow.activeWorkflows.get(threadId);
+      const workflowData = LangGraphOSSwarmWorkflow.activeWorkflows.get(threadId);
       
-      if (!compiledGraph) {
+      if (!workflowData) {
         console.error(`🔍 [RESUME-Timer] No workflow found for thread: ${threadId}`);
         throw new Error(`No active workflow found for thread ${threadId}`);
       }
+      
+      // Update timestamp to prevent cleanup of active workflows
+      workflowData.createdAt = Date.now();
+      const compiledGraph = workflowData.graph;
       
       console.log(`🔍 [RESUME-Timer] Found workflow for thread: ${threadId}`);
       
@@ -396,9 +432,24 @@ export class LangGraphOSSwarmWorkflow {
       console.log(`🔍 [RESUME-Timer] Calling invoke with Command resume...`);
       
       try {
-        const { Command } = require("@langchain/langgraph");
+        const rawWebContents = (global as any).osswarmWebContents;
+        const safeWebContents = rawWebContents ? createSafeWebContents(rawWebContents) : undefined;
+        
+        console.log('[RESUME-Timer] WebContents debug during resume:', {
+          hasRawWebContents: !!rawWebContents,
+          hasSafeWebContents: !!safeWebContents,
+          hasIsValidMethod: safeWebContents ? typeof safeWebContents.isValid === 'function' : false,
+          isValidResult: safeWebContents ? safeWebContents.isValid() : 'N/A'
+        });
+        
         const finalResult = await compiledGraph.invoke(
-          new Command({ resume: resumeValue }),
+          new Command({ 
+            resume: resumeValue,
+            update: {
+              webContents: safeWebContents,
+              ipcSend: ipcSend
+            }
+          }),
           config
         );
         
@@ -416,15 +467,21 @@ export class LangGraphOSSwarmWorkflow {
           console.log(`🔍 [RESUME-Timer] Workflow completed after resume - cleaning up`);
           LangGraphOSSwarmWorkflow.activeWorkflows.delete(threadId);
           
-          const webContents = (global as any).osswarmWebContents;
-          if (webContents && finalResult?.executionId) {
-            webContents.send('agent:execution_updated', {
+          const finalIpcSend = finalResult?.ipcSend || ipcSend;
+          if (finalIpcSend && finalResult?.executionId) {
+            // Clear all task states from the UI
+            finalIpcSend('agent:clear_all_task_state', {
+              executionId: finalResult.executionId
+            });
+
+            // Update the execution status to completed with the final result
+            finalIpcSend('agent:execution_updated', {
               executionId: finalResult.executionId,
               status: 'completed',
               result: finalResult?.synthesizedResult
             });
             
-            webContents.send('agent:add_log_to_db', {
+            finalIpcSend('agent:add_log_to_db', {
               executionId: finalResult.executionId,
               logType: 'info',
               message: 'Workflow execution completed after resume'
@@ -437,7 +494,7 @@ export class LangGraphOSSwarmWorkflow {
         return {
           success: true,
           completed: isCompleted,
-          result: finalResult?.synthesizedResult || finalResult,
+          result: isCompleted ? finalResult?.synthesizedResult : 'Workflow requires more interaction',
           requiresHumanInteraction: !isCompleted,
           toolTimings: finalResult?.toolTimings
         };
@@ -480,5 +537,22 @@ export class LangGraphOSSwarmWorkflow {
         error: error.message
       };
     }
+  }
+
+  public static startCleanupCycle(intervalMinutes = 5, maxAgeMinutes = 30) {
+    const intervalMs = intervalMinutes * 60 * 1000;
+    const maxAgeMs = maxAgeMinutes * 60 * 1000;
+
+    setInterval(() => {
+      const now = Date.now();
+      for (const [threadId, workflowData] of LangGraphOSSwarmWorkflow.activeWorkflows.entries()) {
+        if (now - workflowData.createdAt > maxAgeMs) {
+          console.log(`[LangGraph Agent] Cleaning up old workflow due to inactivity: ${threadId}`);
+          LangGraphOSSwarmWorkflow.activeWorkflows.delete(threadId);
+        }
+      }
+    }, intervalMs);
+
+    console.log(`[LangGraph Agent] Workflow cleanup cycle started. Checking every ${intervalMinutes} minutes.`);
   }
 }

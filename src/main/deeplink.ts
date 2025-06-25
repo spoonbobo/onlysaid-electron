@@ -109,12 +109,17 @@ export function handleDeeplinkUrl(urlLink: string) {
         if (parsedUrl.protocol === `${PROTOCOL}:` && (parsedUrl.hostname === 'auth' || parsedUrl.pathname.startsWith('/auth'))) {
             const token = parsedUrl.searchParams.get('token');
             const cookieName = parsedUrl.searchParams.get('cookieName');
+            const message = parsedUrl.searchParams.get('message');
+            const error = parsedUrl.searchParams.get('error');
 
             if (token) {
                 console.log(`[Deeplink] Extracted token (partial): ${token.substring(0, 10)}... and cookieName: ${cookieName}`);
                 sendAuthInfoToRenderer(token, cookieName);
+            } else if (message || error) {
+                console.log('[Deeplink] Received auth error:', message || error);
+                // Just log the error - the web page should handle showing it to the user
             } else {
-                console.error('[Deeplink] Auth token not found in URL.');
+                console.error('[Deeplink] Auth token not found in URL and no error message.');
             }
         } else {
             console.warn(`[Deeplink] URL not recognized or not an auth URL: ${urlLink}`);

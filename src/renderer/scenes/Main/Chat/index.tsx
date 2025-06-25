@@ -18,7 +18,6 @@ import { useLLMConfigurationStore } from "@/renderer/stores/LLM/LLMConfiguration
 import { toast } from "@/utils/toast";
 import { IChatRoom } from "@/../../types/Chat/Chatroom";
 import ChatUIWithNoChat from "./ChatUIWithNoChat";
-import AgentWorkOverlay from "../../../components/Agent/AgentWorkOverlay";
 
 function Chat() {
   const {
@@ -348,26 +347,9 @@ function Chat() {
     }
   }, [isGuest, agent, createGuestAgent]);
 
-  // ✅ Add ref for the chat container to constrain fullscreen
-  const chatContainerRef = useRef<HTMLDivElement>(null);
-  
-  // ✅ Add overlay visibility state
-  const [showAgentOverlay, setShowAgentOverlay] = useState(false);
-
-  // ✅ Handle Agent toggle - updated to track state properly
-  const handleAgentToggle = useCallback((show: boolean) => {
-    setShowAgentOverlay(show);
-  }, []);
-
-  // ✅ Handle overlay close - notify the toggle
-  const handleOverlayClose = useCallback(() => {
-    setShowAgentOverlay(false);
-  }, []);
-
   return (
     <Box
       key={chatInstanceId}
-      ref={chatContainerRef}
       sx={{
         height: "calc(100% - 5px)",
         display: "flex",
@@ -413,15 +395,6 @@ function Chat() {
                         ? isCurrentlyConnectingForUI
                         : false
                     }
-                  />
-
-                  {/* ✅ Enhanced Agent Work Overlay with proper close handling */}
-                  <AgentWorkOverlay 
-                    visible={showAgentOverlay}
-                    onClose={handleOverlayClose}
-                    containerRef={chatContainerRef}
-                    respectParentBounds={true}
-                    fullscreenMargin={20}
                   />
 
                   {/* Existing streaming indicator for non-agent modes */}
@@ -494,8 +467,6 @@ function Chat() {
           handleSend={handleSend}
           replyingTo={replyingToMessage}
           onCancelReply={handleCancelReply}
-          onAgentToggle={handleAgentToggle}
-          agentOverlayVisible={showAgentOverlay}
         />
       )}
       <div ref={messagesEndRef} />

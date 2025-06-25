@@ -8,14 +8,18 @@ export class ResultSynthesizerNode extends BaseWorkflowNode {
   async execute(state: WorkflowState): WorkflowNodeResult {
     console.log('[LangGraph] Result synthesizer combining agent outputs...');
     
-    const webContents = (global as any).osswarmWebContents;
-    if (webContents && state.executionId) {
-      webContents.send('agent:update_execution_status', {
+    const webContents = state.webContents;
+    const ipcSend = webContents?.isValid() ? 
+      (channel: string, ...args: any[]) => webContents.send(channel, ...args) : 
+      null;
+
+    if (ipcSend && state.executionId) {
+      ipcSend('agent:update_execution_status', {
         executionId: state.executionId,
         status: 'running'
       });
       
-      webContents.send('agent:add_log_to_db', {
+      ipcSend('agent:add_log_to_db', {
         executionId: state.executionId,
         logType: 'status_update',
         message: 'Starting result synthesis...'
@@ -25,6 +29,7 @@ export class ResultSynthesizerNode extends BaseWorkflowNode {
     const masterConfig = AgentRegistry.getAgentConfig('master');
     const masterAgent = LangChainServiceFactory.createAgent({
         ...this.agentOptions,
+        tools: [], // Explicitly disable tools for the synthesizer agent
         systemPrompt: masterConfig?.systemPrompt || 'You are a master coordinator.',
       });
     
@@ -33,14 +38,38 @@ export class ResultSynthesizerNode extends BaseWorkflowNode {
       `${result.agentCard.name} (${result.agentCard.role}): ${result.result}`
     ).join('\n\n');
     
-    const synthesisPrompt = `
-    Synthesize these agent results into a comprehensive final response for: ${state.originalTask}
-    
-    Agent Results:
-    ${resultsText}
-    
-    Provide a well-structured, comprehensive response.
-    `;
+    // Enhanced synthesis prompt that considers decomposed tasks
+    let synthesisPrompt = `
+Synthesize these agent results into a comprehensive final response for: ${state.originalTask}
+
+Agent Results:
+${resultsText}`;
+
+    // Add task decomposition context if available
+    if (state.decomposedSubtasks && state.decomposedSubtasks.length > 0) {
+      synthesisPrompt += `
+
+Task Decomposition Context:
+${state.taskAnalysis || 'Task was broken down into specific subtasks'}
+
+Subtasks Addressed:
+${state.decomposedSubtasks.map((task, idx) => 
+  `${idx + 1}. ${task.description} (Priority: ${task.priority}, Complexity: ${task.estimatedComplexity})`
+).join('\n')}
+
+Consider how each agent's work addressed the specific subtasks and ensure all aspects of the original task are covered in your synthesis.`;
+    }
+
+    synthesisPrompt += `
+
+Instructions for Synthesis:
+1. Provide a well-structured, comprehensive response
+2. Ensure all aspects of the original task are addressed
+3. Highlight key insights and findings from each agent
+4. Create a cohesive narrative that builds upon all agent contributions
+5. Include any actionable recommendations or next steps if appropriate
+
+Final synthesized response:`;
     
     const response = await masterAgent.getCompletion([{
       role: 'user',
@@ -49,16 +78,17 @@ export class ResultSynthesizerNode extends BaseWorkflowNode {
     
     const synthesizedResult = response.choices[0]?.message?.content || '';
     
-    if (webContents && state.executionId) {
-      webContents.send('agent:update_execution_status', {
+    // Log detailed synthesis information
+    if (ipcSend && state.executionId) {
+      ipcSend('agent:update_execution_status', {
         executionId: state.executionId,
         status: 'running'
       });
       
-      webContents.send('agent:add_log_to_db', {
+      ipcSend('agent:add_log_to_db', {
         executionId: state.executionId,
         logType: 'synthesis',
-        message: `Result synthesis completed with ${agentResults.length} agent contributions`
+        message: `Result synthesis completed with ${agentResults.length} agent contributions${state.decomposedSubtasks ? ` across ${state.decomposedSubtasks.length} subtasks` : ''}`
       });
     }
     
@@ -66,23 +96,31 @@ export class ResultSynthesizerNode extends BaseWorkflowNode {
       type: 'result_synthesis',
       data: {
         result: synthesizedResult,
-        agentContributions: agentResults.length
+        agentContributions: agentResults.length,
+        subtasksAddressed: state.decomposedSubtasks?.length || 0,
+        taskAnalysis: state.taskAnalysis,
+        agentBreakdown: agentResults.map(result => ({
+          role: result.agentCard.role,
+          name: result.agentCard.name,
+          status: result.status,
+          hasResult: !!result.result
+        }))
       }
     });
     
-    if (webContents && state.executionId) {
-      webContents.send('agent:clear_task_state', {
+    if (ipcSend && state.executionId) {
+      ipcSend('agent:clear_task_state', {
         taskId: 'current',
         executionId: state.executionId
       });
       
-      webContents.send('agent:update_execution_status', {
+      ipcSend('agent:update_execution_status', {
         executionId: state.executionId,
         status: 'completed',
         result: synthesizedResult
       });
       
-      webContents.send('agent:add_log_to_db', {
+      ipcSend('agent:add_log_to_db', {
         executionId: state.executionId,
         logType: 'info',
         message: 'Task completed - clearing agent states'
@@ -91,7 +129,7 @@ export class ResultSynthesizerNode extends BaseWorkflowNode {
     
     return {
       synthesizedResult,
-      currentPhase: 'validation',
+      currentPhase: 'completed',
       messages: [...state.messages, new AIMessage(synthesizedResult)]
     };
   }

@@ -363,6 +363,66 @@ export function setupFileHandlers(): void {
       throw error;
     }
   });
+
+  // Handler to list files based on a path prefix in metadata
+  ipcMain.handle('file:get-files-in-path', async (event, args: {
+    workspaceId: string,
+    pathPrefix: string,
+    token: string
+  }) => {
+    const { workspaceId, pathPrefix, token } = args;
+    try {
+      const response = await onlysaidServiceInstance.get(
+        `workspace/${workspaceId}/file`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`
+          }
+        }
+      );
+      
+      if (response.data?.data) {
+        const filteredFiles = response.data.data.filter((file: any) => 
+          file.metadata?.targetPath?.startsWith(pathPrefix)
+        );
+        return { success: true, data: filteredFiles };
+      }
+      return { success: true, data: [] };
+    } catch (error: any) {
+      console.error(`Error fetching files in path ${pathPrefix}:`, error);
+      return { success: false, error: error.message || 'Failed to fetch files' };
+    }
+  });
+
+  // Handler to read a remote file as text
+  ipcMain.handle('file:read-text-file', async (event, args: {
+    workspaceId: string,
+    fileId: string,
+    token: string
+  }) => {
+    const { workspaceId, fileId, token } = args;
+    try {
+      const downloadResponse = await onlysaidServiceInstance.get(
+        `workspace/${workspaceId}/file?fileId=${fileId}`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`
+          },
+          responseType: 'arraybuffer'
+        }
+      );
+      
+      const content = Buffer.from(downloadResponse.data).toString('utf-8');
+      
+      return {
+        success: true,
+        data: { content }
+      };
+    } catch (error: any) {
+      console.error(`Error reading text file ${fileId}:`, error);
+      return { success: false, error: error.message || 'Failed to read file' };
+    }
+  });
 }
 
 // Enhanced upload function with multi-stage progress tracking

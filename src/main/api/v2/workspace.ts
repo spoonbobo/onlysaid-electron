@@ -18,7 +18,12 @@ import {
   IUpdateJoinRequestArgs,
   ILeaveWorkspaceArgs,
   IWorkspaceInvitation,
-  IWorkspaceJoin
+  IWorkspaceJoin,
+  IWorkspaceSettings,
+  IGetWorkspaceSettingsArgs,
+  ICreateWorkspaceSettingsArgs,
+  IUpdateWorkspaceSettingsArgs,
+  IDeleteWorkspaceSettingsArgs
 } from '@/../../types/Workspace/Workspace';
 
 interface IUpdateUserRoleArgs {
@@ -448,6 +453,88 @@ export const setupWorkspaceHandlers = () => {
       console.error('Error in main process API call (get_user_join_requests):', error.message);
       return {
         error: error.message,
+        status: error.response?.status
+      };
+    }
+  });
+
+  ipcMain.handle('workspace:get_settings', async (event, args: IGetWorkspaceSettingsArgs) => {
+    try {
+      const response = await onlysaidServiceInstance.get(
+        `/workspace/${args.workspaceId}/settings`,
+        {
+          headers: {
+            Authorization: `Bearer ${args.token}`
+          }
+        }
+      );
+      return { data: response.data };
+    } catch (error: any) {
+      console.error('Error in main process API call (get_workspace_settings):', error.message);
+      return {
+        error: error.response?.data?.message || error.message,
+        status: error.response?.status
+      };
+    }
+  });
+
+  ipcMain.handle('workspace:create_settings', async (event, args: ICreateWorkspaceSettingsArgs) => {
+    try {
+      const response = await onlysaidServiceInstance.post(
+        `/workspace/${args.workspaceId}/settings`,
+        args.request,
+        {
+          headers: {
+            Authorization: `Bearer ${args.token}`
+          }
+        }
+      );
+      return { data: response.data };
+    } catch (error: any) {
+      console.error('Error in main process API call (create_workspace_settings):', error.message);
+      return {
+        error: error.response?.data?.message || error.message,
+        status: error.response?.status
+      };
+    }
+  });
+
+  ipcMain.handle('workspace:update_settings', async (event, args: IUpdateWorkspaceSettingsArgs) => {
+    try {
+      const response = await onlysaidServiceInstance.put(
+        `/workspace/${args.workspaceId}/settings`,
+        args.request,
+        {
+          headers: {
+            Authorization: `Bearer ${args.token}`
+          }
+        }
+      );
+      return { data: response.data };
+    } catch (error: any) {
+      console.error('Error in main process API call (update_workspace_settings):', error.message);
+      return {
+        error: error.response?.data?.message || error.message,
+        status: error.response?.status
+      };
+    }
+  });
+
+  ipcMain.handle('workspace:delete_settings', async (event, args: IDeleteWorkspaceSettingsArgs) => {
+    try {
+      const response = await onlysaidServiceInstance.delete(
+        `/workspace/${args.workspaceId}/settings`,
+        {
+          headers: {
+            Authorization: `Bearer ${args.token}`
+          }
+        }
+      );
+      return { data: response.data };
+    } catch (error: any) {
+      console.error('Error in main process API call (delete_workspace_settings):', error.message);
+      return {
+        error: error.response?.data?.message || error.message,
         status: error.response?.status
       };
     }

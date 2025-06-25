@@ -691,12 +691,12 @@ export const useIPCListeners = ({
       console.log('[IPCListeners-Global-IPC] 🔥 Received save task request:', data);
       
       try {
-        const taskId = await useTaskManagementStore.getState().createTask(
-          data.executionId,
-          data.agentId,
-          data.taskDescription,
-          data.priority || 0
-        );
+        const taskId = await useTaskManagementStore.getState().createTask({
+          executionId: data.executionId,
+          agentId: data.agentId,
+          taskDescription: data.taskDescription,
+          priority: data.priority || 0
+        })
         
         console.log('[IPCListeners-Global-IPC] ✅ Task saved to database with ID:', taskId);
       } catch (error) {
@@ -934,6 +934,91 @@ export const useIPCListeners = ({
       }
     };
 
+    // ==================== NEW: DECOMPOSED TASK HANDLERS ====================
+    
+    const handleSaveDecomposedTasksToDb = async (event: any, ...args: unknown[]) => {
+      const data = args[0] as { 
+        executionId: string; 
+        subtasks: any[]; 
+        taskAnalysis?: string; 
+      };
+      console.log('[IPCListeners-Global-IPC] 🔥 Received save decomposed tasks request:', data);
+      
+      try {
+        const taskIds = await useTaskManagementStore.getState().createDecomposedTasks(
+          data.executionId,
+          data.subtasks,
+          data.taskAnalysis
+        );
+        
+        console.log('[IPCListeners-Global-IPC] ✅ Decomposed tasks saved to database with IDs:', taskIds);
+      } catch (error) {
+        console.error('[IPCListeners-Global-IPC] ❌ Error saving decomposed tasks to database:', error);
+      }
+    };
+
+    const handleCreateTaskWithDecomposition = async (event: any, ...args: unknown[]) => {
+      const taskParams = args[0] as any;
+      console.log('[IPCListeners-Global-IPC] 🔥 Received create task with decomposition request:', taskParams);
+      
+      try {
+        const taskId = await useTaskManagementStore.getState().createTask(taskParams);
+        
+        console.log('[IPCListeners-Global-IPC] ✅ Task with decomposition data created with ID:', taskId);
+      } catch (error) {
+        console.error('[IPCListeners-Global-IPC] ❌ Error creating task with decomposition data:', error);
+      }
+    };
+
+    const handleUpdateTaskAssignment = async (event: any, ...args: unknown[]) => {
+      const data = args[0] as { 
+        taskId: string; 
+        agentId: string; 
+        assignmentReason?: string; 
+        executionId: string; 
+      };
+      console.log('[IPCListeners-Global-IPC] 🔥 Received update task assignment request:', data);
+      
+      try {
+        // Update the task's agent assignment in the database
+        await window.electron.db.query({
+          query: `UPDATE osswarm_tasks SET agent_id = @agent_id, assignment_reason = @assignment_reason WHERE id = @id`,
+          params: {
+            id: data.taskId,
+            agent_id: data.agentId,
+            assignment_reason: data.assignmentReason || null
+          }
+        });
+
+        // Update local store
+        const taskStore = useTaskManagementStore.getState();
+        taskStore.setTasks(
+          taskStore.tasks.map(task => 
+            task.id === data.taskId 
+              ? { ...task, agent_id: data.agentId, assignment_reason: data.assignmentReason }
+              : task
+          )
+        );
+        
+        console.log('[IPCListeners-Global-IPC] ✅ Task assignment updated in database');
+      } catch (error) {
+        console.error('[IPCListeners-Global-IPC] ❌ Error updating task assignment:', error);
+      }
+    };
+
+    const handleLoadTaskHierarchy = async (event: any, ...args: unknown[]) => {
+      const data = args[0] as { executionId: string };
+      console.log('[IPCListeners-Global-IPC] 🔥 Received load task hierarchy request:', data);
+      
+      try {
+        await useTaskManagementStore.getState().loadTasksByExecution(data.executionId);
+        
+        console.log('[IPCListeners-Global-IPC] ✅ Task hierarchy loaded for execution:', data.executionId);
+      } catch (error) {
+        console.error('[IPCListeners-Global-IPC] ❌ Error loading task hierarchy:', error);
+      }
+    };
+
     // ==================== GOOGLE SERVICES LISTENERS ====================
     
     const handleGoogleServicesReady = () => {
@@ -994,6 +1079,12 @@ export const useIPCListeners = ({
     const removeReadyListener = window.electron.ipcRenderer.on('google-services:ready', handleGoogleServicesReady);
     const removeErrorListener = window.electron.ipcRenderer.on('google-services:error', handleGoogleServicesError);
 
+    // New decomposed task handlers
+    const unsubscribeSaveDecomposedTasks = window.electron?.ipcRenderer?.on?.('agent:save_decomposed_tasks_to_db', handleSaveDecomposedTasksToDb);
+    const unsubscribeCreateTaskWithDecomposition = window.electron?.ipcRenderer?.on?.('agent:create_task_with_decomposition', handleCreateTaskWithDecomposition);
+    const unsubscribeUpdateTaskAssignment = window.electron?.ipcRenderer?.on?.('agent:update_task_assignment', handleUpdateTaskAssignment);
+    const unsubscribeLoadTaskHierarchy = window.electron?.ipcRenderer?.on?.('agent:load_task_hierarchy', handleLoadTaskHierarchy);
+
     console.log('[IPCListeners] ✅ ALL IPC listeners registered successfully');
 
     // ==================== CLEANUP FUNCTION ====================
@@ -1031,6 +1122,12 @@ export const useIPCListeners = ({
       unsubscribeAgentUpdated?.();
       unsubscribeTaskUpdated?.();
       unsubscribeExecutionUpdated?.();
+
+      // New decomposed task handlers
+      unsubscribeSaveDecomposedTasks?.();
+      unsubscribeCreateTaskWithDecomposition?.();
+      unsubscribeUpdateTaskAssignment?.();
+      unsubscribeLoadTaskHierarchy?.();
     };
   }, [activeChatId, workspaceId, agent, appendMessage, updateMessage, osswarmToolRequests, setOSSwarmToolRequests, langGraphInteractions, setLangGraphInteractions, resumeLangGraphWorkflow, setGoogleServicesReady]);
 

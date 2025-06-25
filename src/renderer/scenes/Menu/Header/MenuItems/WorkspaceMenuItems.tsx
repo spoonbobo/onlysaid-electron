@@ -4,7 +4,7 @@ import ExitToAppIcon from "@mui/icons-material/ExitToApp";
 import AddCommentIcon from "@mui/icons-material/AddComment";
 import PeopleIcon from "@mui/icons-material/People";
 import SchoolIcon from "@mui/icons-material/School";
-import SettingsSuggestIcon from "@mui/icons-material/SettingsSuggest";
+import SettingsIcon from "@mui/icons-material/Settings";
 import HomeIcon from "@mui/icons-material/Home";
 import TrendingUpIcon from "@mui/icons-material/TrendingUp";
 import AssignmentIcon from "@mui/icons-material/Assignment";
@@ -92,9 +92,9 @@ function WorkspaceMenuItems({ handleClose }: WorkspaceMenuItemsProps) {
       <ListSubheader sx={{ fontSize: 13, fontWeight: 700, color: "text.secondary", bgcolor: "background.paper", lineHeight: 2, px: 2 }}>
         <FormattedMessage id="menu.workspace.insights" />
       </ListSubheader>
-      <MenuItem disabled onClick={() => handleMenuItemClick('trend')} sx={{ minHeight: 36, fontSize: 14 }}>
+      <MenuItem onClick={() => handleMenuItemClick('insights')} sx={{ minHeight: 36, fontSize: 14 }}>
         <TrendingUpIcon fontSize="small" sx={{ mr: 1.5, color: "text.secondary" }} />
-        <FormattedMessage id="menu.workspace.trend" />
+        <FormattedMessage id="menu.workspace.insights" />
       </MenuItem>
 
       <Divider sx={{ my: 1 }} />
@@ -146,9 +146,9 @@ function WorkspaceMenuItems({ handleClose }: WorkspaceMenuItemsProps) {
           )}
         </Box>
       </MenuItem>
-      <MenuItem disabled onClick={() => handleMenuItemClick('mcp')} sx={{ minHeight: 36, fontSize: 14 }}>
-        <SettingsSuggestIcon fontSize="small" sx={{ mr: 1.5, color: "text.secondary" }} />
-        <FormattedMessage id="menu.workspace.mcp" />
+      <MenuItem onClick={() => handleMenuItemClick('settings')} sx={{ minHeight: 36, fontSize: 14 }}>
+        <SettingsIcon fontSize="small" sx={{ mr: 1.5, color: "text.secondary" }} />
+        <FormattedMessage id="menu.workspace.settings" />
       </MenuItem>
 
       <Divider sx={{ my: 1 }} />

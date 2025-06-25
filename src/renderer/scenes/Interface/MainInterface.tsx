@@ -4,17 +4,22 @@ import Main from "../Main";
 import SidebarTabs from "../SidebarTabs";
 import { useLayoutResize } from "@/renderer/stores/Layout/LayoutResize";
 import { useTopicStore } from "@/renderer/stores/Topic/TopicStore";
-import { useRef, useEffect, useCallback } from "react";
+import { useRef, useEffect, useCallback, useState } from "react";
 import UserInfoBar from "./UserInfoBar";
 import LevelUp from "./LevelUp";
 import OverlaysContainer from "./Overlays/OverlaysContainer";
 import TitleBar from "./TitleBar";
+import AgentWorkOverlay from "../../components/Agent/AgentWorkOverlay";
 
 function MainInterface() {
   const { menuWidth, setMenuWidth } = useLayoutResize();
   const { selectedContext } = useTopicStore();
   const isDraggingMenu = useRef(false);
   const mainInterfaceRenderCountRef = useRef(0);
+  
+  const [showAgentOverlay, setShowAgentOverlay] = useState(false);
+  
+  const mainInterfaceRef = useRef<HTMLDivElement>(null);
 
   mainInterfaceRenderCountRef.current += 1;
 
@@ -103,8 +108,17 @@ function MainInterface() {
     };
   }, []);
 
+  const handleAgentToggle = useCallback((show: boolean) => {
+    setShowAgentOverlay(show);
+  }, []);
+
+  const handleOverlayClose = useCallback(() => {
+    setShowAgentOverlay(false);
+  }, []);
+
   return (
     <Box
+      ref={mainInterfaceRef}
       sx={{
         height: "100vh",
         width: "100vw",
@@ -113,6 +127,7 @@ function MainInterface() {
         bgcolor: "background.default",
         boxSizing: "border-box",
         overflow: "hidden",
+        position: "relative",
       }}
     >
       <TitleBar />
@@ -164,7 +179,10 @@ function MainInterface() {
               <Menu />
             </Box>
           </Box>
-          <UserInfoBar />
+          <UserInfoBar 
+            onAgentToggle={handleAgentToggle}
+            agentOverlayVisible={showAgentOverlay}
+          />
 
           <Box
             sx={{
@@ -191,6 +209,14 @@ function MainInterface() {
           </Box>
         </Box>
       </Box>
+
+      <AgentWorkOverlay 
+        visible={showAgentOverlay}
+        onClose={handleOverlayClose}
+        containerRef={mainInterfaceRef}
+        respectParentBounds={true}
+        fullscreenMargin={20}
+      />
 
       <OverlaysContainer mainInterfaceRenderCount={mainInterfaceRenderCountRef.current} />
     </Box>

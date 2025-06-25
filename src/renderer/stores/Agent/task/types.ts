@@ -45,6 +45,17 @@ export interface OSSwarmTask {
   error?: string;
   iterations: number;
   max_iterations: number;
+  
+  // New decomposition fields
+  subtask_id?: string;
+  parent_task_id?: string;
+  required_skills?: string; // JSON array
+  suggested_agent_types?: string; // JSON array
+  estimated_complexity?: 'low' | 'medium' | 'high';
+  coordination_notes?: string;
+  is_decomposed_task?: boolean;
+  task_breakdown_reasoning?: string;
+  assignment_reason?: string;
 }
 
 export interface OSSwarmToolExecution {
@@ -136,4 +147,33 @@ export interface ExecutionStats {
   failed: number;
   running: number;
   byDate: { date: string; count: number }[];
+}
+
+// Type for decomposed subtasks from TaskDecomposer
+export interface DecomposedSubtask {
+  id: string;
+  description: string;
+  requiredSkills: string[];
+  suggestedAgentTypes: string[];
+  priority: number;
+  estimatedComplexity: 'low' | 'medium' | 'high';
+  coordinationNotes?: string;
+  taskBreakdownReasoning?: string;
+}
+
+// Enhanced task creation params
+export interface CreateTaskParams {
+  executionId: string;
+  agentId: string;
+  taskDescription: string;
+  priority?: number;
+  subtaskId?: string;
+  parentTaskId?: string;
+  requiredSkills?: string[];
+  suggestedAgentTypes?: string[];
+  estimatedComplexity?: 'low' | 'medium' | 'high';
+  coordinationNotes?: string;
+  isDecomposedTask?: boolean;
+  taskBreakdownReasoning?: string;
+  assignmentReason?: string;
 } 

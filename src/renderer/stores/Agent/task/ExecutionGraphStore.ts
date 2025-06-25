@@ -96,6 +96,7 @@ export const useExecutionGraphStore = create<ExecutionGraphState>((set, get) => 
         isLoading: false
       });
 
+      console.log('[ExecutionGraphStore] Loaded execution graph:', graph);
       console.log(`[ExecutionGraphStore] Loaded execution graph with ${(logs || []).length} logs`);
     } catch (error: any) {
       console.error('[ExecutionGraphStore] Error loading execution graph:', error);

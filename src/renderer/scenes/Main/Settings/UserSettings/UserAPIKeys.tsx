@@ -51,17 +51,16 @@ function UserAPIKeys() {
     initializeN8nListeners,
     // Health checks
     performHealthCheck,
-    startPeriodicHealthCheck
+    startPeriodicHealthCheck,
   } = useUserTokenStore();
 
-  // Initialize listeners and health checks
+  // Initialize listeners
   useEffect(() => {
     const googleCleanup = initializeGoogleCalendarListeners();
     const microsoftCleanup = initializeMicrosoftCalendarListeners();
     const n8nCleanup = initializeN8nListeners();
     const healthCheckCleanup = startPeriodicHealthCheck();
 
-    // Perform initial health check when component mounts
     performHealthCheck();
 
     return () => {
@@ -128,7 +127,7 @@ function UserAPIKeys() {
   const HealthChip = ({ status }: { status: 'healthy' | 'warning' | 'stale' | 'unknown' }) => {
     const colors = {
       healthy: 'success',
-      warning: 'warning',
+      warning: 'warning', 
       stale: 'error',
       unknown: 'default'
     } as const;

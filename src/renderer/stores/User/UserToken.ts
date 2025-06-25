@@ -16,6 +16,12 @@ interface N8nUser {
   apiKey: string;
 }
 
+interface MoodleUser {
+  fullname: string;
+  email: string;
+  sitename: string;
+}
+
 interface UserTokenStore {
   token: string | null;
   cookieName: string | null;
@@ -742,14 +748,13 @@ export const useUserTokenStore = create<UserTokenStore>()(
     }),
     {
       name: "user-token-storage",
-      // Don't persist health check timestamps, verification status, and failure counts
       partialize: (state) => ({
         ...state,
         lastGoogleHealthCheck: null,
         lastMicrosoftHealthCheck: null,
         lastN8nHealthCheck: null,
         n8nVerified: false,
-        n8nHealthCheckFailures: 0, // Reset failure count on app restart
+        n8nHealthCheckFailures: 0,
       }),
     }
   )

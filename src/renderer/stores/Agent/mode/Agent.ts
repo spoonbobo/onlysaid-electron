@@ -4,6 +4,7 @@ import { IUser } from '@/../../types/User/User';
 import { useMCPSettingsStore } from '@/renderer/stores/MCP/MCPSettingsStore';
 import { useLLMConfigurationStore } from '@/renderer/stores/LLM/LLMConfiguration';
 import { useKBSettingsStore } from '@/renderer/stores/KB/KBSettingStore';
+import { useAgentSettingsStore } from '@/renderer/stores/Agent/AgentSettingStore';
 import { getAgentFromStore } from '@/utils/agent';
 import { getServiceTools, formatMCPName } from '@/utils/mcp';
 import { formatMessagesForContext } from '@/utils/message';
@@ -31,9 +32,11 @@ Your role:
 4. Synthesize agent results into comprehensive responses
 5. Use available tools when needed for enhanced capabilities
 6. Leverage Knowledge Bases when they contain relevant information
+7. Work within system limits to ensure efficient resource usage
 
 Based on messages in this chat, coordinate your agent swarm and use tools that are most relevant to efficiently solve the user's request.
 If no tools or agent coordination is needed, provide a direct response.
+Remember to respect swarm limits and optimize for quality over quantity in agent selection.
   `.trim();
 };
 
@@ -91,6 +94,7 @@ export async function processAgentModeAIResponse({
   const { executeAgentTask } = useAgentStore.getState();
   const { selectedMcpServerIds } = useMCPSettingsStore.getState();
   const { selectedKbIds } = useKBSettingsStore.getState();
+  const { swarmLimits } = useAgentSettingsStore.getState();
   
   const {
     provider,
@@ -181,6 +185,7 @@ export async function processAgentModeAIResponse({
     systemPrompt: systemPromptText,
     humanInTheLoop: true,
     threadId: threadId,
+    swarmLimits: swarmLimits,
     knowledgeBases: selectedKbIds.length > 0 && workspaceId ? {
       enabled: true,
       selectedKbIds: selectedKbIds,
@@ -192,6 +197,7 @@ export async function processAgentModeAIResponse({
     toolsCount: agentOptions.tools?.length || 0,
     knowledgeBases: selectedKbIds.length > 0 ? selectedKbIds : "None selected",
     workspaceId: workspaceId || "Not provided",
+    swarmLimits: swarmLimits,
     toolsDetails: agentOptions.tools?.map(t => ({
       name: t.function?.name,
       hasParams: !!t.function?.parameters,

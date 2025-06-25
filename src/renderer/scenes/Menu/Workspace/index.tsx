@@ -7,6 +7,7 @@ import { useUserStore } from "@/renderer/stores/User/UserStore";
 import { useSocketStore } from "@/renderer/stores/Socket/SocketStore";
 import KnowledgeBaseMenu from "./KnowledgeBase";
 import MembersMenu from "./Members";
+import WorkspaceInsightsMenu from "./Insights";
 
 export default function WorkspaceMenu() {
   const { selectedContext, selectedTopics } = useCurrentTopicContext();
@@ -34,6 +35,7 @@ export default function WorkspaceMenu() {
       {section.includes('chatroom') && <WorkspaceChatMenu />}
       {selectedContext?.type === 'workspace' && section.includes('knowledgeBase') && <KnowledgeBaseMenu />}
       {selectedContext?.type === 'workspace' && section.includes('members') && <MembersMenu />}
+      {selectedContext?.type === 'workspace' && section.includes('insights') && <WorkspaceInsightsMenu />}
     </Box>
   );
 }

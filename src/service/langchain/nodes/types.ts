@@ -4,12 +4,14 @@ import { AgentCard } from '@/../../types/Agent/AgentCard';
 import { 
   AgentExecutionResult, 
   ToolApprovalRequest, 
-  ToolExecution 
+  ToolExecution,
+  SafeWebContents
 } from '../agent/state';
 import { 
   HumanInteractionRequest, 
   HumanInteractionResponse 
 } from '../human_in_the_loop/renderer/human_in_the_loop';
+import { SubTask } from './taskDecomposer';
 
 // Enhanced HumanInteractionResponse type to include execution timing
 export interface EnhancedHumanInteractionResponse extends HumanInteractionResponse {
@@ -31,6 +33,15 @@ export interface TimedToolApprovalRequest extends ToolApprovalRequest {
   executionStartTime?: number;
   executionEndTime?: number;
   totalDuration?: number;
+}
+
+// Swarm limits interface
+export interface SwarmLimits {
+  maxIterations: number;
+  maxParallelAgents: number;
+  maxSwarmSize: number;
+  maxActiveSwarms: number;
+  maxConversationLength: number;
 }
 
 // State type for workflow nodes
@@ -58,6 +69,11 @@ export type WorkflowState = {
   streamCallback?: (update: string) => void;
   threadId: string;
   awaitingToolResults: boolean;
+  selectedSwarmType?: string;
+  decomposedSubtasks?: SubTask[];
+  taskAnalysis?: string;
+  swarmLimits?: SwarmLimits;
+  webContents?: SafeWebContents;
 };
 
 // Return type for workflow nodes

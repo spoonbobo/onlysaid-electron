@@ -323,10 +323,10 @@ function UserPreferences() {
                       <ListItemText
                         primary={<Skeleton variant="text" width="60%" height={20} />}
                         secondary={
-                          <Box>
+                          <>
                             <Skeleton variant="text" width="80%" height={14} />
                             <Skeleton variant="text" width="50%" height={14} />
-                          </Box>
+                          </>
                         }
                       />
                     </ListItem>
@@ -366,8 +366,8 @@ function UserPreferences() {
                           </ListItemIcon>
                           <ListItemText
                             primary={
-                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                <Typography variant="subtitle2">
+                              <>
+                                <Typography variant="subtitle2" component="span">
                                   {device.device_name || 'Unknown Device'}
                                 </Typography>
                                 {isCurrentDevice && (
@@ -376,9 +376,10 @@ function UserPreferences() {
                                     size="small" 
                                     color="primary" 
                                     variant="outlined"
+                                    sx={{ ml: 1 }}
                                   />
                                 )}
-                              </Box>
+                              </>
                             }
                             secondary={
                               <>

@@ -49,10 +49,10 @@ export class ToolApprovalNode extends BaseWorkflowNode {
               timing.executionDuration = Math.floor((timing.executionEndTime - timing.executionStartTime) / 1000);
             }
             if (timing.approvalStartTime) {
-              timing.totalDuration = Math.floor((timing.executionEndTime - timing.approvalStartTime) / 1000);
+              timing.executionDuration = Math.floor((timing.executionEndTime - timing.approvalStartTime) / 1000);
             }
             
-            console.log(`[LangGraph-Timer] Tool ${approval.id} completed - Total: ${timing.totalDuration}s, Execution: ${timing.executionDuration}s`);
+            console.log(`[LangGraph-Timer] Tool ${approval.id} completed - Total: ${timing.executionDuration}s, Execution: ${timing.executionDuration}s`);
           }
           
           console.log(`[LangGraph-Timer] Updating approval ${approval.id} with execution result:`, mcpResult.success ? 'executed' : 'failed');
@@ -94,7 +94,7 @@ export class ToolApprovalNode extends BaseWorkflowNode {
               timing.executionDuration = Math.floor((timing.executionEndTime - timing.executionStartTime) / 1000);
             }
             if (timing.approvalStartTime) {
-              timing.totalDuration = Math.floor((timing.executionEndTime - timing.approvalStartTime) / 1000);
+              timing.executionDuration = Math.floor((timing.executionEndTime - timing.approvalStartTime) / 1000);
             }
           }
           return { ...approval, processed: true };
@@ -120,15 +120,13 @@ export class ToolApprovalNode extends BaseWorkflowNode {
       if (approvedTools.length > 0) {
         console.log('[LangGraph-Timer] Found approved tools, moving to tool execution...');
         
-        // ✅ ADD: Save tool executions to database via IPC with detailed information
-        const webContents = (global as any).osswarmWebContents;
-        
-        if (webContents && approvedTools.length > 0) {
+        // Save tool executions to database via IPC
+        if (state.webContents?.isValid()) {
           for (const approval of approvedTools) {
             try {
               console.log('[ToolApproval] Saving detailed tool execution to database via IPC:', approval.toolCall.function?.name);
               
-              // ✅ NEW: Parse and validate tool arguments
+              // Parse and validate tool arguments
               let parsedArguments = {};
               try {
                 parsedArguments = typeof approval.toolCall.function?.arguments === 'string' 
@@ -139,18 +137,18 @@ export class ToolApprovalNode extends BaseWorkflowNode {
                 parsedArguments = { raw: approval.toolCall.function?.arguments };
               }
               
-              webContents.send('agent:save_tool_execution_to_db', {
+              state.webContents.send('agent:save_tool_execution_to_db', {
                 executionId: state.executionId,
                 agentId: approval.agentCard.runtimeId || 'default',
                 toolName: approval.toolCall.function?.name || 'unknown',
-                toolArguments: parsedArguments, // ✅ Use parsed arguments
+                toolArguments: parsedArguments,
                 approvalId: approval.id,
-                taskId: null, // ✅ TODO: Link to specific task if available
+                taskId: null,
                 mcpServer: approval.mcpServer
               });
               
-              // ✅ NEW: Enhanced logging with tool details
-              webContents.send('agent:add_log_to_db', {
+              // Enhanced logging with tool details
+              state.webContents.send('agent:add_log_to_db', {
                 executionId: state.executionId,
                 logType: 'tool_request',
                 message: `Tool execution approved: ${approval.toolCall.function?.name} from ${approval.mcpServer} with arguments: ${JSON.stringify(parsedArguments)}`,
@@ -186,6 +184,23 @@ export class ToolApprovalNode extends BaseWorkflowNode {
     
     // Send interaction requests to renderer BEFORE interrupt
     for (const approval of pendingApprovals) {
+      // Enhanced context with subtask information
+      let enhancedContext = `${approval.agentCard.role || 'Unknown'} agent wants to use ${approval.toolCall.function?.name} for: ${state.originalTask}`;
+      
+      // Add subtask context if available
+      if (state.decomposedSubtasks && state.decomposedSubtasks.length > 0) {
+        const relevantSubtasks = state.decomposedSubtasks.filter(task => 
+          task.suggestedAgentTypes.includes(approval.agentCard.role || '') || 
+          task.requiredSkills.some(skill => this.agentHasSkill(approval.agentCard.role || '', skill))
+        );
+        
+        if (relevantSubtasks.length > 0) {
+          enhancedContext += `\n\nSpecific subtasks being addressed:\n${relevantSubtasks.map(task => 
+            `• ${task.description} (Priority: ${task.priority})`
+          ).join('\n')}`;
+        }
+      }
+      
       const interactionRequest: HumanInteractionRequest = {
         type: 'tool_approval',
         id: approval.id,
@@ -201,15 +216,22 @@ export class ToolApprovalNode extends BaseWorkflowNode {
             risk: this.assessToolRisk(approval.toolCall.function?.name || 'unknown', approval.mcpServer)
           },
           agentCard: approval.agentCard,
-          context: `${approval.agentCard.role || 'Unknown'} agent wants to use ${approval.toolCall.function?.name} for: ${state.originalTask}`,
+          context: enhancedContext,
           timestamp: approval.timestamp,
-          threadId: state.threadId
+          threadId: state.threadId,
+          subtaskContext: state.decomposedSubtasks ? {
+            totalSubtasks: state.decomposedSubtasks.length,
+            relevantSubtasks: state.decomposedSubtasks.filter(task => 
+              task.suggestedAgentTypes.includes(approval.agentCard.role || '')
+            ).length,
+            taskAnalysis: state.taskAnalysis
+          } : undefined
         },
         timestamp: approval.timestamp,
         threadId: state.threadId
       };
       
-      await this.sendHumanInteractionToRenderer(interactionRequest);
+      await this.sendHumanInteractionToRenderer(interactionRequest, state);
     }
     
     // Enhanced interrupt with proper typing - THIS IS WHERE IT SHOULD PAUSE
@@ -341,16 +363,35 @@ export class ToolApprovalNode extends BaseWorkflowNode {
     };
   }
 
-  private async sendHumanInteractionToRenderer(request: HumanInteractionRequest): Promise<void> {
+  private agentHasSkill(role: string, skill: string): boolean {
+    // Map common skills to agent types
+    const skillMapping: { [key: string]: string[] } = {
+      'research': ['research', 'data_analysis', 'investigation'],
+      'analysis': ['analysis', 'critical_thinking', 'evaluation'],
+      'creative': ['creativity', 'design', 'marketing', 'content'],
+      'communication': ['writing', 'presentation', 'documentation'],
+      'technical': ['programming', 'development', 'engineering'],
+      'validation': ['testing', 'quality_assurance', 'verification']
+    };
+    
+    const agentSkills = skillMapping[role] || [role];
+    return agentSkills.some(agentSkill => 
+      skill.toLowerCase().includes(agentSkill.toLowerCase()) ||
+      agentSkill.toLowerCase().includes(skill.toLowerCase())
+    );
+  }
+
+  private async sendHumanInteractionToRenderer(request: HumanInteractionRequest, state: WorkflowState): Promise<void> {
     console.log(`[LangGraph-DEBUG] Sending interaction to renderer:`, {
       requestId: request.id,
       type: request.type,
-      threadId: request.threadId
+      threadId: request.threadId,
+      hasWebContents: !!state.webContents,
+      webContentsValid: state.webContents?.isValid()
     });
     
-    const webContents = (global as any).osswarmWebContents;
-    if (webContents && !webContents.isDestroyed()) {
-      webContents.send('agent:human_interaction_request', {
+    if (state.webContents?.isValid()) {
+      state.webContents.send('agent:human_interaction_request', {
         interactionId: request.id,
         request
       });

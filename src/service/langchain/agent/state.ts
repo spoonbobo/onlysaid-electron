@@ -1,6 +1,13 @@
 import { BaseMessage } from "@langchain/core/messages";
 import { AgentCard } from '@/../../types/Agent/AgentCard';
 
+// ✅ NEW: WebContents wrapper for safe IPC communication
+export interface SafeWebContents {
+  send: (channel: string, ...args: any[]) => boolean;
+  isDestroyed: () => boolean;
+  isValid: () => boolean;
+}
+
 export interface LangGraphOSSwarmState {
   // Core task data
   originalTask: string;
@@ -20,10 +27,15 @@ export interface LangGraphOSSwarmState {
   iterationCount: number;
   threadId: string;
   
+  // ✅ ENHANCED: Communication layer with safe webContents
+  webContents?: SafeWebContents;
+  streamCallback?: (update: string) => void;
+  ipcSend?: (channel: string, ...args: any[]) => void;
+  
   // ✅ CRITICAL FIX: Enhanced human oversight with proper state tracking
   pendingApprovals: ToolApprovalRequest[];
   approvalHistory: ApprovalRecord[];
-  waitingForHumanResponse: boolean; // New field to track if workflow is paused
+  waitingForHumanResponse: boolean;
   
   // Knowledge base integration
   kbContext?: {
@@ -32,9 +44,6 @@ export interface LangGraphOSSwarmState {
     selectedKbIds: string[];
     retrievedKnowledge: KnowledgeChunk[];
   };
-  
-  // Communication
-  streamCallback?: (update: string) => void;
   
   // Error handling
   errors: string[];
@@ -97,4 +106,38 @@ export interface KnowledgeChunk {
   content: string;
   source: string;
   relevance: number;
+}
+
+// ✅ NEW: Factory function to create safe webContents wrapper
+export function createSafeWebContents(webContents: any): SafeWebContents {
+  return {
+    send: (channel: string, ...args: any[]): boolean => {
+      try {
+        if (webContents && !webContents.isDestroyed()) {
+          webContents.send(channel, ...args);
+          return true;
+        }
+        return false;
+      } catch (error: any) {
+        console.warn(`[SafeWebContents] Failed to send IPC message to channel '${channel}':`, error.message);
+        return false;
+      }
+    },
+    
+    isDestroyed: (): boolean => {
+      try {
+        return !webContents || webContents.isDestroyed();
+      } catch (error) {
+        return true;
+      }
+    },
+    
+    isValid: (): boolean => {
+      try {
+        return webContents && !webContents.isDestroyed() && webContents.mainFrame;
+      } catch (error) {
+        return false;
+      }
+    }
+  };
 }

@@ -17,6 +17,7 @@ export interface FileNode {
 interface FileExplorerState {
   rootFolders: FileNode[];
   selectedId: string | null;
+  currentNodeId: string | null;
   lastOpenedFolderIds: string[];
   isLoading: boolean;
   loadingNodeIds: Record<string, boolean>;
@@ -31,6 +32,8 @@ interface FileExplorerState {
   toggleFolder: (nodeId: string) => void;
   selectItem: (nodeId: string) => void;
   refreshFolder: (nodeId: string, token?: string) => Promise<void>;
+  setCurrentNode: (nodeId: string | null) => void;
+  getCurrentNode: () => FileNode | null;
 }
 
 const generateNodeId = (source: 'local' | 'remote', path: string, workspaceId?: string): string => {
@@ -185,10 +188,21 @@ export const useFileExplorerStore = create<FileExplorerState>()(
     (set, get) => ({
       rootFolders: [],
       selectedId: null,
+      currentNodeId: null,
       lastOpenedFolderIds: [],
       isLoading: false,
       loadingNodeIds: {},
       error: null,
+
+      setCurrentNode: (nodeId: string | null) => {
+        set({ currentNodeId: nodeId });
+      },
+
+      getCurrentNode: () => {
+        const state = get();
+        if (!state.currentNodeId) return null;
+        return findNodeById(state.rootFolders, state.currentNodeId);
+      },
 
       addLocalRootFolder: async () => {
         set({ isLoading: true, error: null });
@@ -282,11 +296,13 @@ export const useFileExplorerStore = create<FileExplorerState>()(
       removeRootFolder: (nodeId: string) => {
         set(state => {
           const nodeToRemove = findNodeById(state.rootFolders, nodeId);
-          return {
+          const newState = {
             rootFolders: state.rootFolders.filter(folder => folder.id !== nodeId),
             lastOpenedFolderIds: state.lastOpenedFolderIds.filter(id => id !== nodeId),
             selectedId: state.selectedId === nodeId ? null : state.selectedId,
+            currentNodeId: state.currentNodeId === nodeId ? null : state.currentNodeId,
           };
+          return newState;
         });
       },
 
@@ -303,6 +319,7 @@ export const useFileExplorerStore = create<FileExplorerState>()(
             rootFolders: state.rootFolders.filter(folder => folder.id !== remoteRootNodeId),
             lastOpenedFolderIds: state.lastOpenedFolderIds.filter(id => id !== remoteRootNodeId),
             selectedId: state.selectedId === remoteRootNodeId ? null : state.selectedId,
+            currentNodeId: state.currentNodeId === remoteRootNodeId ? null : state.currentNodeId,
           };
         });
       },
@@ -398,7 +415,9 @@ export const useFileExplorerStore = create<FileExplorerState>()(
         })),
         lastOpenedFolderIds: state.lastOpenedFolderIds,
         selectedId: state.selectedId,
+        currentNodeId: state.currentNodeId,
       }),
+      version: 2,
     }
   )
 );
@@ -406,6 +425,7 @@ export const useFileExplorerStore = create<FileExplorerState>()(
 export const selectors = {
   selectRootFolders: (state: FileExplorerState) => state.rootFolders,
   selectSelectedNodeId: (state: FileExplorerState) => state.selectedId,
+  selectCurrentNodeId: (state: FileExplorerState) => state.currentNodeId,
   selectIsLoading: (state: FileExplorerState) => state.isLoading,
   selectError: (state: FileExplorerState) => state.error,
   selectLastOpenedFolderIds: (state: FileExplorerState) => state.lastOpenedFolderIds,

@@ -10,8 +10,14 @@ import { useState } from "react";
 import { getTotalNotificationCount } from "@/utils/notifications";
 import { useNotificationStore } from "@/renderer/stores/Notification/NotificationStore";
 import NotificationView from "@/renderer/components/Dialog/NotificationView";
+import AgentTaskToggle from "../Main/Chat/ChatInput/ActionButtons/AgentTaskToggle";
 
-export default function UserInfoBar() {
+interface UserInfoBarProps {
+  onAgentToggle?: (show: boolean) => void;
+  agentOverlayVisible?: boolean;
+}
+
+export default function UserInfoBar({ onAgentToggle, agentOverlayVisible = false }: UserInfoBarProps) {
   const user: IUser | null = useUserStore((state) => state.user);
   const agent: IUser | null = useAgentStore((state) => state.agent);
   const setSelectedContext = useTopicStore((state) => state.setSelectedContext);
@@ -141,6 +147,10 @@ export default function UserInfoBar() {
       </Box>
 
       <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+        <AgentTaskToggle 
+          onToggle={onAgentToggle}
+          isOverlayVisible={agentOverlayVisible}
+        />
         <IconButton
           size="small"
           onClick={handleNavigateToSettings}

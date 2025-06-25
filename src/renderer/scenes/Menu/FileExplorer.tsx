@@ -8,6 +8,7 @@ import CreateNewFolderIcon from "@mui/icons-material/CreateNewFolder";
 import FolderOpenIcon from "@mui/icons-material/FolderOpen";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import CloudDoneIcon from '@mui/icons-material/CloudDone';
+import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import MenuSection from "@/renderer/components/Navigation/MenuSection";
 import { FormattedMessage } from "react-intl";
 import FileDropDialog from "@/renderer/components/Dialog/File";
@@ -81,6 +82,11 @@ function FileNodeItem({ node, level = 0 }: { node: FileNode, level?: number }) {
   const { processedKbDocuments } = useKBStore();
   const [isSynced, setIsSynced] = useState(false);
 
+  // Check if folder has too many items (more than 5)
+  const hasTooManyItems = node.type === 'directory' && node.children && node.children.length > 5;
+
+  const { setSelectedContext } = useTopicStore();
+
   useEffect(() => {
     if (node.type === 'file' && node.source === 'remote' && node.workspaceId && node.fileDbId) {
       const workspaceKbsData = processedKbDocuments[node.workspaceId];
@@ -126,6 +132,12 @@ function FileNodeItem({ node, level = 0 }: { node: FileNode, level?: number }) {
   const handleExpansionClick = (e: React.MouseEvent) => {
     e.stopPropagation();
     handleClick();
+  };
+
+  const handleViewInFileExplorer = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    // Switch to file context
+    setSelectedContext({ name: "file", type: "file" });
   };
 
   const handleDragStart = (e: React.DragEvent<HTMLDivElement>) => {
@@ -543,29 +555,70 @@ function FileNodeItem({ node, level = 0 }: { node: FileNode, level?: number }) {
         nodeId={node.id}
       />
 
+      {/* Show children or "too many files" message */}
       {node.type === 'directory' && node.isExpanded && node.children && (
-        node.children.length > 0 ? (
-          node.children.map((child: FileNode) => (
-            <FileNodeItem key={child.id} node={child} level={level + 1} />
-          ))
-        ) : (
-          !isLoading && (
+        <>
+          {hasTooManyItems ? (
             <ListItem
               sx={{
-                pl: 1 + (level + 1) * 1.5 + (24 / 8 / 2),
-                py: 0.25,
-                height: 30,
-                minHeight: 30,
-                boxSizing: 'border-box',
-                userSelect: 'none',
+                pl: 1 + (level + 1) * 1.5,
+                py: 0.5,
+                flexDirection: 'column',
+                alignItems: 'flex-start',
+                bgcolor: 'warning.light',
+                borderRadius: 1,
+                mx: 1,
+                my: 0.25,
               }}
             >
-              <Typography variant="body2" sx={{ fontSize: '0.75rem' }} color="text.secondary">
-                <FormattedMessage id="file.emptyFolder" defaultMessage="Empty folder" />
+              <Typography variant="body2" sx={{ fontSize: '0.75rem', mb: 0.5 }} color="warning.dark">
+                <FormattedMessage 
+                  id="menu.fileExplorer.tooManyFiles" 
+                  defaultMessage="Too many files ({count} items). View in File Explorer for better navigation."
+                  values={{ count: node.children!.length }}
+                />
               </Typography>
+              <Button
+                size="small"
+                variant="outlined"
+                startIcon={<OpenInNewIcon sx={{ fontSize: '0.8rem' }} />}
+                onClick={handleViewInFileExplorer}
+                sx={{
+                  fontSize: '0.7rem',
+                  py: 0.25,
+                  px: 1,
+                  minHeight: 'auto',
+                  height: 24,
+                }}
+              >
+                <FormattedMessage id="menu.fileExplorer.viewInExplorer" defaultMessage="View in File Explorer" />
+              </Button>
             </ListItem>
-          )
-        )
+          ) : (
+            node.children.length > 0 ? (
+              node.children.map((child: FileNode) => (
+                <FileNodeItem key={child.id} node={child} level={level + 1} />
+              ))
+            ) : (
+              !isLoading && (
+                <ListItem
+                  sx={{
+                    pl: 1 + (level + 1) * 1.5 + (24 / 8 / 2),
+                    py: 0.25,
+                    height: 30,
+                    minHeight: 30,
+                    boxSizing: 'border-box',
+                    userSelect: 'none',
+                  }}
+                >
+                  <Typography variant="body2" sx={{ fontSize: '0.75rem' }} color="text.secondary">
+                    <FormattedMessage id="file.emptyFolder" defaultMessage="Empty folder" />
+                  </Typography>
+                </ListItem>
+              )
+            )
+          )}
+        </>
       )}
     </div>
   );
@@ -579,7 +632,7 @@ function FileExplorer({ minContentHeightAbove }: FileExplorerProps) {
   const fileExplorerRef = useRef<HTMLDivElement>(null);
   const syncInProgressRef = useRef(false);
 
-  const { contexts } = useTopicStore();
+  const { contexts, setSelectedContext } = useTopicStore();
   const { workspaces } = useWorkspaceStore();
   const token = getUserTokenFromStore();
 
@@ -657,6 +710,10 @@ function FileExplorer({ minContentHeightAbove }: FileExplorerProps) {
     startY.current = e.clientY;
     document.body.style.userSelect = "none";
     document.body.style.cursor = "ns-resize";
+  };
+
+  const handleOpenFileExplorer = () => {
+    setSelectedContext({ name: "file", type: "file" });
   };
 
   useEffect(() => {
@@ -762,8 +819,19 @@ function FileExplorer({ minContentHeightAbove }: FileExplorerProps) {
                   }
                 }
               }}
-              sx={{ my: 0 }}
+              sx={{ my: 0, flexGrow: 1 }}
             />
+            <IconButton
+              size="small"
+              onClick={(e) => {
+                e.stopPropagation();
+                handleOpenFileExplorer();
+              }}
+              sx={{ p: 0.25, ml: 0.5 }}
+              title="Open File Explorer"
+            >
+              <OpenInNewIcon sx={{ fontSize: '0.9rem' }} />
+            </IconButton>
           </ListItemButton>
 
           {isExpanded && (

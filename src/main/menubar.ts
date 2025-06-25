@@ -65,9 +65,7 @@ export function setupMenuBarHandlers(mainWindow: BrowserWindow) {
         shell.openExternal('https://onlysaid.com/docs/#/');
         break;
       case 'view:n8n':
-        const n8nUrl = process.env.NODE_ENV === 'production' 
-          ? 'https://n8n.onlysaid.com/' 
-          : 'http://n8n.onlysaid-dev.com/';
+        const n8nUrl = process.env.N8N_URL || 'https://n8n.onlysaid.com/';
         shell.openExternal(n8nUrl);
         break;
       case 'help:community':

@@ -4,7 +4,6 @@ import { useIntl } from "react-intl";
 import { useMCPStore } from "@/renderer/stores/MCP/MCPStore";
 import { useMCPSettingsStore } from "@/renderer/stores/MCP/MCPSettingsStore";
 import SelectMCPDialog, { IMCPServiceDisplay, IMCPToolDisplay } from "@/renderer/components/Dialog/MCP/SelectMCPDialog";
-import { useLLMConfigurationStore } from "@/renderer/stores/LLM/LLMConfiguration";
 import { useMCPClientStore } from "@/renderer/stores/MCP/MCPClient";
 import { getServiceTools, formatMCPName } from "@/utils/mcp";
 
@@ -23,35 +22,34 @@ export default function MCPSelector({ disabled = false }: MCPSelectorProps) {
   } = useMCPSettingsStore();
   const { getAllConfiguredServers } = useMCPStore();
   const { ListMCPTool } = useMCPClientStore.getState();
-  const { aiMode } = useLLMConfigurationStore();
   const intl = useIntl();
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const componentDisabled = disabled;
   const [initialSelectAllDone, setInitialSelectAllDone] = useState(false);
+  const [hasLoadedMcps, setHasLoadedMcps] = useState(false);
 
+  // Load MCPs on mount
   useEffect(() => {
-    if (aiMode === "agent") {
-      loadMcps();
-    } else {
-      setAvailableMcps([]);
-      setInitialSelectAllDone(false);
-    }
-  }, [aiMode]);
+    loadMcps();
+  }, []);
 
+  // Only clear selections if we've actually loaded data and confirmed there are no MCPs
   useEffect(() => {
-    if (aiMode === "agent" && availableMcps.length > 0) {
-      const currentSelected = selectedMcpServerIds.filter(id => availableMcps.some(mcp => mcp.id === id));
-      if (currentSelected.length !== selectedMcpServerIds.length) {
-        setSelectedMcpServerIds(currentSelected);
+    if (hasLoadedMcps) {
+      if (availableMcps.length > 0) {
+        const currentSelected = selectedMcpServerIds.filter(id => availableMcps.some(mcp => mcp.id === id));
+        if (currentSelected.length !== selectedMcpServerIds.length) {
+          setSelectedMcpServerIds(currentSelected);
+        }
+      } else if (selectedMcpServerIds.length > 0) {
+        // Only clear if we've confirmed there are no available MCPs after loading
+        clearSelectedMcpServerIds();
       }
-    } else if (aiMode === "agent" && availableMcps.length === 0 && selectedMcpServerIds.length > 0) {
-      clearSelectedMcpServerIds();
     }
-  }, [availableMcps, aiMode, selectedMcpServerIds, setSelectedMcpServerIds, clearSelectedMcpServerIds]);
+  }, [availableMcps, selectedMcpServerIds, setSelectedMcpServerIds, clearSelectedMcpServerIds, hasLoadedMcps]);
 
   const loadMcps = async () => {
-    // console.log("MCPSelector: loadMcps called");
     const allServers = getAllConfiguredServers();
 
     const enabledAndConfiguredMcpsBase: Omit<IMCPServiceDisplay, 'tools' | 'toolsError'>[] = Object.entries(allServers)
@@ -62,16 +60,12 @@ export default function MCPSelector({ disabled = false }: MCPSelectorProps) {
       }));
 
     const mcpDataWithTools = enabledAndConfiguredMcpsBase.map((mcpBase) => {
-      // console.log(`MCPSelector: Loading tools for MCP ${mcpBase.id}`);
-
       const storedTools = getServiceTools(mcpBase.id);
 
       const validTools: IMCPToolDisplay[] = storedTools.map(tool => ({
         name: tool.name,
         description: tool.description || ""
       }));
-
-      // console.log(`MCPSelector: Successfully processed tools for ${mcpBase.id}:`, validTools.length);
 
       return {
         ...mcpBase,
@@ -80,8 +74,8 @@ export default function MCPSelector({ disabled = false }: MCPSelectorProps) {
       };
     });
 
-    // console.log("MCPSelector: Final mcpDataWithTools:", mcpDataWithTools);
     setAvailableMcps(mcpDataWithTools);
+    setHasLoadedMcps(true);
 
     if (mcpDataWithTools.length > 0 && !initialSelectAllDone) {
       setInitialSelectAllDone(true);
@@ -137,10 +131,6 @@ export default function MCPSelector({ disabled = false }: MCPSelectorProps) {
   }, [selectedMcpServerIds, availableMcps, intl]);
 
   const isAllSelected = availableMcps.length > 0 && selectedMcpServerIds.length === availableMcps.length;
-
-  if (aiMode !== "agent") {
-    return null;
-  }
 
   return (
     <>

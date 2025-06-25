@@ -4,7 +4,8 @@ import {
   useExecutionGraphStore,
   useAgentManagementStore,
   useTaskManagementStore,
-  useToolExecutionStore
+  useToolExecutionStore,
+  useAgentTaskOrchestrator
 } from './';
 import { OSSwarmExecution, OSSwarmAgent, OSSwarmTask, OSSwarmToolExecution } from './types';
 
@@ -45,12 +46,9 @@ interface RealtimeState {
   handleAgentUpdate: (data: AgentUpdateData) => void;
   handleTaskUpdate: (data: TaskUpdateData) => void;
   handleToolExecutionUpdate: (data: ToolExecutionUpdateData) => void;
-  setStoreReferences: (stores: any) => void;
 }
 
 export const useRealtimeStore = create<RealtimeState>((set, get) => {
-  let storeRefs: any = {};
-
   return {
     handleExecutionUpdate: (data: ExecutionUpdateData) => {
       console.log('[RealtimeStore] Handling execution update:', data);
@@ -247,10 +245,5 @@ export const useRealtimeStore = create<RealtimeState>((set, get) => {
         });
       }
     },
-
-    setStoreReferences: (stores) => {
-      console.log('[RealtimeStore] Store references set (deprecated - using direct access)');
-      storeRefs = stores;
-    }
   };
 }); 

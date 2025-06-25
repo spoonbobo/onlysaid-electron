@@ -17,36 +17,40 @@ export abstract class BaseWorkflowNode {
       state.streamCallback(`[LangGraph OSSwarm] ${update.type}: ${JSON.stringify(update.data)}`);
     }
     
-    const webContents = (global as any).osswarmWebContents;
-    if (webContents && !webContents.isDestroyed()) {
-      switch (update.type) {
-        case 'agent_status':
-          webContents.send('agent:agent_updated', {
-            agentCard: update.data.agentCard,
-            status: update.data.status,
-            currentTask: update.data.currentTask,
-            executionId: state.executionId,
-            toolTimings: update.data.toolTimings
-          });
-          break;
-          
-        case 'execution_progress':
-          webContents.send('agent:execution_updated', {
-            executionId: state.executionId,
-            status: update.data.status,
-            progress: update.data,
-            toolTimings: state.toolTimings
-          });
-          break;
-          
-        case 'result_synthesis':
-          webContents.send('agent:result_synthesized', {
-            executionId: state.executionId,
-            result: update.data.result,
-            agentCards: Object.values(state.activeAgentCards),
-            toolTimings: state.toolTimings
-          });
-          break;
+    const webContents = state.webContents;
+    if (webContents?.isValid()) {
+      try {
+        switch (update.type) {
+          case 'agent_status':
+            webContents.send('agent:agent_updated', {
+              agentCard: update.data.agentCard,
+              status: update.data.status,
+              currentTask: update.data.currentTask,
+              executionId: state.executionId,
+              toolTimings: update.data.toolTimings
+            });
+            break;
+            
+          case 'execution_progress':
+            webContents.send('agent:execution_updated', {
+              executionId: state.executionId,
+              status: update.data.status,
+              progress: update.data,
+              toolTimings: state.toolTimings
+            });
+            break;
+            
+          case 'result_synthesis':
+            webContents.send('agent:result_synthesized', {
+              executionId: state.executionId,
+              result: update.data.result,
+              agentCards: Object.values(state.activeAgentCards),
+              toolTimings: state.toolTimings
+            });
+            break;
+        }
+      } catch (error: any) {
+        console.warn('[BaseWorkflowNode] Failed to send renderer update:', error.message);
       }
     }
   }

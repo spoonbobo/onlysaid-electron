@@ -169,10 +169,10 @@ export class AgentExecutorNode extends BaseWorkflowNode {
     try {
       console.log(`[LangGraph] executeAgentWithApproval starting for ${role} agent at ${new Date(startTime).toLocaleTimeString()}`);
       
-      const webContents = (global as any).osswarmWebContents;
+      const webContents = state.webContents;
       const taskDescription = `${role} agent execution: ${state.originalTask}`;
       
-      if (webContents && state.executionId) {
+      if (webContents?.isValid() && state.executionId) {
         webContents.send('agent:save_task_to_db', {
           executionId: state.executionId,
           agentId: agentCard.runtimeId || agentCard.role,
@@ -234,7 +234,7 @@ export class AgentExecutorNode extends BaseWorkflowNode {
           
           console.log(`[LangGraph-Timer] Creating pending approval for tool: ${toolName} from ${mcpServer} at ${new Date(currentTime).toLocaleTimeString()}`);
           
-          if (webContents && state.executionId) {
+          if (webContents?.isValid() && state.executionId) {
             webContents.send('agent:add_log_to_db', {
               executionId: state.executionId,
               logType: 'tool_request',
@@ -276,7 +276,7 @@ export class AgentExecutorNode extends BaseWorkflowNode {
         };
       }
       
-      if (webContents && state.executionId) {
+      if (webContents?.isValid() && state.executionId) {
         webContents.send('agent:add_log_to_db', {
           executionId: state.executionId,
           logType: 'info',

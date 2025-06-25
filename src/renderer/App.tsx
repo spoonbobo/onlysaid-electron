@@ -30,7 +30,10 @@ function App() {
   const { user } = useUserStore();
   const { agent, createGuestAgent, resumeLangGraphWorkflow } = useAgentStore();
   const { initialize: initializeSocket, close: closeSocket } = useSocketStore();
-  const { initializeGoogleCalendarListeners, initializeMicrosoftCalendarListeners } = useUserTokenStore();
+  const { 
+    initializeGoogleCalendarListeners, 
+    initializeMicrosoftCalendarListeners
+  } = useUserTokenStore();
   const { preloadAssets } = useAppAssets();
   
   // ✅ Global state for IPC listeners
@@ -164,7 +167,7 @@ function App() {
         console.log('[App] Starting initialization...');
         
         // Step 1: Preload essential assets
-        sendInitProgress('Loading essential assets', 1, 4); // Changed to 4 steps
+        sendInitProgress('Loading essential assets', 1, 4);
         console.log('[App] Loading essential assets...');
         await preloadAssets(['icon.png']);
         sendStepComplete('Essential Assets');
@@ -175,14 +178,17 @@ function App() {
         setupDeeplinkAuthListener();
         sendStepComplete('Authentication');
         
-        // Step 3: Initialize calendar listeners (non-blocking)
-        sendInitProgress('Setting up calendar listeners', 3, 4);
-        console.log('[App] Setting up calendar listeners...');
+        // Step 3: Initialize calendar and service listeners (non-blocking)
+        sendInitProgress('Setting up service listeners', 3, 4);
+        console.log('[App] Setting up service listeners...');
+        
+        // Initialize authentication listeners (removed Moodle)
         const cleanupGoogle = initializeGoogleCalendarListeners();
         const cleanupMicrosoft = initializeMicrosoftCalendarListeners();
-        sendStepComplete('Calendar Listeners');
         
-        // Step 4: Initialize MCP services (no waiting for Google services)
+        sendStepComplete('Service Listeners');
+        
+        // Step 4: Initialize MCP services
         sendInitProgress('Initializing MCP services', 4, 4);
         console.log('[App] Initializing MCP services...');
         await initializeMCPServices();
@@ -200,6 +206,12 @@ function App() {
         setIsAppReady(true);
         setInitializationComplete(true);
         
+        // Return cleanup function for this useEffect
+        return () => {
+          cleanupGoogle();
+          cleanupMicrosoft();
+        };
+        
       } catch (error) {
         console.error('App initialization failed:', error);
         sendInitComplete();
@@ -211,7 +223,19 @@ function App() {
       }
     };
 
-    initializeApp();
+    // Call the async function and handle cleanup
+    let cleanup: (() => void) | undefined;
+    
+    initializeApp().then((cleanupFn) => {
+      cleanup = cleanupFn;
+    });
+
+    // Return cleanup function for the useEffect
+    return () => {
+      if (cleanup) {
+        cleanup();
+      }
+    };
   }, [preloadAssets, initializeGoogleCalendarListeners, initializeMicrosoftCalendarListeners]);
 
   useEffect(() => {

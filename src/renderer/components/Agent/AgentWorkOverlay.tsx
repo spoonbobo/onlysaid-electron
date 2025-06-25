@@ -1,24 +1,10 @@
 import { 
   Box, 
   CircularProgress, 
-  Typography, 
   Tabs, 
   Tab, 
-  Alert, 
-  Dialog, 
-  DialogTitle, 
-  DialogContent, 
-  DialogActions, 
-  Chip, 
-  Stack, 
-  ButtonGroup, 
-  Tooltip, 
   Paper, 
-  Card, 
-  CardContent, 
-  useTheme,
-  Button,
-  IconButton
+  useTheme
 } from "@mui/material";
 import { useEffect, useState, useRef, useMemo } from "react";
 import { useAgentStore } from "@/renderer/stores/Agent/AgentStore";
@@ -40,7 +26,8 @@ import {
   CheckCircle,
   Error as ErrorIcon,
   Info as InfoIcon,
-  Person
+  Person,
+  Task as TaskIcon
 } from "@mui/icons-material";
 import { useIntl } from "react-intl";
 import { alpha } from "@mui/material/styles";
@@ -52,6 +39,9 @@ import { LogsPanel } from './LogsPanel';
 import { GraphPanel } from './GraphPanel';
 import { StatsFooter } from './StatsFooter';
 import TaskHistory from '../Dialog/Agent/TaskHistory';
+import { TaskPanel } from './Task';
+import KBSelector from './KBSelector';
+import MCPSelector from './MCPSelector';
 
 interface AgentWorkOverlayProps {
   visible?: boolean;
@@ -85,10 +75,10 @@ export default function AgentWorkOverlay({
   
   const { aiMode } = useLLMConfigurationStore();
   
-  // ✅ Use underlying stores instead of aggregated store
   const { currentExecution } = useExecutionStore();
   const { currentGraph } = useExecutionGraphStore();
   const { executions, loadExecutionHistory } = useHistoryStore();
+  
   const { 
     setCurrentExecution, 
     deleteExecutionCompletely, 
@@ -103,6 +93,7 @@ export default function AgentWorkOverlay({
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showHistoryDialog, setShowHistoryDialog] = useState(false);
   const [parentBounds, setParentBounds] = useState<DOMRect | null>(null);
+  const [isHistoryView, setIsHistoryView] = useState(false);
 
   // Get current Agent Task state
   const currentTaskUpdates = agentTaskUpdates['current'] || [];
@@ -149,18 +140,25 @@ export default function AgentWorkOverlay({
     }
   }, [respectParentBounds, containerRef]);
 
+  // When the overlay hides, reset the history view flag
+  useEffect(() => {
+    if (!shouldShow) {
+      setIsHistoryView(false);
+    }
+  }, [shouldShow]);
+
   // Load execution history on mount
   useEffect(() => {
     loadExecutionHistory(20);
   }, [loadExecutionHistory]);
 
-  // Updated logic - prioritize manual visibility control
-  useEffect(() => {
+  const displayState = useMemo(() => {
+    // Manually controlled state from the `visible` prop takes precedence
     if (visible !== undefined) {
-      setShouldShow(visible);
-      return;
+      return visible ? 'visible_prop' : 'hidden_prop';
     }
 
+    // Determine if any active process is running that should show the overlay
     const shouldShowOverlay = isAgentModeActive || 
                              isTaskActive || 
                              isTaskRunning || 
@@ -169,15 +167,18 @@ export default function AgentWorkOverlay({
                              (hasExecutionGraph && !isExecutionCompleted);
     
     if (shouldShowOverlay) {
-      setShouldShow(true);
-    } else if ((isTaskCompleted || isExecutionCompleted) && !isTaskActive && !isAgentModeActive) {
-      const delay = currentTaskStatus === 'failed' ? 10000 : 5000;
-      const timer = setTimeout(() => setShouldShow(false), delay);
-      return () => clearTimeout(timer);
-    } else {
-      const timer = setTimeout(() => setShouldShow(false), 1000);
-      return () => clearTimeout(timer);
+      return 'active';
     }
+
+    // Determine if the task/execution has finished
+    const isFinished = (isTaskCompleted || isExecutionCompleted) && !isTaskActive && !isAgentModeActive;
+    
+    if (isFinished) {
+      return currentTaskStatus === 'failed' ? 'completed_failed' : 'completed_success';
+    }
+    
+    // Default idle state
+    return 'idle';
   }, [
     visible,
     isAgentModeActive, 
@@ -191,22 +192,43 @@ export default function AgentWorkOverlay({
     currentTaskStatus
   ]);
 
+  useEffect(() => {
+    // If the overlay's visibility is being controlled by the `visible` prop, respect it
+    if (displayState === 'visible_prop') {
+      setShouldShow(true);
+      return;
+    }
+    if (displayState === 'hidden_prop') {
+      setShouldShow(false);
+      return;
+    }
+
+    // Handle state transitions based on agent activity
+    switch(displayState) {
+      case 'active':
+        setShouldShow(true);
+        break;
+      case 'completed_failed':
+        const failTimer = setTimeout(() => setShouldShow(false), 10000);
+        return () => clearTimeout(failTimer);
+      case 'completed_success':
+        const successTimer = setTimeout(() => setShouldShow(false), 5000);
+        return () => clearTimeout(successTimer);
+      case 'idle':
+      default:
+        // Hide after a short delay if idle and not explicitly kept open
+        const idleTimer = setTimeout(() => setShouldShow(false), 1000);
+        return () => clearTimeout(idleTimer);
+    }
+  }, [displayState]);
+
   // Add this useEffect to clear stale agent state when execution completes
   useEffect(() => {
-    // If execution is completed but agent tasks are still active, clear them
-    if (currentGraph?.execution?.status === 'completed' && isTaskActive) {
-      console.log('[AgentWorkOverlay] Execution completed but agent tasks still active - clearing stale state');
-      
-      // Clear the stale agent task state
-      clearAgentTaskUpdates('current');
-      
-      // Force clear the active state if the store has this method
-      const agentStore = useAgentStore.getState();
-      if (agentStore.clearAgentTaskState) {
-        agentStore.clearAgentTaskState('current');
-      }
+    // If execution is completed AND we are not viewing history, clear live agent state
+    if (!isHistoryView && isExecutionCompleted && !isTaskActive && !isAgentModeActive) {
+      clearCurrentExecution();
     }
-  }, [currentGraph?.execution?.status, isTaskActive, clearAgentTaskUpdates]);
+  }, [isHistoryView, isExecutionCompleted, isTaskActive, isAgentModeActive, clearCurrentExecution]);
 
   // Handler functions
   const handleAbort = async () => {
@@ -237,6 +259,7 @@ export default function AgentWorkOverlay({
   // ✅ Enhanced history select with error handling
   const handleHistorySelect = async (executionId: string) => {
     try {
+      setIsHistoryView(true);
       await setCurrentExecution(executionId);
       setShowHistoryDialog(false);
       setCurrentTab(1);
@@ -509,6 +532,28 @@ export default function AgentWorkOverlay({
           onClose={handleClose}
         />
 
+        {/* Global MCP/KB Selector Bar */}
+        {!isMinimized && (
+          <Box
+            sx={{
+              display: 'flex',
+              gap: 1,
+              alignItems: 'center',
+              px: 2,
+              py: 1,
+              bgcolor: alpha(theme.palette.primary.main, 0.05),
+              borderBottom: 1,
+              borderColor: 'divider',
+              flexShrink: 0
+            }}
+          >
+            <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+              {(aiMode === "query" || aiMode === "agent") && <KBSelector />}
+              {aiMode === "agent" && <MCPSelector />}
+            </Box>
+          </Box>
+        )}
+
         {/* Content - show/hide directly without animations */}
         {!isMinimized && (
           <Box sx={{ 
@@ -555,6 +600,11 @@ export default function AgentWorkOverlay({
                   iconPosition="start"
                   disabled={!hasExecutionGraph}
                 />
+                <Tab 
+                  icon={<TaskIcon />} 
+                  label={intl.formatMessage({ id: 'agent.tabs.tasks' })}
+                  iconPosition="start"
+                />
               </Tabs>
             </Paper>
 
@@ -588,6 +638,16 @@ export default function AgentWorkOverlay({
                   isFullscreen={isFullscreen}
                   onFullscreenToggle={handleFullscreenToggle}
                   onShowHistory={() => setShowHistoryDialog(true)}
+                />
+              )}
+
+              {/* Tasks Panel */}
+              {currentTab === 2 && (
+                <TaskPanel
+                  currentExecution={currentExecution}
+                  isTaskRunning={isTaskRunning}
+                  isTaskActive={isTaskActive}
+                  isFullscreen={isFullscreen}
                 />
               )}
             </Box>

@@ -13,7 +13,6 @@ import { useStreamStore } from "@/renderer/stores/Stream/StreamStore";
 import { useTopicStore } from "@/renderer/stores/Topic/TopicStore";
 import { useLLMConfigurationStore } from "@/renderer/stores/LLM/LLMConfiguration";
 import { useUserStore } from "@/renderer/stores/User/UserStore";
-import { useAgentSettingsStore } from "@/renderer/stores/Agent/AgentSettingStore";
 import { calculateExperienceForLevel } from "@/utils/agent";
 import { summarizeToolCallResults } from "@/renderer/stores/Agent/mode/Ask";
 import { v4 as uuidv4 } from 'uuid';

@@ -6,9 +6,6 @@ import AttachFileIcon from "@mui/icons-material/AttachFile";
 import { useLLMConfigurationStore } from "@/renderer/stores/LLM/LLMConfiguration";
 import ModelSelector from "./ModelSelector";
 import AIMode from "./AIMode";
-import KBSelector from "./KBSelector";
-import MCPSelector from "./MCPSelector";
-import AgentTaskToggle from "./AgentTaskToggle";
 
 interface ActionButtonsProps {
   input: string;
@@ -17,8 +14,6 @@ interface ActionButtonsProps {
   disabled?: boolean;
   isSending?: boolean;
   hasAttachments?: boolean;
-  onAgentToggle?: (show: boolean) => void;
-  agentOverlayVisible?: boolean;
 }
 
 export default function ActionButtons({
@@ -27,11 +22,9 @@ export default function ActionButtons({
   onAttachment,
   disabled = false,
   isSending = false,
-  hasAttachments = false,
-  onAgentToggle,
-  agentOverlayVisible = false
+  hasAttachments = false
 }: ActionButtonsProps) {
-  const { modelId, provider, aiMode } = useLLMConfigurationStore();
+  const { modelId, provider } = useLLMConfigurationStore();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -75,17 +68,6 @@ export default function ActionButtons({
       <Box sx={{ display: "flex", gap: 0.5, alignItems: "center", flexWrap: "nowrap", overflowX: "auto" }}>
         <AIMode disabled={disabled} />
         <ModelSelector disabled={disabled} />
-        {(aiMode === "query" || aiMode === "agent") && <KBSelector disabled={disabled} />}
-        {aiMode === "agent" && (
-          <>
-            <MCPSelector disabled={disabled} />
-            <AgentTaskToggle 
-              disabled={disabled} 
-              onToggle={onAgentToggle}
-              isOverlayVisible={agentOverlayVisible}
-            />
-          </>
-        )}
       </Box>
 
       <Box sx={{ display: "flex", gap: 0.5 }}>
