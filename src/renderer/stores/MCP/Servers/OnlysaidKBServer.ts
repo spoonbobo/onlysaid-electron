@@ -9,7 +9,7 @@ export const createOnlysaidKBServer = (
 
   const defaultConfig: IOnlysaidKBConfig = {
     baseUrl: "http://onlysaid-dev.com/api/kb",
-    timeout: 30,
+    timeout: 60,
     path: ""
   };
 

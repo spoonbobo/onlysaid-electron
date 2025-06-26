@@ -13,6 +13,9 @@ import { useStreamStore } from "@/renderer/stores/Stream/StreamStore";
 import { useTopicStore } from "@/renderer/stores/Topic/TopicStore";
 import { HumanInteractionResponse } from "@/service/langchain/human_in_the_loop/renderer/human_in_the_loop";
 
+// Add this constant at the top of the file, after imports
+const TOOL_EXECUTION_TIMEOUT = 10 * 60 * 1000; // 10 minutes
+
 interface UseToolDisplayLogicProps {
   toolCalls: IChatMessageToolCall[];
   chatId: string;
@@ -49,12 +52,12 @@ export const useToolDisplayLogic = ({ toolCalls, chatId, messageId }: UseToolDis
     const result = mcpServer === 'agent_orchestrator' || 
            functionName.endsWith('_agent_execution');
     
-    console.log('[ToolDisplay] 🐛 DEBUG: isAgentExecution check:', {
-      toolCallId: toolCall.id,
-      functionName: functionName,
-      mcpServer: mcpServer,
-      isAgentExecution: result
-    });
+    // console.log('[ToolDisplay] 🐛 DEBUG: isAgentExecution check:', {
+    //   toolCallId: toolCall.id,
+    //   functionName: functionName,
+    //   mcpServer: mcpServer,
+    //   isAgentExecution: result
+    // });
     
     return result;
   }, []);
@@ -146,7 +149,7 @@ export const useToolDisplayLogic = ({ toolCalls, chatId, messageId }: UseToolDis
       }
       
       const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error('Tool execution timeout after 30 seconds')), 30000);
+        setTimeout(() => reject(new Error(`Tool execution timeout after ${TOOL_EXECUTION_TIMEOUT / 1000} seconds`)), TOOL_EXECUTION_TIMEOUT);
       });
       
       const executionPromise = executeTool(serverName, toolName, args);

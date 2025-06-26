@@ -58,6 +58,7 @@ export const GraphPanel: React.FC<GraphPanelProps> = ({
       height: '100%',
       display: 'flex',
       flexDirection: 'column',
+      minHeight: 0,
       overflow: 'hidden',
       position: 'relative'
     }}>
@@ -66,7 +67,8 @@ export const GraphPanel: React.FC<GraphPanelProps> = ({
           flexGrow: 1, 
           display: 'flex',
           minHeight: 0,
-          position: 'relative'
+          position: 'relative',
+          overflow: 'hidden'
         }}>
           <ExecutionGraphComponent
             graph={currentGraph}
@@ -74,47 +76,55 @@ export const GraphPanel: React.FC<GraphPanelProps> = ({
             fullscreen={isFullscreen}
             onFullscreenToggle={onFullscreenToggle}
             onRefresh={handleRefresh}
-            // ✅ Add debug prop to help with troubleshooting
             debug={process.env.NODE_ENV === 'development'}
           />
         </Box>
       ) : (
-        <Card sx={{ 
-          display: 'flex', 
-          alignItems: 'center', 
-          justifyContent: 'center', 
+        <Box sx={{ 
           flexGrow: 1,
-          bgcolor: alpha(theme.palette.grey[50], 0.5),
-          borderRadius: 3
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          p: 3
         }}>
-          <CardContent>
-            <Stack alignItems="center" spacing={3} sx={{ py: 6 }}>
-              <Timeline sx={{ fontSize: 64, color: 'text.disabled' }} />
-              <Typography variant="h5" color="text.secondary" fontWeight={500}>
-                {intl.formatMessage({ id: 'agent.graph.noExecutionGraph' })}
-              </Typography>
-              <Typography variant="body1" color="text.secondary" textAlign="center" sx={{ maxWidth: 400 }}>
-                {intl.formatMessage({ id: 'agent.graph.startOrSelectFromHistory' })}
-              </Typography>
-              <Button
-                variant="contained"
-                size="large"
-                startIcon={<History />}
-                onClick={onShowHistory}
-                sx={{ 
-                  mt: 2,
-                  borderRadius: 3,
-                  textTransform: 'none',
-                  fontWeight: 600,
-                  px: 4,
-                  py: 1.5
-                }}
-              >
-                {intl.formatMessage({ id: 'agent.viewHistory' })}
-              </Button>
-            </Stack>
-          </CardContent>
-        </Card>
+          <Card sx={{ 
+            display: 'flex', 
+            alignItems: 'center', 
+            justifyContent: 'center', 
+            width: '100%',
+            maxWidth: 600,
+            bgcolor: alpha(theme.palette.grey[50], 0.5),
+            borderRadius: 3
+          }}>
+            <CardContent>
+              <Stack alignItems="center" spacing={3} sx={{ py: 6 }}>
+                <Timeline sx={{ fontSize: 64, color: 'text.disabled' }} />
+                <Typography variant="h5" color="text.secondary" fontWeight={500}>
+                  {intl.formatMessage({ id: 'agent.graph.noExecutionGraph' })}
+                </Typography>
+                <Typography variant="body1" color="text.secondary" textAlign="center" sx={{ maxWidth: 400 }}>
+                  {intl.formatMessage({ id: 'agent.graph.startOrSelectFromHistory' })}
+                </Typography>
+                <Button
+                  variant="contained"
+                  size="large"
+                  startIcon={<History />}
+                  onClick={onShowHistory}
+                  sx={{ 
+                    mt: 2,
+                    borderRadius: 3,
+                    textTransform: 'none',
+                    fontWeight: 600,
+                    px: 4,
+                    py: 1.5
+                  }}
+                >
+                  {intl.formatMessage({ id: 'agent.viewHistory' })}
+                </Button>
+              </Stack>
+            </CardContent>
+          </Card>
+        </Box>
       )}
     </Box>
   );

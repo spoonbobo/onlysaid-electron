@@ -41,12 +41,19 @@ export abstract class BaseWorkflowNode {
             break;
             
           case 'result_synthesis':
+            console.log('[BaseWorkflowNode] Sending result_synthesized event:', {
+              executionId: state.executionId,
+              resultLength: update.data.result?.length || 0,
+              agentCardsCount: Object.values(state.activeAgentCards).length,
+              isAutoGrading: state.executionId?.startsWith('autograde_')
+            });
             webContents.send('agent:result_synthesized', {
               executionId: state.executionId,
               result: update.data.result,
               agentCards: Object.values(state.activeAgentCards),
               toolTimings: state.toolTimings
             });
+            console.log('[BaseWorkflowNode] Result_synthesized event sent successfully');
             break;
         }
       } catch (error: any) {

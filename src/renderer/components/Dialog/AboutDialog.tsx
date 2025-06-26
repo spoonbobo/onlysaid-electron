@@ -32,19 +32,25 @@ function AboutDialog({ open, onClose }: AboutDialogProps) {
   const [version, setVersion] = useState<string>("Loading...");
   const [buildTime, setBuildTime] = useState<string>("");
   const [deviceInfo, setDeviceInfo] = useState<DeviceInfo | null>(null);
+  const [appName, setAppName] = useState<string>("Loading...");
+  const [productName, setProductName] = useState<string>("Loading...");
   const currentYear = new Date().getFullYear();
 
   useEffect(() => {
     const fetchAppInfo = async () => {
       try {
-        const [appVersion, appBuildTime, appDeviceInfo] = await Promise.all([
+        const [appVersion, appBuildTime, appDeviceInfo, appAppName, appProductName] = await Promise.all([
           window.electron.ipcRenderer.invoke('app:get-version'),
           window.electron.ipcRenderer.invoke('app:get-build-time'),
-          window.electron.ipcRenderer.invoke('app:get-device-info')
+          window.electron.ipcRenderer.invoke('app:get-device-info'),
+          window.electron.app.getName(),
+          window.electron.app.getProductName()
         ]);
 
         setVersion(appVersion);
         setDeviceInfo(appDeviceInfo);
+        setAppName(appAppName);
+        setProductName(appProductName);
 
         // Format build time nicely
         const buildDate = new Date(appBuildTime);
@@ -54,6 +60,8 @@ function AboutDialog({ open, onClose }: AboutDialogProps) {
         setVersion('Unknown');
         setBuildTime('Unknown');
         setDeviceInfo(null);
+        setAppName('Unknown');
+        setProductName('Unknown');
       }
     };
 
@@ -82,7 +90,7 @@ function AboutDialog({ open, onClose }: AboutDialogProps) {
       <DialogContent>
         <Box sx={{ py: 2, textAlign: 'center' }}>
           <Typography variant="h6" sx={{ mb: 2, fontWeight: 'normal' }}>
-            {intl.formatMessage({ id: 'titleBar.appName' })}
+            {productName}
           </Typography>
 
           <Typography variant="body1" sx={{ mb: 1 }}>

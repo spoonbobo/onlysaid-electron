@@ -162,4 +162,47 @@ export function setupContentHandlers() {
       throw error;
     }
   });
+
+  // NEW: Handler to download and read submission content from Moodle
+  ipcMain.handle('submission:download-and-read', async (event, args) => {
+    const { fileUrl, fileName, apiToken } = args;
+    
+    try {
+      console.log(`[Submission] Downloading submission from: ${fileUrl}`);
+      console.log(`[Submission] File name: ${fileName}`);
+      
+      // Add token to URL if not already present
+      const separator = fileUrl.includes('?') ? '&' : '?';
+      const downloadUrl = `${fileUrl}${separator}token=${apiToken}`;
+      
+      // Download the file content
+      const response = await axios.get(downloadUrl, {
+        responseType: 'text', // For now, assume text content
+        timeout: 30000 // 30 second timeout
+      });
+      
+      const content = response.data;
+      
+      console.log(`[Submission] Successfully downloaded ${content.length} characters from ${fileName}`);
+      console.log(`[Submission] Content preview:`, content.substring(0, 500));
+      console.log(`[Submission] Full content:`, content);
+      
+      return {
+        success: true,
+        content,
+        fileName,
+        fileUrl,
+        size: content.length,
+        type: response.headers['content-type'] || 'text/plain'
+      };
+    } catch (error: any) {
+      console.error(`[Submission] Error downloading submission file ${fileName}:`, error);
+      return {
+        success: false,
+        error: error.message,
+        fileName,
+        fileUrl
+      };
+    }
+  });
 }

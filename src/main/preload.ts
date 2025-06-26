@@ -43,7 +43,9 @@ type FileSystemChannels =
   | 'file:get-workspace-icon'
   | 'file:get-files-in-path'
   | 'file:read-text-file'
-  | 'assets:get-local-asset';
+  | 'assets:get-local-asset'
+  | 'submission:read-content'
+  | 'submission:download-and-read';
 
 // Add dialog channels
 type DialogChannels = 'dialog:showSaveDialog';
@@ -61,14 +63,18 @@ type KnowledgeBaseChannels =
   | 'kb:register'
   | 'kb:getStatus'
   | 'kb:synchronize'
-  | 'kb:fullUpdate';
+  | 'kb:fullUpdate'
+  | 'kb:get-members'
+  | 'kb:add-member'
+  | 'kb:update-member-role'
+  | 'kb:remove-member';
 
 type AIChannels = 'ai:get_completion';
 
 type SSEChannels = 'streaming:abort_stream' | 'streaming:chat_stream_complete' | 'streaming:chunk' | 'streaming:query_stream_complete';
 type MCPChannels = 'mcp:initialize_client' | 'mcp:list_tools' | 'mcp:execute_tool';
 
-type ApiChatChannels = 'chat:get' | 'chat:create' | 'chat:update' | 'chat:delete';
+type ApiChatChannels = 'chat:get' | 'chat:create' | 'chat:update' | 'chat:delete' | 'chat:get-members' | 'chat:add-member' | 'chat:update-member-role' | 'chat:remove-member';
 type ApiUserChannels = 'user:auth' | 'user:get' | 'user:get_one' | 'user:update' | 'user:search' | 'user:usage:log' | 'user:usage:get-logs' | 'user:usage:get-analytics' | 'user:plan:get' | 'user:plan:create' | 'user:plan:update' | 'user:devices:list' | 'user:devices:register' | 'user:devices:update' | 'user:devices:remove';
 type ApiWorkspaceChannels =
   | 'workspace:get'
@@ -373,6 +379,16 @@ const electronHandler = {
     create: (...args: unknown[]) => ipcRenderer.invoke('chat:create', ...args),
     update: (...args: unknown[]) => ipcRenderer.invoke('chat:update', ...args),
     delete: (...args: unknown[]) => ipcRenderer.invoke('chat:delete', ...args),
+    
+    // Member management methods
+    getMembers: (args: { token: string; chatId: string }) =>
+      ipcRenderer.invoke('chat:get-members', args),
+    addMember: (args: { token: string; chatId: string; user_id: string; role?: string }) =>
+      ipcRenderer.invoke('chat:add-member', args),
+    updateMemberRole: (args: { token: string; chatId: string; user_id: string; role: string }) =>
+      ipcRenderer.invoke('chat:update-member-role', args),
+    removeMember: (args: { token: string; chatId: string; user_id: string }) =>
+      ipcRenderer.invoke('chat:remove-member', args),
   },
   // Add new storage handler
   storage: {
@@ -428,6 +444,10 @@ const electronHandler = {
       ipcRenderer.invoke('file:get-files-in-path', args),
     readTextFile: (args: { workspaceId: string; fileId: string; token: string }) =>
       ipcRenderer.invoke('file:read-text-file', args),
+    readSubmissionContent: (args: { filePath: string; fileName: string }) =>
+      ipcRenderer.invoke('submission:read-content', args),
+    downloadAndReadSubmission: (args: { fileUrl: string; fileName: string; apiToken: string }) =>
+      ipcRenderer.invoke('submission:download-and-read', args),
   },
   dialog: {
     showSaveDialog: (options: any) => ipcRenderer.invoke('dialog:showSaveDialog', options),
@@ -480,6 +500,16 @@ const electronHandler = {
       kbIds?: string[];
       topK?: number;
     }) => ipcRenderer.invoke('kb:retrieve', args),
+    
+    // Member management methods
+    getMembers: (args: { token: string; workspaceId: string; kbId: string }) =>
+      ipcRenderer.invoke('kb:get-members', args),
+    addMember: (args: { token: string; workspaceId: string; kbId: string; user_id: string; role?: string }) =>
+      ipcRenderer.invoke('kb:add-member', args),
+    updateMemberRole: (args: { token: string; workspaceId: string; kbId: string; user_id: string; role: string }) =>
+      ipcRenderer.invoke('kb:update-member-role', args),
+    removeMember: (args: { token: string; workspaceId: string; kbId: string; user_id: string }) =>
+      ipcRenderer.invoke('kb:remove-member', args),
   },
   ai: {
     getCompletion: (args: { messages: any[], options: any }) => ipcRenderer.invoke('ai:get_completion', args),

@@ -24,7 +24,7 @@ export default function ActionButtons({
   isSending = false,
   hasAttachments = false
 }: ActionButtonsProps) {
-  const { modelId, provider } = useLLMConfigurationStore();
+  const { modelId, provider, aiMode } = useLLMConfigurationStore();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -67,7 +67,7 @@ export default function ActionButtons({
     >
       <Box sx={{ display: "flex", gap: 0.5, alignItems: "center", flexWrap: "nowrap", overflowX: "auto" }}>
         <AIMode disabled={disabled} />
-        <ModelSelector disabled={disabled} />
+        {aiMode !== "agent" && <ModelSelector disabled={disabled} />}
       </Box>
 
       <Box sx={{ display: "flex", gap: 0.5 }}>
@@ -112,7 +112,7 @@ export default function ActionButtons({
           size="small"
           disabled={(!input.trim() && !hasAttachments) || disabled || isSending}
           sx={{
-            color: (input.trim() || hasAttachments) && !disabled && modelId && provider
+            color: (input.trim() || hasAttachments) && !disabled && (aiMode !== "agent" ? (modelId && provider) : true)
               ? "primary.main"
               : "text.disabled",
             "&:hover": {

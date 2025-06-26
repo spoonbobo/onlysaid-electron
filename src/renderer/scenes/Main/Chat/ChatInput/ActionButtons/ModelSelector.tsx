@@ -18,8 +18,8 @@ export default function ModelSelector({ disabled = false }: ModelSelectorProps) 
   const menuOpen = Boolean(menuAnchor);
   const intl = useIntl();
 
-  // Check if model selection should be disabled based on AI mode
-  const isDisabled = disabled || aiMode === "none";
+  // UPDATED: Hide model selector when in agent mode - agent mode uses overlay model selector
+  const isDisabled = disabled || aiMode === "none" || aiMode === "agent";
 
   useEffect(() => {
     loadModels();
@@ -29,7 +29,7 @@ export default function ModelSelector({ disabled = false }: ModelSelectorProps) 
     try {
       const models = await llmService.GetEnabledLLM();
       setAvailableModels(models);
-      if (models.length > 0 && (modelId === undefined || provider === undefined) && aiMode !== "none") {
+      if (models.length > 0 && (modelId === undefined || provider === undefined) && aiMode !== "none" && aiMode !== "agent") {
         setSelectedModel(models[0].provider, models[0].id, models[0].name);
       }
     } catch (error) {
@@ -51,6 +51,11 @@ export default function ModelSelector({ disabled = false }: ModelSelectorProps) 
     setSelectedModel(model.provider, model.id, model.name);
     handleMenuClose();
   };
+
+  // UPDATED: Don't render anything when in agent mode
+  if (aiMode === "agent") {
+    return null;
+  }
 
   return (
     <>

@@ -26,12 +26,15 @@ import {
   RestartAlt as RestartAltIcon,
   Clear as ClearIcon,
   Delete as DeleteIcon,
+  Chat as ChatIcon,
+  Stop as StopIcon,
 } from '@mui/icons-material';
 import { useIntl } from 'react-intl';
 import { StudentSubmissionData, Assignment, MarkingScheme, Submission } from './types';
 import { toast } from '@/utils/toast';
 import { getUserTokenFromStore } from '@/utils/user';
 import FeedbackDetail from '@/renderer/components/Dialog/Insight/FeedbackDetail';
+import { useGradingState, useNavigateToGradingChat, useClearGradingState } from '@/renderer/stores/Insight/AutoGrade/AutoGradeStore';
 
 interface StudentTableProps {
   studentData: StudentSubmissionData[];
@@ -154,6 +157,11 @@ export default function StudentTable({
   const intl = useIntl();
   const [feedbackDetailOpen, setFeedbackDetailOpen] = useState(false);
   const [selectedStudentForFeedback, setSelectedStudentForFeedback] = useState<StudentSubmissionData | null>(null);
+  
+  // NEW: Get grading state
+  const gradingState = useGradingState();
+  const navigateToGradingChat = useNavigateToGradingChat();
+  const clearGradingState = useClearGradingState();
 
   // Helper function to format scores to 1 decimal place
   const formatScore = (score: string | number | undefined | null): string => {
@@ -168,6 +176,11 @@ export default function StudentTable({
     if (score === undefined || score === null || score === '') return false;
     const numScore = typeof score === 'string' ? parseFloat(score) : score;
     return !isNaN(numScore) && numScore >= 0; // Only positive grades are valid
+  };
+
+  // NEW: Helper function to check if student has submitted their assignment
+  const hasSubmitted = (submission?: Submission): boolean => {
+    return submission?.status === 'submitted';
   };
 
   const getSubmissionStatus = (submission?: Submission) => {
@@ -222,20 +235,6 @@ export default function StudentTable({
     }
   };
 
-  // Helper function to create a dummy zip file
-  const createDummyZipFile = (studentName: string): Promise<string> => {
-    return new Promise((resolve) => {
-      // Create a simple text file content as dummy data
-      const content = `Dummy submission file for ${studentName}\nGenerated at: ${new Date().toISOString()}`;
-      const blob = new Blob([content], { type: 'text/plain' });
-      
-      // Convert to data URL
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result as string);
-      reader.readAsDataURL(blob);
-    });
-  };
-
   const uploadToOnlysaid = async (studentId: string) => {
     if (!selectedAssignmentData || !workspaceId) {
       toast.error('Assignment or workspace information missing');
@@ -257,11 +256,17 @@ export default function StudentTable({
     try {
       toast.info(`Uploading submission for ${studentData_item.student.fullname}...`);
 
-      // Create dummy zip file content
-      const dummyFileData = await createDummyZipFile(studentData_item.student.fullname);
+      // UPDATED: Instead of creating dummy content, we would download the actual submission
+      // For now, we'll still create dummy content but with a note about real implementation
+      const dummyFileData = `data:text/plain;base64,${btoa(`Real Submission for ${studentData_item.student.fullname}
+Assignment: ${selectedAssignmentData.name}
+Uploaded at: ${new Date().toISOString()}
+
+This would be the actual submission content downloaded from Moodle.
+In the real implementation, this would be the student's actual submission file.`)}`;
       
       // Construct the path: gradings/{assignmentId}/{student}/zipFile
-      const uploadPath = `gradings/${selectedAssignmentData.id}/${studentData_item.student.username}/submission.zip`;
+      const uploadPath = `gradings/${selectedAssignmentData.id}/${studentData_item.student.username}/submission.txt`;
       
       const metadata = {
         targetPath: uploadPath,
@@ -275,7 +280,7 @@ export default function StudentTable({
       const response = await window.electron.fileSystem.uploadFile({
         workspaceId,
         fileData: dummyFileData,
-        fileName: 'submission.zip',
+        fileName: 'submission.txt',
         token,
         metadata
       });
@@ -337,6 +342,15 @@ export default function StudentTable({
     );
   };
 
+  const handleNavigateToChat = () => {
+    navigateToGradingChat();
+  };
+
+  const handleStopGrading = () => {
+    clearGradingState();
+    toast.info('Grading session ended');
+  };
+
   return (
     <>
       <TableContainer component={Paper}>
@@ -367,218 +381,266 @@ export default function StudentTable({
             </TableRow>
           </TableHead>
           <TableBody>
-            {studentData.map((data) => (
-              <TableRow key={data.student.id}>
-                <TableCell>
-                  <Box>
-                    <Typography variant="body2" fontWeight="medium" color="text.primary">
-                      {data.student.fullname}
-                    </Typography>
-                    <Typography variant="caption" color="text.secondary">
-                      {data.student.email}
-                    </Typography>
-                  </Box>
-                </TableCell>
-                <TableCell>
-                  <Chip
-                    label={getSubmissionStatus(data.submission)}
-                    color={getSubmissionStatusColor(data.submission) as any}
-                    size="small"
-                  />
-                </TableCell>
-                <TableCell>
-                  <Chip
-                    label={getGradeStatus(data)}
-                    color={getGradeStatusColor(data) as any}
-                    size="small"
-                  />
-                </TableCell>
-                <TableCell>
-                  <Typography variant="body2" color="text.primary">
-                    {isValidGrade(data.aiGrade) ? formatScore(data.aiGrade) : intl.formatMessage({ id: 'workspace.insights.moodle.autograde.aiGradeNotAvailable', defaultMessage: 'Not available' })}
-                    {isValidGrade(data.aiGrade) && selectedAssignmentData?.grade && 
-                      ` / ${formatScore(selectedAssignmentData.grade)}`}
-                  </Typography>
-                </TableCell>
-                <TableCell>
-                  {data.isEditing ? (
-                    <TextField
+            {studentData.map((data) => {
+              // Check if this student is currently being graded
+              const isCurrentlyGrading = gradingState.isGrading && gradingState.studentId === data.student.id;
+              
+              return (
+                <TableRow 
+                  key={data.student.id}
+                  sx={{ 
+                    backgroundColor: isCurrentlyGrading ? 'action.hover' : 'inherit',
+                    border: isCurrentlyGrading ? '1px solid' : 'none',
+                    borderColor: isCurrentlyGrading ? 'primary.light' : 'transparent',
+                    borderRadius: isCurrentlyGrading ? 1 : 0,
+                  }}
+                >
+                  <TableCell>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <Box>
+                        <Typography variant="body2" fontWeight="medium" color="text.primary">
+                          {data.student.fullname}
+                          {isCurrentlyGrading && (
+                            <Chip 
+                              label="Grading" 
+                              size="small" 
+                              color="primary" 
+                              variant="outlined"
+                              sx={{ ml: 1, fontSize: '0.7rem', height: 20 }}
+                            />
+                          )}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          {data.student.email}
+                        </Typography>
+                      </Box>
+                    </Box>
+                  </TableCell>
+                  <TableCell>
+                    <Chip
+                      label={getSubmissionStatus(data.submission)}
+                      color={getSubmissionStatusColor(data.submission) as any}
                       size="small"
-                      type="number"
-                      value={data.currentGrade}
-                      onChange={(e) => onGradeEdit(data.student.id, 'currentGrade', e.target.value)}
-                      inputProps={{ 
-                        min: 0, 
-                        max: selectedAssignmentData?.grade || 100,
-                        step: 0.1
-                      }}
-                      sx={{
-                        '& .MuiOutlinedInput-root': {
-                          color: 'text.primary'
-                        }
-                      }}
                     />
-                  ) : (
+                  </TableCell>
+                  <TableCell>
+                    <Chip
+                      label={getGradeStatus(data)}
+                      color={getGradeStatusColor(data) as any}
+                      size="small"
+                    />
+                  </TableCell>
+                  <TableCell>
                     <Typography variant="body2" color="text.primary">
-                      {isValidGrade(data.currentGrade) ? formatScore(data.currentGrade) : intl.formatMessage({ id: 'workspace.insights.moodle.autograde.notGraded', defaultMessage: 'Not graded' })}
-                      {isValidGrade(data.currentGrade) && selectedAssignmentData?.grade && 
+                      {isValidGrade(data.aiGrade) ? formatScore(data.aiGrade) : intl.formatMessage({ id: 'workspace.insights.moodle.autograde.aiGradeNotAvailable', defaultMessage: 'Not available' })}
+                      {isValidGrade(data.aiGrade) && selectedAssignmentData?.grade && 
                         ` / ${formatScore(selectedAssignmentData.grade)}`}
                     </Typography>
-                  )}
-                </TableCell>
-                <TableCell sx={{ maxWidth: 300 }}>
-                  {renderFeedbackCell(data)}
-                </TableCell>
-                <TableCell>
-                  <Box display="flex" gap={1}>
+                  </TableCell>
+                  <TableCell>
                     {data.isEditing ? (
-                      <>
-                        <Tooltip title={intl.formatMessage({ id: 'workspace.insights.moodle.autograde.tooltip.saveGrade', defaultMessage: 'Save Grade' })}>
-                          <IconButton
-                            size="small"
-                            color="primary"
-                            onClick={() => onSaveGrade(data.student.id)}
-                          >
-                            <SaveIcon />
-                          </IconButton>
-                        </Tooltip>
-                        <Tooltip title={intl.formatMessage({ id: 'workspace.insights.moodle.autograde.tooltip.cancel', defaultMessage: 'Cancel' })}>
-                          <IconButton
-                            size="small"
-                            onClick={() => onToggleEdit(data.student.id)}
-                          >
-                            <CancelIcon />
-                          </IconButton>
-                        </Tooltip>
-                      </>
-                    ) : (
-                      <>
-                        {(() => {
-                          const submissionFile = data.submission?.plugins
-                            ?.find(p => p.type === 'file')
-                            ?.fileareas?.find((fa: { area: string }) => fa.area === 'submission_files')
-                            ?.files?.[0];
-
-                          const canDownload = data.submission?.status === 'submitted' && submissionFile && apiToken;
-                          
-                          let downloadUrl = '';
-                          if (canDownload) {
-                            const separator = submissionFile.fileurl.includes('?') ? '&' : '?';
-                            downloadUrl = `${submissionFile.fileurl}${separator}token=${apiToken}`;
+                      <TextField
+                        size="small"
+                        type="number"
+                        value={data.currentGrade}
+                        onChange={(e) => onGradeEdit(data.student.id, 'currentGrade', e.target.value)}
+                        inputProps={{ 
+                          min: 0, 
+                          max: selectedAssignmentData?.grade || 100,
+                          step: 0.1
+                        }}
+                        sx={{
+                          '& .MuiOutlinedInput-root': {
+                            color: 'text.primary'
                           }
-
-                          const tooltipTitle = canDownload
-                            ? intl.formatMessage({ id: 'workspace.insights.moodle.autograde.tooltip.downloadSubmission', defaultMessage: 'Download Submission' })
-                            : intl.formatMessage({ id: 'workspace.insights.moodle.autograde.tooltip.noSubmissionToDownload', defaultMessage: 'No submission to download' });
-
-                          return (
-                            <Tooltip title={tooltipTitle}>
-                              <span>
-                                <IconButton
-                                  size="small"
-                                  disabled={!canDownload}
-                                  onClick={() => window.open(downloadUrl, '_blank')}
-                                >
-                                  <DownloadIcon />
-                                </IconButton>
-                              </span>
-                            </Tooltip>
-                          );
-                        })()}
-                        <Tooltip title={intl.formatMessage({ id: 'workspace.insights.moodle.autograde.tooltip.autoGrade', defaultMessage: 'Auto Grade with KB' })}>
-                          <span>
-                            <IconButton
-                              size="small"
-                              disabled={!currentMarkingScheme}
-                              onClick={() => onExecuteAutoGrade(data.student.id)}
-                            >
-                              <SmartToyIcon />
-                            </IconButton>
-                          </span>
-                        </Tooltip>
-                        <Tooltip title={intl.formatMessage({ id: 'workspace.insights.moodle.autograde.tooltip.adoptAiGrade', defaultMessage: 'Adopt AI Grade' })}>
-                          <span>
-                            <IconButton
-                              size="small"
-                              color="secondary"
-                              disabled={!data.aiGrade}
-                              onClick={() => onAdoptAiGrade(data.student.id)}
-                            >
-                              <CheckCircleIcon />
-                            </IconButton>
-                          </span>
-                        </Tooltip>
-                        <Tooltip title={intl.formatMessage({ id: 'workspace.insights.moodle.autograde.tooltip.resetAiGrade', defaultMessage: 'Reset AI Grade' })}>
-                          <span>
-                            <IconButton
-                              size="small"
-                              color="warning"
-                              disabled={!data.aiGrade}
-                              onClick={() => onResetAiGrade(data.student.id)}
-                            >
-                              <RestartAltIcon />
-                            </IconButton>
-                          </span>
-                        </Tooltip>
-                        <Tooltip title={intl.formatMessage({ id: 'workspace.insights.moodle.autograde.tooltip.resetFeedback', defaultMessage: 'Reset Feedback' })}>
-                          <span>
-                            <IconButton
-                              size="small"
-                              color="warning"
-                              disabled={!data.feedback}
-                              onClick={() => handleResetFeedback(data.student.id)}
-                            >
-                              <ClearIcon />
-                            </IconButton>
-                          </span>
-                        </Tooltip>
-                        <Tooltip title={intl.formatMessage({ id: 'workspace.insights.moodle.autograde.tooltip.editGrade', defaultMessage: 'Edit Grade' })}>
-                          <IconButton
-                            size="small"
-                            onClick={() => onToggleEdit(data.student.id)}
-                          >
-                            <EditIcon />
-                          </IconButton>
-                        </Tooltip>
-                        <Tooltip title={intl.formatMessage({ id: 'workspace.insights.moodle.autograde.tooltip.publishGrade', defaultMessage: 'Publish Grade' })}>
-                          <span>
-                            <IconButton
-                              size="small"
-                              color="success"
-                              disabled={!data.currentGrade}
-                              onClick={() => onPublishGrade(data.student.id)}
-                            >
-                              <PublishIcon />
-                            </IconButton>
-                          </span>
-                        </Tooltip>
-                        <Tooltip title={intl.formatMessage({ id: 'workspace.insights.moodle.autograde.tooltip.uploadToOnlySaid', defaultMessage: 'Upload to OnlySaid' })}>
-                          <IconButton
-                            size="small"
-                            color="info"
-                            onClick={() => uploadToOnlysaid(data.student.id)}
-                          >
-                            <UploadIcon />
-                          </IconButton>
-                        </Tooltip>
-                        <Tooltip title={intl.formatMessage({ id: 'workspace.insights.moodle.autograde.tooltip.deleteGrade', defaultMessage: 'Delete Grade & Feedback' })}>
-                          <span>
-                            <IconButton
-                              size="small"
-                              color="error"
-                              disabled={!data.currentGrade && !data.feedback && (!data.grade || data.grade.grade <= 0)}
-                              onClick={() => onDeleteGrade(data.student.id)}
-                            >
-                              <DeleteIcon />
-                            </IconButton>
-                          </span>
-                        </Tooltip>
-                      </>
+                        }}
+                      />
+                    ) : (
+                      <Typography variant="body2" color="text.primary">
+                        {isValidGrade(data.currentGrade) ? formatScore(data.currentGrade) : intl.formatMessage({ id: 'workspace.insights.moodle.autograde.notGraded', defaultMessage: 'Not graded' })}
+                        {isValidGrade(data.currentGrade) && selectedAssignmentData?.grade && 
+                          ` / ${formatScore(selectedAssignmentData.grade)}`}
+                      </Typography>
                     )}
-                  </Box>
-                </TableCell>
-              </TableRow>
-            ))}
+                  </TableCell>
+                  <TableCell sx={{ maxWidth: 300 }}>
+                    {renderFeedbackCell(data)}
+                  </TableCell>
+                  <TableCell>
+                    <Box display="flex" gap={1}>
+                      {data.isEditing ? (
+                        <>
+                          <Tooltip title={intl.formatMessage({ id: 'workspace.insights.moodle.autograde.tooltip.saveGrade', defaultMessage: 'Save Grade' })}>
+                            <IconButton
+                              size="small"
+                              color="primary"
+                              onClick={() => onSaveGrade(data.student.id)}
+                            >
+                              <SaveIcon />
+                            </IconButton>
+                          </Tooltip>
+                          <Tooltip title={intl.formatMessage({ id: 'workspace.insights.moodle.autograde.tooltip.cancel', defaultMessage: 'Cancel' })}>
+                            <IconButton
+                              size="small"
+                              onClick={() => onToggleEdit(data.student.id)}
+                            >
+                              <CancelIcon />
+                            </IconButton>
+                          </Tooltip>
+                        </>
+                      ) : (
+                        <>
+                          {(() => {
+                            const submissionFile = data.submission?.plugins
+                              ?.find(p => p.type === 'file')
+                              ?.fileareas?.find((fa: { area: string }) => fa.area === 'submission_files')
+                              ?.files?.[0];
+
+                            const canDownload = data.submission?.status === 'submitted' && submissionFile && apiToken;
+                            
+                            let downloadUrl = '';
+                            if (canDownload) {
+                              const separator = submissionFile.fileurl.includes('?') ? '&' : '?';
+                              downloadUrl = `${submissionFile.fileurl}${separator}token=${apiToken}`;
+                            }
+
+                            const tooltipTitle = canDownload
+                              ? intl.formatMessage({ id: 'workspace.insights.moodle.autograde.tooltip.downloadSubmission', defaultMessage: 'Download Submission' })
+                              : intl.formatMessage({ id: 'workspace.insights.moodle.autograde.tooltip.noSubmissionToDownload', defaultMessage: 'No submission to download' });
+
+                            return (
+                              <Tooltip title={tooltipTitle}>
+                                <span>
+                                  <IconButton
+                                    size="small"
+                                    disabled={!canDownload}
+                                    onClick={() => window.open(downloadUrl, '_blank')}
+                                  >
+                                    <DownloadIcon />
+                                  </IconButton>
+                                </span>
+                              </Tooltip>
+                            );
+                          })()}
+                          <Tooltip title={
+                            !hasSubmitted(data.submission) 
+                              ? intl.formatMessage({ id: 'workspace.insights.moodle.autograde.tooltip.noSubmissionToGrade', defaultMessage: 'Student must submit assignment before auto-grading' })
+                              : intl.formatMessage({ id: 'workspace.insights.moodle.autograde.tooltip.autoGrade', defaultMessage: 'Auto Grade with KB' })
+                          }>
+                            <span>
+                              <IconButton
+                                size="small"
+                                disabled={!currentMarkingScheme || !hasSubmitted(data.submission) || (gradingState.isGrading && !isCurrentlyGrading)}
+                                onClick={() => onExecuteAutoGrade(data.student.id)}
+                                color={isCurrentlyGrading ? "primary" : "default"}
+                              >
+                                <SmartToyIcon />
+                              </IconButton>
+                            </span>
+                          </Tooltip>
+                          
+                          {/* Chat navigation button - always shown but disabled for non-grading entries */}
+                          <Tooltip title={
+                            isCurrentlyGrading && gradingState.chatId
+                              ? intl.formatMessage({ id: 'workspace.insights.moodle.autograde.tooltip.goToGradingChat', defaultMessage: 'Go to Grading Chat' })
+                              : intl.formatMessage({ id: 'workspace.insights.moodle.autograde.tooltip.noChatAvailable', defaultMessage: 'No grading chat available' })
+                          }>
+                            <span>
+                              <IconButton
+                                size="small"
+                                disabled={!isCurrentlyGrading || !gradingState.chatId}
+                                color={isCurrentlyGrading ? "primary" : "default"}
+                                onClick={handleNavigateToChat}
+                              >
+                                <ChatIcon />
+                              </IconButton>
+                            </span>
+                          </Tooltip>
+                          
+                          <Tooltip title={intl.formatMessage({ id: 'workspace.insights.moodle.autograde.tooltip.adoptAiGrade', defaultMessage: 'Adopt AI Grade' })}>
+                            <span>
+                              <IconButton
+                                size="small"
+                                color="secondary"
+                                disabled={!data.aiGrade}
+                                onClick={() => onAdoptAiGrade(data.student.id)}
+                              >
+                                <CheckCircleIcon />
+                              </IconButton>
+                            </span>
+                          </Tooltip>
+                          <Tooltip title={intl.formatMessage({ id: 'workspace.insights.moodle.autograde.tooltip.resetAiGrade', defaultMessage: 'Reset AI Grade' })}>
+                            <span>
+                              <IconButton
+                                size="small"
+                                color="warning"
+                                disabled={!data.aiGrade}
+                                onClick={() => onResetAiGrade(data.student.id)}
+                              >
+                                <RestartAltIcon />
+                              </IconButton>
+                            </span>
+                          </Tooltip>
+                          <Tooltip title={intl.formatMessage({ id: 'workspace.insights.moodle.autograde.tooltip.resetFeedback', defaultMessage: 'Reset Feedback' })}>
+                            <span>
+                              <IconButton
+                                size="small"
+                                color="warning"
+                                disabled={!data.feedback}
+                                onClick={() => handleResetFeedback(data.student.id)}
+                              >
+                                <ClearIcon />
+                              </IconButton>
+                            </span>
+                          </Tooltip>
+                          <Tooltip title={intl.formatMessage({ id: 'workspace.insights.moodle.autograde.tooltip.editGrade', defaultMessage: 'Edit Grade' })}>
+                            <IconButton
+                              size="small"
+                              onClick={() => onToggleEdit(data.student.id)}
+                            >
+                              <EditIcon />
+                            </IconButton>
+                          </Tooltip>
+                          <Tooltip title={intl.formatMessage({ id: 'workspace.insights.moodle.autograde.tooltip.publishGrade', defaultMessage: 'Publish Grade' })}>
+                            <span>
+                              <IconButton
+                                size="small"
+                                color="success"
+                                disabled={!data.currentGrade}
+                                onClick={() => onPublishGrade(data.student.id)}
+                              >
+                                <PublishIcon />
+                              </IconButton>
+                            </span>
+                          </Tooltip>
+                          <Tooltip title={intl.formatMessage({ id: 'workspace.insights.moodle.autograde.tooltip.uploadToOnlySaid', defaultMessage: 'Upload to OnlySaid' })}>
+                            <IconButton
+                              size="small"
+                              color="info"
+                              onClick={() => uploadToOnlysaid(data.student.id)}
+                            >
+                              <UploadIcon />
+                            </IconButton>
+                          </Tooltip>
+                          <Tooltip title={intl.formatMessage({ id: 'workspace.insights.moodle.autograde.tooltip.deleteGrade', defaultMessage: 'Delete Grade & Feedback' })}>
+                            <span>
+                              <IconButton
+                                size="small"
+                                color="error"
+                                disabled={!data.currentGrade && !data.feedback && (!data.grade || data.grade.grade <= 0)}
+                                onClick={() => onDeleteGrade(data.student.id)}
+                              >
+                                <DeleteIcon />
+                              </IconButton>
+                            </span>
+                          </Tooltip>
+                        </>
+                      )}
+                    </Box>
+                  </TableCell>
+                </TableRow>
+              );
+            })}
           </TableBody>
         </Table>
       </TableContainer>

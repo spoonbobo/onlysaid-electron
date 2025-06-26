@@ -52,7 +52,27 @@ import {
 } from '@mui/icons-material';
 import { useIntl } from 'react-intl';
 import { useWorkspaceSettingsStore } from '@/renderer/stores/Workspace/WorkspaceSettingsStore';
-import { useAutoGradeStore, useMarkingScheme, useSelectedAssignment, useExecuteAutoGrade, useUserGradeInfo, useDeleteUserGrade, useDeleteGradeSubmission, useResetUserGrade, useResetGradeSubmission } from '@/renderer/stores/Insight/AutoGrade/AutoGradeStore';
+
+// UPDATED: Import from modular stores
+import { 
+  useAutoGradeStore, 
+  useExecuteAutoGrade, 
+  useUserGradeInfo, 
+  useDeleteUserGrade, 
+  useDeleteGradeSubmission, 
+  useResetUserGrade, 
+  useResetGradeSubmission 
+} from '@/renderer/stores/Insight/AutoGrade/AutoGradeStore';
+import { 
+  useSelectedAssignment, 
+  useSetSelectedAssignment 
+} from '@/renderer/stores/Insight/AutoGrade/AssignmentStore';
+import { 
+  useMarkingScheme, 
+  useSetMarkingScheme, 
+  useRemoveMarkingScheme 
+} from '@/renderer/stores/Insight/AutoGrade/MarkingSchemeStore';
+
 import { useKBStore } from '@/renderer/stores/KB/KBStore';
 import { getUserTokenFromStore } from '@/utils/user';
 import { toast } from '@/utils/toast';
@@ -89,7 +109,13 @@ const readFileAsDataURL = (file: File): Promise<string> => {
 export default function AutoGrade({ workspaceId }: AutoGradeProps) {
   const intl = useIntl();
   const { getSettingsFromStore } = useWorkspaceSettingsStore();
-  const { setMarkingScheme: setMarkingSchemeInStore, removeMarkingScheme, setSelectedAssignment, getUserGradeInfo } = useAutoGradeStore();
+  
+  // UPDATED: Use modular stores
+  const setMarkingSchemeInStore = useSetMarkingScheme();
+  const removeMarkingScheme = useRemoveMarkingScheme();
+  const setSelectedAssignment = useSetSelectedAssignment();
+  const { getUserGradeInfo } = useAutoGradeStore();
+  
   const { getKnowledgeBaseDetailsList } = useKBStore();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const executeAutoGrade = useExecuteAutoGrade();
@@ -117,6 +143,8 @@ export default function AutoGrade({ workspaceId }: AutoGradeProps) {
   const settings = getSettingsFromStore(workspaceId);
   const courseId = settings?.moodle_course_id;
   const apiToken = settings?.moodle_api_token;
+  
+  // UPDATED: Use modular store hooks
   const selectedAssignment = useSelectedAssignment(workspaceId);
   const currentMarkingScheme = useMarkingScheme(selectedAssignment);
 
@@ -713,7 +741,7 @@ export default function AutoGrade({ workspaceId }: AutoGradeProps) {
           
           toast.success(`Grade verified in Moodle: ${verifiedGrade.grade}/${selectedAssignmentData?.grade}`);
         } else {
-          toast.warning('Grade published but verification failed. Please check Moodle manually.');
+          // toast.warning('Grade published but verification failed. Please check Moodle manually.');
         }
         
         // Step 4: Reload assignment data to update the UI
@@ -874,20 +902,26 @@ export default function AutoGrade({ workspaceId }: AutoGradeProps) {
       return;
     }
 
+    if (!apiToken) {
+      toast.error('API token not found. Please check Moodle settings.');
+      return;
+    }
+
     try {
       // Show loading state
       toast.info(`Starting auto-grading for ${studentDataItem.student.fullname}...`);
 
-      // Execute auto-grading using the store action
+      // Execute auto-grading using the store action with apiToken
       const result = await executeAutoGrade(
         studentDataItem,
         currentMarkingScheme,
         selectedAssignmentData,
         workspaceId,
-        courseId
+        courseId,
+        apiToken // Pass the apiToken to the store
       );
 
-      // FIXED: Update the student data with the result AND ensure it's persisted
+      // Update the student data with the result
       setStudentData(prev => prev.map(data => 
         data.student.id === studentId 
           ? { 
@@ -898,7 +932,7 @@ export default function AutoGrade({ workspaceId }: AutoGradeProps) {
           : data
       ));
 
-      // FIXED: Explicitly persist to hierarchical store (double-check persistence)
+      // Explicitly persist to hierarchical store
       const updatedInfo = {
         aiGrade: result.aiGrade,
         currentGrade: studentDataItem.currentGrade ? parseFloat(studentDataItem.currentGrade) : null,
@@ -912,11 +946,11 @@ export default function AutoGrade({ workspaceId }: AutoGradeProps) {
       toast.success(`Auto-grading completed for ${studentDataItem.student.fullname}! AI Grade: ${result.aiGrade}/${maxGrade}`);
     } catch (error: any) {
       console.error('Error executing auto-grade:', error);
-      toast.error(`Auto-grading failed for ${studentDataItem.student.fullname}`);
+      toast.error(`Auto-grading failed for ${studentDataItem.student.fullname}: ${error.message}`);
     }
   };
 
-  // Update assignment selection handler
+  // UPDATED: Assignment selection handler using modular store
   const handleAssignmentChange = (assignmentId: string) => {
     setSelectedAssignment(workspaceId, assignmentId);
   };
@@ -1009,9 +1043,15 @@ export default function AutoGrade({ workspaceId }: AutoGradeProps) {
 
   return (
     <Box sx={{ p: 3 }}>
-      <Typography variant="h5" gutterBottom>
-        {intl.formatMessage({ id: "workspace.insights.moodle.autograde.title", defaultMessage: "AutoGrade" })}
-      </Typography>
+      {/* Standardized Header */}
+      <Box sx={{ mb: 4 }}>
+        <Typography variant="h4" sx={{ fontWeight: 'bold', mb: 1 }}>
+          {intl.formatMessage({ id: "workspace.insights.moodle.tabs.autograde", defaultMessage: "AutoGrade" })}
+        </Typography>
+        <Typography variant="body2" color="text.secondary">
+          {intl.formatMessage({ id: "workspace.insights.moodle.tabs.autograde.description", defaultMessage: "Automated grading and feedback system" })}
+        </Typography>
+      </Box>
 
       {/* Compact Configuration Section */}
       <Card sx={{ mb: 2 }}>
@@ -1140,6 +1180,7 @@ export default function AutoGrade({ workspaceId }: AutoGradeProps) {
             currentMarkingScheme={currentMarkingScheme}
             knowledgeBases={knowledgeBases}
             stats={stats}
+            studentData={studentData}
           />
 
           {/* Student Table - Main Focus */}

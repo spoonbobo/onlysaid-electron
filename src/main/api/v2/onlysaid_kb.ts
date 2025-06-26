@@ -22,6 +22,15 @@ interface IKBViewIPCArgsUpdated extends IKBViewIPCArgs {
   kbId?: string;
 }
 
+// Add new interface for KB member args
+interface IKBMemberArgs {
+  token: string;
+  workspaceId: string;
+  kbId: string;
+  user_id?: string;
+  role?: string;
+}
+
 const KB_BASE_URL = process.env.KB_BASE_URL || 'http://onlysaid-dev.com/api/kb/';
 const kbService = new OnylsaidKBService(KB_BASE_URL);
 
@@ -331,6 +340,105 @@ export function initializeKnowledgeBaseHandlers(): void {
         attemptedUrl,
         args
       );
+    }
+  });
+
+  // KB Members Management Handlers
+  ipcMain.handle('kb:get-members', async (event, args: IKBMemberArgs) => {
+    const { workspaceId, kbId, token } = args;
+    if (!token) {
+      console.error(`Error getting KB members for ${kbId}: Token is missing`);
+      throw new Error('Authentication token is required.');
+    }
+    try {
+      const response = await onlysaidServiceInstance.get(
+        `/v2/workspace/${workspaceId}/kb/${kbId}/members`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`
+          }
+        }
+      );
+      return response.data.data;
+    } catch (error) {
+      throw handleAxiosError(error, `getting KB members for ${kbId}`, 'GET', `/v2/workspace/${workspaceId}/kb/${kbId}/members`);
+    }
+  });
+
+  ipcMain.handle('kb:add-member', async (event, args: IKBMemberArgs) => {
+    const { workspaceId, kbId, user_id, role = 'member', token } = args;
+    if (!token) {
+      console.error(`Error adding member to KB ${kbId}: Token is missing`);
+      throw new Error('Authentication token is required.');
+    }
+    if (!user_id) {
+      console.error(`Error adding member to KB ${kbId}: user_id is missing`);
+      throw new Error('User ID is required.');
+    }
+    try {
+      const response = await onlysaidServiceInstance.post(
+        `/v2/workspace/${workspaceId}/kb/${kbId}/members`,
+        { user_id, role },
+        {
+          headers: {
+            Authorization: `Bearer ${token}`
+          }
+        }
+      );
+      return response.data.data;
+    } catch (error) {
+      throw handleAxiosError(error, `adding member to KB ${kbId}`, 'POST', `/v2/workspace/${workspaceId}/kb/${kbId}/members`, { user_id, role });
+    }
+  });
+
+  ipcMain.handle('kb:update-member-role', async (event, args: IKBMemberArgs) => {
+    const { workspaceId, kbId, user_id, role, token } = args;
+    if (!token) {
+      console.error(`Error updating member role in KB ${kbId}: Token is missing`);
+      throw new Error('Authentication token is required.');
+    }
+    if (!user_id || !role) {
+      console.error(`Error updating member role in KB ${kbId}: user_id or role is missing`);
+      throw new Error('User ID and role are required.');
+    }
+    try {
+      const response = await onlysaidServiceInstance.put(
+        `/v2/workspace/${workspaceId}/kb/${kbId}/members`,
+        { user_id, role },
+        {
+          headers: {
+            Authorization: `Bearer ${token}`
+          }
+        }
+      );
+      return response.data.data;
+    } catch (error) {
+      throw handleAxiosError(error, `updating member role in KB ${kbId}`, 'PUT', `/v2/workspace/${workspaceId}/kb/${kbId}/members`, { user_id, role });
+    }
+  });
+
+  ipcMain.handle('kb:remove-member', async (event, args: IKBMemberArgs) => {
+    const { workspaceId, kbId, user_id, token } = args;
+    if (!token) {
+      console.error(`Error removing member from KB ${kbId}: Token is missing`);
+      throw new Error('Authentication token is required.');
+    }
+    if (!user_id) {
+      console.error(`Error removing member from KB ${kbId}: user_id is missing`);
+      throw new Error('User ID is required.');
+    }
+    try {
+      const response = await onlysaidServiceInstance.delete(
+        `/v2/workspace/${workspaceId}/kb/${kbId}/members?user_id=${user_id}`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`
+          }
+        }
+      );
+      return response.data.data;
+    } catch (error) {
+      throw handleAxiosError(error, `removing member from KB ${kbId}`, 'DELETE', `/v2/workspace/${workspaceId}/kb/${kbId}/members?user_id=${user_id}`);
     }
   });
 }

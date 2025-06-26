@@ -4,11 +4,16 @@ import {
   Tabs, 
   Tab, 
   Paper, 
-  useTheme
+  useTheme,
+  Chip,
+  Menu,
+  MenuItem,
+  Typography
 } from "@mui/material";
 import { useEffect, useState, useRef, useMemo } from "react";
 import { useAgentStore } from "@/renderer/stores/Agent/AgentStore";
 import { useLLMConfigurationStore } from "@/renderer/stores/LLM/LLMConfiguration";
+import { LLMService } from "@/service/ai";
 import { 
   useExecutionStore,
   useExecutionGraphStore,
@@ -27,7 +32,8 @@ import {
   Error as ErrorIcon,
   Info as InfoIcon,
   Person,
-  Task as TaskIcon
+  Task as TaskIcon,
+  ExpandMore as ExpandMoreIcon
 } from "@mui/icons-material";
 import { useIntl } from "react-intl";
 import { alpha } from "@mui/material/styles";
@@ -43,12 +49,112 @@ import { TaskPanel } from './Task';
 import KBSelector from './KBSelector';
 import MCPSelector from './MCPSelector';
 
+const llmService = new LLMService();
+
 interface AgentWorkOverlayProps {
   visible?: boolean;
   onClose?: () => void;
   containerRef?: React.RefObject<HTMLDivElement | null>;
   respectParentBounds?: boolean;
   fullscreenMargin?: number;
+}
+
+// NEW: Agent Model Selector Component - independent of aiMode
+function AgentModelSelector() {
+  const [availableModels, setAvailableModels] = useState<any[]>([]);
+  const { modelName, provider, modelId, setSelectedModel } = useLLMConfigurationStore();
+  const [menuAnchor, setMenuAnchor] = useState<null | HTMLElement>(null);
+  const menuOpen = Boolean(menuAnchor);
+  const intl = useIntl();
+
+  useEffect(() => {
+    loadModels();
+  }, []);
+
+  const loadModels = async () => {
+    try {
+      const models = await llmService.GetEnabledLLM();
+      setAvailableModels(models);
+      // Don't auto-select models - let user choose
+    } catch (error) {
+      console.error('Failed to load models:', error);
+    }
+  };
+
+  const handleMenuOpen = (event: React.MouseEvent<HTMLDivElement>) => {
+    loadModels();
+    setMenuAnchor(event.currentTarget);
+  };
+
+  const handleMenuClose = () => {
+    setMenuAnchor(null);
+  };
+
+  const handleModelSelect = (model: any) => {
+    setSelectedModel(model.provider, model.id, model.name);
+    handleMenuClose();
+  };
+
+  return (
+    <>
+      <Chip
+        label={modelName || "Select Model"}
+        onClick={handleMenuOpen}
+        deleteIcon={<ExpandMoreIcon fontSize="small" />}
+        onDelete={handleMenuOpen}
+        size="small"
+        variant="outlined"
+        sx={{
+          height: 24,
+          fontSize: "0.75rem",
+          fontWeight: 500,
+          borderColor: "transparent",
+          color: "text.primary",
+          "& .MuiChip-deleteIcon": {
+            margin: 0,
+            color: "text.secondary"
+          }
+        }}
+      />
+
+      <Menu
+        anchorEl={menuAnchor}
+        open={menuOpen}
+        onClose={handleMenuClose}
+        anchorOrigin={{
+          vertical: 'top',
+          horizontal: 'left',
+        }}
+        transformOrigin={{
+          vertical: 'bottom',
+          horizontal: 'left',
+        }}
+        PaperProps={{
+          elevation: 2,
+          sx: { minWidth: 150 }
+        }}
+      >
+        {availableModels.length > 0 ? (
+          availableModels.map((model) => (
+            <MenuItem
+              key={model.id}
+              onClick={() => handleModelSelect(model)}
+              selected={modelId === model.id && provider === model.provider}
+              dense
+            >
+              <Typography variant="body2">{model.name}</Typography>
+            </MenuItem>
+          ))
+        ) : (
+          <MenuItem disabled dense>
+            <Typography variant="body2" sx={{ maxWidth: 220 }}>
+              {intl.formatMessage({ id: "chat.noModelsEnabled" })}
+            </Typography>
+          </MenuItem>
+        )}
+      </Menu>
+    </>
+  );
 }
 
 export default function AgentWorkOverlay({ 
@@ -532,7 +638,7 @@ export default function AgentWorkOverlay({
           onClose={handleClose}
         />
 
-        {/* Global MCP/KB Selector Bar */}
+        {/* UPDATED: Always show ALL selectors - independent of aiMode */}
         {!isMinimized && (
           <Box
             sx={{
@@ -547,9 +653,13 @@ export default function AgentWorkOverlay({
               flexShrink: 0
             }}
           >
-            <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
-              {(aiMode === "query" || aiMode === "agent") && <KBSelector />}
-              {aiMode === "agent" && <MCPSelector />}
+            <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap' }}>
+              {/* UPDATED: Always show Model Selector */}
+              <AgentModelSelector />
+              {/* UPDATED: Always show KB Selector */}
+              <KBSelector />
+              {/* UPDATED: Always show MCP Selector */}
+              <MCPSelector />
             </Box>
           </Box>
         )}
@@ -559,7 +669,8 @@ export default function AgentWorkOverlay({
           <Box sx={{ 
             display: 'flex', 
             flexDirection: 'column', 
-            height: '100%',
+            flexGrow: 1, // ✅ Allow content to grow and fill available space
+            minHeight: 0, // ✅ Critical for flex children to shrink properly
             bgcolor: 'background.paper'
           }}>
             {/* Updated Tabs without Agents tab */}
@@ -608,14 +719,15 @@ export default function AgentWorkOverlay({
               </Tabs>
             </Paper>
 
-            {/* Tab content container */}
+            {/* ✅ FIXED: Tab content container with proper flex layout */}
             <Box 
               sx={{ 
                 flexGrow: 1, 
-                overflow: 'hidden',
+                minHeight: 0, // ✅ Critical for proper scrolling
                 display: 'flex',
                 flexDirection: 'column',
-                bgcolor: 'background.paper'
+                bgcolor: 'background.paper',
+                position: 'relative' // ✅ Establish positioning context
               }}
             >
               {/* Logs Panel */}
@@ -651,15 +763,15 @@ export default function AgentWorkOverlay({
                 />
               )}
             </Box>
-          </Box>
-        )}
 
-        {/* Stats Footer Component */}
-        {currentGraph && (
-          <StatsFooter
-            currentGraph={currentGraph}
-            isFullscreen={isFullscreen}
-          />
+            {/* ✅ FIXED: Stats Footer moved inside content area and positioned properly */}
+            {currentGraph && (
+              <StatsFooter
+                currentGraph={currentGraph}
+                isFullscreen={isFullscreen}
+              />
+            )}
+          </Box>
         )}
       </Paper>
 

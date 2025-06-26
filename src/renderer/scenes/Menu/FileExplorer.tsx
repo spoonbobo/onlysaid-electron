@@ -560,39 +560,37 @@ function FileNodeItem({ node, level = 0 }: { node: FileNode, level?: number }) {
         <>
           {hasTooManyItems ? (
             <ListItem
+              onClick={handleViewInFileExplorer}
               sx={{
                 pl: 1 + (level + 1) * 1.5,
-                py: 0.5,
-                flexDirection: 'column',
-                alignItems: 'flex-start',
-                bgcolor: 'warning.light',
-                borderRadius: 1,
-                mx: 1,
-                my: 0.25,
+                py: 0.25,
+                cursor: 'pointer',
+                '&:hover': { bgcolor: 'action.hover' },
+                height: 30,
+                minHeight: 30,
+                boxSizing: 'border-box',
               }}
             >
-              <Typography variant="body2" sx={{ fontSize: '0.75rem', mb: 0.5 }} color="warning.dark">
-                <FormattedMessage 
-                  id="menu.fileExplorer.tooManyFiles" 
-                  defaultMessage="Too many files ({count} items). View in File Explorer for better navigation."
-                  values={{ count: node.children!.length }}
-                />
-              </Typography>
-              <Button
-                size="small"
-                variant="outlined"
-                startIcon={<OpenInNewIcon sx={{ fontSize: '0.8rem' }} />}
-                onClick={handleViewInFileExplorer}
-                sx={{
-                  fontSize: '0.7rem',
-                  py: 0.25,
-                  px: 1,
-                  minHeight: 'auto',
-                  height: 24,
+              <ListItemIcon sx={{ minWidth: 30, mr: 0.5 }}>
+                <OpenInNewIcon sx={{ fontSize: '1rem' }} color="primary" />
+              </ListItemIcon>
+              <ListItemText
+                primary={
+                  <FormattedMessage 
+                    id="menu.fileExplorer.tooManyFiles" 
+                    defaultMessage="Too many files ({count} items). Click to browse."
+                    values={{ count: node.children!.length }}
+                  />
+                }
+                slotProps={{
+                  primary: {
+                    sx: { 
+                      fontSize: '0.75rem',
+                      color: 'text.secondary'
+                    }
+                  }
                 }}
-              >
-                <FormattedMessage id="menu.fileExplorer.viewInExplorer" defaultMessage="View in File Explorer" />
-              </Button>
+              />
             </ListItem>
           ) : (
             node.children.length > 0 ? (

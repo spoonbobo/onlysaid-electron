@@ -20,6 +20,7 @@ import {
   Warning,
   Close
 } from "@mui/icons-material";
+import { useState, useEffect } from "react";
 import { useIntl } from "react-intl";
 
 interface DisclaimerDialogProps {
@@ -31,6 +32,23 @@ interface DisclaimerDialogProps {
 
 function DisclaimerDialog({ open, onAccept, onDecline, isNewUser = true }: DisclaimerDialogProps) {
   const intl = useIntl();
+  const [productName, setProductName] = useState<string>("Loading...");
+
+  useEffect(() => {
+    const fetchProductName = async () => {
+      try {
+        const appProductName = await window.electron.app.getProductName();
+        setProductName(appProductName);
+      } catch (error) {
+        console.error('Failed to get product name:', error);
+        setProductName('OnlySaid'); // Fallback
+      }
+    };
+
+    if (open) {
+      fetchProductName();
+    }
+  }, [open]);
 
   const handleClose = isNewUser ? onDecline : onDecline;
 
@@ -51,12 +69,12 @@ function DisclaimerDialog({ open, onAccept, onDecline, isNewUser = true }: Discl
       <DialogContent>
         {isNewUser && (
           <Alert severity="info" sx={{ mb: 3 }}>
-            {intl.formatMessage({ id: 'disclaimer.welcome' })}
+            {intl.formatMessage({ id: 'disclaimer.welcome' }, { productName })}
           </Alert>
         )}
 
         <Typography variant="body1" sx={{ mb: 2 }}>
-          {intl.formatMessage({ id: 'disclaimer.description' })}
+          {intl.formatMessage({ id: 'disclaimer.description' }, { productName })}
         </Typography>
 
         <List>

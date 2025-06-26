@@ -34,7 +34,7 @@ function App() {
     initializeGoogleCalendarListeners, 
     initializeMicrosoftCalendarListeners
   } = useUserTokenStore();
-  const { preloadAssets } = useAppAssets();
+  const { preloadAssets, clearCache } = useAppAssets();
   
   // ✅ Global state for IPC listeners
   const [osswarmToolRequests, setOSSwarmToolRequests] = useState<Map<string, {
@@ -166,10 +166,14 @@ function App() {
       try {
         console.log('[App] Starting initialization...');
         
-        // Step 1: Preload essential assets
+        // Step 1: Preload essential assets with force refresh
         sendInitProgress('Loading essential assets', 1, 4);
         console.log('[App] Loading essential assets...');
-        await preloadAssets(['icon.png']);
+        
+        // Force refresh the assets to ensure we get the latest versions
+        await preloadAssets(['icon.png'], true); // Use forceRefresh parameter
+        console.log('[App] Fresh assets loaded successfully');
+        
         sendStepComplete('Essential Assets');
         
         // Step 2: Setup authentication listeners

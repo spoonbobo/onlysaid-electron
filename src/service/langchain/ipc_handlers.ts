@@ -91,6 +91,16 @@ export function setupLangChainHandlers() {
   // Enhanced execute_task handler
   ipcMain.handle('agent:execute_task', async (event, { task, options, limits, chatId, workspaceId }) => {
     try {
+      console.log('[LangGraph-IPC] Execute task request:', {
+        taskPreview: task?.substring(0, 50) + '...',
+        hasOptions: !!options,
+        threadId: options?.threadId,
+        executionId: options?.executionId,
+        isAutoGrading: options?.executionId?.startsWith('autograde_'),
+        chatId,
+        workspaceId
+      });
+      
       const ipcSend = (channel: string, ...args: any[]) => {
         if (!event.sender.isDestroyed()) {
           event.sender.send(channel, ...args);
@@ -102,9 +112,16 @@ export function setupLangChainHandlers() {
 
       const workflow = new LangGraphOSSwarmWorkflow(options);
       const threadId = options?.threadId || `thread_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      const executionId = options?.executionId || uuidv4();
+      
+      console.log('[LangGraph-IPC] Workflow execution with IDs:', {
+        threadId,
+        executionId,
+        isAutoGrading: executionId.startsWith('autograde_')
+      });
       
       const result = await workflow.executeWorkflow(task, threadId, {
-        executionId: options?.executionId || uuidv4(),
+        executionId: executionId,
         chatId,
         workspaceId,
         streamCallback: (update: string) => {

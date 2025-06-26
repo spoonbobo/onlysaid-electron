@@ -85,7 +85,7 @@ const TitleBar = () => {
   const user = useUserStore((state) => state.user);
 
   // Add app assets hook
-  const { getAsset } = useAppAssets();
+  const { assets } = useAppAssets(); // Only get assets, don't call getAsset
 
   // Get user and disclaimer state
   const showDisclaimerFromStore = useUserStore((state) => state.showDisclaimer);
@@ -156,19 +156,14 @@ const TitleBar = () => {
 
   // Load app icon on component mount
   useEffect(() => {
-    const loadAppIcon = async () => {
-      try {
-        const iconUrl = await getAsset('icon.png');
-        if (iconUrl) {
-          setAppIcon(iconUrl);
-        }
-      } catch (error) {
-        console.error('Failed to load app icon:', error);
-      }
-    };
-    
-    loadAppIcon();
-  }, [getAsset]);
+    // Simply use the asset if it's already loaded by App.tsx
+    if (assets['icon.png']) {
+      setAppIcon(assets['icon.png']);
+      console.log('[TitleBar] Using preloaded icon from assets');
+    } else {
+      console.log('[TitleBar] Icon not yet loaded, will update when available');
+    }
+  }, [assets]); // Only depend on assets
 
   // ✅ Add window state listener
   useEffect(() => {

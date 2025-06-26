@@ -16,6 +16,7 @@ import {
   useLogStore, 
   useAgentTaskOrchestrator
 } from '@/renderer/stores/Agent/task';
+import { useHandleGradingSynthesis } from '@/renderer/stores/Insight/AutoGrade/AutoGradeStore';
 
 // ✅ LangGraph Interaction interface
 interface LangGraphInteraction {
@@ -60,6 +61,9 @@ export const useIPCListeners = ({
   resumeLangGraphWorkflow,
   setGoogleServicesReady
 }: IPCListenersProps) => {
+
+  // ✅ Get the auto-grading synthesis handler
+  const handleGradingSynthesis = useHandleGradingSynthesis();
 
   // ✅ Human Interaction Response Handler
   const handleHumanInteractionResponse = useCallback(async (interactionId: string, approved: boolean, userInput?: string) => {
@@ -612,8 +616,27 @@ export const useIPCListeners = ({
       console.log('[IPCListeners] 🔮 Received LangGraph result synthesis:', {
         executionId: data.executionId,
         resultLength: data.result?.length || 0,
-        agentCount: data.agentCards?.length || 0
+        agentCount: data.agentCards?.length || 0,
+        startsWithAutograde: data.executionId?.startsWith('autograde_'),
+        executionIdType: typeof data.executionId
       });
+
+      // ✅ UPDATED: Check if this is an auto-grading synthesis and handle it, but still create UI message
+      if (data.executionId && data.executionId.startsWith('autograde_')) {
+        console.log('[IPCListeners] 🎯 Detected auto-grading synthesis, handling via AutoGrade store');
+        console.log('[IPCListeners] 🎯 Auto-grading execution ID:', data.executionId);
+        console.log('[IPCListeners] 🎯 Auto-grading result preview:', data.result?.substring(0, 200) + '...');
+        try {
+          handleGradingSynthesis(data.executionId, data.result);
+          console.log('[IPCListeners] ✅ Auto-grading synthesis handled successfully');
+          // ✅ REMOVED: Don't return early, continue to create UI message
+        } catch (error) {
+          console.error('[IPCListeners] ❌ Error handling auto-grading synthesis:', error);
+          // Fall through to regular synthesis handling as fallback
+        }
+      } else {
+        console.log('[IPCListeners] 🔍 Not an auto-grading synthesis - executionId:', data.executionId);
+      }
       
       if (!activeChatId || !agent) {
         console.warn('[IPCListeners] No active chat ID or agent, ignoring result synthesis');
@@ -1129,7 +1152,7 @@ export const useIPCListeners = ({
       unsubscribeUpdateTaskAssignment?.();
       unsubscribeLoadTaskHierarchy?.();
     };
-  }, [activeChatId, workspaceId, agent, appendMessage, updateMessage, osswarmToolRequests, setOSSwarmToolRequests, langGraphInteractions, setLangGraphInteractions, resumeLangGraphWorkflow, setGoogleServicesReady]);
+  }, [activeChatId, workspaceId, agent, appendMessage, updateMessage, osswarmToolRequests, setOSSwarmToolRequests, langGraphInteractions, setLangGraphInteractions, resumeLangGraphWorkflow, setGoogleServicesReady, handleGradingSynthesis]);
 
   // ✅ EXPOSE GLOBAL HANDLER
   useEffect(() => {

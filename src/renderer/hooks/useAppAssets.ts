@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 
 interface AssetCache {
   [assetPath: string]: {
@@ -51,8 +51,9 @@ loadCacheFromStorage();
 export const useAppAssets = () => {
   const [assets, setAssets] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
+  const loadingRef = useRef(false);
 
-  // Load cached assets into state on mount
+  // Load cached assets into state on mount - only once
   useEffect(() => {
     const cachedAssets: Record<string, string> = {};
     const now = Date.now();
@@ -66,7 +67,7 @@ export const useAppAssets = () => {
     if (Object.keys(cachedAssets).length > 0) {
       setAssets(cachedAssets);
     }
-  }, []);
+  }, []); // Empty dependency array - only run once
 
   const shouldRetryFailedAsset = (assetPath: string): boolean => {
     const failed = failedAssets[assetPath];
@@ -93,22 +94,32 @@ export const useAppAssets = () => {
     };
   };
 
-  const loadAsset = useCallback(async (assetPath: string) => {
+  // Use useRef to prevent dependency loops
+  const loadAsset = useCallback(async (assetPath: string, forceRefresh = false) => {
+    // Prevent multiple simultaneous loads of the same asset
+    const loadingKey = `${assetPath}-${forceRefresh}`;
+    if (loadingRef.current) {
+      console.log(`[useAppAssets] Already loading, skipping: ${assetPath}`);
+      return null;
+    }
+
     // Check if asset has failed recently and shouldn't be retried
-    if (!shouldRetryFailedAsset(assetPath)) {
+    if (!forceRefresh && !shouldRetryFailedAsset(assetPath)) {
       console.warn(`Skipping retry for failed asset: ${assetPath}`);
       return null;
     }
 
-    // Check cache first
+    // Check cache first (skip cache if forceRefresh is true)
     const cached = assetCache[assetPath];
     const now = Date.now();
     
-    if (cached && (now - cached.timestamp) < CACHE_DURATION) {
+    if (!forceRefresh && cached && (now - cached.timestamp) < CACHE_DURATION) {
       return cached.dataUrl;
     }
 
     try {
+      loadingRef.current = true;
+      console.log(`[useAppAssets] ${forceRefresh ? 'Force loading' : 'Loading'} asset: ${assetPath}`);
       const assetData = await window.electron.fileSystem.getLocalAsset(assetPath);
       
       if (assetData) {
@@ -124,29 +135,31 @@ export const useAppAssets = () => {
         // Persist to localStorage
         saveCacheToStorage();
         
+        console.log(`[useAppAssets] Successfully ${forceRefresh ? 'force loaded' : 'loaded'} asset: ${assetPath}`);
         return assetData.data;
       }
     } catch (error) {
       console.error(`Failed to load asset ${assetPath}:`, error);
       markAssetAsFailed(assetPath);
+    } finally {
+      loadingRef.current = false;
     }
     
     return null;
   }, []);
 
-  const getAsset = useCallback(async (assetPath: string) => {
-    // Check if already in state
-    if (assets[assetPath]) {
+  const getAsset = useCallback(async (assetPath: string, forceRefresh = false) => {
+    // Check if already in state and not forcing refresh
+    if (!forceRefresh && assets[assetPath]) {
       return assets[assetPath];
     }
 
-    // Check if this asset has failed recently
-    if (!shouldRetryFailedAsset(assetPath)) {
+    if (!forceRefresh && !shouldRetryFailedAsset(assetPath)) {
       return null;
     }
 
     setLoading(true);
-    const assetUrl = await loadAsset(assetPath);
+    const assetUrl = await loadAsset(assetPath, forceRefresh);
     
     if (assetUrl) {
       setAssets(prev => ({
@@ -157,23 +170,36 @@ export const useAppAssets = () => {
     
     setLoading(false);
     return assetUrl;
-  }, [assets, loadAsset]);
+  }, [loadAsset]);
 
-  const preloadAssets = useCallback(async (assetPaths: string[]) => {
+  const preloadAssets = useCallback(async (assetPaths: string[], forceRefresh = false) => {
+    if (loadingRef.current) {
+      console.log('[useAppAssets] Already loading assets, skipping preload');
+      return;
+    }
+
     setLoading(true);
     
-    // Filter out assets that have failed recently
+    // If forceRefresh is true, clear cache for these specific assets
+    if (forceRefresh) {
+      assetPaths.forEach(assetPath => {
+        delete assetCache[assetPath];
+        delete failedAssets[assetPath];
+      });
+    }
+    
+    // Filter out assets that have failed recently (unless force refresh)
     const assetsToLoad = assetPaths.filter(assetPath => 
-      !assets[assetPath] && shouldRetryFailedAsset(assetPath)
+      forceRefresh || (!assets[assetPath] && shouldRetryFailedAsset(assetPath))
     );
 
-    if (assetsToLoad.length === 0) {
+    if (assetsToLoad.length === 0 && !forceRefresh) {
       setLoading(false);
       return;
     }
     
     const loadPromises = assetsToLoad.map(async (assetPath) => {
-      const assetUrl = await loadAsset(assetPath);
+      const assetUrl = await loadAsset(assetPath, forceRefresh);
       return { assetPath, assetUrl };
     });
 
@@ -188,7 +214,7 @@ export const useAppAssets = () => {
     
     setAssets(newAssets);
     setLoading(false);
-  }, [assets, loadAsset]);
+  }, [loadAsset]);
 
   // Method to clear cache if needed (for development or updates)
   const clearCache = useCallback(() => {

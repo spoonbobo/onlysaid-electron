@@ -473,7 +473,13 @@ export const TaskPanel: React.FC<TaskPanelProps> = ({
 
   if (!currentExecution) {
     return (
-      <Box sx={{ p: 2, textAlign: 'center' }}>
+      <Box sx={{ 
+        height: '100%',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        p: 2
+      }}>
         <Typography variant="body2" color="text.secondary">
           {intl.formatMessage({ id: 'agent.tasks.no_execution' })}
         </Typography>
@@ -483,19 +489,33 @@ export const TaskPanel: React.FC<TaskPanelProps> = ({
 
   if (isLoading) {
     return (
-      <Box sx={{ p: 2 }}>
-        <LinearProgress />
-        <Typography variant="body2" color="text.secondary" sx={{ mt: 1, textAlign: 'center' }}>
-          {intl.formatMessage({ id: 'task.loadingTasks' })}
-        </Typography>
+      <Box sx={{ 
+        height: '100%',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        p: 2
+      }}>
+        <Stack alignItems="center" spacing={2}>
+          <LinearProgress sx={{ width: 200 }} />
+          <Typography variant="body2" color="text.secondary">
+            {intl.formatMessage({ id: 'task.loadingTasks' })}
+          </Typography>
+        </Stack>
       </Box>
     );
   }
 
   if (error) {
     return (
-      <Box sx={{ p: 2 }}>
-        <Alert severity="error">
+      <Box sx={{ 
+        height: '100%',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        p: 2
+      }}>
+        <Alert severity="error" sx={{ maxWidth: 400 }}>
           {error}
         </Alert>
       </Box>
@@ -507,10 +527,17 @@ export const TaskPanel: React.FC<TaskPanelProps> = ({
       height: '100%', 
       display: 'flex', 
       flexDirection: 'column',
+      minHeight: 0, // ✅ Critical for proper flex behavior
       overflow: 'hidden'
     }}>
-      {/* Header with stats */}
-      <Box sx={{ p: 2, borderBottom: 1, borderColor: 'divider', flexShrink: 0 }}>
+      {/* ✅ FIXED: Header with stats - properly constrained */}
+      <Box sx={{ 
+        p: 2, 
+        borderBottom: 1, 
+        borderColor: 'divider', 
+        flexShrink: 0, // ✅ Prevent header from shrinking
+        bgcolor: 'background.paper'
+      }}>
         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
           <Typography variant="h6" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <TaskIcon />
@@ -583,17 +610,19 @@ export const TaskPanel: React.FC<TaskPanelProps> = ({
         )}
       </Box>
 
-      {/* Content - Enhanced with proper scrolling */}
+      {/* ✅ FIXED: Content with proper scrolling container */}
       <Box sx={{ 
         flexGrow: 1, 
+        minHeight: 0, // ✅ Critical for proper scrolling
         overflow: 'hidden',
         display: 'flex',
         flexDirection: 'column'
       }}>
         <Box sx={{ 
           flexGrow: 1,
-          overflow: 'auto',
+          overflow: 'auto', // ✅ Enable scrolling
           p: 2,
+          // ✅ Enhanced scrollbar styling
           '&::-webkit-scrollbar': {
             width: '8px',
           },
