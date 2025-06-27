@@ -1,6 +1,6 @@
 import Chat from "./Chat";
 import Settings from "./Settings";
-import Default from "./Default";
+import Default from "./default";
 import HomePage from "./HomePage";
 import FileExplorer from "./FileExplorer";
 import { useTopicStore } from "@/renderer/stores/Topic/TopicStore";
