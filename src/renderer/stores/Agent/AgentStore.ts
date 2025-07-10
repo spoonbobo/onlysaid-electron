@@ -545,15 +545,19 @@ export const useAgentStore = create<AgentState>()(
                 break;
 
               case "query":
-                if (!workspaceId) {
-                  throw new Error("Workspace ID is required for query mode");
-                }
+                // ✅ TEMPORARILY DISABLED: Remove workspace ID requirement
+                // if (!workspaceId) {
+                //   throw new Error("Workspace ID is required for query mode");
+                // }
+                
+                console.log("[AgentStore] Query mode - workspace ID temporarily disabled");
+                
                 result = await processQueryModeAIResponse({
                   activeChatId,
-                  workspaceId,
+                  workspaceId: workspaceId || "default", // ✅ Use default if not provided
                   userMessageText,
                   modelId,
-                  provider: "onlysaid-kb",
+                  provider: "lightrag", // ✅ Updated to use lightrag instead of onlysaid-kb
                   agent: currentAgent,
                   currentUser,
                   existingMessages,
@@ -646,8 +650,8 @@ export const useAgentStore = create<AgentState>()(
               return { success: false, error: "No model selected" };
             }
 
-            // ✅ Debug: Let's see what we're getting
-            const workspaceId = getCurrentWorkspaceId();
+            // ✅ TEMPORARILY DISABLED: Remove strict workspace ID requirement
+            const workspaceId = getCurrentWorkspaceId() || "default";
             const selectedContext = useTopicStore.getState().selectedContext;
             
             console.log("[AgentStore DEBUG] sendAgentMessage debugging:");
@@ -655,6 +659,7 @@ export const useAgentStore = create<AgentState>()(
             console.log("[AgentStore DEBUG] - workspaceId from getCurrentWorkspaceId():", workspaceId);
             console.log("[AgentStore DEBUG] - selectedContext?.id:", selectedContext?.id);
             console.log("[AgentStore DEBUG] - mode:", mode);
+            console.log("[AgentStore DEBUG] - Using fallback workspaceId:", workspaceId);
 
             // Get existing messages
             const messages = useChatStore.getState().messages[chatId] || [];
@@ -666,7 +671,7 @@ export const useAgentStore = create<AgentState>()(
               provider: provider || "openai",
               currentUser,
               existingMessages: messages,
-              workspaceId, // ✅ Now properly passed
+              workspaceId, // ✅ Now always has a value (either real or "default")
               aiMode: mode,
               appendMessage,
               updateMessage,

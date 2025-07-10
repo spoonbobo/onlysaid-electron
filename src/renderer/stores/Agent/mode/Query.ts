@@ -182,7 +182,8 @@ export async function processQueryModeAIResponse({
       preferredLanguage: preferredLanguage
     };
 
-    if (provider === "onlysaid-kb" && selectedKbIds.length > 0) {
+    // Update provider check to include both "lightrag" and "onlysaid-kb"
+    if ((provider === "lightrag" || provider === "onlysaid-kb") && selectedKbIds.length > 0) {
       streamOptions.kbIds = selectedKbIds;
     }
 
@@ -191,14 +192,17 @@ export async function processQueryModeAIResponse({
       streamOptions
     );
 
+    // Better fallback handling - only use fallback if truly empty
+    const finalResponseText = responseText && responseText.trim() ? responseText : "No response received from knowledge base.";
+
     await updateMessage(activeChatId, assistantMessage.id, {
-      text: responseText || "Completed query.",
+      text: finalResponseText,
       sender: assistantSenderId,
       status: "completed"
     });
 
-    markStreamAsCompleted(activeChatId, responseText || "Completed query.", assistantMessage.id);
-    return { success: true, responseText: responseText, assistantMessageId: assistantMessage.id };
+    markStreamAsCompleted(activeChatId, finalResponseText, assistantMessage.id);
+    return { success: true, responseText: finalResponseText, assistantMessageId: assistantMessage.id };
 
   } catch (error: any) {
     console.error("Stream error in QueryMode:", error);

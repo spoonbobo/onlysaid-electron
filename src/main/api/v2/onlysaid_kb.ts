@@ -1,5 +1,5 @@
 import { ipcMain } from 'electron';
-import { OnylsaidKBService } from '@/service/knowledge_base/onlysaid_kb';
+import { LightRAGService } from '@/service/knowledge_base/lightrag_kb';
 import {
   IKnowledgeBase,
   IKnowledgeBaseRegisterArgs,
@@ -31,8 +31,16 @@ interface IKBMemberArgs {
   role?: string;
 }
 
-const KB_BASE_URL = process.env.KB_BASE_URL || 'http://onlysaid-dev.com/api/kb/';
-const kbService = new OnylsaidKBService(KB_BASE_URL);
+// Add new interface for KB scan args
+interface IKBScanIPCArgs {
+  token: string;
+  workspaceId: string;
+  kbId: string;
+}
+
+const KB_BASE_URL = process.env.KB_BASE_URL || 'https://lightrag.onlysaid.com';
+console.log('KB_BASE_URL', KB_BASE_URL);
+const kbService = new LightRAGService(KB_BASE_URL);
 
 function handleAxiosError(error: any, context: string, method?: string, url?: string, requestData?: any): Error {
   if (axios.isAxiosError(error)) {
@@ -207,6 +215,31 @@ export function initializeKnowledgeBaseHandlers(): void {
     }
   });
 
+  // ✅ NEW: KB document scan handler
+  ipcMain.handle('kb:scan', async (event, args: IKBScanIPCArgs) => {
+    const { workspaceId, kbId, token } = args;
+    console.log(`kb:scan called for KB ID: ${kbId} in Workspace: ${workspaceId}`, 'token:', token ? 'present' : 'missing');
+
+    if (!token) {
+      throw new Error('Authentication token is required for scanning KB.');
+    }
+
+    try {
+      const result = await kbService.scanDocuments();
+      console.log(`KB scan successful for ${kbId} in workspace ${workspaceId}:`, result);
+      return result;
+    } catch (error) {
+      const attemptedUrl = `${KB_BASE_URL}/documents/scan`;
+      throw handleAxiosError(
+        error,
+        `scanning knowledge base ${kbId}`,
+        'POST',
+        attemptedUrl
+      );
+    }
+  });
+
+  // Update the existing kb:synchronize handler to use the new scan method
   ipcMain.handle('kb:synchronize', async (event, args: IKBSynchronizeIPCArgs) => {
     try {
       const { workspaceId, kbId, token } = args;
@@ -214,19 +247,25 @@ export function initializeKnowledgeBaseHandlers(): void {
       if (!token) {
         throw new Error('Authentication token is required for synchronizing KB.');
       }
+
+      // Use the new scan method instead of dummy data
+      const scanResult = await kbService.scanDocuments();
+      
+      // Transform the scan result to match the expected synchronize format
       const syncResult = {
         kbId: kbId,
         workspaceId: workspaceId,
-        syncStatus: 'dummy_sync_COMPLETED',
+        syncStatus: scanResult.status === 'scanning_started' ? 'COMPLETED' : 'ERROR',
         lastSynced: new Date().toISOString(),
-        documentsProcessed: Math.floor(Math.random() * 100),
-        message: 'Synchronization process initiated and completed (dummy).'
+        documentsProcessed: 0, // This info isn't available from scan endpoint
+        message: scanResult.message
       };
-      console.log('[DUMMY] KB Synchronized:', syncResult);
+      
+      console.log('KB Synchronized:', syncResult);
       return syncResult;
     } catch (error) {
-      console.error('Error in kb:synchronize (dummy):', error);
-      throw error instanceof Error ? error : new Error('Failed to synchronize KB (dummy)');
+      console.error('Error in kb:synchronize:', error);
+      throw error instanceof Error ? error : new Error('Failed to synchronize KB');
     }
   });
 
@@ -440,5 +479,10 @@ export function initializeKnowledgeBaseHandlers(): void {
     } catch (error) {
       throw handleAxiosError(error, `removing member from KB ${kbId}`, 'DELETE', `/v2/workspace/${workspaceId}/kb/${kbId}/members?user_id=${user_id}`);
     }
+  });
+
+  // ✅ NEW: Add KB URL handler
+  ipcMain.handle('kb:get-url', async () => {
+    return KB_BASE_URL;
   });
 }

@@ -19,7 +19,7 @@ import { getUserTokenFromStore } from '@/utils/user';
 function KnowledgeBaseManagerComponent() {
   const intl = useIntl();
   const { selectedContext } = useCurrentTopicContext();
-  const { selectedTopics, clearSelectedTopic } = useTopicStore();
+  const { selectedTopics, clearSelectedTopic, setSelectedTopic } = useTopicStore(); // Add setSelectedTopic
 
   const {
     isLoading: kbStoreIsLoadingGlobal,
@@ -195,6 +195,10 @@ function KnowledgeBaseManagerComponent() {
         toast.success(intl.formatMessage({ id: "settings.kb.delete.success", defaultMessage: "Knowledge base deleted." }));
         setSelectedKnowledgeBase(null);
         clearSelectedTopic(KNOWLEDGE_BASE_SELECTION_KEY);
+        
+        // Also clear workspace-specific KB selection if it matches the deleted KB
+        const { clearWorkspaceSelectedKB } = useTopicStore.getState();
+        clearWorkspaceSelectedKB(currentWorkspaceId);
       } else {
         toast.error(intl.formatMessage({ id: "settings.kb.delete.error", defaultMessage: "Failed to delete knowledge base." }));
       }
@@ -202,84 +206,7 @@ function KnowledgeBaseManagerComponent() {
     }
   }, [selectedKnowledgeBase, currentWorkspaceId, deleteKnowledgeBase, intl, handleCloseDeleteDialog, clearSelectedTopic]);
 
-  const handleToggleEnabled = useCallback(async (enabled: boolean) => {
-    if (selectedKnowledgeBase && currentWorkspaceId) {
-      if (!selectedKnowledgeBase.configured) {
-        toast.warning(intl.formatMessage({ id: "settings.kb.enable.notConfiguredWarn", defaultMessage: "Cannot enable/disable a non-configured knowledge base." }));
-        return;
-      }
-
-      const userToken = getUserTokenFromStore();
-      if (!userToken) {
-        toast.error(intl.formatMessage({ id: "settings.kb.auth.tokenMissing", defaultMessage: "Authentication token is missing. Cannot update knowledge base status." }));
-        return;
-      }
-
-      // Attempt to update the knowledge base's enabled status in the primary data store.
-      const updatedKbFromStore = await updateKnowledgeBase(currentWorkspaceId, selectedKnowledgeBase.id, {
-        enabled,
-        update_at: new Date().toISOString(),
-      });
-
-      if (updatedKbFromStore) {
-        // Primary update was successful.
-        toast.success(intl.formatMessage({
-          id: enabled ? "settings.kb.enable.success" : "settings.kb.disable.success",
-          defaultMessage: enabled ? "Knowledge base enabled." : "Knowledge base disabled."
-        }));
-        // Refresh UI from the source of truth immediately after successful update.
-        fetchAndSetSelectedKbDetails(selectedKnowledgeBase.id);
-
-        if (enabled) {
-          // If enabling, proceed to register the KB using the fresh data.
-          // Ensure the kbData sent for registration reflects the latest state including update_at
-          const kbDataForRegistration = {
-            ...updatedKbFromStore, // This object already has the new 'enabled' and 'update_at'
-            // id, workspace_id, name, description, url, type, source, embedding_engine, configured are from updatedKbFromStore
-          };
-
-          const registerArgs: IKBRegisterIPCArgs = {
-            kbData: kbDataForRegistration,
-            token: userToken,
-          };
-          try {
-            const registrationResult = await registerKB(registerArgs);
-            if (registrationResult) {
-              toast.success(intl.formatMessage({ id: "settings.kb.register.success", defaultMessage: "Knowledge base registered successfully." }));
-            } else {
-              toast.error(intl.formatMessage({ id: "settings.kb.register.error", defaultMessage: "Failed to register knowledge base." }));
-            }
-          } catch (error: any) {
-            console.error("Error registering KB:", error);
-            toast.error(intl.formatMessage({ id: "settings.kb.register.exception", defaultMessage: "An error occurred during knowledge base registration." }) + ` ${error.message}`);
-          }
-        } else {
-          // If disabling, proceed with fullUpdateKB for backend synchronization, using fresh data.
-          // Ensure kbData sent for full update reflects the latest state including update_at
-          const kbDataForFullUpdate = {
-            ...updatedKbFromStore, // This object already has the new 'enabled' and 'update_at'
-          };
-          const fullUpdateArgs: IKBFullUpdateIPCArgs = {
-            kbId: updatedKbFromStore.id,
-            workspaceId: updatedKbFromStore.workspace_id,
-            token: userToken,
-            kbData: kbDataForFullUpdate
-          };
-          try {
-            await fullUpdateKB(fullUpdateArgs);
-            // Handle success/failure of fullUpdateKB if necessary, e.g., if it returns a status.
-            // For now, we assume the primary disable action is complete.
-          } catch (error: any) {
-            console.error("Error disabling KB via fullUpdateKB:", error);
-            toast.error(intl.formatMessage({ id: "settings.kb.update.error.exception", defaultMessage: "An error occurred while finalizing the disabling of the knowledge base." }) + ` ${error.message}`);
-          }
-        }
-      } else {
-        // updateKnowledgeBase failed for either enabling or disabling.
-        toast.error(intl.formatMessage({ id: "settings.kb.update.error", defaultMessage: "Failed to update knowledge base status." }));
-      }
-    }
-  }, [selectedKnowledgeBase, currentWorkspaceId, updateKnowledgeBase, intl, fetchAndSetSelectedKbDetails, registerKB, fullUpdateKB]);
+  // Removed handleToggleEnabled function - knowledge bases are always enabled when created
 
   const getEmbeddingEngineName = useCallback((engineId: string) => {
     if (!engineId) return intl.formatMessage({ id: "settings.kb.embedding.notApplicable", defaultMessage: "N/A" });
@@ -373,10 +300,76 @@ function KnowledgeBaseManagerComponent() {
     if (newKb) {
       toast.success(intl.formatMessage({ id: "settings.kb.create.success", defaultMessage: "Knowledge base created successfully." }));
       closeCreateKBDialog();
+      
+      // Automatically select the newly created KB
+      setSelectedTopic(KNOWLEDGE_BASE_SELECTION_KEY, newKb.id);
+      
+      // Automatically register the new KB since LightRAG is always enabled
+      const userToken = getUserTokenFromStore();
+      if (userToken && newKb) {
+        const registerArgs: IKBRegisterIPCArgs = {
+          kbData: newKb,
+          token: userToken,
+        };
+        try {
+          const registrationResult = await registerKB(registerArgs);
+          if (registrationResult) {
+            toast.success(intl.formatMessage({ id: "settings.kb.register.success", defaultMessage: "Knowledge base registered successfully." }));
+          }
+        } catch (error: any) {
+          console.error("Error registering KB:", error);
+          toast.error(intl.formatMessage({ id: "settings.kb.register.exception", defaultMessage: "An error occurred during knowledge base registration." }) + ` ${error.message}`);
+        }
+      }
     } else {
       toast.error(intl.formatMessage({ id: "settings.kb.create.error", defaultMessage: "Failed to create knowledge base." }));
     }
-  }, [currentWorkspaceId, createKnowledgeBase, intl, closeCreateKBDialog, fetchAndSetSelectedKbDetails]);
+  }, [currentWorkspaceId, createKnowledgeBase, intl, closeCreateKBDialog, registerKB, setSelectedTopic]);
+
+  const handleRefreshKBStructure = useCallback(() => {
+    if (selectedKnowledgeBase?.id && currentWorkspaceId) {
+      // Force refresh of KB structure data by re-triggering the fetch
+      const viewKBStructure = useKBStore.getState().viewKnowledgeBaseStructure;
+      viewKBStructure(currentWorkspaceId, selectedKnowledgeBase.id)
+        .then(result => {
+          console.log(`KB structure refreshed for ${selectedKnowledgeBase.id}:`, result);
+          toast.success(intl.formatMessage({ 
+            id: "settings.kb.structure.refresh.success", 
+            defaultMessage: "Knowledge base structure refreshed." 
+          }));
+        })
+        .catch(err => {
+          console.error(`Error refreshing KB structure for ${selectedKnowledgeBase.id}:`, err);
+          toast.error(intl.formatMessage({ 
+            id: "settings.kb.structure.refresh.error", 
+            defaultMessage: "Failed to refresh knowledge base structure." 
+          }));
+        });
+    }
+  }, [selectedKnowledgeBase, currentWorkspaceId, intl]);
+
+  // Change the handleReinitialize function name and add scan functionality
+  const handleScanDocuments = useCallback(async () => {
+    if (selectedKnowledgeBase && currentWorkspaceId) {
+      try {
+        // Call the new scan API
+        const userToken = getUserTokenFromStore();
+        if (userToken) {
+          await window.electron.knowledgeBase.scanKB({
+            workspaceId: currentWorkspaceId,
+            kbId: selectedKnowledgeBase.id,
+            token: userToken
+          });
+          toast.success(intl.formatMessage({ 
+            id: "kbExplorer.scanSuccess", 
+            defaultMessage: "Document scan initiated successfully." 
+          }));
+        }
+      } catch (error: any) {
+        toast.error(`Scan failed: ${error.message}`);
+      }
+    }
+  }, [selectedKnowledgeBase, currentWorkspaceId, intl]);
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
@@ -407,11 +400,9 @@ function KnowledgeBaseManagerComponent() {
             kbRawStatus={kbStatus}
             isLoading={isLoadingDetails}
             isKbStatusLoading={isStatusLoading}
-            onToggleEnabled={handleToggleEnabled}
-            onReinitialize={handleReinitialize}
-            onRefreshDetails={handleRefreshDetails}
             onEdit={handleOpenEditDialog}
             onDelete={handleOpenDeleteDialog}
+            // Remove onRefreshDetails prop
             getEmbeddingEngineName={getEmbeddingEngineName}
             getKbSourceIconAndLabel={getKbSourceIconAndLabel}
           />
@@ -446,12 +437,11 @@ function KnowledgeBaseManagerComponent() {
           flexDirection: 'column',
           minHeight: 0,
         }}>
-          <Typography variant="h6" gutterBottom>
-            <FormattedMessage id="settings.kb.explorerSection.title" defaultMessage="KB Explorer" />
-          </Typography>
           <KBExplorer
             kbStatus={kbStatus}
             isLoading={isStatusLoading}
+            onScanDocuments={handleScanDocuments}  // Changed from onReinitialize
+            onRefreshStructure={handleRefreshKBStructure}
             sx={{
               flexGrow: 1,
               display: 'flex',

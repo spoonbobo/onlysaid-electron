@@ -1,11 +1,11 @@
 import React from 'react';
-import { Box, Typography, Card, CardContent, Chip, Stack, Divider, IconButton, Switch, Tooltip, ChipProps } from "@mui/material";
+import { Box, Typography, Card, CardContent, Chip, Stack, Divider, IconButton, Tooltip, ChipProps } from "@mui/material";
 import { FormattedMessage, useIntl, IntlShape } from "react-intl";
 import { IKnowledgeBase } from "@/../../types/KnowledgeBase/KnowledgeBase";
 import EditIcon from "@mui/icons-material/Edit";
 import DeleteIcon from "@mui/icons-material/Delete";
 import RefreshIcon from "@mui/icons-material/Refresh";
-import SyncIcon from '@mui/icons-material/Sync';
+import ManageAccountsIcon from "@mui/icons-material/ManageAccounts";  // ✅ UPDATED: Changed to more appropriate icon
 import StatusBadge, { KBOverallStatus } from '@/renderer/components/Badge/StatusBadge';
 import { IKBStatus } from "./KBExplorer";
 
@@ -14,9 +14,6 @@ interface KBInfoProps {
   kbRawStatus: IKBStatus | null;
   isLoading: boolean;
   isKbStatusLoading: boolean;
-  onToggleEnabled: (enabled: boolean) => Promise<void>;
-  onReinitialize: () => Promise<void>;
-  onRefreshDetails: () => void;
   onEdit: () => void;
   onDelete: () => void;
   getEmbeddingEngineName: (engineId: string) => string;
@@ -28,15 +25,22 @@ const KBInfo: React.FC<KBInfoProps> = ({
   kbRawStatus,
   isLoading,
   isKbStatusLoading,
-  onToggleEnabled,
-  onReinitialize,
-  onRefreshDetails,
   onEdit,
   onDelete,
   getEmbeddingEngineName,
   getKbSourceIconAndLabel,
 }) => {
   const intl: IntlShape = useIntl();
+
+  // ✅ UPDATED: Renamed handler to be more descriptive
+  const handleManageKB = async () => {
+    try {
+      const kbUrl = await window.electron.knowledgeBase.getUrl();
+      await window.electron.shell.openExternal(kbUrl);
+    } catch (error) {
+      console.error('Failed to open KB management website:', error);
+    }
+  };
 
   const formatDate = (dateString: string) => {
     if (!dateString) return "-";
@@ -61,19 +65,13 @@ const KBInfo: React.FC<KBInfoProps> = ({
   const determineOverallStatus = (): KBOverallStatus | null => {
     if (!knowledgeBase.configured) return null;
 
-    if (!knowledgeBase.enabled) {
-      return "disabled";
-    }
-
     if (isKbStatusLoading) {
       return 'initializing';
     }
 
-    if (!kbRawStatus) {
-      return 'not_found';
-    }
+    // Temporarily removed: if (!kbRawStatus) return 'not_found';
 
-    if (kbRawStatus.syncState) {
+    if (kbRawStatus && kbRawStatus.syncState) {
       switch (kbRawStatus.syncState) {
         case 'syncing':
           return 'initializing';
@@ -86,7 +84,7 @@ const KBInfo: React.FC<KBInfoProps> = ({
       }
     }
 
-    if (kbRawStatus.status) {
+    if (kbRawStatus && kbRawStatus.status) {
       const statusValue = kbRawStatus.status.toLowerCase();
       switch (statusValue) {
         case 'running':
@@ -101,11 +99,12 @@ const KBInfo: React.FC<KBInfoProps> = ({
       }
     }
 
-    if (kbRawStatus.errorDetails) {
+    if (kbRawStatus && kbRawStatus.errorDetails) {
       return 'error';
     }
 
-    return 'not_found';
+    // Return null instead of 'not_found' when no status is available
+    return null;
   };
 
   const overallStatus = determineOverallStatus();
@@ -121,27 +120,11 @@ const KBInfo: React.FC<KBInfoProps> = ({
             {overallStatus && <StatusBadge status={overallStatus} />}
           </Box>
           <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'center', flexShrink: 0 }}>
-            <Tooltip title={intl.formatMessage({ id: "settings.kb.private.enableKB", defaultMessage: "Enable Knowledge Base" })}>
+            {/* ✅ UPDATED: Changed to "manage" with appropriate icon */}
+            <Tooltip title={intl.formatMessage({ id: "settings.kb.private.manage", defaultMessage: "Manage" })}>
               <span>
-                <Switch
-                  checked={knowledgeBase.enabled}
-                  onChange={(e) => onToggleEnabled(e.target.checked)}
-                  disabled={!knowledgeBase.configured || isLoading}
-                  size="small"
-                />
-              </span>
-            </Tooltip>
-            <Tooltip title={intl.formatMessage({ id: "settings.kb.private.refreshDetails", defaultMessage: "Refresh Details" })}>
-              <span>
-                <IconButton size="small" color="info" onClick={onRefreshDetails} disabled={isLoading || isKbStatusLoading}>
-                  <RefreshIcon />
-                </IconButton>
-              </span>
-            </Tooltip>
-            <Tooltip title={intl.formatMessage({ id: "settings.kb.private.synchronize", defaultMessage: "Synchronize" })}>
-              <span>
-                <IconButton size="small" color="secondary" onClick={onReinitialize} disabled={isLoading || !knowledgeBase.enabled || !knowledgeBase.configured}>
-                  <SyncIcon />
+                <IconButton size="small" color="secondary" onClick={handleManageKB} disabled={isLoading}>
+                  <ManageAccountsIcon />
                 </IconButton>
               </span>
             </Tooltip>
@@ -178,10 +161,10 @@ const KBInfo: React.FC<KBInfoProps> = ({
           {knowledgeBase.configured && (
             <Chip
               size="small"
-              color={knowledgeBase.enabled ? "primary" : "default"}
+              color="primary"
               label={intl.formatMessage({
-                id: knowledgeBase.enabled ? "settings.kb.status.enabled" : "settings.kb.status.disabled",
-                defaultMessage: knowledgeBase.enabled ? "Enabled" : "Disabled"
+                id: "settings.kb.status.enabled",
+                defaultMessage: "Enabled"
               })}
             />
           )}

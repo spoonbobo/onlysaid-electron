@@ -63,11 +63,14 @@ type KnowledgeBaseChannels =
   | 'kb:register'
   | 'kb:getStatus'
   | 'kb:synchronize'
+  | 'kb:scan'  // ✅ NEW: Add the new scan channel
   | 'kb:fullUpdate'
   | 'kb:get-members'
   | 'kb:add-member'
   | 'kb:update-member-role'
-  | 'kb:remove-member';
+  | 'kb:remove-member'
+  | 'kb:get-url'  // ✅ NEW: Add the new URL channel
+  | 'kb:get-url';
 
 type AIChannels = 'ai:get_completion';
 
@@ -483,6 +486,8 @@ const electronHandler = {
     registerKB: (...args: unknown[]) => ipcRenderer.invoke('kb:register', ...args),
     getKBStatus: (...args: unknown[]) => ipcRenderer.invoke('kb:getStatus', ...args),
     synchronizeKB: (...args: unknown[]) => ipcRenderer.invoke('kb:synchronize', ...args),
+    scanKB: (args: { workspaceId: string; kbId: string; token: string }) =>  // ✅ NEW: Add scan method
+      ipcRenderer.invoke('kb:scan', args),
     fullUpdateKB: (...args: unknown[]) => ipcRenderer.invoke('kb:fullUpdate', ...args),
     queryNonStreaming: (args: {
       workspaceId: string;
@@ -500,6 +505,9 @@ const electronHandler = {
       kbIds?: string[];
       topK?: number;
     }) => ipcRenderer.invoke('kb:retrieve', args),
+    
+    // ✅ NEW: Add getUrl method
+    getUrl: () => ipcRenderer.invoke('kb:get-url'),
     
     // Member management methods
     getMembers: (args: { token: string; workspaceId: string; kbId: string }) =>

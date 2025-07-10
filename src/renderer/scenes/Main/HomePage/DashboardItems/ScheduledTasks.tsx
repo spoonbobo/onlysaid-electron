@@ -1,24 +1,30 @@
-import { Box, Typography, Card, CardContent, List, ListItem, ListItemText, ListItemIcon, Checkbox, IconButton, Button, Chip, Menu, MenuItem, Tabs, Tab, Alert, CircularProgress } from "@mui/material";
+import { Box, Typography, Card, CardContent, List, ListItem, ListItemText, ListItemIcon, Checkbox, IconButton, Button, Chip, Alert, CircularProgress, Dialog, DialogTitle, DialogContent, DialogActions, TextField, FormControl, InputLabel, Select, MenuItem, Grid, Tooltip, SelectChangeEvent } from "@mui/material";
 import { useIntl } from "react-intl";
 import { useState, useEffect } from "react";
-import { Add, CheckCircle, RadioButtonUnchecked, Event, MoreVert, Notifications, AccountTree, OpenInNew, PlayArrow, Pause, Schedule } from "@mui/icons-material";
+import { Add, CheckCircle, RadioButtonUnchecked, Event, AccountTree, OpenInNew, Schedule, School, Assignment, Group, Business, Science, Person, AccessTime, Repeat, DateRange, Edit, Delete, Notifications, Refresh, Settings } from "@mui/icons-material";
 import { useUserTokenStore } from "@/renderer/stores/User/UserToken";
+import { WorkflowDialog } from "@/renderer/components/Dialog/Schedule/Workflow";
+import { WorkflowEdit } from "@/renderer/components/Dialog/Schedule/WorkflowEdit";
 
-interface Task {
+interface ScheduledItem {
   id: string;
   title: string;
-  completed: boolean;
-  dueDate?: Date;
-  priority?: 'low' | 'medium' | 'high';
-}
-
-interface N8nWorkflow {
-  id: string;
-  name: string;
+  description?: string;
+  type: 'workflow' | 'manual';
   active: boolean;
-  lastExecution?: Date;
+  category: 'classes' | 'student' | 'assessments' | 'meetings' | 'research' | 'admin';
+  periodType: 'one-time' | 'recurring' | 'specific-dates';
+  schedule?: {
+    frequency?: 'daily' | 'weekly' | 'monthly';
+    days?: string[];
+    time?: string;
+    duration?: number;
+    dates?: string[];
+  };
   nextExecution?: Date;
-  tags?: string[];
+  lastExecution?: Date;
+  metadata?: Record<string, any>;
+  n8nWorkflowId?: string;
 }
 
 function ScheduledTasks() {
@@ -26,153 +32,206 @@ function ScheduledTasks() {
   const { n8nConnected, n8nApiUrl, n8nApiKey } = useUserTokenStore();
   
   // State management
-  const [tasks, setTasks] = useState<Task[]>([]);
-  const [n8nWorkflows, setN8nWorkflows] = useState<N8nWorkflow[]>([]);
-  const [loadingWorkflows, setLoadingWorkflows] = useState(false);
-  const [workflowError, setWorkflowError] = useState<string | null>(null);
-  const [menuAnchor, setMenuAnchor] = useState<null | HTMLElement>(null);
-  const [viewMode, setViewMode] = useState<'today' | 'upcoming' | 'all'>('today');
-  const [activeTab, setActiveTab] = useState(0); // 0: Tasks, 1: N8n Workflows
+  const [scheduledItems, setScheduledItems] = useState<ScheduledItem[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [selectedCategory, setSelectedCategory] = useState<string>('all');
+  const [workflowDialogOpen, setWorkflowDialogOpen] = useState(false);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [editingItem, setEditingItem] = useState<ScheduledItem | null>(null);
 
-  // Load N8n workflows when connected
+  // Load scheduled items
   useEffect(() => {
-    if (n8nConnected && activeTab === 1) {
-      loadN8nWorkflows();
-    }
-  }, [n8nConnected, activeTab]);
+    loadScheduledItems();
+  }, [n8nConnected]);
 
-  const loadN8nWorkflows = async () => {
-    if (!n8nConnected || !n8nApiUrl || !n8nApiKey) return;
-
-    setLoadingWorkflows(true);
-    setWorkflowError(null);
+  const loadScheduledItems = async () => {
+    setLoading(true);
+    setError(null);
 
     try {
-      // Pass the required parameters
-      const result = await (window as any).electron?.n8nApi?.getWorkflows({
-        apiUrl: n8nApiUrl,
-        apiKey: n8nApiKey
-      });
-      
-      if (result?.success) {
-        setN8nWorkflows(result.workflows || []);
-      } else {
-        setWorkflowError(result?.error || 'Failed to load workflows');
+      // Load N8n workflows if connected
+      let n8nWorkflows: any[] = [];
+      if (n8nConnected && n8nApiUrl && n8nApiKey) {
+        const result = await (window as any).electron?.n8nApi?.getWorkflows({
+          apiUrl: n8nApiUrl,
+          apiKey: n8nApiKey
+        });
+        
+        if (result?.success) {
+          n8nWorkflows = result.workflows || [];
+        }
       }
+
+      // Convert N8n workflows to scheduled items
+      const workflowItems: ScheduledItem[] = n8nWorkflows.map(workflow => ({
+        id: `n8n-${workflow.id}`,
+        title: workflow.name,
+        type: 'workflow',
+        active: workflow.active,
+        category: determineWorkflowCategory(workflow.name),
+        periodType: 'recurring', // Most N8n workflows are recurring
+        nextExecution: workflow.nextExecution,
+        lastExecution: workflow.lastExecution,
+        n8nWorkflowId: workflow.id
+      }));
+
+      // TODO: Load manual tasks from local storage or database
+      const manualItems: ScheduledItem[] = [
+        // Placeholder manual items - these would come from storage
+      ];
+
+      setScheduledItems([...workflowItems, ...manualItems]);
     } catch (error) {
-      console.error('Error loading N8n workflows:', error);
-      setWorkflowError('Failed to connect to N8n');
+      console.error('Error loading scheduled items:', error);
+      setError('Failed to load scheduled items');
     } finally {
-      setLoadingWorkflows(false);
+      setLoading(false);
     }
   };
 
-  const handleTaskToggle = (taskId: string) => {
-    setTasks(prev => 
-      prev.map(task => 
-        task.id === taskId 
-          ? { ...task, completed: !task.completed }
-          : task
-      )
-    );
+  const determineWorkflowCategory = (workflowName: string): ScheduledItem['category'] => {
+    const name = workflowName.toLowerCase();
+    if (name.includes('lecture') || name.includes('class') || name.includes('lab')) return 'classes';
+    if (name.includes('student') || name.includes('office') || name.includes('thesis')) return 'student';
+    if (name.includes('assignment') || name.includes('exam') || name.includes('grade')) return 'assessments';
+    if (name.includes('meeting') || name.includes('committee')) return 'meetings';
+    if (name.includes('research') || name.includes('grant') || name.includes('paper')) return 'research';
+    return 'admin';
   };
 
-  const handleAddTask = () => {
-    console.log('Add new task');
+  const handleItemToggle = async (itemId: string) => {
+    const item = scheduledItems.find(i => i.id === itemId);
+    if (!item) return;
+
+    if (item.type === 'workflow' && item.n8nWorkflowId && n8nApiUrl && n8nApiKey) {
+      try {
+        const result = await (window as any).electron?.n8nApi?.toggleWorkflow({
+          apiUrl: n8nApiUrl,
+          apiKey: n8nApiKey,
+          workflowId: item.n8nWorkflowId,
+          active: !item.active
+        });
+        
+        if (result?.success) {
+          setScheduledItems(prev => 
+            prev.map(i => 
+              i.id === itemId 
+                ? { ...i, active: !i.active }
+                : i
+            )
+          );
+        }
+      } catch (error) {
+        console.error('Error toggling workflow:', error);
+      }
+    } else {
+      // Handle manual task toggle
+      setScheduledItems(prev => 
+        prev.map(i => 
+          i.id === itemId 
+            ? { ...i, active: !i.active }
+            : i
+        )
+      );
+    }
+  };
+
+  const handleEditItem = (item: ScheduledItem) => {
+    setEditingItem(item);
+    setEditDialogOpen(true);
+  };
+
+  const handleSaveEdit = (updatedItem: ScheduledItem) => {
+    setScheduledItems(prev => 
+      prev.map(i => 
+        i.id === updatedItem.id 
+          ? updatedItem
+          : i
+      )
+    );
+    setEditDialogOpen(false);
+    setEditingItem(null);
+  };
+
+  const handleDeleteItem = (itemId: string) => {
+    if (confirm('Are you sure you want to delete this item?')) {
+      setScheduledItems(prev => prev.filter(i => i.id !== itemId));
+    }
+  };
+
+  const handleCreateWorkflow = (template: any, data: any) => {
+    // TODO: Implement workflow creation logic
+    console.log('Creating workflow:', template, data);
+    
+    // For now, create a local scheduled item
+    const newItem: ScheduledItem = {
+      id: `manual-${Date.now()}`,
+      title: data.courseName || data.assignmentTitle || data.meetingType || template.name,
+      description: template.description,
+      type: 'manual',
+      active: false,
+      category: template.category,
+      periodType: template.periodType,
+      metadata: data
+    };
+
+    setScheduledItems(prev => [...prev, newItem]);
+    setWorkflowDialogOpen(false);
   };
 
   const handleOpenN8n = () => {
     if (n8nApiUrl) {
-      // Remove /api/v1 from URL for web interface
       const webUrl = n8nApiUrl.replace('/api/v1', '');
       (window as any).electron?.shell?.openExternal(webUrl);
     }
   };
 
-  const handleWorkflowToggle = async (workflowId: string, currentState: boolean) => {
-    if (!n8nApiUrl || !n8nApiKey) return;
+  const categories = [
+    { id: 'all', label: intl.formatMessage({ id: 'homepage.scheduledTasks.category.all', defaultMessage: 'All Items' }), icon: <Schedule /> },
+    { id: 'classes', label: intl.formatMessage({ id: 'homepage.scheduledTasks.category.classes', defaultMessage: 'Classes & Lectures' }), icon: <School /> },
+    { id: 'student', label: intl.formatMessage({ id: 'homepage.scheduledTasks.category.student', defaultMessage: 'Student-Related' }), icon: <Person /> },
+    { id: 'assessments', label: intl.formatMessage({ id: 'homepage.scheduledTasks.category.assessments', defaultMessage: 'Assessments' }), icon: <Assignment /> },
+    { id: 'meetings', label: intl.formatMessage({ id: 'homepage.scheduledTasks.category.meetings', defaultMessage: 'Meetings' }), icon: <Business /> },
+    { id: 'research', label: intl.formatMessage({ id: 'homepage.scheduledTasks.category.research', defaultMessage: 'Research' }), icon: <Science /> },
+    { id: 'admin', label: intl.formatMessage({ id: 'homepage.scheduledTasks.category.admin', defaultMessage: 'Administrative' }), icon: <Event /> }
+  ];
 
-    try {
-      const result = await (window as any).electron?.n8nApi?.toggleWorkflow({
-        apiUrl: n8nApiUrl,
-        apiKey: n8nApiKey,
-        workflowId,
-        active: !currentState
-      });
-      
-      if (result?.success) {
-        setN8nWorkflows(prev => 
-          prev.map(workflow => 
-            workflow.id === workflowId 
-              ? { ...workflow, active: !currentState }
-              : workflow
-          )
-        );
-      }
-    } catch (error) {
-      console.error('Error toggling workflow:', error);
-    }
+  const getFilteredItems = () => {
+    if (selectedCategory === 'all') return scheduledItems;
+    return scheduledItems.filter(item => item.category === selectedCategory);
   };
 
-  const handleViewMenuClick = (event: React.MouseEvent<HTMLElement>) => {
-    setMenuAnchor(event.currentTarget);
+  const filteredItems = getFilteredItems();
+  const activeCount = filteredItems.filter(item => item.active).length;
+
+  const getCategoryIcon = (category: string) => {
+    const categoryMap: Record<string, React.ReactNode> = {
+      classes: <School />,
+      student: <Person />,
+      assessments: <Assignment />,
+      meetings: <Business />,
+      research: <Science />,
+      admin: <Event />
+    };
+    return categoryMap[category] || <Schedule />;
   };
 
-  const handleViewMenuClose = () => {
-    setMenuAnchor(null);
-  };
-
-  const handleViewModeChange = (mode: 'today' | 'upcoming' | 'all') => {
-    setViewMode(mode);
-    handleViewMenuClose();
-  };
-
-  const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
-    setActiveTab(newValue);
-  };
-
-  const getFilteredTasks = () => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    
-    switch (viewMode) {
-      case 'today':
-        return tasks.filter(task => {
-          if (!task.dueDate) return false;
-          const taskDate = new Date(task.dueDate);
-          taskDate.setHours(0, 0, 0, 0);
-          return taskDate.getTime() === today.getTime();
-        });
-      case 'upcoming':
-        return tasks.filter(task => {
-          if (!task.dueDate) return false;
-          const taskDate = new Date(task.dueDate);
-          return taskDate > today;
-        });
-      case 'all':
-      default:
-        return tasks;
-    }
-  };
-
-  const filteredTasks = getFilteredTasks();
-  const completedCount = filteredTasks.filter(task => task.completed).length;
-
-  const getPriorityColor = (priority?: string) => {
-    switch (priority) {
-      case 'high': return 'error';
-      case 'medium': return 'warning';
-      case 'low': return 'info';
-      default: return 'default';
-    }
-  };
-
-  const getViewModeLabel = () => {
-    switch (viewMode) {
-      case 'today': return intl.formatMessage({ id: 'tasks.today', defaultMessage: 'Today' });
-      case 'upcoming': return intl.formatMessage({ id: 'tasks.upcoming', defaultMessage: 'Upcoming' });
-      case 'all': return intl.formatMessage({ id: 'tasks.all', defaultMessage: 'All Tasks' });
-    }
+  const getPeriodTypeChip = (periodType: string) => {
+    const colors: Record<string, any> = {
+      'one-time': 'info',
+      'recurring': 'success',
+      'specific-dates': 'warning'
+    };
+    return (
+      <Chip
+        label={periodType.replace('-', ' ')}
+        size="small"
+        color={colors[periodType] || 'default'}
+        variant="outlined"
+        sx={{ fontSize: '0.7rem', height: 18 }}
+      />
+    );
   };
 
   const formatExecutionTime = (date?: Date) => {
@@ -184,344 +243,6 @@ function ScheduledTasks() {
       minute: '2-digit'
     }).format(date);
   };
-
-  const TasksTabContent = () => (
-    <>
-      {/* Tasks Summary */}
-      {filteredTasks.length > 0 && (
-        <Box sx={{ mb: 2 }}>
-          <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-            {intl.formatMessage(
-              { 
-                id: 'tasks.summary', 
-                defaultMessage: '{completed} of {total} tasks completed' 
-              },
-              { 
-                completed: completedCount,
-                total: filteredTasks.length
-              }
-            )}
-          </Typography>
-        </Box>
-      )}
-
-      {/* Tasks List */}
-      <Box sx={{ 
-        height: 200, 
-        overflow: 'auto',
-        border: '1px solid',
-        borderColor: 'divider',
-        borderRadius: 1,
-        bgcolor: 'background.default'
-      }}>
-        {filteredTasks.length === 0 ? (
-          <Box sx={{ 
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'center',
-            height: '100%',
-            p: 3,
-            textAlign: 'center'
-          }}>
-            <Event sx={{ fontSize: 48, color: 'text.secondary', mb: 2 }} />
-            <Typography variant="body1" sx={{ mb: 1, color: 'text.secondary' }}>
-              {intl.formatMessage({ 
-                id: 'tasks.noTasks', 
-                defaultMessage: 'No tasks scheduled' 
-              })}
-            </Typography>
-            <Typography variant="body2" sx={{ mb: 2, color: 'text.secondary' }}>
-              {intl.formatMessage({ 
-                id: 'tasks.emptyStateDescription', 
-                defaultMessage: 'Stay organized with tasks and reminders' 
-              })}
-            </Typography>
-            <Button 
-              variant="outlined" 
-              size="small" 
-              startIcon={<Add />}
-              onClick={handleAddTask}
-            >
-              {intl.formatMessage({ 
-                id: 'tasks.addFirst', 
-                defaultMessage: 'Add your first task' 
-              })}
-            </Button>
-          </Box>
-        ) : (
-          <List dense sx={{ p: 1 }}>
-            {filteredTasks.map((task) => (
-              <ListItem 
-                key={task.id}
-                sx={{ 
-                  borderRadius: 1,
-                  mb: 0.5,
-                  bgcolor: task.completed ? 'action.hover' : 'background.paper',
-                  '&:hover': { bgcolor: 'action.hover' }
-                }}
-              >
-                <ListItemIcon sx={{ minWidth: 32 }}>
-                  <IconButton 
-                    size="small" 
-                    onClick={() => handleTaskToggle(task.id)}
-                    color={task.completed ? 'success' : 'default'}
-                  >
-                    {task.completed ? <CheckCircle /> : <RadioButtonUnchecked />}
-                  </IconButton>
-                </ListItemIcon>
-                
-                <ListItemText
-                  primary={
-                    <Typography 
-                      variant="body2"
-                      sx={{
-                        textDecoration: task.completed ? 'line-through' : 'none',
-                        color: task.completed ? 'text.secondary' : 'text.primary'
-                      }}
-                    >
-                      {task.title}
-                    </Typography>
-                  }
-                  secondary={
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.5 }}>
-                      {task.dueDate && (
-                        <Chip
-                          label={formatExecutionTime(task.dueDate)}
-                          size="small"
-                          variant="outlined"
-                          sx={{ fontSize: '0.7rem', height: 20 }}
-                        />
-                      )}
-                      {task.priority && (
-                        <Chip
-                          label={task.priority}
-                          size="small"
-                          color={getPriorityColor(task.priority) as any}
-                          sx={{ fontSize: '0.7rem', height: 20 }}
-                        />
-                      )}
-                    </Box>
-                  }
-                  disableTypography
-                />
-              </ListItem>
-            ))}
-          </List>
-        )}
-      </Box>
-    </>
-  );
-
-  const N8nTabContent = () => (
-    <>
-      {/* N8n Connection Status */}
-      {!n8nConnected ? (
-        <Alert 
-          severity="info" 
-          sx={{ mb: 2 }}
-          action={
-            <Button 
-              size="small" 
-              onClick={() => window.location.hash = '#/settings/userAPIKeys'}
-            >
-              {intl.formatMessage({ 
-                id: 'n8n.connectN8n', 
-                defaultMessage: 'Connect N8n' 
-              })}
-            </Button>
-          }
-        >
-          {intl.formatMessage({ 
-            id: 'n8n.connectInstanceMessage', 
-            defaultMessage: 'Connect your N8n instance to view and manage scheduled workflows' 
-          })}
-        </Alert>
-      ) : (
-        <>
-          {/* N8n Actions */}
-          <Box sx={{ display: 'flex', gap: 1, mb: 2 }}>
-            <Button
-              size="small"
-              variant="outlined"
-              startIcon={<OpenInNew />}
-              onClick={handleOpenN8n}
-            >
-              {intl.formatMessage({ 
-                id: 'n8n.openN8n', 
-                defaultMessage: 'Open N8n' 
-              })}
-            </Button>
-            <Button
-              size="small"
-              variant="outlined"
-              startIcon={<AccountTree />}
-              onClick={loadN8nWorkflows}
-              disabled={loadingWorkflows}
-            >
-              {loadingWorkflows 
-                ? intl.formatMessage({ 
-                    id: 'n8n.loading', 
-                    defaultMessage: 'Loading...' 
-                  })
-                : intl.formatMessage({ 
-                    id: 'n8n.refresh', 
-                    defaultMessage: 'Refresh' 
-                  })
-              }
-            </Button>
-          </Box>
-
-          {/* Workflows List */}
-          <Box sx={{ 
-            height: 200, 
-            overflow: 'auto',
-            border: '1px solid',
-            borderColor: 'divider',
-            borderRadius: 1,
-            bgcolor: 'background.default'
-          }}>
-            {loadingWorkflows ? (
-              <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}>
-                <CircularProgress size={24} />
-              </Box>
-            ) : workflowError ? (
-              <Box sx={{ p: 2, textAlign: 'center' }}>
-                <Typography variant="body2" color="error">
-                  {workflowError}
-                </Typography>
-                <Button size="small" onClick={loadN8nWorkflows} sx={{ mt: 1 }}>
-                  {intl.formatMessage({ 
-                    id: 'n8n.retry', 
-                    defaultMessage: 'Retry' 
-                  })}
-                </Button>
-              </Box>
-            ) : n8nWorkflows.length === 0 ? (
-              <Box sx={{ 
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                justifyContent: 'center',
-                height: '100%',
-                p: 3,
-                textAlign: 'center'
-              }}>
-                <AccountTree sx={{ fontSize: 48, color: 'text.secondary', mb: 2 }} />
-                <Typography variant="body1" sx={{ mb: 1, color: 'text.secondary' }}>
-                  {intl.formatMessage({ 
-                    id: 'n8n.noWorkflowsFound', 
-                    defaultMessage: 'No workflows found' 
-                  })}
-                </Typography>
-                <Typography variant="body2" sx={{ mb: 2, color: 'text.secondary' }}>
-                  {intl.formatMessage({ 
-                    id: 'n8n.createWorkflowsMessage', 
-                    defaultMessage: 'Create workflows in N8n to see them here' 
-                  })}
-                </Typography>
-                <Button 
-                  variant="outlined" 
-                  size="small" 
-                  startIcon={<OpenInNew />}
-                  onClick={handleOpenN8n}
-                >
-                  {intl.formatMessage({ 
-                    id: 'n8n.openN8n', 
-                    defaultMessage: 'Open N8n' 
-                  })}
-                </Button>
-              </Box>
-            ) : (
-              <List dense sx={{ p: 1 }}>
-                {n8nWorkflows.map((workflow) => (
-                  <ListItem 
-                    key={workflow.id}
-                    sx={{ 
-                      borderRadius: 1,
-                      mb: 0.5,
-                      bgcolor: 'background.paper',
-                      '&:hover': { bgcolor: 'action.hover' }
-                    }}
-                  >
-                    <ListItemIcon sx={{ minWidth: 32 }}>
-                      <IconButton 
-                        size="small" 
-                        onClick={() => handleWorkflowToggle(workflow.id, workflow.active)}
-                        color={workflow.active ? 'success' : 'default'}
-                      >
-                        {workflow.active ? <PlayArrow /> : <Pause />}
-                      </IconButton>
-                    </ListItemIcon>
-                    
-                    <ListItemText
-                      primary={
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                          <Typography variant="body2">
-                            {workflow.name}
-                          </Typography>
-                          <Chip
-                            label={workflow.active 
-                              ? intl.formatMessage({ 
-                                  id: 'n8n.active', 
-                                  defaultMessage: 'Active' 
-                                })
-                              : intl.formatMessage({ 
-                                  id: 'n8n.inactive', 
-                                  defaultMessage: 'Inactive' 
-                                })
-                            }
-                            size="small"
-                            color={workflow.active ? 'success' : 'default'}
-                            sx={{ fontSize: '0.7rem', height: 18 }}
-                          />
-                        </Box>
-                      }
-                      secondary={
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.5 }}>
-                          {workflow.lastExecution && (
-                            <Chip
-                              label={intl.formatMessage(
-                                { 
-                                  id: 'n8n.lastExecution', 
-                                  defaultMessage: 'Last: {time}' 
-                                },
-                                { time: formatExecutionTime(workflow.lastExecution) }
-                              )}
-                              size="small"
-                              variant="outlined"
-                              sx={{ fontSize: '0.65rem', height: 18 }}
-                            />
-                          )}
-                          {workflow.nextExecution && (
-                            <Chip
-                              label={intl.formatMessage(
-                                { 
-                                  id: 'n8n.nextExecution', 
-                                  defaultMessage: 'Next: {time}' 
-                                },
-                                { time: formatExecutionTime(workflow.nextExecution) }
-                              )}
-                              size="small"
-                              variant="outlined"
-                              color="primary"
-                              icon={<Schedule sx={{ fontSize: '0.8rem !important' }} />}
-                              sx={{ fontSize: '0.65rem', height: 18 }}
-                            />
-                          )}
-                        </Box>
-                      }
-                      disableTypography
-                    />
-                  </ListItem>
-                ))}
-              </List>
-            )}
-          </Box>
-        </>
-      )}
-    </>
-  );
 
   return (
     <Box>
@@ -541,64 +262,246 @@ function ScheduledTasks() {
           })}
         </Typography>
         
-        <Box>
-          {activeTab === 0 && (
-            <>
-              <Chip 
-                label={getViewModeLabel()}
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <Tooltip title={intl.formatMessage({ id: "common.refresh", defaultMessage: "Refresh" })}>
+            <IconButton
+              size="small"
+              color="info"
+              onClick={loadScheduledItems}
+              disabled={loading}
+            >
+              <Refresh />
+            </IconButton>
+          </Tooltip>
+          
+          <Tooltip title={intl.formatMessage({ id: "homepage.scheduledTasks.addTask", defaultMessage: "Add Task" })}>
+            <IconButton
+              size="small"
+              color="primary"
+              onClick={() => setWorkflowDialogOpen(true)}
+            >
+              <Add />
+            </IconButton>
+          </Tooltip>
+          
+          {/* Hidden for now */}
+          {/* {n8nConnected && (
+            <Tooltip title={intl.formatMessage({ id: "homepage.scheduledTasks.manage", defaultMessage: "Manage" })}>
+              <IconButton
                 size="small"
-                variant="outlined"
-                onClick={handleViewMenuClick}
-                sx={{ mr: 1 }}
-              />
-              <IconButton onClick={handleAddTask} size="small" color="primary">
-                <Add />
+                color="secondary"
+                onClick={handleOpenN8n}
+              >
+                <Settings />
               </IconButton>
-            </>
-          )}
-          
-          <IconButton onClick={handleViewMenuClick} size="small">
-            <MoreVert />
-          </IconButton>
-          
-          <Menu
-            anchorEl={menuAnchor}
-            open={Boolean(menuAnchor)}
-            onClose={handleViewMenuClose}
-          >
-            {activeTab === 0 && [
-              <MenuItem key="today" onClick={() => handleViewModeChange('today')}>
-                {intl.formatMessage({ id: 'tasks.today', defaultMessage: 'Today' })}
-              </MenuItem>,
-              <MenuItem key="upcoming" onClick={() => handleViewModeChange('upcoming')}>
-                {intl.formatMessage({ id: 'tasks.upcoming', defaultMessage: 'Upcoming' })}
-              </MenuItem>,
-              <MenuItem key="all" onClick={() => handleViewModeChange('all')}>
-                {intl.formatMessage({ id: 'tasks.all', defaultMessage: 'All Tasks' })}
-              </MenuItem>
-            ]}
-          </Menu>
+            </Tooltip>
+          )} */}
         </Box>
       </Box>
 
-      {/* Tabs */}
-      <Tabs value={activeTab} onChange={handleTabChange} sx={{ mb: 2 }}>
-        <Tab 
-          label="Manual Tasks" 
-          icon={<Event />} 
-          iconPosition="start"
-          sx={{ minHeight: 36, textTransform: 'none' }}
-        />
-        <Tab 
-          label="N8n Workflows" 
-          icon={<AccountTree />} 
-          iconPosition="start"
-          sx={{ minHeight: 36, textTransform: 'none' }}
-        />
-      </Tabs>
+      {/* Category Filter */}
+      <Box sx={{ mb: 2 }}>
+        <FormControl sx={{ minWidth: 200 }}>
+          <InputLabel id="category-select-label">
+            {intl.formatMessage({ id: "homepage.scheduledTasks.filterByCategory", defaultMessage: "Filter by Category" })}
+          </InputLabel>
+          <Select
+            labelId="category-select-label"
+            value={selectedCategory}
+            onChange={(event: SelectChangeEvent) => setSelectedCategory(event.target.value)}
+            label={intl.formatMessage({ id: "homepage.scheduledTasks.filterByCategory", defaultMessage: "Filter by Category" })}
+            size="small"
+          >
+            {categories.map(category => (
+              <MenuItem key={category.id} value={category.id}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  {category.icon}
+                  {category.label}
+                </Box>
+              </MenuItem>
+            ))}
+          </Select>
+        </FormControl>
+      </Box>
 
-      {/* Tab Content */}
-      {activeTab === 0 ? <TasksTabContent /> : <N8nTabContent />}
+      {/* N8n Connection Status */}
+      {!n8nConnected && (
+        <Alert 
+          severity="info" 
+          sx={{ mb: 2 }}
+          action={
+            <Button 
+              size="small" 
+              onClick={() => window.location.hash = '#/settings/userAPIKeys'}
+            >
+              Connect N8n
+            </Button>
+          }
+        >
+          Connect N8n to enable workflow automation and advanced scheduling features.
+        </Alert>
+      )}
+
+      {/* Summary */}
+      {filteredItems.length > 0 && (
+        <Box sx={{ mb: 2 }}>
+          <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+            {activeCount} of {filteredItems.length} items active
+          </Typography>
+        </Box>
+      )}
+
+      {/* Items List */}
+      <Box sx={{ 
+        height: 300, 
+        overflow: 'auto',
+        border: '1px solid',
+        borderColor: 'divider',
+        borderRadius: 1,
+        bgcolor: 'background.default'
+      }}>
+        {loading ? (
+          <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}>
+            <CircularProgress size={24} />
+          </Box>
+        ) : error ? (
+          <Box sx={{ p: 2, textAlign: 'center' }}>
+            <Typography variant="body2" color="error">
+              {error}
+            </Typography>
+            <Button size="small" onClick={loadScheduledItems} sx={{ mt: 1 }}>
+              Retry
+            </Button>
+          </Box>
+        ) : filteredItems.length === 0 ? (
+          <Box sx={{ 
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            height: '100%',
+            p: 3,
+            textAlign: 'center'
+          }}>
+            <Schedule sx={{ fontSize: 48, color: 'text.secondary', mb: 2 }} />
+            <Typography variant="body1" sx={{ mb: 1, color: 'text.secondary' }}>
+              {intl.formatMessage({ 
+                id: 'homepage.scheduledTasks.noTasksYet', 
+                defaultMessage: 'No scheduled tasks yet' 
+              })}
+            </Typography>
+            <Typography variant="body2" sx={{ mb: 2, color: 'text.secondary' }}>
+              {intl.formatMessage({ 
+                id: 'homepage.scheduledTasks.createWorkflowsDescription', 
+                defaultMessage: 'Create academic workflows to automate your schedule' 
+              })}
+            </Typography>
+            <Button 
+              variant="outlined" 
+              size="small" 
+              startIcon={<Add />}
+              onClick={() => setWorkflowDialogOpen(true)}
+            >
+              {intl.formatMessage({ 
+                id: 'homepage.scheduledTasks.createTask', 
+                defaultMessage: 'Create Task' 
+              })}
+            </Button>
+          </Box>
+        ) : (
+          <List dense sx={{ p: 1 }}>
+            {filteredItems.map((item) => (
+              <ListItem 
+                key={item.id}
+                sx={{ 
+                  borderRadius: 1,
+                  mb: 0.5,
+                  bgcolor: 'background.paper',
+                  '&:hover': { bgcolor: 'action.hover' }
+                }}
+              >
+                <ListItemIcon sx={{ minWidth: 32 }}>
+                  {getCategoryIcon(item.category)}
+                </ListItemIcon>
+                
+                <ListItemText
+                  primary={
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <Typography variant="body2">
+                        {item.title}
+                      </Typography>
+                      <Chip
+                        label={item.active ? 'Active' : 'Inactive'}
+                        size="small"
+                        color={item.active ? 'success' : 'default'}
+                        sx={{ fontSize: '0.7rem', height: 18 }}
+                      />
+                    </Box>
+                  }
+                  secondary={
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.5 }}>
+                      {getPeriodTypeChip(item.periodType)}
+                      {item.nextExecution && (
+                        <Chip
+                          label={`Next: ${formatExecutionTime(item.nextExecution)}`}
+                          size="small"
+                          variant="outlined"
+                          color="primary"
+                          icon={<Schedule sx={{ fontSize: '0.8rem !important' }} />}
+                          sx={{ fontSize: '0.65rem', height: 18 }}
+                        />
+                      )}
+                      {item.lastExecution && (
+                        <Chip
+                          label={`Last: ${formatExecutionTime(item.lastExecution)}`}
+                          size="small"
+                          variant="outlined"
+                          sx={{ fontSize: '0.65rem', height: 18 }}
+                        />
+                      )}
+                    </Box>
+                  }
+                  disableTypography
+                />
+                
+                <Box sx={{ display: 'flex', gap: 0.5 }}>
+                  <IconButton 
+                    size="small"
+                    onClick={() => handleEditItem(item)}
+                  >
+                    <Edit />
+                  </IconButton>
+                  <IconButton 
+                    size="small" 
+                    color="error"
+                    onClick={() => handleDeleteItem(item.id)}
+                  >
+                    <Delete />
+                  </IconButton>
+                </Box>
+              </ListItem>
+            ))}
+          </List>
+        )}
+      </Box>
+
+      {/* Workflow Creation Dialog */}
+      <WorkflowDialog
+        open={workflowDialogOpen}
+        onClose={() => setWorkflowDialogOpen(false)}
+        onCreateWorkflow={handleCreateWorkflow}
+      />
+
+      {/* Edit Dialog */}
+      <WorkflowEdit
+        open={editDialogOpen}
+        item={editingItem}
+        onClose={() => {
+          setEditDialogOpen(false);
+          setEditingItem(null);
+        }}
+        onSave={handleSaveEdit}
+      />
     </Box>
   );
 }

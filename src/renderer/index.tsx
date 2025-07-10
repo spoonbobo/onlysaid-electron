@@ -14,19 +14,9 @@ import { SSEProvider } from "@/renderer/providers/SSEProvider";
 import { ToastProvider } from "@/renderer/providers/ToastProvider";
 import { IntlProvider } from "@/renderer/providers/IntlProvider";
 
-// Preload Inter font to prevent FOUT (Flash of Unstyled Text)
-const preloadFont = () => {
-  const link = document.createElement('link');
-  link.rel = 'preload';
-  link.href = '/node_modules/@fontsource/inter/files/inter-latin-400-normal.woff2';
-  link.as = 'font';
-  link.type = 'font/woff2';
-  link.crossOrigin = 'anonymous';
-  document.head.appendChild(link);
-};
-
-// Call preload immediately
-preloadFont();
+// Remove the manual font preloading since @fontsource imports handle it
+// The original preloadFont function was trying to access a non-existent path
+// and the font loading is already optimized through the CSS imports above
 
 const container = document.getElementById('root') as HTMLElement;
 const root = ReactDOM.createRoot(container);

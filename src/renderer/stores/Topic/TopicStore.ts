@@ -85,11 +85,17 @@ interface TopicStore {
   calendarViewMode: CalendarViewMode;
   setCalendarViewMode: (mode: CalendarViewMode) => void;
 
-  // NEW: Add workspace chat selection persistence
+  // Workspace chat selection persistence
   workspaceSelectedChats: Record<string, string | null>;
   setWorkspaceSelectedChat: (workspaceId: string, chatId: string | null) => void;
   getWorkspaceSelectedChat: (workspaceId: string) => string | null;
   clearWorkspaceSelectedChat: (workspaceId: string) => void;
+
+  // NEW: Workspace KB selection persistence
+  workspaceSelectedKBs: Record<string, string | null>;
+  setWorkspaceSelectedKB: (workspaceId: string, kbId: string | null) => void;
+  getWorkspaceSelectedKB: (workspaceId: string) => string | null;
+  clearWorkspaceSelectedKB: (workspaceId: string) => void;
 }
 
 export type CalendarViewMode = "month" | "week" | "day";
@@ -232,10 +238,23 @@ export const useTopicStore = create<TopicStore>()(
           const prevEffectiveWorkspaceId = state.selectedContext?.type === "workspace" ? state.selectedContext.id : null;
           const newEffectiveWorkspaceId = newContext.type === "workspace" ? newContext.id : null;
 
+          // When switching workspaces, restore the workspace-specific KB selection
           if (prevEffectiveWorkspaceId !== newEffectiveWorkspaceId) {
+            // Clear the global KB selection first
             if (state.selectedTopics[KNOWLEDGE_BASE_SELECTION_KEY]) {
               updatedSelectedTopics = { ...state.selectedTopics };
               delete updatedSelectedTopics[KNOWLEDGE_BASE_SELECTION_KEY];
+            }
+
+            // If entering a workspace, restore its KB selection
+            if (newEffectiveWorkspaceId) {
+              const workspaceKB = state.getWorkspaceSelectedKB(newEffectiveWorkspaceId);
+              if (workspaceKB) {
+                updatedSelectedTopics = {
+                  ...updatedSelectedTopics,
+                  [KNOWLEDGE_BASE_SELECTION_KEY]: workspaceKB
+                };
+              }
             }
           }
 
@@ -263,17 +282,34 @@ export const useTopicStore = create<TopicStore>()(
       selectedTopics: {},
 
       setSelectedTopic: (sectionName, topicId) =>
-        set((state) => ({
-          selectedTopics: {
+        set((state) => {
+          const newSelectedTopics = {
             ...state.selectedTopics,
             [sectionName]: topicId,
-          },
-        })),
+          };
+
+          // If this is a KB selection in a workspace context, persist it
+          if (sectionName === KNOWLEDGE_BASE_SELECTION_KEY && 
+              state.selectedContext?.type === "workspace" && 
+              state.selectedContext.id) {
+            state.setWorkspaceSelectedKB(state.selectedContext.id, topicId);
+          }
+
+          return { selectedTopics: newSelectedTopics };
+        }),
 
       clearSelectedTopic: (sectionName) =>
         set((state) => {
           const updatedTopics = { ...state.selectedTopics };
           delete updatedTopics[sectionName];
+
+          // If clearing KB selection in a workspace context, also clear the workspace-specific persistence
+          if (sectionName === KNOWLEDGE_BASE_SELECTION_KEY && 
+              state.selectedContext?.type === "workspace" && 
+              state.selectedContext.id) {
+            state.clearWorkspaceSelectedKB(state.selectedContext.id);
+          }
+
           return { selectedTopics: updatedTopics };
         }),
 
@@ -450,10 +486,9 @@ export const useTopicStore = create<TopicStore>()(
       calendarViewMode: "month",
       setCalendarViewMode: (mode) => set({ calendarViewMode: mode }),
 
-      // NEW: Initialize workspace chat selections
+      // Workspace chat selection persistence
       workspaceSelectedChats: {},
 
-      // NEW: Methods for workspace chat selection persistence
       setWorkspaceSelectedChat: (workspaceId: string, chatId: string | null) =>
         set((state) => ({
           workspaceSelectedChats: {
@@ -474,6 +509,30 @@ export const useTopicStore = create<TopicStore>()(
             workspaceSelectedChats: updatedSelections
           };
         }),
+
+      // NEW: Workspace KB selection persistence
+      workspaceSelectedKBs: {},
+
+      setWorkspaceSelectedKB: (workspaceId: string, kbId: string | null) =>
+        set((state) => ({
+          workspaceSelectedKBs: {
+            ...state.workspaceSelectedKBs,
+            [workspaceId]: kbId
+          }
+        })),
+
+      getWorkspaceSelectedKB: (workspaceId: string) => {
+        return get().workspaceSelectedKBs[workspaceId] || null;
+      },
+
+      clearWorkspaceSelectedKB: (workspaceId: string) =>
+        set((state) => {
+          const updatedSelections = { ...state.workspaceSelectedKBs };
+          delete updatedSelections[workspaceId];
+          return {
+            workspaceSelectedKBs: updatedSelections
+          };
+        }),
     }),
     {
       name: "topic-store",
@@ -486,8 +545,9 @@ export const useTopicStore = create<TopicStore>()(
         scrollPositions: state.scrollPositions,
         navigationHistory: state.navigationHistory,
         workspaceSelectedChats: state.workspaceSelectedChats,
+        workspaceSelectedKBs: state.workspaceSelectedKBs, // NEW: Persist workspace KB selections
       }),
-      version: 11, // Increment version due to new workspaceSelectedChats field
+      version: 12, // Increment version due to new workspaceSelectedKBs field
     }
   )
 );

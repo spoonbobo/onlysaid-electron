@@ -353,14 +353,17 @@ const ChatBubble = memo(({
           ) : (
             (msg.text || isStreaming || streamContent) ? (
               (isStreaming && !textForCopy && !streamContent) ? (
-                <Typography sx={{ 
-                  color: "text.secondary", 
-                  whiteSpace: 'pre-wrap',
-                  fontStyle: 'italic',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 1
-                }}>
+                <Typography 
+                  component="div"
+                  sx={{ 
+                    color: "text.secondary", 
+                    whiteSpace: 'pre-wrap',
+                    fontStyle: 'italic',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 1
+                  }}
+                >
                   {getThinkingMessage()}
                   <Box
                     sx={{

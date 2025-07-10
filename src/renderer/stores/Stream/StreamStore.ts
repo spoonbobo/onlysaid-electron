@@ -40,7 +40,7 @@ export interface OpenAIStreamOptions {
   temperature?: number;
   maxTokens?: number;
   streamId: string;
-  provider?: "openai" | "deepseek" | "ollama" | "onlysaid-kb" | null;
+  provider?: "openai" | "deepseek" | "ollama" | "onlysaid-kb" | "lightrag" | null; // ✅ Added "lightrag"
   kbIds?: string[];
 }
 
