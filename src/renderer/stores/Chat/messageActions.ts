@@ -17,6 +17,11 @@ import {
   clearNotificationsForHomeSection 
 } from '@/utils/notifications';
 import { useAgentStore } from '@/renderer/stores/Agent/AgentStore';
+import { useThreeStore } from '@/renderer/stores/Avatar/ThreeStore';
+import { IUser } from '@/../../types/User/User';
+import { OpenAIMessage } from '@/renderer/stores/Stream/StreamStore';
+import { useLLMConfigurationStore } from '@/renderer/stores/LLM/LLMConfiguration';
+import { appendRulesToSystemPrompt } from '@/utils/rules';
 
 export const createMessageActions = (set: any, get: () => ChatState) => ({
   sendMessage: async (chatId: string, messageData: Partial<IChatMessage>, workspaceId?: string) => {
@@ -26,14 +31,18 @@ export const createMessageActions = (set: any, get: () => ChatState) => ({
       const currentUser = getUserFromStore();
       const isGuest = isGuestUser();
       
-      // For guest users, always set status as "sent" and don't use workspace features
-      const status = (workspaceId && !isGuest) ? "pending" : "sent";
-      const sent_at = (workspaceId && !isGuest) ? null : messageData.sent_at || new Date().toISOString();
+      // NEW: Check if this is avatar mode
+      const topicStore = useTopicStore.getState();
+      const isAvatarMode = topicStore.selectedContext?.section === 'workspace:avatar';
+      
+      // For guest users or avatar mode, always set status as "sent" and don't use workspace features
+      const status = (workspaceId && !isGuest && !isAvatarMode) ? "pending" : "sent";
+      const sent_at = (workspaceId && !isGuest && !isAvatarMode) ? null : messageData.sent_at || new Date().toISOString();
 
       let files: IFile[] | undefined = undefined;
 
-      // Skip file metadata fetching for guest users since they don't have workspace access
-      if (messageData.file_ids && !isGuest) {
+      // Skip file metadata fetching for guest users or avatar mode since they don't have workspace access
+      if (messageData.file_ids && !isGuest && !isAvatarMode) {
         try {
           const fileIds = JSON.parse(messageData.file_ids);
           if (Array.isArray(fileIds) && fileIds.length > 0) {
@@ -70,14 +79,14 @@ export const createMessageActions = (set: any, get: () => ChatState) => ({
         files: files,
         sent_at: sent_at || new Date().toISOString(),
         status: status,
-        workspace_id: workspaceId
+        workspace_id: isAvatarMode ? undefined : workspaceId // Force null for avatar mode
       };
 
-      // Try to encrypt the message if crypto is available and not a guest user
+      // Try to encrypt the message if crypto is available and not a guest user or avatar mode
       let encryptedMessage: IEncryptedMessage | undefined;
       let isEncrypted = false;
       
-      if (!isGuest) {
+      if (!isGuest && !isAvatarMode) {
         // Get fresh crypto store state
         const cryptoStore = useCryptoStore.getState();
         console.log('🔐 Crypto store state:', {
@@ -85,7 +94,8 @@ export const createMessageActions = (set: any, get: () => ChatState) => ({
           hasEncryptMessage: typeof cryptoStore.encryptMessage === 'function',
           messageText: message.text,
           chatId: chatId,
-          isGuest
+          isGuest,
+          isAvatarMode
         });
         
         if (cryptoStore.isUnlocked && message.text) {
@@ -106,7 +116,7 @@ export const createMessageActions = (set: any, get: () => ChatState) => ({
           });
         }
       } else {
-        console.log('🔓 Encryption skipped for guest user');
+        console.log('🔓 Encryption skipped for guest user or avatar mode');
       }
 
       // Prepare database parameters - convert boolean to integer for SQLite
@@ -159,8 +169,8 @@ export const createMessageActions = (set: any, get: () => ChatState) => ({
       // Add to local state immediately with files populated
       get().appendMessage(chatId, message);
 
-      // Only send to socket if not a guest user and workspace is specified
-      if (workspaceId && !isGuest) {
+      // Only send to socket if not a guest user, not avatar mode, and workspace is specified
+      if (workspaceId && !isGuest && !isAvatarMode) {
         // Create a network-safe version of the message for transmission
         const networkMessage: IChatMessage = {
           ...message,
@@ -406,6 +416,33 @@ export const createMessageActions = (set: any, get: () => ChatState) => ({
             const { agent } = useAgentStore.getState();
             if (agent && msg.sender === agent.id) {
               senderObject = agent; // ✅ Use the actual agent object
+            }
+          }
+          
+          // NEW: Handle avatar mode - if sender matches avatar name, create avatar sender object
+          if (!senderObject) {
+            const topicStore = useTopicStore.getState();
+            const isAvatarMode = topicStore.selectedContext?.section === 'workspace:avatar';
+            
+            if (isAvatarMode) {
+              const { selectedModel, getModelById } = useThreeStore.getState();
+              const currentAvatar = getModelById(selectedModel || 'alice-3d');
+              const avatarName = currentAvatar?.name || 'Avatar';
+              
+              // Check if this message is from the avatar
+              if (msg.sender === avatarName.toLowerCase() || msg.sender === avatarName) {
+                senderObject = {
+                  id: avatarName.toLowerCase(),
+                  username: avatarName,
+                  name: avatarName,
+                  display_name: avatarName,
+                  avatar_url: null,
+                  email: '',
+                  created_at: new Date().toISOString(),
+                  last_updated: new Date().toISOString(),
+                  settings: {}
+                } as IUser;
+              }
             }
           }
           

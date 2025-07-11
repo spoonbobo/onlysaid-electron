@@ -17,13 +17,12 @@ function Menu() {
   const selectedContextType = selectedContext?.type || "";
   const { isExpanded } = useFileExplorerStore();
 
-  // Get the active context (like chatId) for the current section
-  const activeContextId = selectedContext?.section ? selectedTopics[selectedContext.section] || null : null;
-
-  const menuKey = React.useMemo(() =>
-    `${selectedContextType}-${selectedContext?.name || "unknown"}-${activeContextId || "none"}`,
-    [selectedContextType, selectedContext?.name, activeContextId]
-  );
+  const menuKey = React.useMemo(() => {
+    if (selectedContextType === "workspace") {
+      return `${selectedContextType}-${selectedContext?.id || "unknown"}`;
+    }
+    return selectedContextType;
+  }, [selectedContextType, selectedContext?.id]);
 
   const MenuComponent = React.useMemo(() => {
     switch (selectedContextType) {

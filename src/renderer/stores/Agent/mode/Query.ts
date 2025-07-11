@@ -3,6 +3,8 @@ import { IChatMessage } from '@/../../types/Chat/Message';
 import { IUser } from '@/../../types/User/User';
 import { useKBSettingsStore } from '@/renderer/stores/KB/KBSettingStore';
 import { useLLMConfigurationStore } from '@/renderer/stores/LLM/LLMConfiguration';
+import { useThreeStore } from '@/renderer/stores/Avatar/ThreeStore';
+import { useTopicStore } from '@/renderer/stores/Topic/TopicStore';
 import { OpenAIMessage, OpenAIStreamOptions } from '@/renderer/stores/Stream/StreamStore';
 import { getAgentFromStore } from '@/utils/agent';
 import { appendRulesToSystemPrompt } from '@/utils/rules';
@@ -13,8 +15,10 @@ export const queryModeSystemPrompt = (
   agent: IUser,
   kbIds: string[],
   queryEngine: string,
-  embeddingModel: string
+  embeddingModel: string,
+  avatarName?: string
 ) => {
+  const assistantName = avatarName || agent.username;
   let kbInfo = "No specific Knowledge Bases are selected for this query.";
   if (kbIds.length > 0) {
     kbInfo = `You should primarily use the following Knowledge Base(s) for your answer: [${kbIds.join(', ')}].`;
@@ -27,7 +31,7 @@ export const queryModeSystemPrompt = (
   }
 
   return `
-  You are ${agent.username}, a specialized assistant for ${user.username}.
+  You are ${assistantName}, a specialized assistant for ${user.username}.
   Your task is to answer questions based on the provided chat history and available Knowledge Bases.
   ${kbInfo}
   Analyze the user's latest message in the context of the conversation history.
@@ -43,24 +47,26 @@ const getSystemPrompt = (
   agent: IUser,
   kbIds: string[],
   queryEngine: string,
-  embeddingModel: string
+  embeddingModel: string,
+  avatarName?: string
 ): string => {
   const { queryModeSystemPrompt: customPrompt } = useLLMConfigurationStore.getState();
+  const assistantName = avatarName || agent.username;
   
   let systemPrompt = '';
   if (customPrompt && customPrompt.trim()) {
     // Replace placeholders in custom prompt
     systemPrompt = customPrompt
-      .replace(/\{agent\.username\}/g, agent.username)
+      .replace(/\{agent\.username\}/g, assistantName)
       .replace(/\{user\.username\}/g, user.username)
-      .replace(/\{agent_username\}/g, agent.username)
+      .replace(/\{agent_username\}/g, assistantName)
       .replace(/\{user_username\}/g, user.username)
       .replace(/\{kbIds\}/g, kbIds.join(', '))
       .replace(/\{queryEngine\}/g, queryEngine)
       .replace(/\{embeddingModel\}/g, embeddingModel);
   } else {
     // Fallback to default prompt
-    systemPrompt = queryModeSystemPrompt(user, agent, kbIds, queryEngine, embeddingModel);
+    systemPrompt = queryModeSystemPrompt(user, agent, kbIds, queryEngine, embeddingModel, avatarName);
   }
   
   // Append rules for query mode
@@ -109,7 +115,32 @@ export async function processQueryModeAIResponse({
 }: ProcessQueryModeAIResponseParams): Promise<{ success: boolean; responseText?: string; assistantMessageId?: string; error?: any }> {
   // Use provided agent or get from store
   const assistantSender = agent || getAgentFromStore();
-  const assistantSenderId = assistantSender?.id || "query-assistant";
+  
+  // NEW: Check if we're in avatar mode and get avatar info
+  const topicStore = useTopicStore.getState();
+  const isAvatarMode = topicStore.selectedContext?.section === 'workspace:avatar';
+  
+  let assistantSenderId = assistantSender?.id || "query-assistant";
+  let assistantSenderObject = assistantSender as IUser;
+  
+  if (isAvatarMode) {
+    // In avatar mode, use avatar name and create a custom sender object
+    const { selectedModel, getModelById } = useThreeStore.getState();
+    const currentAvatar = getModelById(selectedModel || 'alice-3d');
+    const avatarName = currentAvatar?.name || 'Avatar';
+    
+    // Create a custom sender object with avatar name
+    assistantSenderObject = {
+      ...assistantSender,
+      id: avatarName.toLowerCase(),
+      username: avatarName,
+      name: avatarName,
+      display_name: avatarName,
+      settings: {}
+    } as IUser;
+    
+    assistantSenderId = avatarName.toLowerCase();
+  }
 
   if (!assistantSender) {
     console.warn("[QueryMode] No agent available, using fallback ID.");
@@ -123,7 +154,7 @@ export async function processQueryModeAIResponse({
     id: uuidv4(),
     chat_id: activeChatId,
     sender: assistantSenderId,
-    sender_object: assistantSender as IUser,
+    sender_object: assistantSenderObject,
     text: "",
     created_at: new Date().toISOString(),
     sent_at: new Date().toISOString(),
@@ -139,15 +170,17 @@ export async function processQueryModeAIResponse({
       return { role: role, content: msg.text || "" };
     });
 
-    // Get system prompt with custom prompt support
+    // Get system prompt with custom prompt support and avatar name
     let systemPromptText = "";
     if (currentUser && assistantSender) {
+      const avatarName = isAvatarMode ? assistantSenderObject.username : undefined;
       systemPromptText = getSystemPrompt(
         currentUser,
         assistantSender,
         selectedKbIds,
         queryEngineLLM || "",
-        embeddingEngine || ""
+        embeddingEngine || "",
+        avatarName
       );
     }
 
@@ -198,6 +231,7 @@ export async function processQueryModeAIResponse({
     await updateMessage(activeChatId, assistantMessage.id, {
       text: finalResponseText,
       sender: assistantSenderId,
+      sender_object: assistantSenderObject,
       status: "completed"
     });
 
@@ -207,7 +241,7 @@ export async function processQueryModeAIResponse({
   } catch (error: any) {
     console.error("Stream error in QueryMode:", error);
     const isAborted = error.name === 'AbortError' || (error.message && error.message.includes('aborted'));
-    const errorText = isAborted ? "Knowledge Base query stopped." : `Sorry, I (Agent: ${assistantSender?.username || assistantSenderId}) encountered an error with the Knowledge Base query.`;
+    const errorText = isAborted ? "Knowledge Base query stopped." : `Sorry, I (Agent: ${assistantSenderObject?.username || assistantSenderId}) encountered an error with the Knowledge Base query.`;
 
     await updateMessage(activeChatId, assistantMessage.id, {
       text: errorText,

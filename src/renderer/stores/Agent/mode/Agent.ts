@@ -5,6 +5,8 @@ import { useMCPSettingsStore } from '@/renderer/stores/MCP/MCPSettingsStore';
 import { useLLMConfigurationStore } from '@/renderer/stores/LLM/LLMConfiguration';
 import { useKBSettingsStore } from '@/renderer/stores/KB/KBSettingStore';
 import { useAgentSettingsStore } from '@/renderer/stores/Agent/AgentSettingStore';
+import { useThreeStore } from '@/renderer/stores/Avatar/ThreeStore';
+import { useTopicStore } from '@/renderer/stores/Topic/TopicStore';
 import { getAgentFromStore } from '@/utils/agent';
 import { getServiceTools, formatMCPName } from '@/utils/mcp';
 import { formatMessagesForContext } from '@/utils/message';
@@ -13,14 +15,15 @@ import { appendRulesToSystemPrompt } from '@/utils/rules';
 import { useAgentStore } from '@/renderer/stores/Agent/AgentStore';
 import { getHumanInTheLoopManager } from '@/service/langchain/human_in_the_loop/renderer/human_in_the_loop';
 
-export const agentModeSystemPrompt = (user: IUser, agent: IUser, kbIds?: string[]) => {
+export const agentModeSystemPrompt = (user: IUser, agent: IUser, kbIds?: string[], avatarName?: string) => {
+  const assistantName = avatarName || agent.username;
   let kbInfo = "";
   if (kbIds && kbIds.length > 0) {
     kbInfo = `\n\nYou have access to the following Knowledge Base(s): [${kbIds.join(', ')}]. Use them when relevant to provide more accurate and contextual responses.`;
   }
 
   return `
-You are ${agent.username}, the Master Agent coordinating specialized AI agents to solve complex tasks.
+You are ${assistantName}, the Master Agent coordinating specialized AI agents to solve complex tasks.
 You are in a chat with your companion, ${user.username}.
 
 You have access to a distributed swarm of specialized agents and tools. Your available tools will be provided to you separately.${kbInfo}
@@ -40,22 +43,23 @@ Remember to respect swarm limits and optimize for quality over quantity in agent
   `.trim();
 };
 
-const getSystemPrompt = (user: IUser, agent: IUser, kbIds?: string[]): string => {
+const getSystemPrompt = (user: IUser, agent: IUser, kbIds?: string[], avatarName?: string): string => {
   const { agentModeSystemPrompt: customPrompt } = useLLMConfigurationStore.getState();
+  const assistantName = avatarName || agent.username;
   
   let systemPrompt = '';
   if (customPrompt && customPrompt.trim()) {
     systemPrompt = customPrompt
-      .replace(/\{agent\.username\}/g, agent.username)
+      .replace(/\{agent\.username\}/g, assistantName)
       .replace(/\{user\.username\}/g, user.username)
-      .replace(/\{agent_username\}/g, agent.username)
+      .replace(/\{agent_username\}/g, assistantName)
       .replace(/\{user_username\}/g, user.username);
       
     if (kbIds && kbIds.length > 0) {
       systemPrompt += `\n\nYou have access to the following Knowledge Base(s): [${kbIds.join(', ')}]. Use them when relevant to provide more accurate and contextual responses.`;
     }
   } else {
-    systemPrompt = agentModeSystemPrompt(user, agent, kbIds);
+    systemPrompt = agentModeSystemPrompt(user, agent, kbIds, avatarName);
   }
   
   return appendRulesToSystemPrompt(systemPrompt, 'agent');
@@ -89,7 +93,32 @@ export async function processAgentModeAIResponse({
   const threadId = `agent_mode_${activeChatId}_${Date.now()}`;
   const humanInTheLoopManager = getHumanInTheLoopManager();
   const assistantSender = agent || getAgentFromStore();
-  const assistantSenderId = assistantSender?.id || "agent-master";
+  
+  // NEW: Check if we're in avatar mode and get avatar info
+  const topicStore = useTopicStore.getState();
+  const isAvatarMode = topicStore.selectedContext?.section === 'workspace:avatar';
+  
+  let assistantSenderId = assistantSender?.id || "agent-master";
+  let assistantSenderObject = assistantSender as IUser;
+  
+  if (isAvatarMode) {
+    // In avatar mode, use avatar name and create a custom sender object
+    const { selectedModel, getModelById } = useThreeStore.getState();
+    const currentAvatar = getModelById(selectedModel || 'alice-3d');
+    const avatarName = currentAvatar?.name || 'Avatar';
+    
+    // Create a custom sender object with avatar name
+    assistantSenderObject = {
+      ...assistantSender,
+      id: avatarName.toLowerCase(),
+      username: avatarName,
+      name: avatarName,
+      display_name: avatarName,
+      settings: {}
+    } as IUser;
+    
+    assistantSenderId = avatarName.toLowerCase();
+  }
 
   const { executeAgentTask } = useAgentStore.getState();
   const { selectedMcpServerIds } = useMCPSettingsStore.getState();
@@ -154,7 +183,13 @@ export async function processAgentModeAIResponse({
 
   let systemPromptText = "";
   if (currentUser && assistantSender) {
-    systemPromptText = getSystemPrompt(currentUser, assistantSender, selectedKbIds.length > 0 ? selectedKbIds : undefined);
+    const avatarName = isAvatarMode ? assistantSenderObject.username : undefined;
+    systemPromptText = getSystemPrompt(
+      currentUser, 
+      assistantSender, 
+      selectedKbIds.length > 0 ? selectedKbIds : undefined,
+      avatarName
+    );
   }
 
   const recentMessages = existingMessages.slice(-10);

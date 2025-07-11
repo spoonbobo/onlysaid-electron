@@ -8,6 +8,7 @@ import { useSocketStore } from "@/renderer/stores/Socket/SocketStore";
 import KnowledgeBaseMenu from "./KnowledgeBase";
 import MembersMenu from "./Members";
 import WorkspaceInsightsMenu from "./Insights";
+import AvatarMenu from "./Avatar";
 
 export default function WorkspaceMenu() {
   const { selectedContext, selectedTopics } = useCurrentTopicContext();
@@ -27,12 +28,11 @@ export default function WorkspaceMenu() {
     }
   }, [workspaceId, user?.id, isConnected, joinWorkspace]);
 
-  const contextId = selectedContext ? `${selectedContext.name}:${selectedContext.type}` : '';
-  const menuKey = `${contextId}-${activeContextId || 'none'}`;
-
+  // Remove the key that causes unnecessary remounts
   return (
-    <Box key={menuKey} sx={{ p: 1 }}>
+    <Box sx={{ p: 1 }}>
       {section.includes('chatroom') && <WorkspaceChatMenu />}
+      {section.includes('avatar') && <AvatarMenu />}
       {selectedContext?.type === 'workspace' && section.includes('knowledgeBase') && <KnowledgeBaseMenu />}
       {selectedContext?.type === 'workspace' && section.includes('members') && <MembersMenu />}
       {selectedContext?.type === 'workspace' && section.includes('insights') && <WorkspaceInsightsMenu />}

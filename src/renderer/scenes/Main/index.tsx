@@ -13,6 +13,7 @@ import Members from "@/renderer/scenes/Main/Workspace/Members/index";
 import KnowledgeBase from "@/renderer/scenes/Main/Settings/KnowledgeBase";
 import WorkspaceSettings from "@/renderer/scenes/Main/Workspace/Settings/index";
 import MoodleInsights from "@/renderer/scenes/Main/Workspace/Insights/Moodle/index";
+import Avatar from "@/renderer/scenes/Main/Workspace/Avatar/index";
 
 function Main() {
   const { selectedContext } = useTopicStore();
@@ -25,6 +26,8 @@ function Main() {
     switch (section) {
       case "workspace:chatroom":
         return <Chat />;
+      case "workspace:avatar":
+        return <Avatar />;
       case "workspace:plans":
         return <Default section="Plans" />;
       case "workspace:exit":

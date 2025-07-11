@@ -18,6 +18,8 @@ import { useWorkspaceStore } from "@/renderer/stores/Workspace/WorkspaceStore";
 import { useKBStore } from "@/renderer/stores/KB/KBStore";
 import InviteUserDialog from "@/renderer/components/Dialog/Workspace/InviteUserToWorkspace";
 import { IUser } from "@/../../types/User/User";
+import PersonIcon from "@mui/icons-material/Person";
+import { useThreeStore } from "@/renderer/stores/Avatar/ThreeStore";
 
 
 type WorkspaceMenuItemsProps = {
@@ -80,9 +82,9 @@ function WorkspaceMenuItems({ handleClose }: WorkspaceMenuItemsProps) {
           )}
         </Box>
       </MenuItem>
-      <MenuItem disabled onClick={() => handleMenuItemClick('plans')} sx={{ minHeight: 36, fontSize: 14 }}>
-        <AssignmentIcon fontSize="small" sx={{ mr: 1.5, color: "text.secondary" }} />
-        <FormattedMessage id="menu.workspace.plans" />
+      <MenuItem onClick={() => handleMenuItemClick('avatar')} sx={{ minHeight: 36, fontSize: 14 }}>
+        <PersonIcon fontSize="small" sx={{ mr: 1.5, color: "text.secondary" }} />
+        <FormattedMessage id="menu.workspace.avatar" />
       </MenuItem>
 
       <Divider sx={{ my: 1 }} />
@@ -169,6 +171,7 @@ export const RenderWorkspaceActions = ({
   const { createChat, setActiveChat } = useChatStore();
   const { selectedContext, setSelectedTopic } = useTopicStore();
   const { getWorkspaceById } = useWorkspaceStore();
+  const { getModelById } = useThreeStore();
   const currentUser = getUserFromStore();
   const { openCreateKBDialog } = useKBStore();
   const [isInviteDialogOpen, setIsInviteDialogOpen] = useState(false);
@@ -192,6 +195,24 @@ export const RenderWorkspaceActions = ({
         console.error("Error inviting users:", error);
       }
     }
+  };
+
+  const handleCreateAvatarChat = async () => {
+    if (currentUser && selectedContext?.id) {
+      // Get avatar name and create workspace-specific chat type
+      const currentAvatar = getModelById('alice-3d'); // Always Alice as per requirement
+      const avatarName = currentAvatar?.name || 'Alice';
+      const avatarChatType = `${selectedContext.id}:${avatarName.toLowerCase()}`;
+      
+      // Create a local avatar chat with workspace-specific type
+      const newChat = await createChat(currentUser.id || "", avatarChatType, undefined);
+
+      if (newChat?.id) {
+        setSelectedTopic(selectedContext?.section || 'workspace:avatar', newChat.id);
+        setActiveChat(newChat.id, `${selectedContext?.name}:${selectedContext?.type}`);
+      }
+    }
+    handleAction?.('newAvatarChat');
   };
 
   if (!selectedSection) {
@@ -218,6 +239,18 @@ export const RenderWorkspaceActions = ({
               }
               handleAction?.('newChatroom');
             }}
+          >
+            <AddCommentIcon fontSize="small" />
+          </IconButton>
+        </Tooltip>
+      );
+      break;
+    case 'avatar':
+      actualContent = (
+        <Tooltip title={<FormattedMessage id="menu.workspace.newAvatarChat" />}>
+          <IconButton
+            size="small"
+            onClick={handleCreateAvatarChat}
           >
             <AddCommentIcon fontSize="small" />
           </IconButton>

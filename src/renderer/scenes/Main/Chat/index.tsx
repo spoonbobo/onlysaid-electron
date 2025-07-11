@@ -61,8 +61,12 @@ function Chat() {
     resumeLangGraphWorkflow
   } = useAgentStore();
   const isLocal = currentUser?.id ? false : true;
+  
+  // NEW: Check if we're in avatar mode to force local chat
+  const isAvatarMode = selectedContext?.section === 'workspace:avatar';
+  
   let workspaceId = '';
-  if (!isLocal) {
+  if (!isLocal && !isAvatarMode) { // Don't use workspace for avatar mode
     workspaceId = selectedContext?.id || '';
   }
 
@@ -72,7 +76,8 @@ function Chat() {
   const isGuest = isGuestUser();
 
   useEffect(() => {
-    if (workspaceId) {
+    // Only fetch workspace users if not in avatar mode
+    if (workspaceId && !isAvatarMode) {
       const fetchUsers = async () => {
         try {
           const users = await getUsersByWorkspace(workspaceId);
@@ -83,7 +88,7 @@ function Chat() {
       };
       fetchUsers();
     }
-  }, [workspaceId, getUsersByWorkspace]);
+  }, [workspaceId, getUsersByWorkspace, isAvatarMode]);
 
   const messages = storeMessages[activeChatId || ''] || [];
   const replyingToMessage = replyingToId ? messages.find((m: IChatMessage) => m.id === replyingToId) || null : null;
@@ -235,7 +240,9 @@ function Chat() {
           messageData.reply_to = replyingToId;
         }
 
-        const messageId = await sendMessage(activeChatId, messageData, workspaceId);
+        // NEW: Pass workspaceId only if not in avatar mode
+        const effectiveWorkspaceId = isAvatarMode ? undefined : workspaceId;
+        const messageId = await sendMessage(activeChatId, messageData, effectiveWorkspaceId);
 
         if (messageId) {
           const currentUser = getUserFromStore();
@@ -272,7 +279,7 @@ function Chat() {
                 provider: provider || "openai",
                 currentUser,
                 existingMessages: messages,
-                workspaceId: selectedContext?.id,
+                workspaceId: isAvatarMode ? undefined : selectedContext?.id, // Don't pass workspace for avatar mode
                 aiMode,
                 appendMessage,
                 updateMessage,
@@ -326,7 +333,8 @@ function Chat() {
   }, [streamingState.messageId, abortStream, setStreamingState]);
 
   const messagesWithRoles = useMemo(() => {
-    if (!messages.length || !workspaceUsers.length) return messages;
+    // Only add roles if we have workspace users (not in avatar mode)
+    if (!messages.length || !workspaceUsers.length || isAvatarMode) return messages;
 
     const userRoleMap = workspaceUsers.reduce((acc, user) => {
       acc[user.user_id] = user.role;
@@ -337,7 +345,7 @@ function Chat() {
       ...message,
       sender_role: userRoleMap[message.sender] || 'user'
     }));
-  }, [messages, workspaceUsers]);
+  }, [messages, workspaceUsers, isAvatarMode]);
 
   // Ensure guest agent exists when no user is logged in
   useEffect(() => {

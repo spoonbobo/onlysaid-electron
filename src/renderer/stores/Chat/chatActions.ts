@@ -59,8 +59,13 @@ export const createChatActions = (set: any, get: () => ChatState) => ({
       const newChat = NewChat(userId, type, workspaceId);
       const chatId = uuidv4();
 
-      if (!userId && (!workspaceId || workspaceId === 'undefined')) {
-        console.log('Creating local chat');
+      // NEW: Check if this is avatar mode - force local storage
+      const topicStore = useTopicStore.getState();
+      const isAvatarMode = topicStore.selectedContext?.section === 'workspace:avatar';
+      const shouldUseLocal = userId === 'guest' || isAvatarMode || (!workspaceId || workspaceId === 'undefined');
+
+      if (shouldUseLocal) {
+        console.log('Creating local chat', isAvatarMode ? '(Avatar mode)' : '(Guest/No workspace)');
         await window.electron.db.query({
           query: `
             insert into ${DBTABLES.CHATROOM}
@@ -74,7 +79,7 @@ export const createChatActions = (set: any, get: () => ChatState) => ({
             createdAt: newChat.created_at,
             lastUpdated: newChat.last_updated,
             unread: newChat.unread,
-            workspaceId: newChat.workspace_id || null,
+            workspaceId: isAvatarMode ? null : (newChat.workspace_id || null), // Force null for avatar mode
             type: newChat.type,
             userId: newChat.user_id
           }
@@ -82,7 +87,8 @@ export const createChatActions = (set: any, get: () => ChatState) => ({
 
         const localChat = {
           ...newChat,
-          id: chatId
+          id: chatId,
+          workspace_id: isAvatarMode ? null : newChat.workspace_id // Force null for avatar mode
         };
 
         const { isUnlocked, createChatKey } = useCryptoStore.getState();
@@ -103,7 +109,7 @@ export const createChatActions = (set: any, get: () => ChatState) => ({
           isLoading: false
         }));
 
-        const contextId = workspaceId && workspaceId !== 'undefined' ? workspaceId : '';
+        const contextId = (workspaceId && workspaceId !== 'undefined' && !isAvatarMode) ? workspaceId : '';
         get().setActiveChat(chatId, contextId);
         return localChat;
       } else {
@@ -165,8 +171,14 @@ export const createChatActions = (set: any, get: () => ChatState) => ({
 
   deleteChat: async (chatId: string, local?: boolean) => {
     try {
-      if (local) {
-        console.log('Deleting chat locally');
+      // NEW: Check if this is avatar mode or if the chat is local
+      const topicStore = useTopicStore.getState();
+      const isAvatarMode = topicStore.selectedContext?.section === 'workspace:avatar';
+      const chat = get().chats.find(c => c.id === chatId);
+      const shouldUseLocal = local || isAvatarMode || !chat?.workspace_id;
+
+      if (shouldUseLocal) {
+        console.log('Deleting chat locally', isAvatarMode ? '(Avatar mode)' : '');
         await window.electron.db.query({
           query: `
             delete from ${DBTABLES.CHATROOM}
@@ -203,7 +215,12 @@ export const createChatActions = (set: any, get: () => ChatState) => ({
   getChat: async (userId: string, type: string, workspaceId?: string) => {
     set({ isLoading: true, error: null });
     try {
-      if (!userId && (!workspaceId || workspaceId === 'undefined')) {
+      // NEW: Check if this is avatar mode - force local storage
+      const topicStore = useTopicStore.getState();
+      const isAvatarMode = topicStore.selectedContext?.section === 'workspace:avatar';
+      const shouldUseLocal = !userId || isAvatarMode || (!workspaceId || workspaceId === 'undefined');
+
+      if (shouldUseLocal) {
         let query = `
           select * from ${DBTABLES.CHATROOM}
           where type = @type
@@ -212,9 +229,12 @@ export const createChatActions = (set: any, get: () => ChatState) => ({
 
         const params: any = { type, userId };
 
-        if (workspaceId && workspaceId !== 'undefined') {
+        if (workspaceId && workspaceId !== 'undefined' && !isAvatarMode) {
           query += ` and workspace_id = @workspaceId`;
           params.workspaceId = workspaceId;
+        } else if (isAvatarMode) {
+          // For avatar mode, only get local chats (workspace_id is null)
+          query += ` and workspace_id IS NULL`;
         }
 
         const chats = await window.electron.db.query({
@@ -277,7 +297,13 @@ export const createChatActions = (set: any, get: () => ChatState) => ({
         )
       }));
 
-      if (local) {
+      // NEW: Check if this is avatar mode or if the chat is local
+      const topicStore = useTopicStore.getState();
+      const isAvatarMode = topicStore.selectedContext?.section === 'workspace:avatar';
+      const chat = get().chats.find(c => c.id === chatId);
+      const shouldUseLocal = local || isAvatarMode || !chat?.workspace_id;
+
+      if (shouldUseLocal) {
         const updateFields = Object.entries(data)
           .filter(([key]) => key !== 'id')
           .map(([key, _]) => {

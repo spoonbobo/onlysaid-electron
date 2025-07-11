@@ -10,11 +10,9 @@ export default function HomeMenu() {
     ? selectedContext.section || 'agents'
     : null;
 
-  const contextId = selectedContext ? `${selectedContext.name}:${selectedContext.type}` : '';
-  const menuKey = `${contextId}`;
-
+  // No key prop to prevent unnecessary remounts
   return (
-    <Box key={menuKey}>
+    <Box>
       {activeSection === 'agents' && <AgentsMenu />}
       {activeSection === 'friends' && <FriendsMenu />}
     </Box>

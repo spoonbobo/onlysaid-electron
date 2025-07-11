@@ -3,12 +3,15 @@ import { IChatMessage } from '@/../../types/Chat/Message';
 import { IUser } from '@/../../types/User/User';
 import { OpenAIMessage } from '@/renderer/stores/Stream/StreamStore';
 import { useLLMConfigurationStore } from '@/renderer/stores/LLM/LLMConfiguration';
+import { useThreeStore } from '@/renderer/stores/Avatar/ThreeStore';
+import { useTopicStore } from '@/renderer/stores/Topic/TopicStore';
 import { getAgentFromStore } from '@/utils/agent';
 import { appendRulesToSystemPrompt } from '@/utils/rules';
 
-export const askModeSystemPrompt = (user: IUser, agent: IUser) => {
+export const askModeSystemPrompt = (user: IUser, agent: IUser, avatarName?: string) => {
+  const assistantName = avatarName || agent.username;
   return `
-  Your name is ${agent.username} and you are assistant for your companion ${user.username}.
+  Your name is ${assistantName} and you are assistant for your companion ${user.username}.
 
   You and your companion ${user.username} will be hearing messages in chats.
   Your responses should be short, concise, friendly, helpful, and professional.
@@ -19,20 +22,21 @@ export const askModeSystemPrompt = (user: IUser, agent: IUser) => {
 };
 
 // Helper function to get system prompt with fallback and rules
-const getSystemPrompt = (user: IUser, agent: IUser): string => {
+const getSystemPrompt = (user: IUser, agent: IUser, avatarName?: string): string => {
   const { askModeSystemPrompt: customPrompt } = useLLMConfigurationStore.getState();
+  const assistantName = avatarName || agent.username;
   
   let systemPrompt = '';
   if (customPrompt && customPrompt.trim()) {
     // Replace placeholders in custom prompt
     systemPrompt = customPrompt
-      .replace(/\{agent\.username\}/g, agent.username)
+      .replace(/\{agent\.username\}/g, assistantName)
       .replace(/\{user\.username\}/g, user.username)
-      .replace(/\{agent_username\}/g, agent.username)
+      .replace(/\{agent_username\}/g, assistantName)
       .replace(/\{user_username\}/g, user.username);
   } else {
     // Fallback to default prompt
-    systemPrompt = askModeSystemPrompt(user, agent);
+    systemPrompt = askModeSystemPrompt(user, agent, avatarName);
   }
   
   // Append rules for ask mode
@@ -73,7 +77,31 @@ export async function processAskModeAIResponse({
 }: ProcessAskModeAIResponseParams): Promise<{ success: boolean; responseText?: string; assistantMessageId?: string; error?: any }> {
   // Use provided agent or get from store
   const assistantSender = agent || getAgentFromStore();
-  const assistantSenderId = assistantSender?.id || "assistant";
+  
+  // NEW: Check if we're in avatar mode and get avatar info
+  const topicStore = useTopicStore.getState();
+  const isAvatarMode = topicStore.selectedContext?.section === 'workspace:avatar';
+  
+  let assistantSenderId = assistantSender?.id || "assistant";
+  let assistantSenderObject = assistantSender as IUser;
+  
+  if (isAvatarMode) {
+    // In avatar mode, use avatar name and create a custom sender object
+    const { selectedModel, getModelById } = useThreeStore.getState();
+    const currentAvatar = getModelById(selectedModel || 'alice-3d');
+    const avatarName = currentAvatar?.name || 'Avatar';
+    
+    // Create a custom sender object with avatar name
+    assistantSenderObject = {
+      ...assistantSender,
+      id: avatarName.toLowerCase(), // Use avatar name as ID
+      username: avatarName,
+      name: avatarName,
+      display_name: avatarName
+    } as IUser;
+    
+    assistantSenderId = avatarName.toLowerCase();
+  }
 
   if (!assistantSender) {
     console.warn("[AskMode] No agent available, using fallback ID for assistant message sender.");
@@ -81,14 +109,15 @@ export async function processAskModeAIResponse({
 
   let systemPrompt = "";
   if (currentUser && assistantSender) {
-    systemPrompt = getSystemPrompt(currentUser, assistantSender);
+    const avatarName = isAvatarMode ? assistantSenderObject.username : undefined;
+    systemPrompt = getSystemPrompt(currentUser, assistantSender, avatarName);
   }
 
   const assistantMessage: IChatMessage = {
     id: uuidv4(),
     chat_id: activeChatId,
     sender: assistantSenderId,
-    sender_object: assistantSender as IUser,
+    sender_object: assistantSenderObject,
     text: "",
     created_at: new Date().toISOString(),
     sent_at: new Date().toISOString(),
@@ -136,6 +165,7 @@ export async function processAskModeAIResponse({
     await updateMessage(activeChatId, assistantMessage.id, {
       text: response,
       sender: assistantSenderId,
+      sender_object: assistantSenderObject,
       status: "completed"
     });
 

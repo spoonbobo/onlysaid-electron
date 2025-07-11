@@ -80,7 +80,7 @@ export default function WorkspaceChatMenu() {
     const currentUser = getUserFromStore();
     if (currentUser?.id && selectedContext?.id) {
       const workspaceId = selectedContext.id || '';
-      getChat(currentUser.id, "workspace", workspaceId);
+      getChat(currentUser.id, 'chatroom', workspaceId);
     }
   }, [selectedContext?.id, getChat]);
 

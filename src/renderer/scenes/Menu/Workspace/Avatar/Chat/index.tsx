@@ -4,19 +4,22 @@ import { useEffect, useState, useRef, useMemo } from "react";
 import { FormattedMessage } from "react-intl";
 import { useTopicStore } from "@/renderer/stores/Topic/TopicStore";
 import { useChatStore } from "@/renderer/stores/Chat/ChatStore";
+import { useThreeStore } from "@/renderer/stores/Avatar/ThreeStore";
 import MenuListItem from "@/renderer/components/Navigation/MenuListItem";
 import ChatUpdate from '@/renderer/components/Dialog/Chat/ChatUpdate';
 import { IChatRoom } from '@/../../types/Chat/Chatroom';
+import { useCurrentTopicContext } from "@/renderer/stores/Topic/TopicStore";
 import { getUserFromStore } from "@/utils/user";
 
-export default function AgentsMenu() {
-  const selectedContext = useTopicStore((state) => state.selectedContext);
+export default function AvatarChatMenu() {
+  const { selectedContext } = useCurrentTopicContext();
   const selectedTopics = useTopicStore((state) => state.selectedTopics);
   const setSelectedTopic = useTopicStore((state) => state.setSelectedTopic);
   const chats = useChatStore((state) => state.chats);
   const setActiveChat = useChatStore((state) => state.setActiveChat);
   const deleteChat = useChatStore((state) => state.deleteChat);
   const getChat = useChatStore((state) => state.getChat);
+  const { getModelById } = useThreeStore();
 
   const [menuAnchorEl, setMenuAnchorEl] = useState<null | HTMLElement>(null);
   const [selectedChatId, setSelectedChatId] = useState<string>('');
@@ -25,16 +28,28 @@ export default function AgentsMenu() {
   const [isFetching, setIsFetching] = useState(false);
   const menuOpen = Boolean(menuAnchorEl);
 
-  const activeSection = 'agents';
+  // Use the same pattern as Agents menu - fixed section name
+  const activeSection = selectedContext?.section || '';
   const selectedSubcategory = selectedTopics[activeSection] || '';
   const fetchingRef = useRef(false);
 
   const user = getUserFromStore();
 
-  // Memoize agent chats to prevent unnecessary recalculations
-  const agentChats = useMemo(() => 
-    chats.filter(chat => chat.type === 'agent'), 
-    [chats]
+  // Get workspace ID and avatar chat type - but keep them stable
+  const workspaceId = selectedContext?.id || '';
+  const currentAvatar = getModelById('alice-3d');
+  const avatarName = currentAvatar?.name || 'Alice';
+  
+  // Memoize the avatar chat type to prevent unnecessary recalculations
+  const avatarChatType = useMemo(() => 
+    `${workspaceId}:${avatarName.toLowerCase()}`, 
+    [workspaceId, avatarName]
+  );
+
+  // Filter chats for avatar mode - use workspace-specific avatar type
+  const avatarChats = useMemo(() => 
+    chats.filter(chat => chat.type === avatarChatType && !chat.workspace_id), 
+    [chats, avatarChatType]
   );
 
   // Memoize getContextId to prevent infinite loops
@@ -43,30 +58,30 @@ export default function AgentsMenu() {
     return `${selectedContext.name}:${selectedContext.type}`;
   }, [selectedContext?.name, selectedContext?.type]);
 
-  // Fetch chats when user changes
+  // Fetch avatar chats when user changes - FIXED dependencies
   useEffect(() => {
     const currentUser = getUserFromStore();
     if (currentUser?.id) {
-      const userId = currentUser.id;
       if (!fetchingRef.current) {
         fetchingRef.current = true;
         setIsFetching(true);
         
-        getChat(userId, 'agent', undefined)
+        // Get local avatar chats with workspace-specific type
+        getChat(currentUser.id, avatarChatType, undefined)
           .finally(() => {
             setIsFetching(false);
             fetchingRef.current = false;
           });
       }
     }
-  }, [user?.id, getChat]);
+  }, [user?.id, getChat]); // STABLE dependencies - removed avatarChatType and workspaceId
 
-  // Handle agent chat selection logic
+  // Handle avatar chat selection logic - EXACT same pattern as Agents menu
   useEffect(() => {
-    if (agentChats.length > 0) {
+    if (avatarChats.length > 0) {
       // Check if current selection is valid
       const isSelectionValid = selectedSubcategory && 
-        agentChats.some(chat => chat.id === selectedSubcategory);
+        avatarChats.some(chat => chat.id === selectedSubcategory);
       
       if (!isSelectionValid) {
         // Add a small delay to let other components finish their restoration
@@ -74,11 +89,11 @@ export default function AgentsMenu() {
           // Double-check that we still don't have a valid selection
           const currentSelectedSubcategory = useTopicStore.getState().selectedTopics[activeSection] || '';
           const currentlyValid = currentSelectedSubcategory && 
-            agentChats.some(chat => chat.id === currentSelectedSubcategory);
+            avatarChats.some(chat => chat.id === currentSelectedSubcategory);
           
           if (!currentlyValid) {
             // Fall back to first chat if no valid selection
-            const firstChatId = agentChats[0].id;
+            const firstChatId = avatarChats[0].id;
             setSelectedTopic(activeSection, firstChatId);
             setActiveChat(firstChatId, getContextId);
           }
@@ -93,7 +108,7 @@ export default function AgentsMenu() {
       }
       setActiveChat('', getContextId); // Clear active chat
     }
-  }, [agentChats, activeSection, getContextId]); // Removed selectedSubcategory from dependencies
+  }, [avatarChats, activeSection, getContextId]); // EXACT same dependencies as Agents menu
 
   const handleSelectChat = (chatId: string) => {
     setSelectedTopic(activeSection, chatId);
@@ -117,7 +132,8 @@ export default function AgentsMenu() {
 
   const handleDeleteChat = (id?: string, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
-    const isLocal = user?.id ? false : true;
+    // Avatar chats are always local
+    const isLocal = true;
 
     const chatIdToDelete = id || selectedChatId;
     if (chatIdToDelete) {
@@ -142,8 +158,8 @@ export default function AgentsMenu() {
           </Box>
         ) : (
           <>
-            {agentChats.length > 0 ? (
-              agentChats.map((chat) => (
+            {avatarChats.length > 0 ? (
+              avatarChats.map((chat) => (
                 <MenuListItem
                   key={chat.id}
                   label={chat.name}
@@ -169,7 +185,7 @@ export default function AgentsMenu() {
               ))
             ) : (
               <Box sx={{ pl: 4, py: 1, color: 'text.secondary', fontSize: '0.875rem' }}>
-                <FormattedMessage id="home.noAgents" defaultMessage="No agents found" />
+                <FormattedMessage id="workspace.avatar.noChats" defaultMessage="No avatar chats found" />
               </Box>
             )}
           </>
@@ -207,4 +223,4 @@ export default function AgentsMenu() {
       />
     </Box>
   );
-}
+} 

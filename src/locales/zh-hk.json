@@ -1405,11 +1405,24 @@
   "menu.chooseFromSidebar": "請從側邊欄選擇選項開始使用",
   "menu.sectionNotAvailable": "「{section}」區域暫時無法使用",
 
-  "portal.services.description": "管理和配置各種整合服務和應用程式。",
-  "portal.services.placeholder": "服務整合",
-  "portal.services.placeholder.description": "服務整合功能將在此處實現。",
 
   "menu.noMenuAvailable": "此選項沒有可用的選單",
   "menu.selectFromSidebar": "請從側邊欄選擇選項以存取其選單",
-  "menu.noMenuForSection": "「{section}」區域沒有可用的選單"
+  "menu.noMenuForSection": "「{section}」區域沒有可用的選單",
+
+  "menu.workspace.avatar": "虛擬導師",
+  "workspace.avatar.title": "虛擬導師",
+  "workspace.avatar.description": "配置您的工作空間虛擬導師設定和偏好",
+  "workspace.avatar.selection": "導師選擇",
+  "workspace.avatar.selection.subtitle": "選擇您偏好的虛擬導師",
+  "workspace.avatar.design": "設計",
+  "workspace.avatar.design.subtitle": "自訂外觀和語音",
+  "workspace.avatar.appearance": "外觀",
+  "workspace.avatar.appearance.description": "自訂您的虛擬導師的視覺外觀",
+  "workspace.avatar.voice": "語音",
+  "workspace.avatar.voice.description": "配置語音設定和偏好",
+  "workspace.avatar.customize.appearance": "自訂外觀",
+  "workspace.avatar.customize.voice": "自訂語音",
+  "workspace.avatar.current": "目前導師",
+  "workspace.avatar.design.overview": "自訂您的虛擬導師設計設定。請從選單選擇外觀或語音選項開始。"
 }
