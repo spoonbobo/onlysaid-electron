@@ -290,12 +290,13 @@ function WorkspaceContainer() {
           {showAddButton && (
             <Card 
               sx={{ 
-                bgcolor: 'background.paper',
+                bgcolor: 'transparent',
                 border: '2px dashed',
                 borderColor: 'divider',
                 height: 150,
                 cursor: 'pointer',
                 transition: 'all 0.2s ease-in-out',
+                boxShadow: 'none',
                 '&:hover': {
                   borderColor: 'primary.main',
                   bgcolor: 'action.hover'
@@ -320,15 +321,6 @@ function WorkspaceContainer() {
                   {intl.formatMessage({ 
                     id: 'workspace.addOrJoin', 
                     defaultMessage: 'Add or Join Workspace' 
-                  })}
-                </Typography>
-                <Typography 
-                  variant="caption" 
-                  sx={{ color: 'text.secondary' }}
-                >
-                  {intl.formatMessage({ 
-                    id: 'workspace.clickToStart', 
-                    defaultMessage: 'Click to get started' 
                   })}
                 </Typography>
               </CardContent>

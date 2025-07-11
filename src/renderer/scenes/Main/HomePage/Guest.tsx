@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Box, 
   Typography, 
@@ -23,6 +23,31 @@ const GuestHomePage = () => {
   const { setSelectedContext } = useTopicStore();
   const { createGuestAgent } = useAgentStore();
   const { getChat, setActiveChat } = useChatStore();
+  
+  // State for dynamic app name - following AboutDialog pattern
+  const [appName, setAppName] = useState<string>("OnlySaid"); // Default fallback
+  const [productName, setProductName] = useState<string>("OnlySaid"); // Default fallback
+
+  // Get app name on component mount - following AboutDialog pattern
+  useEffect(() => {
+    const fetchAppInfo = async () => {
+      try {
+        const [appAppName, appProductName] = await Promise.all([
+          window.electron.app.getName(),
+          window.electron.app.getProductName()
+        ]);
+
+        setAppName(appAppName);
+        setProductName(appProductName);
+      } catch (error) {
+        console.error('Failed to get app info:', error);
+        setAppName('OnlySaid');
+        setProductName('OnlySaid');
+      }
+    };
+
+    fetchAppInfo();
+  }, []);
 
   const handleSignIn = () => {
     signIn();
@@ -92,7 +117,7 @@ const GuestHomePage = () => {
                   fontSize: { xs: '2rem', md: '3rem' }
                 }}
               >
-                {intl.formatMessage({ id: 'app.welcome' })}
+                {intl.formatMessage({ id: 'app.welcome' }, { appName: productName })}
               </Typography>
 
               <Typography

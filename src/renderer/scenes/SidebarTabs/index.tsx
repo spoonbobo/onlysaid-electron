@@ -3,6 +3,7 @@ import HomeIcon from "@mui/icons-material/Home";
 import AddIcon from "@mui/icons-material/Add";
 import GroupIcon from "@mui/icons-material/Group";
 import CalendarTodayIcon from "@mui/icons-material/CalendarToday";
+import AdminPanelSettingsIcon from "@mui/icons-material/AdminPanelSettings";
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import AddTeamDialog from "@/renderer/components/Dialog/Workspace/AddWorkspace";
 import ExitWorkspaceDialog from "@/renderer/components/Dialog/Workspace/ExitWorkspace";
@@ -15,6 +16,8 @@ import { useUserStore } from "@/renderer/stores/User/UserStore";
 import { useNotificationStore } from "@/renderer/stores/Notification/NotificationStore";
 import { useIntl } from "react-intl";
 import { useWorkspaceIcons } from '@/renderer/hooks/useWorkspaceIcons';
+import SupervisorAccountIcon from "@mui/icons-material/SupervisorAccount";
+import PortalIcon from "@mui/icons-material/Web";
 
 function SidebarTabs() {
   const { selectedContext, contexts, setSelectedContext, removeContext, addContext } = useTopicStore();
@@ -313,6 +316,17 @@ function SidebarTabs() {
     });
   };
 
+  const handleAdminNavigate = () => {
+    setSelectedContext({
+      name: "admin",
+      type: "admin",
+      section: "dashboard"
+    });
+  };
+
+  // Check if user has admin privileges (you can modify this logic)
+  const isAdmin = true;
+
   return (
     <>
       <Box
@@ -467,6 +481,64 @@ function SidebarTabs() {
                 onClick={handleCalendarNavigate}
               >
                 <CalendarTodayIcon />
+              </IconButton>
+            </Box>
+          </Tooltip>
+        )}
+
+        {/* {user && (
+          <Tooltip
+            title={intl.formatMessage({ id: "portal.title", defaultMessage: "Portal" })}
+            placement="right"
+          >
+            <Box
+              sx={{
+                borderBottom: selectedContext?.name === "portal" && selectedContext?.type === "portal"
+                  ? "3px solid"
+                  : "3px solid transparent",
+                borderColor: selectedContext?.name === "portal" && selectedContext?.type === "portal"
+                  ? "primary.main"
+                  : "transparent",
+                borderRadius: 0,
+              }}
+            >
+              <IconButton
+                color="primary"
+                size="large"
+                onClick={() => setSelectedContext({
+                  name: "portal",
+                  type: "portal",
+                  section: "dashboard"
+                })}
+              >
+                <PortalIcon />
+              </IconButton>
+            </Box>
+          </Tooltip>
+        )} */}
+
+        {user && isAdmin && (
+          <Tooltip
+            title={intl.formatMessage({ id: "admin.title", defaultMessage: "Admin Panel" })}
+            placement="right"
+          >
+            <Box
+              sx={{
+                borderBottom: selectedContext?.name === "admin" && selectedContext?.type === "admin"
+                  ? "3px solid"
+                  : "3px solid transparent",
+                borderColor: selectedContext?.name === "admin" && selectedContext?.type === "admin"
+                  ? "primary.main"
+                  : "transparent",
+                borderRadius: 0,
+              }}
+            >
+              <IconButton
+                color="primary"
+                size="large"
+                onClick={handleAdminNavigate}
+              >
+                <SupervisorAccountIcon />
               </IconButton>
             </Box>
           </Tooltip>

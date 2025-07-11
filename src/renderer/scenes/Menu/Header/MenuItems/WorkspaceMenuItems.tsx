@@ -1,6 +1,5 @@
 import { MenuItem, ListSubheader, Divider, Tooltip, IconButton, Box, Badge } from "@mui/material";
 import { FormattedMessage } from "react-intl";
-import ExitToAppIcon from "@mui/icons-material/ExitToApp";
 import AddCommentIcon from "@mui/icons-material/AddComment";
 import PeopleIcon from "@mui/icons-material/People";
 import SchoolIcon from "@mui/icons-material/School";
@@ -18,7 +17,6 @@ import { useState } from "react";
 import { useWorkspaceStore } from "@/renderer/stores/Workspace/WorkspaceStore";
 import { useKBStore } from "@/renderer/stores/KB/KBStore";
 import InviteUserDialog from "@/renderer/components/Dialog/Workspace/InviteUserToWorkspace";
-import { IWorkspace } from "@/../../types/Workspace/Workspace";
 import { IUser } from "@/../../types/User/User";
 
 
@@ -146,16 +144,16 @@ function WorkspaceMenuItems({ handleClose }: WorkspaceMenuItemsProps) {
           )}
         </Box>
       </MenuItem>
-      <MenuItem onClick={() => handleMenuItemClick('settings')} sx={{ minHeight: 36, fontSize: 14 }}>
+      <MenuItem onClick={() => handleMenuItemClick('workspaceSettings')} sx={{ minHeight: 36, fontSize: 14 }}>
         <SettingsIcon fontSize="small" sx={{ mr: 1.5, color: "text.secondary" }} />
-        <FormattedMessage id="menu.workspace.settings" />
+        <FormattedMessage id="menu.workspace.workspaceSettings" />
       </MenuItem>
 
       <Divider sx={{ my: 1 }} />
 
-      <MenuItem disabled onClick={() => handleMenuItemClick('exit')} sx={{ minHeight: 36, fontSize: 14, color: "error.main" }}>
-        <ExitToAppIcon fontSize="small" sx={{ mr: 1.5, color: "error.main" }} />
-        <FormattedMessage id="menu.workspace.exit" />
+      <MenuItem onClick={() => handleMenuItemClick('workspaceGeneralSettings')} sx={{ minHeight: 36, fontSize: 14 }}>
+        <SettingsIcon fontSize="small" sx={{ mr: 1.5, color: "text.secondary" }} />
+        <FormattedMessage id="menu.workspace.workspaceGeneralSettings" />
       </MenuItem>
     </>
   );

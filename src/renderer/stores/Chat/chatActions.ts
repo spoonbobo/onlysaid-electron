@@ -36,14 +36,11 @@ export const createChatActions = (set: any, get: () => ChatState) => ({
         }
       }));
       
-      // Mark as read using the existing markAsRead method
       get().markAsRead(chatId);
       
-      // Also mark chat as read for notifications - determine if it's a workspace chat
       const chat = chats.find(c => c.id === chatId);
       const workspaceId = chat?.workspace_id;
       
-      // Call the new markChatAsRead method to clear notifications
       if (get().markChatAsRead) {
         get().markChatAsRead(chatId, workspaceId);
       }
@@ -62,7 +59,8 @@ export const createChatActions = (set: any, get: () => ChatState) => ({
       const newChat = NewChat(userId, type, workspaceId);
       const chatId = uuidv4();
 
-      if (!workspaceId || workspaceId === 'undefined') {
+      if (!userId && (!workspaceId || workspaceId === 'undefined')) {
+        console.log('Creating local chat');
         await window.electron.db.query({
           query: `
             insert into ${DBTABLES.CHATROOM}
@@ -87,11 +85,9 @@ export const createChatActions = (set: any, get: () => ChatState) => ({
           id: chatId
         };
 
-        // Auto-create chat encryption key if crypto is unlocked
         const { isUnlocked, createChatKey } = useCryptoStore.getState();
         if (isUnlocked) {
           try {
-            // ✅ FIX: Always get current user for local chats
             const currentUser = getUserFromStore();
             if (currentUser?.id) {
               await createChatKey(chatId, [currentUser.id]);
@@ -99,7 +95,6 @@ export const createChatActions = (set: any, get: () => ChatState) => ({
             }
           } catch (error) {
             console.warn('⚠️ Failed to create chat encryption key:', error);
-            // Continue without encryption
           }
         }
 
@@ -108,7 +103,6 @@ export const createChatActions = (set: any, get: () => ChatState) => ({
           isLoading: false
         }));
 
-        // ✅ FIX: Use proper context ID for local chats (empty string or 'home')
         const contextId = workspaceId && workspaceId !== 'undefined' ? workspaceId : '';
         get().setActiveChat(chatId, contextId);
         return localChat;
@@ -118,14 +112,12 @@ export const createChatActions = (set: any, get: () => ChatState) => ({
           request: newChat
         });
 
-        // Auto-create chat encryption key if crypto is unlocked
         const createdChatId = response.data?.data?.[0]?.id;
         if (createdChatId) {
           const { isUnlocked, createChatKey } = useCryptoStore.getState();
           if (isUnlocked) {
             try {
               if (workspaceId && workspaceId !== 'undefined') {
-                // ✅ FIX: Get ALL workspace users for workspace chats
                 const workspaceUsers = await useWorkspaceStore.getState().getUsersByWorkspace(workspaceId);
                 const allUserIds = workspaceUsers.map(user => user.user_id);
                 
@@ -133,7 +125,6 @@ export const createChatActions = (set: any, get: () => ChatState) => ({
                   await createChatKey(createdChatId, allUserIds);
                   console.log(`✅ Chat encryption key created for ${allUserIds.length} workspace users`);
                 } else {
-                  // Fallback to just current user if no workspace users found
                   const currentUser = getUserFromStore();
                   if (currentUser?.id) {
                     await createChatKey(createdChatId, [currentUser.id]);
@@ -141,7 +132,6 @@ export const createChatActions = (set: any, get: () => ChatState) => ({
                   }
                 }
               } else {
-                // For non-workspace chats, just use current user
                 const currentUser = getUserFromStore();
                 if (currentUser?.id) {
                   await createChatKey(createdChatId, [currentUser.id]);
@@ -150,17 +140,14 @@ export const createChatActions = (set: any, get: () => ChatState) => ({
               }
             } catch (error) {
               console.warn('⚠️ Failed to create chat encryption key:', error);
-              // Continue without encryption
             }
           }
         }
 
         await get().getChat(userId, type, workspaceId);
         if (createdChatId) {
-          // ✅ FIX: Set active chat with proper context ID
           get().setActiveChat(createdChatId, workspaceId);
           
-          // ✅ NEW: Also update TopicStore's workspace chat selection if it's a workspace chat
           if (workspaceId && workspaceId !== 'undefined') {
             const topicStore = useTopicStore.getState();
             topicStore.setWorkspaceSelectedChat(workspaceId, createdChatId);
@@ -249,24 +236,19 @@ export const createChatActions = (set: any, get: () => ChatState) => ({
         });
 
         if (response.data && response.data.data && Array.isArray(response.data.data)) {
-          // ✅ FIX: Merge chats instead of replacing them
           const newChats = response.data.data;
           
           set((state: ChatState) => {
             const existingChats = state.chats;
             
-            // Remove existing chats for this workspace/type combination
             const filteredExistingChats = existingChats.filter(chat => {
               if (workspaceId && workspaceId !== 'undefined') {
-                // For workspace chats, remove chats from this specific workspace
                 return chat.workspace_id !== workspaceId || chat.type !== type;
               } else {
-                // For non-workspace chats, remove chats of this type that don't have a workspace
                 return !(chat.type === type && (!chat.workspace_id || chat.workspace_id === 'undefined'));
               }
             });
             
-            // Merge with new chats
             const mergedChats = [...filteredExistingChats, ...newChats];
             
             return {
@@ -345,7 +327,7 @@ export const createChatActions = (set: any, get: () => ChatState) => ({
   },
 
   markAsRead: (chatId: string) => {
-    // Implementation here if needed
+
   },
 
   cleanupContextReferences: (contextId: string) => {

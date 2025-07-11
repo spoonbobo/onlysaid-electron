@@ -12,7 +12,6 @@ import { useAppAssets } from '@/renderer/hooks/useAppAssets';
 import { useChatStore } from '@/renderer/stores/Chat/ChatStore';
 import { useIPCListeners } from '@/renderer/IPCListeners';
 
-// ✅ LangGraph Interaction interface
 interface LangGraphInteraction {
   interactionId: string;
   request: any;
@@ -36,7 +35,6 @@ function App() {
   } = useUserTokenStore();
   const { preloadAssets, clearCache } = useAppAssets();
   
-  // ✅ Global state for IPC listeners
   const [osswarmToolRequests, setOSSwarmToolRequests] = useState<Map<string, {
     approvalId: string;
     request: any;
@@ -45,14 +43,12 @@ function App() {
   
   const [langGraphInteractions, setLangGraphInteractions] = useState<Map<string, LangGraphInteraction>>(new Map());
 
-  // ✅ Get current chat context
   const { selectedTopics } = useTopicStore();
   const { messages: storeMessages, appendMessage, updateMessage } = useChatStore();
   
   const activeChatId = selectedContext?.section ? selectedTopics[selectedContext.section] || null : null;
   const workspaceId = selectedContext?.id || '';
 
-  // ✅ Use the IPC listeners hook
   const [googleServicesReady, setGoogleServicesReady] = useState(false);
   const { handleHumanInteractionResponse } = useIPCListeners({
     activeChatId,
@@ -68,28 +64,21 @@ function App() {
     setGoogleServicesReady
   });
 
-  // ✅ FIXED: Corrected progress tracking - 4 main steps with proper percentage calculation
   const sendInitProgress = (step: string, currentStep: number, totalSteps: number, mcpProgress?: { current: number, total: number }) => {
     let percentage: number;
     
     if (mcpProgress && currentStep === totalSteps) {
-      // For MCP step (final step), calculate progress within that step
-      // Previous steps take up 75% (3/4), MCP step takes up the remaining 25%
-      const previousStepsProgress = ((currentStep - 1) / totalSteps) * 100; // 75%
-      const mcpStepProgress = (mcpProgress.current / mcpProgress.total) * (100 / totalSteps); // 0-25%
+      const previousStepsProgress = ((currentStep - 1) / totalSteps) * 100;
+      const mcpStepProgress = (mcpProgress.current / mcpProgress.total) * (100 / totalSteps);
       percentage = Math.round(previousStepsProgress + mcpStepProgress);
     } else {
-      // For non-MCP steps, calculate normally but don't reach 100% until the very end
       if (currentStep === totalSteps && !mcpProgress) {
-        // This is the final step without MCP progress - show 100%
         percentage = 100;
       } else {
-        // For steps 1-3, show 0%, 25%, 50%, 75%
         percentage = Math.round(((currentStep - 1) / totalSteps) * 100);
       }
     }
     
-    // Use window function with MCP progress info
     if (window.updateEJSProgress) {
       window.updateEJSProgress(percentage, step, mcpProgress);
     }
@@ -111,7 +100,6 @@ function App() {
     console.log('[App Init] Initialization complete');
   };
 
-  // ✅ Enhanced MCP Services initialization with corrected progress calls
   const initializeMCPServices = async () => {
     const servers = getAllConfiguredServers();
     const serviceTypeMap = getServiceTypeMapping();
@@ -132,7 +120,6 @@ function App() {
 
     console.log(`[App] Starting MCP initialization: ${total} services to initialize`);
 
-    // ✅ Show initial MCP progress (75% + 0% of remaining 25%)
     sendInitProgress('Initializing MCP services', 4, 4, { current: 0, total });
 
     for (const { key, serviceType } of servicesToInit) {
@@ -144,14 +131,12 @@ function App() {
         
         console.log(`[App] Successfully initialized ${serviceType} (${completed}/${total})`);
         
-        // ✅ Update progress after completing each service
         sendInitProgress('Initializing MCP services', 4, 4, { current: completed, total });
         
       } catch (error) {
         console.error(`[App] Failed to initialize ${serviceType}:`, error);
-        completed++; // Still count as completed to maintain progress
+        completed++;
         
-        // ✅ Update progress even on failure
         sendInitProgress('Initializing MCP services', 4, 4, { current: completed, total });
       }
     }
@@ -160,47 +145,38 @@ function App() {
     sendStepComplete('MCP Services');
   };
 
-  // ✅ SIMPLIFIED: Remove Google services dependency
   useEffect(() => {
     const initializeApp = async () => {
       try {
         console.log('[App] Starting initialization...');
         
-        // Step 1: Preload essential assets with force refresh
         sendInitProgress('Loading essential assets', 1, 4);
         console.log('[App] Loading essential assets...');
         
-        // Force refresh the assets to ensure we get the latest versions
-        await preloadAssets(['icon.png'], true); // Use forceRefresh parameter
+        await preloadAssets(['icon.png'], true);
         console.log('[App] Fresh assets loaded successfully');
         
         sendStepComplete('Essential Assets');
         
-        // Step 2: Setup authentication listeners
         sendInitProgress('Setting up authentication', 2, 4);
         console.log('[App] Setting up authentication...');
         setupDeeplinkAuthListener();
         sendStepComplete('Authentication');
         
-        // Step 3: Initialize calendar and service listeners (non-blocking)
         sendInitProgress('Setting up service listeners', 3, 4);
         console.log('[App] Setting up service listeners...');
         
-        // Initialize authentication listeners (removed Moodle)
         const cleanupGoogle = initializeGoogleCalendarListeners();
         const cleanupMicrosoft = initializeMicrosoftCalendarListeners();
         
         sendStepComplete('Service Listeners');
         
-        // Step 4: Initialize MCP services
         sendInitProgress('Initializing MCP services', 4, 4);
         console.log('[App] Initializing MCP services...');
         await initializeMCPServices();
         
-        // Ready!
         sendInitComplete();
         
-        // Hide EJS loading after showing completion
         setTimeout(() => {
           if (window.hideEJSLoading) {
             window.hideEJSLoading();
@@ -210,7 +186,6 @@ function App() {
         setIsAppReady(true);
         setInitializationComplete(true);
         
-        // Return cleanup function for this useEffect
         return () => {
           cleanupGoogle();
           cleanupMicrosoft();
@@ -227,14 +202,12 @@ function App() {
       }
     };
 
-    // Call the async function and handle cleanup
     let cleanup: (() => void) | undefined;
     
     initializeApp().then((cleanupFn) => {
       cleanup = cleanupFn;
     });
 
-    // Return cleanup function for the useEffect
     return () => {
       if (cleanup) {
         cleanup();
@@ -278,19 +251,17 @@ function App() {
     }
   }, [isConnected]);
 
-  // Ensure crypto is unlocked for logged-in users
   useEffect(() => {
     if (user && user.id) {
       const timer = setTimeout(() => {
         console.log('[App] Ensuring crypto is unlocked for user:', user.username);
         useUserStore.getState().ensureCryptoUnlocked();
-      }, 2000); // Give a bit more time for everything to initialize
+      }, 2000);
 
       return () => clearTimeout(timer);
     }
   }, [user]);
 
-  // Initialize guest agent when no user is logged in
   useEffect(() => {
     if (!user && !agent) {
       console.log('[App] No user logged in, creating guest agent');
@@ -298,9 +269,8 @@ function App() {
     }
   }, [user, agent, createGuestAgent]);
 
-  // Skip LoadingScreen entirely
   if (!initializationComplete) {
-    return null; // Return nothing while EJS loading screen handles everything
+    return null;
   }
 
   return <MainInterface />;

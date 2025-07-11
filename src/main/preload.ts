@@ -231,6 +231,16 @@ type MoodleApiChannels =
   | 'moodle:get-assignment-grade-details'
   | 'moodle:delete-assignment-grade';
 
+// Add N8n channels to the type definitions
+type N8nChannels = 
+  | 'n8n:test-connection'
+  | 'n8n:get-workflows'
+  | 'n8n:get-workflow'
+  | 'n8n:create-workflow'
+  | 'n8n:activate-workflow'  // ✅ ADD: New activation channel
+  | 'n8n:toggle-workflow'
+  | 'n8n:delete-workflow';
+
 export type Channels =
   | AuthChannels
   | GoogleAuthChannels
@@ -257,7 +267,8 @@ export type Channels =
   | HealthCheckChannels
   | AgentChannels
   | InitializationChannels
-  | MoodleApiChannels;
+  | MoodleApiChannels
+  | N8nChannels; // Add N8nChannels here
 
 const electronHandler = {
   ipcRenderer: {
@@ -602,8 +613,16 @@ const electronHandler = {
       ipcRenderer.invoke('n8n:test-connection', args),
     getWorkflows: (args: { apiUrl: string; apiKey: string }) => 
       ipcRenderer.invoke('n8n:get-workflows', args),
+    getWorkflow: (args: { apiUrl: string; apiKey: string; workflowId: string }) => 
+      ipcRenderer.invoke('n8n:get-workflow', args),  // Add this line
+    createWorkflow: (args: { apiUrl: string; apiKey: string; workflow: any }) => 
+      ipcRenderer.invoke('n8n:create-workflow', args),
+    activateWorkflow: (args: { apiUrl: string; apiKey: string; workflowId: string }) => 
+      ipcRenderer.invoke('n8n:activate-workflow', args),  // ✅ ADD: New activation method
     toggleWorkflow: (args: { apiUrl: string; apiKey: string; workflowId: string; active: boolean }) => 
       ipcRenderer.invoke('n8n:toggle-workflow', args),
+    deleteWorkflow: (args: { apiUrl: string; apiKey: string; workflowId: string }) => 
+      ipcRenderer.invoke('n8n:delete-workflow', args),
   },
   // Add health check handler
   healthCheck: {

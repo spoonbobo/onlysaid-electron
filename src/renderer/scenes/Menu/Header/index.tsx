@@ -11,6 +11,8 @@ import SettingsMenuItems, { renderSettingsActions } from "./MenuItems/SettingsMe
 import CalendarMenuItems, { RenderCalendarActions } from "./MenuItems/CalendarMenuItem";
 import DefaultMenuItems from "./MenuItems/DefaultMenuItems";
 import { useUserStore } from "@/renderer/stores/User/UserStore";
+import AdminMenuItems, { renderAdminActions } from "./MenuItems/AdminMenuItems";
+import PortalMenuItems, { renderPortalActions } from "./MenuItems/PortalMenuItems";
 
 function MenuHeader() {
   const user = useUserStore((state) => state.user);
@@ -119,6 +121,14 @@ function MenuHeader() {
         return <SettingsMenuItems
           handleClose={handleClose}
         />;
+      case 'admin':
+        return <AdminMenuItems
+          handleClose={handleClose}
+        />;
+      case 'portal':
+        return <PortalMenuItems
+          handleClose={handleClose}
+        />;
       default:
         return <DefaultMenuItems
           handleClose={handleClose}
@@ -151,6 +161,24 @@ function MenuHeader() {
           <FormattedMessage id="menu.settings" />
           {selectedSection && (
             <> / <FormattedMessage id={`settings.${selectedSection}`} /></>
+          )}
+        </>
+      );
+    } else if (selectedContext?.type === 'admin') {
+      return (
+        <>
+          <FormattedMessage id="menu.admin" />
+          {selectedSection && (
+            <> / <FormattedMessage id={`admin.${selectedSection}`} /></>
+          )}
+        </>
+      );
+    } else if (selectedContext?.type === 'portal') {
+      return (
+        <>
+          <FormattedMessage id="menu.portal" />
+          {selectedSection && (
+            <> / <FormattedMessage id={`portal.${selectedSection}`} /></>
           )}
         </>
       );
@@ -201,7 +229,7 @@ function MenuHeader() {
           alignItems: "center",
           width: '100%',
           pb: ((selectedCategory && selectedContext?.type === 'home') ||
-            (selectedSection && (selectedContext?.type === 'workspace' || selectedContext?.type === 'settings' || selectedContext?.type === 'calendar'))) ? 0 : 1
+            (selectedSection && (selectedContext?.type === 'workspace' || selectedContext?.type === 'settings' || selectedContext?.type === 'calendar' || selectedContext?.type === 'admin'))) ? 0 : 1
         }}>
           <Typography variant="subtitle1" sx={{ fontWeight: 500 }}>
             {renderHeaderTitle()}
@@ -263,6 +291,22 @@ function MenuHeader() {
               handleAction: (action) => console.log('Settings action:', action)
             });
             return settingsActionContent ? <Box sx={actionBarBoxStyles}>{settingsActionContent}</Box> : null;
+          }
+
+          if (selectedContext?.type === 'admin' && selectedSection) {
+            const adminActionContent = renderAdminActions({
+              selectedSection,
+              handleAction: (action) => console.log('Admin action:', action)
+            });
+            return adminActionContent ? <Box sx={actionBarBoxStyles}>{adminActionContent}</Box> : null;
+          }
+
+          if (selectedContext?.type === 'portal' && selectedSection) {
+            const portalActionContent = renderPortalActions({
+              selectedSection,
+              handleAction: (action) => console.log('Portal action:', action)
+            });
+            return portalActionContent ? <Box sx={actionBarBoxStyles}>{portalActionContent}</Box> : null;
           }
 
           return null;

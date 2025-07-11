@@ -8,7 +8,7 @@ import FileExplorer from "@/renderer/scenes/Menu/FileExplorer";
 import MenuHeader from "./Header";
 import React from "react";
 import CalendarMenu from "./Calendar";
-import { useNotificationStore } from "@/renderer/stores/Notification/NotificationStore";
+import MenuDefault from "./default";
 
 const MIN_CONTENT_HEIGHT = 50;
 
@@ -31,7 +31,7 @@ function Menu() {
       case "settings": return UserSettings;
       case "home": return HomeMenu;
       case "calendar": return CalendarMenu;
-      default: return () => <Box p={2}>Select a menu item</Box>;
+      default: return MenuDefault;
     }
   }, [selectedContextType]);
 

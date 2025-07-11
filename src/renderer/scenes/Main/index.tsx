@@ -3,6 +3,8 @@ import Settings from "./Settings";
 import Default from "./default";
 import HomePage from "./HomePage";
 import FileExplorer from "./FileExplorer";
+import AdminPanel from "./Admin";
+import Portal from "./Portal";
 import { useTopicStore } from "@/renderer/stores/Topic/TopicStore";
 import { Box, Typography } from "@mui/material";
 import Playground from "@/renderer/components/Debug/Playground";
@@ -31,8 +33,10 @@ function Main() {
         return <Members workspaceId={workspaceId || ""} />;
       case "workspace:knowledgeBase":
         return <KnowledgeBase />;
-      case "workspace:settings":
+      case "workspace:workspaceSettings":
         return <WorkspaceSettings />;
+      case "workspace:workspaceGeneralSettings":
+        return <Default section="Workspace General Settings" />;
       case "workspace:insights":
         return <MoodleInsights />;
       default:
@@ -67,6 +71,8 @@ function Main() {
       settings: <Settings />,
       playground: <Playground />,
       file: <FileExplorer />,
+      admin: <AdminPanel />,
+      portal: <Portal />,
     };
     componentToRender = menuComponents[contextTypeToRender] || <Default section={contextTypeToRender} />;
   }

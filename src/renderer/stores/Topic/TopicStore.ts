@@ -21,7 +21,9 @@ export interface TopicContext {
   "file" |
   "playground" |
   "calendar" |
-  "workspace:calendar"
+  "workspace:calendar" |
+  "admin" |
+  "portal"
   section?: string;
 }
 
@@ -116,7 +118,9 @@ export const useTopicStore = create<TopicStore>()(
         { name: "workspace", type: "workspace" },
         { name: "settings", type: "settings" },
         { name: "file", type: "file" },
-        { name: "playground", type: "playground" }
+        { name: "playground", type: "playground" },
+        { name: "admin", type: "admin" },
+        { name: "portal", type: "portal" }
       ],
       selectedContext: { name: "home", type: "home", section: "homepage" },
       lastSections: {},
@@ -264,6 +268,7 @@ export const useTopicStore = create<TopicStore>()(
               newContext.type === 'settings' ? 'settings' :
                 newContext.type === 'file' ? 'file' :
                   newContext.type === 'playground' ? 'playground' :
+                    newContext.type === 'admin' ? 'admin' :
                     `${newContext.type}:${newContext.name}`;
 
           const contextAttachments = { ...(state.attachmentsByContext[newContextKey] || {}) };
@@ -355,6 +360,9 @@ export const useTopicStore = create<TopicStore>()(
         }
         if (context.type === 'playground') {
           return 'playground';
+        }
+        if (context.type === 'admin') {
+          return 'admin';
         }
 
         return `${context.type}:${context.name}`;
