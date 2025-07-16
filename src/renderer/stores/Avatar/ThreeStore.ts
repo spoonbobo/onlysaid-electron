@@ -55,12 +55,25 @@ export interface LightingSettings {
 
 export interface ThreeScene {
   backgroundColor: string;
+  backgroundType: 'solid' | 'gradient' | 'environment' | 'custom';
+  gradientColors?: {
+    start: string;
+    end: string;
+    direction: 'horizontal' | 'vertical' | 'diagonal';
+  };
+  environmentPreset?: 'city' | 'dawn' | 'forest' | 'lobby' | 'night' | 'park' | 'studio' | 'sunset' | 'warehouse';
+  customTexture?: string;
   fog?: {
     color: string;
     near: number;
     far: number;
   };
-  environment?: string;
+  grid?: {
+    enabled: boolean;
+    size: number;
+    divisions: number;
+    color: string;
+  };
 }
 
 interface ThreeStore {
@@ -157,10 +170,23 @@ const defaultLightingSettings: LightingSettings = {
 
 const defaultSceneSettings: ThreeScene = {
   backgroundColor: '#f0f0f0',
+  backgroundType: 'gradient',
+  gradientColors: {
+    start: '#e3f2fd',
+    end: '#bbdefb',
+    direction: 'vertical'
+  },
+  environmentPreset: 'city',
   fog: {
     color: '#f0f0f0',
     near: 10,
     far: 50
+  },
+  grid: {
+    enabled: false,
+    size: 10,
+    divisions: 10,
+    color: '#cccccc'
   }
 };
 

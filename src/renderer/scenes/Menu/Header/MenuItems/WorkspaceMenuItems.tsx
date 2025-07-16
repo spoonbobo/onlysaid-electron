@@ -9,6 +9,7 @@ import TrendingUpIcon from "@mui/icons-material/TrendingUp";
 import AssignmentIcon from "@mui/icons-material/Assignment";
 import PersonAddIcon from "@mui/icons-material/PersonAdd";
 import LibraryAddIcon from "@mui/icons-material/LibraryAdd";
+import GroupIcon from "@mui/icons-material/Group";
 import { useTopicStore } from "@/renderer/stores/Topic/TopicStore";
 import { useChatStore } from "@/renderer/stores/Chat/ChatStore";
 import { useNotificationStore } from "@/renderer/stores/Notification/NotificationStore";
@@ -86,12 +87,10 @@ function WorkspaceMenuItems({ handleClose }: WorkspaceMenuItemsProps) {
         <PersonIcon fontSize="small" sx={{ mr: 1.5, color: "text.secondary" }} />
         <FormattedMessage id="menu.workspace.avatar" />
       </MenuItem>
-
-      <Divider sx={{ my: 1 }} />
-
-      <ListSubheader sx={{ fontSize: 13, fontWeight: 700, color: "text.secondary", bgcolor: "background.paper", lineHeight: 2, px: 2 }}>
-        <FormattedMessage id="menu.workspace.insights" />
-      </ListSubheader>
+      <MenuItem onClick={() => handleMenuItemClick('learningPartner')} sx={{ minHeight: 36, fontSize: 14 }}>
+        <GroupIcon fontSize="small" sx={{ mr: 1.5, color: "text.secondary" }} />
+        <FormattedMessage id="menu.workspace.learningPartner" />
+      </MenuItem>
       <MenuItem onClick={() => handleMenuItemClick('insights')} sx={{ minHeight: 36, fontSize: 14 }}>
         <TrendingUpIcon fontSize="small" sx={{ mr: 1.5, color: "text.secondary" }} />
         <FormattedMessage id="menu.workspace.insights" />
@@ -140,6 +139,7 @@ function WorkspaceMenuItems({ handleClose }: WorkspaceMenuItemsProps) {
                   minWidth: 16
                 }
               }}
+              // 7d7c8bed395cb93f9056634724f4ab0a
             >
               <Box sx={{ width: 8 }} />
             </Badge>
@@ -256,6 +256,10 @@ export const RenderWorkspaceActions = ({
           </IconButton>
         </Tooltip>
       );
+      break;
+    case 'learningPartner':
+      // Add action for learning partner section if needed
+      actualContent = null;
       break;
     case 'knowledgeBase':
       actualContent = (

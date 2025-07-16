@@ -14,6 +14,7 @@ import KnowledgeBase from "@/renderer/scenes/Main/Settings/KnowledgeBase";
 import WorkspaceSettings from "@/renderer/scenes/Main/Workspace/Settings/index";
 import MoodleInsights from "@/renderer/scenes/Main/Workspace/Insights/Moodle/index";
 import Avatar from "@/renderer/scenes/Main/Workspace/Avatar/index";
+import MyPartner from "./Workspace/MyPartner";
 
 function Main() {
   const { selectedContext } = useTopicStore();
@@ -42,6 +43,8 @@ function Main() {
         return <Default section="Workspace General Settings" />;
       case "workspace:insights":
         return <MoodleInsights />;
+      case "workspace:learningPartner":
+        return <MyPartner />;
       default:
         return <Default section={section} />;
     }

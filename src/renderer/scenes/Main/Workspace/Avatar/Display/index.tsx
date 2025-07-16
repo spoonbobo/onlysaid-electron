@@ -30,7 +30,7 @@ function AvatarDisplay() {
             showName={false} 
             showPreviewText={false}
             enableControls={true}
-            autoRotate={true}
+            autoRotate={false}
           />
           
           {/* Status Indicator with Avatar Name */}

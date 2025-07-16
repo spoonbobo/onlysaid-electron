@@ -39,6 +39,7 @@ import { useCryptoStore } from '@/renderer/stores/Crypto/CryptoStore';
 import { toast } from '@/utils/toast';
 import { createNotificationsForUnreadMessages } from '@/utils/notifications';
 import CollapsedMenu from './CollapsedMenu';
+import { Fade } from '@mui/material';
 
 // Modern titlebar height standards
 const TITLEBAR_HEIGHT = 44; // Increased from 32px to 44px for better usability
@@ -833,6 +834,8 @@ const TitleBar = () => {
           onClose={handleClose}
           anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
           transformOrigin={{ vertical: 'top', horizontal: 'left' }}
+          TransitionComponent={undefined}
+          transitionDuration={0}
         >
           <MenuItem onClick={() => handleMenuAction('file:open')}>
             <Typography variant="body2">
@@ -859,6 +862,8 @@ const TitleBar = () => {
           onClose={handleClose}
           anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
           transformOrigin={{ vertical: 'top', horizontal: 'left' }}
+          TransitionComponent={undefined}
+          transitionDuration={0}
         >
           <MenuItem onClick={() => handleMenuAction('edit:undo')}>
             <Undo sx={{ fontSize: 16, mr: 1 }} />
@@ -925,6 +930,8 @@ const TitleBar = () => {
           onClose={handleClose}
           anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
           transformOrigin={{ vertical: 'top', horizontal: 'left' }}
+          TransitionComponent={undefined}
+          transitionDuration={0}
         >
           <MenuItem onClick={() => handleMenuAction('view:reload')}>
             <Refresh sx={{ fontSize: 16, mr: 1 }} />
@@ -997,6 +1004,8 @@ const TitleBar = () => {
           onClose={handleClose}
           anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
           transformOrigin={{ vertical: 'top', horizontal: 'left' }}
+          TransitionComponent={undefined}
+          transitionDuration={0}
         >
           <MenuItem onClick={() => handleMenuAction('help:learn-more')}>
             <Typography variant="body2">

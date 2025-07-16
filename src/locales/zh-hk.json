@@ -1424,5 +1424,7 @@
   "workspace.avatar.customize.appearance": "自訂外觀",
   "workspace.avatar.customize.voice": "自訂語音",
   "workspace.avatar.current": "目前導師",
-  "workspace.avatar.design.overview": "自訂您的虛擬導師設計設定。請從選單選擇外觀或語音選項開始。"
+  "workspace.avatar.design.overview": "自訂您的虛擬導師設計設定。請從選單選擇外觀或語音選項開始。",
+  "menu.workspace.tools": "工具箱",
+  "menu.workspace.learningPartner": "我的夥伴"
 }

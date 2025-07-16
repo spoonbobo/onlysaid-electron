@@ -1,14 +1,11 @@
 import { Box, Typography } from "@mui/material";
-import { useState, useEffect } from "react";
 import { FormattedMessage } from "react-intl";
 import { useTopicStore } from "@/renderer/stores/Topic/TopicStore";
 import MenuListItem from "@/renderer/components/Navigation/MenuListItem";
 import { useCurrentTopicContext } from "@/renderer/stores/Topic/TopicStore";
 import SchoolIcon from "@mui/icons-material/School";
-import AnalyticsIcon from "@mui/icons-material/Analytics";
-import TrendingUpIcon from "@mui/icons-material/TrendingUp";
 
-export default function WorkspaceInsightsMenu() {
+export default function MyPartnerMenu() {
   const { selectedContext } = useCurrentTopicContext();
   const selectedTopics = useTopicStore((state) => state.selectedTopics);
   const setSelectedTopic = useTopicStore((state) => state.setSelectedTopic);
@@ -17,24 +14,17 @@ export default function WorkspaceInsightsMenu() {
   const section = selectedContext?.section || '';
   const selectedSubcategory = section ? selectedTopics[section] || '' : '';
 
-  const handleSelectInsight = (insightType: string) => {
-    setSelectedTopic(section, insightType);
+  const handleSelectPartner = (partnerType: string) => {
+    setSelectedTopic(section, partnerType);
   };
 
-  // Available insight services
-  const insightServices = [
+  // Available partner services
+  const partnerServices = [
     {
-      id: 'moodle',
-      name: 'Moodle Learning Analytics',
+      id: 'coursework-helper',
+      name: 'Coursework Helper',
       icon: SchoolIcon,
-      description: 'Course progress and student performance insights',
-      disabled: false
-    },
-    {
-      id: 'meeting-summarizer',
-      name: 'Meeting Summarizer',
-      icon: AnalyticsIcon,
-      description: 'Automatically summarize meetings and extract key insights',
+      description: 'AI assistant for coursework, assignments, and academic support',
       disabled: false
     }
   ];
@@ -43,8 +33,8 @@ export default function WorkspaceInsightsMenu() {
     return (
       <Box sx={{ mt: 2, px: 2 }}>
         <Box sx={{ mt: 2 }}>
-          {insightServices.length > 0 ? (
-            insightServices.map((service) => {
+          {partnerServices.length > 0 ? (
+            partnerServices.map((service) => {
               const IconComponent = service.icon;
               
               return (
@@ -78,7 +68,7 @@ export default function WorkspaceInsightsMenu() {
                     </Box>
                   }
                   isSelected={selectedSubcategory === service.id}
-                  onClick={() => !service.disabled && handleSelectInsight(service.id)}
+                  onClick={() => !service.disabled && handleSelectPartner(service.id)}
                   sx={{ 
                     pl: 4,
                     py: 1.5,
@@ -94,17 +84,17 @@ export default function WorkspaceInsightsMenu() {
             })
           ) : (
             <Box sx={{ pl: 4, py: 1, color: 'text.secondary', fontSize: '0.875rem' }}>
-              <FormattedMessage id="workspace.insights.noServices" defaultMessage="No insight services available" />
+              <FormattedMessage id="workspace.mypartner.noServices" defaultMessage="No partner services available" />
             </Box>
           )}
         </Box>
       </Box>
     );
   } catch (error) {
-    console.error("Error in WorkspaceInsightsMenu:", error);
+    console.error("Error in MyPartnerMenu:", error);
     return (
       <Box sx={{ p: 2, color: 'error.main' }}>
-        An error occurred loading the insights menu.
+        An error occurred loading the partner menu.
       </Box>
     );
   }

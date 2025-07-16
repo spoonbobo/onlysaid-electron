@@ -256,10 +256,9 @@ export default function AutoGrade({ workspaceId }: AutoGradeProps) {
       setLoadingKBs(true);
       const kbs = await getKnowledgeBaseDetailsList(workspaceId);
       if (kbs) {
-        const enabledKBs = kbs.filter(kb => kb.enabled);
-        setKnowledgeBases(enabledKBs);
-        if (!selectedKbId && enabledKBs.length > 0) {
-          setSelectedKbId(enabledKBs[0].id);
+        setKnowledgeBases(kbs as unknown as KnowledgeBase[]);
+        if (!selectedKbId && kbs.length > 0) {
+          setSelectedKbId(kbs[0].id);
         }
       }
     } catch (error: any) {

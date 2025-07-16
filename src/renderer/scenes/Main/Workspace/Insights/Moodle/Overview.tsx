@@ -141,7 +141,7 @@ export default function MoodleOverview({ workspaceId }: MoodleOverviewProps) {
                       id: selectedContext?.id,
                       name: selectedContext?.name || 'workspace',
                       type: selectedContext?.type || 'workspace',
-                      section: 'workspace:settings'
+                      section: 'workspace:workspaceSettings'
                     });
                   }}
                 >
