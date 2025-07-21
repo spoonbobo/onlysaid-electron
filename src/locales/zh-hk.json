@@ -98,9 +98,9 @@
   "chat.renameChat": "重命名聊天",
   "chat.originalName": "原始名稱",
   "chat.chatName": "聊天名稱",
-  "chat.mode.none": "不使用AI",
-  "chat.mode.ask": "詢問(AI)",
-  "chat.mode.agent": "代理(AI)",
+  "chat.mode.none": "None",
+  "chat.mode.ask": "Ask",
+  "chat.mode.agent": "Agent",
   "workspace.create": "創建工作空間",
   "workspace.create.description": "創建一個工作空間，讓您可以與其他人共享工作空間。",
   "workspace.create.title": "創建新工作空間",
@@ -179,7 +179,7 @@
   "menu.workspace.role.admin": "管理員",
   "menu.workspace.role.superAdmin": "超級管理員",
   "menu.workspace.roleDescription": "設定用戶在工作空間中的權限級別",
-  "menu.playground": "Playground",
+  "menu.docs": "幫助",
 
   "settings.general": "一般",
   "settings.user": "用戶",
@@ -329,7 +329,7 @@
   "menu.workspace.inviteUserTo": "邀請用戶加入「{name}」",
 
   "workspace.workspace:chatroom": "聊天室",
-  "chat.mode.query": "查詢(AI)",
+  "chat.mode.query": "Query",
   "chat.noKBsAvailable": "沒有可用的知識庫",
   "chat.selectKB.multiple": "選擇知識庫",
   "chat.allKBsSelected": "已選擇所有知識庫",
@@ -568,13 +568,13 @@
   "titleBar.topic.workspace": "工作區",
   "titleBar.topic.settings": "設定",
   "titleBar.topic.file": "檔案",
-  "titleBar.topic.playground": "遊樂場",
+  "titleBar.topic.docs": "幫助",
   "titleBar.topic.calendar": "日曆",
 
   "titleBar.menu.file": "檔案",
   "titleBar.menu.edit": "編輯",
   "titleBar.menu.view": "檢視",
-  "titleBar.menu.help": "說明",
+  "titleBar.menu.help": "幫助",
 
   "titleBar.file.open": "開啟",
   "titleBar.file.close": "關閉",
@@ -1426,5 +1426,30 @@
   "workspace.avatar.current": "目前導師",
   "workspace.avatar.design.overview": "自訂您的虛擬導師設計設定。請從選單選擇外觀或語音選項開始。",
   "menu.workspace.tools": "工具箱",
-  "menu.workspace.learningPartner": "我的夥伴"
+  "menu.workspace.learningPartner": "我的夥伴",
+
+  "workspace.insights.services.moodle": "Moodle 學習分析",
+  "workspace.insights.services.meetingSummarizer": "會議摘要工具",
+  
+  "workspace.insights.moodle.tabs.overview.keyword": "概覽",
+  
+  "workspace.insights.moodle.tabs.autograde.keyword": "自動評分",
+  
+  "workspace.insights.moodle.tabs.deeptrend.keyword": "趨勢",
+  
+  "workspace.insights.moodle.tabs.coursearchitect.keyword": "設計",
+  
+  "workspace.insights.moodle.tabs.semesterreport.keyword": "報告",
+  
+  "workspace.insights.moodle.tabs.insightsreleaser.keyword": "發佈",
+  
+  "workspace.insights.moodle.tabs.safebackup.keyword": "備份",
+
+  "workspace.insights.noWorkspaceSelected": "沒有選擇工作空間。請選擇一個工作空間來查看洞察。",
+  "workspace.insights.selectService": "選擇洞察服務",
+  "workspace.insights.selectServiceDescription": "從選單中選擇洞察服務開始進行分析和報告。",
+  "workspace.insights.serviceNotImplemented": "{service} 服務尚未實現。",
+  "workspace.insights.meetingSummarizer.description": "{name} 的會議分析和摘要洞察",
+  "workspace.insights.meetingSummarizer.comingSoon": "會議摘要和洞察功能即將推出...",
+  "docs.mcp-tools": "MCP 工具和測試"
 }

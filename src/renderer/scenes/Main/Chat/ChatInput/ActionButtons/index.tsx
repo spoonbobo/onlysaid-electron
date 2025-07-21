@@ -67,7 +67,8 @@ export default function ActionButtons({
     >
       <Box sx={{ display: "flex", gap: 0.5, alignItems: "center", flexWrap: "nowrap", overflowX: "auto" }}>
         <AIMode disabled={disabled} />
-        {aiMode !== "agent" && <ModelSelector disabled={disabled} />}
+        {/* Only show model selector when not in agent or query mode */}
+        {aiMode !== "agent" && aiMode !== "query" && <ModelSelector disabled={disabled} />}
       </Box>
 
       <Box sx={{ display: "flex", gap: 0.5 }}>
@@ -112,7 +113,9 @@ export default function ActionButtons({
           size="small"
           disabled={(!input.trim() && !hasAttachments) || disabled || isSending}
           sx={{
-            color: (input.trim() || hasAttachments) && !disabled && (aiMode !== "agent" ? (modelId && provider) : true)
+            color: (input.trim() || hasAttachments) && !disabled && (
+              aiMode === "agent" || aiMode === "query" ? true : (modelId && provider)
+            )
               ? "primary.main"
               : "text.disabled",
             "&:hover": {

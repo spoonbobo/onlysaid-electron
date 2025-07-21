@@ -16,254 +16,277 @@ function AvatarModel({ autoRotate = false }: { autoRotate?: boolean }) {
   const meshRef = useRef<THREE.Group>(null);
   const { 
     currentAppearance, 
-    currentAnimation, 
-    animationSpeed,
     selectedModel,
     getModelById 
   } = useThreeStore();
 
   const currentModel = getModelById(selectedModel || 'alice-3d');
 
-  // Create a simple avatar geometry based on appearance
-  useFrame((state, delta) => {
+  // Keep avatar static - no animations
+  useFrame(() => {
     if (meshRef.current) {
-      // Only rotate if autoRotate is enabled
-      if (autoRotate) {
-        meshRef.current.rotation.y += delta * 0.5 * animationSpeed;
-      }
-      
-      // Add some idle animation (but reset rotation first if not auto-rotating)
-      if (!autoRotate) {
-        // Keep the avatar facing forward when not auto-rotating
-        meshRef.current.rotation.y = 0;
-      }
-      
-      if (currentAnimation === 'idle') {
-        meshRef.current.position.y = Math.sin(state.clock.elapsedTime * 2) * 0.05;
-      } else if (currentAnimation === 'wave') {
-        meshRef.current.rotation.z = Math.sin(state.clock.elapsedTime * 3) * 0.1;
-      } else {
-        // Reset position and Z rotation when no animation
-        meshRef.current.position.y = 0;
-        meshRef.current.rotation.z = 0;
-      }
+      meshRef.current.rotation.y = 0;
+      meshRef.current.position.y = 0;
+      meshRef.current.rotation.z = 0;
     }
   });
 
   return (
     <group ref={meshRef}>
-      {/* Head - More oval shaped */}
-      <mesh position={[0, 1.65, 0]}>
-        <sphereGeometry args={[0.28, 32, 32]} />
+      {/* Head - Anime style (larger, rounder) */}
+      <mesh position={[0, 1.7, 0]}>
+        <sphereGeometry args={[0.32, 32, 32]} />
         <meshStandardMaterial 
           color={currentAppearance.skinColor} 
-          roughness={0.8}
+          roughness={0.3}
           metalness={0.1}
         />
       </mesh>
       
-      {/* Eyes - More realistic positioning */}
-      <mesh position={[-0.08, 1.7, 0.22]}>
-        <sphereGeometry args={[0.04, 16, 16]} />
-        <meshStandardMaterial color="white" />
+      {/* Large anime eyes - Left eye */}
+      <mesh position={[-0.08, 1.75, 0.28]}>
+        <sphereGeometry args={[0.08, 16, 16]} />
+        <meshStandardMaterial color="white" roughness={0.1} />
       </mesh>
-      <mesh position={[0.08, 1.7, 0.22]}>
-        <sphereGeometry args={[0.04, 16, 16]} />
-        <meshStandardMaterial color="white" />
+      <mesh position={[0.08, 1.75, 0.28]}>
+        <sphereGeometry args={[0.08, 16, 16]} />
+        <meshStandardMaterial color="white" roughness={0.1} />
       </mesh>
       
-      {/* Pupils */}
-      <mesh position={[-0.08, 1.7, 0.25]}>
-        <sphereGeometry args={[0.025, 16, 16]} />
+      {/* Large anime pupils */}
+      <mesh position={[-0.08, 1.75, 0.35]}>
+        <sphereGeometry args={[0.045, 16, 16]} />
         <meshStandardMaterial color={currentAppearance.eyeColor} />
       </mesh>
-      <mesh position={[0.08, 1.7, 0.25]}>
-        <sphereGeometry args={[0.025, 16, 16]} />
+      <mesh position={[0.08, 1.75, 0.35]}>
+        <sphereGeometry args={[0.045, 16, 16]} />
         <meshStandardMaterial color={currentAppearance.eyeColor} />
       </mesh>
       
-      {/* Eyebrows */}
-      <mesh position={[-0.08, 1.78, 0.18]} rotation={[0, 0, -0.2]}>
-        <boxGeometry args={[0.08, 0.02, 0.02]} />
+      {/* Eye highlights (anime sparkle) */}
+      <mesh position={[-0.06, 1.78, 0.36]}>
+        <sphereGeometry args={[0.015, 8, 8]} />
+        <meshStandardMaterial color="white" emissive="white" emissiveIntensity={0.3} />
+      </mesh>
+      <mesh position={[0.1, 1.78, 0.36]}>
+        <sphereGeometry args={[0.015, 8, 8]} />
+        <meshStandardMaterial color="white" emissive="white" emissiveIntensity={0.3} />
+      </mesh>
+      
+      {/* Smaller secondary highlights */}
+      <mesh position={[-0.09, 1.72, 0.36]}>
+        <sphereGeometry args={[0.008, 8, 8]} />
+        <meshStandardMaterial color="white" emissive="white" emissiveIntensity={0.5} />
+      </mesh>
+      <mesh position={[0.07, 1.72, 0.36]}>
+        <sphereGeometry args={[0.008, 8, 8]} />
+        <meshStandardMaterial color="white" emissive="white" emissiveIntensity={0.5} />
+      </mesh>
+      
+      {/* Anime-style eyebrows (thinner, more arched) */}
+      <mesh position={[-0.08, 1.85, 0.25]} rotation={[0, 0, -0.15]}>
+        <capsuleGeometry args={[0.008, 0.08, 4, 8]} />
         <meshStandardMaterial color={currentAppearance.hairColor} />
       </mesh>
-      <mesh position={[0.08, 1.78, 0.18]} rotation={[0, 0, 0.2]}>
-        <boxGeometry args={[0.08, 0.02, 0.02]} />
+      <mesh position={[0.08, 1.85, 0.25]} rotation={[0, 0, 0.15]}>
+        <capsuleGeometry args={[0.008, 0.08, 4, 8]} />
         <meshStandardMaterial color={currentAppearance.hairColor} />
       </mesh>
       
-      {/* Nose */}
-      <mesh position={[0, 1.65, 0.25]}>
-        <coneGeometry args={[0.03, 0.08, 8]} />
+      {/* Small anime nose (just a tiny dot) */}
+      <mesh position={[0, 1.68, 0.31]}>
+        <sphereGeometry args={[0.015, 8, 8]} />
         <meshStandardMaterial 
           color={currentAppearance.skinColor} 
-          roughness={0.8}
-          metalness={0.1}
+          roughness={0.4}
         />
       </mesh>
       
-      {/* Mouth */}
-      <mesh position={[0, 1.55, 0.22]}>
-        <sphereGeometry args={[0.06, 16, 8, 0, Math.PI]} />
-        <meshStandardMaterial color="#8B4513" />
+      {/* Small anime mouth */}
+      <mesh position={[0, 1.58, 0.3]}>
+        <sphereGeometry args={[0.025, 16, 8, 0, Math.PI]} />
+        <meshStandardMaterial color="#FF6B9D" roughness={0.2} />
       </mesh>
       
-      {/* Hair - More realistic shape */}
-      <mesh position={[0, 1.8, -0.05]}>
-        <sphereGeometry args={[0.32, 32, 32, 0, Math.PI * 2, 0, Math.PI * 0.8]} />
+      {/* Anime blush marks */}
+      <mesh position={[-0.2, 1.65, 0.25]}>
+        <sphereGeometry args={[0.03, 16, 8]} />
+        <meshStandardMaterial color="#FFB6C1" transparent opacity={0.6} />
+      </mesh>
+      <mesh position={[0.2, 1.65, 0.25]}>
+        <sphereGeometry args={[0.03, 16, 8]} />
+        <meshStandardMaterial color="#FFB6C1" transparent opacity={0.6} />
+      </mesh>
+      
+      {/* Anime hair - more voluminous and stylized */}
+      <mesh position={[0, 1.9, -0.1]}>
+        <sphereGeometry args={[0.35, 32, 32, 0, Math.PI * 2, 0, Math.PI * 0.7]} />
         <meshStandardMaterial 
           color={currentAppearance.hairColor}
-          roughness={0.9}
-          metalness={0.1}
+          roughness={0.8}
+          metalness={0.05}
         />
       </mesh>
       
-      {/* Neck */}
-      <mesh position={[0, 1.3, 0]}>
-        <cylinderGeometry args={[0.12, 0.15, 0.25, 16]} />
+      {/* Hair bangs */}
+      <mesh position={[0, 1.95, 0.15]}>
+        <sphereGeometry args={[0.25, 16, 16, 0, Math.PI * 2, 0, Math.PI * 0.4]} />
+        <meshStandardMaterial 
+          color={currentAppearance.hairColor}
+          roughness={0.8}
+        />
+      </mesh>
+      
+      {/* Side hair strands */}
+      <mesh position={[-0.25, 1.8, 0.1]} rotation={[0, 0, -0.3]}>
+        <capsuleGeometry args={[0.08, 0.3, 4, 8]} />
+        <meshStandardMaterial 
+          color={currentAppearance.hairColor}
+          roughness={0.8}
+        />
+      </mesh>
+      <mesh position={[0.25, 1.8, 0.1]} rotation={[0, 0, 0.3]}>
+        <capsuleGeometry args={[0.08, 0.3, 4, 8]} />
+        <meshStandardMaterial 
+          color={currentAppearance.hairColor}
+          roughness={0.8}
+        />
+      </mesh>
+      
+      {/* Neck - slimmer for anime style */}
+      <mesh position={[0, 1.4, 0]}>
+        <cylinderGeometry args={[0.08, 0.1, 0.18, 16]} />
         <meshStandardMaterial 
           color={currentAppearance.skinColor}
-          roughness={0.8}
-          metalness={0.1}
+          roughness={0.3}
         />
       </mesh>
       
-      {/* Torso - More human proportions */}
-      <mesh position={[0, 0.85, 0]}>
-        <capsuleGeometry args={[0.25, 0.6, 4, 8]} />
+      {/* Torso - more stylized, smaller waist */}
+      <mesh position={[0, 0.95, 0]}>
+        <capsuleGeometry args={[0.18, 0.5, 4, 8]} />
         <meshStandardMaterial 
           color={currentAppearance.clothingColor}
-          roughness={0.7}
-          metalness={0.2}
+          roughness={0.6}
         />
       </mesh>
       
-      {/* Shoulders */}
-      <mesh position={[-0.35, 1.1, 0]}>
-        <sphereGeometry args={[0.12, 16, 16]} />
+      {/* Anime-style clothing details */}
+      <mesh position={[0, 1.1, 0.19]}>
+        <boxGeometry args={[0.3, 0.25, 0.02]} />
         <meshStandardMaterial 
           color={currentAppearance.clothingColor}
-          roughness={0.7}
-          metalness={0.2}
+          roughness={0.5}
         />
       </mesh>
-      <mesh position={[0.35, 1.1, 0]}>
-        <sphereGeometry args={[0.12, 16, 16]} />
+      
+      {/* Arms - slimmer anime proportions */}
+      <mesh position={[-0.25, 1.05, 0]}>
+        <capsuleGeometry args={[0.045, 0.22, 4, 8]} />
         <meshStandardMaterial 
           color={currentAppearance.clothingColor}
-          roughness={0.7}
-          metalness={0.2}
+          roughness={0.6}
         />
       </mesh>
-      
-      {/* Upper Arms */}
-      <mesh position={[-0.35, 0.85, 0]}>
-        <capsuleGeometry args={[0.08, 0.35, 4, 8]} />
-        <meshStandardMaterial 
-          color={currentAppearance.skinColor}
-          roughness={0.8}
-          metalness={0.1}
-        />
-      </mesh>
-      <mesh position={[0.35, 0.85, 0]}>
-        <capsuleGeometry args={[0.08, 0.35, 4, 8]} />
-        <meshStandardMaterial 
-          color={currentAppearance.skinColor}
-          roughness={0.8}
-          metalness={0.1}
-        />
-      </mesh>
-      
-      {/* Lower Arms */}
-      <mesh position={[-0.35, 0.45, 0]}>
-        <capsuleGeometry args={[0.07, 0.3, 4, 8]} />
-        <meshStandardMaterial 
-          color={currentAppearance.skinColor}
-          roughness={0.8}
-          metalness={0.1}
-        />
-      </mesh>
-      <mesh position={[0.35, 0.45, 0]}>
-        <capsuleGeometry args={[0.07, 0.3, 4, 8]} />
-        <meshStandardMaterial 
-          color={currentAppearance.skinColor}
-          roughness={0.8}
-          metalness={0.1}
-        />
-      </mesh>
-      
-      {/* Hands */}
-      <mesh position={[-0.35, 0.25, 0]}>
-        <sphereGeometry args={[0.08, 12, 12]} />
-        <meshStandardMaterial 
-          color={currentAppearance.skinColor}
-          roughness={0.8}
-          metalness={0.1}
-        />
-      </mesh>
-      <mesh position={[0.35, 0.25, 0]}>
-        <sphereGeometry args={[0.08, 12, 12]} />
-        <meshStandardMaterial 
-          color={currentAppearance.skinColor}
-          roughness={0.8}
-          metalness={0.1}
-        />
-      </mesh>
-      
-      {/* Hips */}
-      <mesh position={[0, 0.4, 0]}>
-        <sphereGeometry args={[0.22, 16, 16, 0, Math.PI * 2, 0, Math.PI * 0.7]} />
+      <mesh position={[0.25, 1.05, 0]}>
+        <capsuleGeometry args={[0.045, 0.22, 4, 8]} />
         <meshStandardMaterial 
           color={currentAppearance.clothingColor}
-          roughness={0.7}
-          metalness={0.2}
+          roughness={0.6}
         />
       </mesh>
       
-      {/* Upper Legs */}
-      <mesh position={[-0.12, 0.05, 0]}>
-        <capsuleGeometry args={[0.1, 0.5, 4, 8]} />
-        <meshStandardMaterial 
-          color={currentAppearance.clothingColor}
-          roughness={0.7}
-          metalness={0.2}
-        />
-      </mesh>
-      <mesh position={[0.12, 0.05, 0]}>
-        <capsuleGeometry args={[0.1, 0.5, 4, 8]} />
-        <meshStandardMaterial 
-          color={currentAppearance.clothingColor}
-          roughness={0.7}
-          metalness={0.2}
-        />
-      </mesh>
-      
-      {/* Lower Legs */}
-      <mesh position={[-0.12, -0.35, 0]}>
-        <capsuleGeometry args={[0.08, 0.4, 4, 8]} />
+      {/* Forearms */}
+      <mesh position={[-0.25, 0.75, 0]}>
+        <capsuleGeometry args={[0.04, 0.2, 4, 8]} />
         <meshStandardMaterial 
           color={currentAppearance.skinColor}
-          roughness={0.8}
-          metalness={0.1}
+          roughness={0.3}
         />
       </mesh>
-      <mesh position={[0.12, -0.35, 0]}>
-        <capsuleGeometry args={[0.08, 0.4, 4, 8]} />
+      <mesh position={[0.25, 0.75, 0]}>
+        <capsuleGeometry args={[0.04, 0.2, 4, 8]} />
         <meshStandardMaterial 
           color={currentAppearance.skinColor}
-          roughness={0.8}
-          metalness={0.1}
+          roughness={0.3}
         />
       </mesh>
       
-      {/* Feet */}
-      <mesh position={[-0.12, -0.65, 0.05]}>
-        <boxGeometry args={[0.12, 0.08, 0.25]} />
-        <meshStandardMaterial color="#2E2E2E" />
+      {/* Hands - smaller, more delicate */}
+      <mesh position={[-0.25, 0.6, 0]}>
+        <sphereGeometry args={[0.05, 12, 12]} />
+        <meshStandardMaterial 
+          color={currentAppearance.skinColor}
+          roughness={0.3}
+        />
       </mesh>
-      <mesh position={[0.12, -0.65, 0.05]}>
-        <boxGeometry args={[0.12, 0.08, 0.25]} />
-        <meshStandardMaterial color="#2E2E2E" />
+      <mesh position={[0.25, 0.6, 0]}>
+        <sphereGeometry args={[0.05, 12, 12]} />
+        <meshStandardMaterial 
+          color={currentAppearance.skinColor}
+          roughness={0.3}
+        />
+      </mesh>
+      
+      {/* Waist - very slim anime waist */}
+      <mesh position={[0, 0.6, 0]}>
+        <cylinderGeometry args={[0.12, 0.15, 0.12, 16]} />
+        <meshStandardMaterial 
+          color={currentAppearance.clothingColor}
+          roughness={0.6}
+        />
+      </mesh>
+      
+      {/* Legs - anime proportions */}
+      <mesh position={[-0.07, 0.3, 0]}>
+        <capsuleGeometry args={[0.06, 0.35, 4, 8]} />
+        <meshStandardMaterial 
+          color={currentAppearance.clothingColor}
+          roughness={0.6}
+        />
+      </mesh>
+      <mesh position={[0.07, 0.3, 0]}>
+        <capsuleGeometry args={[0.06, 0.35, 4, 8]} />
+        <meshStandardMaterial 
+          color={currentAppearance.clothingColor}
+          roughness={0.6}
+        />
+      </mesh>
+      
+      {/* Lower legs - slim */}
+      <mesh position={[-0.07, -0.05, 0]}>
+        <capsuleGeometry args={[0.05, 0.3, 4, 8]} />
+        <meshStandardMaterial 
+          color={currentAppearance.skinColor}
+          roughness={0.3}
+        />
+      </mesh>
+      <mesh position={[0.07, -0.05, 0]}>
+        <capsuleGeometry args={[0.05, 0.3, 4, 8]} />
+        <meshStandardMaterial 
+          color={currentAppearance.skinColor}
+          roughness={0.3}
+        />
+      </mesh>
+      
+      {/* Anime-style shoes - cuter, rounder */}
+      <mesh position={[-0.07, -0.28, 0.06]}>
+        <sphereGeometry args={[0.08, 16, 16, 0, Math.PI * 2, 0, Math.PI * 0.6]} />
+        <meshStandardMaterial color="#FF69B4" roughness={0.4} />
+      </mesh>
+      <mesh position={[0.07, -0.28, 0.06]}>
+        <sphereGeometry args={[0.08, 16, 16, 0, Math.PI * 2, 0, Math.PI * 0.6]} />
+        <meshStandardMaterial color="#FF69B4" roughness={0.4} />
+      </mesh>
+      
+      {/* Shoe straps */}
+      <mesh position={[-0.07, -0.22, 0.1]}>
+        <boxGeometry args={[0.1, 0.02, 0.02]} />
+        <meshStandardMaterial color="#FF1493" />
+      </mesh>
+      <mesh position={[0.07, -0.22, 0.1]}>
+        <boxGeometry args={[0.1, 0.02, 0.02]} />
+        <meshStandardMaterial color="#FF1493" />
       </mesh>
     </group>
   );

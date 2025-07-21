@@ -31,3 +31,6 @@ npm-debug.log.*
 *.sass.d.ts
 *.scss.d.ts
 
+
+# Environment file backups
+.env.backup

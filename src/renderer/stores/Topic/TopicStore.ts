@@ -23,7 +23,8 @@ export interface TopicContext {
   "calendar" |
   "workspace:calendar" |
   "admin" |
-  "portal"
+  "portal" |
+  "docs"
   section?: string;
 }
 

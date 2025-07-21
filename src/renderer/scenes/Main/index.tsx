@@ -7,14 +7,15 @@ import AdminPanel from "./Admin";
 import Portal from "./Portal";
 import { useTopicStore } from "@/renderer/stores/Topic/TopicStore";
 import { Box, Typography } from "@mui/material";
-import Playground from "@/renderer/components/Debug/Playground";
+import Playground from "@/renderer/scenes/Main/Docs";
 import Calendar from "@/renderer/scenes/Main/Calendar";
 import Members from "@/renderer/scenes/Main/Workspace/Members/index";
 import KnowledgeBase from "@/renderer/scenes/Main/Settings/KnowledgeBase";
 import WorkspaceSettings from "@/renderer/scenes/Main/Workspace/Settings/index";
-import MoodleInsights from "@/renderer/scenes/Main/Workspace/Insights/Moodle/index";
+import WorkspaceInsights from "@/renderer/scenes/Main/Workspace/Insights/index";
 import Avatar from "@/renderer/scenes/Main/Workspace/Avatar/index";
 import MyPartner from "./Workspace/MyPartner";
+import Docs from "./Docs";
 
 function Main() {
   const { selectedContext } = useTopicStore();
@@ -42,7 +43,7 @@ function Main() {
       case "workspace:workspaceGeneralSettings":
         return <Default section="Workspace General Settings" />;
       case "workspace:insights":
-        return <MoodleInsights />;
+        return <WorkspaceInsights />;
       case "workspace:learningPartner":
         return <MyPartner />;
       default:
@@ -76,6 +77,7 @@ function Main() {
     const menuComponents: Record<string, React.ReactNode> = {
       settings: <Settings />,
       playground: <Playground />,
+      docs: <Docs />,
       file: <FileExplorer />,
       admin: <AdminPanel />,
       portal: <Portal />,

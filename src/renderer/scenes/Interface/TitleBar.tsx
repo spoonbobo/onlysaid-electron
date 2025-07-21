@@ -55,6 +55,8 @@ const TitleBar = () => {
   const [showDisclaimer, setShowDisclaimer] = useState(false);
   const [appIcon, setAppIcon] = useState<string | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
+  // ✅ Add search input state
+  const [searchInputValue, setSearchInputValue] = useState('');
   
   // ✅ Add window state tracking
   const [isWindowMaximized, setIsWindowMaximized] = useState(false);
@@ -112,10 +114,11 @@ const TitleBar = () => {
         icon: null
       },
       {
-        name: intl.formatMessage({ id: 'titleBar.topic.playground' }),
-        type: 'playground', 
+        name: intl.formatMessage({ id: 'titleBar.topic.docs' }),
+        type: 'docs', 
         section: 'Core',
-        value: { name: 'playground', type: 'playground' },
+        // ✅ FIX: Add a default section so header shows just "Documentation"
+        value: { name: 'docs', type: 'docs', section: 'docs' },
         icon: null
       }
     ];
@@ -248,14 +251,36 @@ const TitleBar = () => {
     goForward();
   }, [goForward]);
 
+  // ✅ Update onInputChange handler to allow typing
+  const handleInputChange = useCallback((event: React.SyntheticEvent, newInputValue: string, reason: string) => {
+    if (reason === 'input') {
+      setSearchInputValue(newInputValue);
+    }
+  }, []);
+
   const handleContextChange = useCallback((event: any, newValue: any) => {
     if (newValue && newValue.value) {
       const contextToSet = newValue.value;
       setSelectedContext(contextToSet);
       addToHistory(contextToSet);
       setSearchOpen(false);
+      // ✅ Clear search input after selection
+      setSearchInputValue('');
     }
   }, [setSelectedContext, addToHistory]);
+
+  // ✅ Update to handle search open/close and reset input
+  const handleSearchOpen = useCallback(() => {
+    setSearchOpen(true);
+    // Always start with empty input to show all contexts
+    setSearchInputValue('');
+  }, []);
+
+  const handleSearchClose = useCallback(() => {
+    setSearchOpen(false);
+    // Reset to empty when closing without selection
+    setSearchInputValue('');
+  }, []);
 
   // Function to get current topic display name - memoized
   const getCurrentTopicInfo = useMemo(() => {
@@ -295,9 +320,9 @@ const TitleBar = () => {
           name: intl.formatMessage({ id: 'titleBar.topic.file' }),
           icon: null
         };
-      case 'playground':
+      case 'docs':
         return {
-          name: intl.formatMessage({ id: 'titleBar.topic.playground' }),
+          name: intl.formatMessage({ id: 'titleBar.topic.docs' }),
           icon: null
         };
       case 'calendar':
@@ -592,14 +617,12 @@ const TitleBar = () => {
             <Autocomplete
               options={availableContexts}
               getOptionLabel={(option) => option.name}
-              inputValue={getCurrentContextOption()?.name || ''}
-              onInputChange={(event: React.SyntheticEvent, newInputValue: string, reason: string) => {
-                // Handle typing if needed
-              }}
+              inputValue={searchOpen ? searchInputValue : (getCurrentContextOption()?.name || '')}
+              onInputChange={handleInputChange}
               onChange={handleContextChange}
               open={searchOpen}
-              onOpen={() => setSearchOpen(true)}
-              onClose={() => setSearchOpen(false)}
+              onOpen={handleSearchOpen}
+              onClose={handleSearchClose}
               disableClearable
               size="small"
               groupBy={(option) => option.section}
@@ -654,13 +677,6 @@ const TitleBar = () => {
                       startAdornment: (
                         <InputAdornment position="start">
                           <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                            <Search 
-                              sx={{ 
-                                fontSize: 16, 
-                                color: 'text.secondary',
-                                opacity: searchOpen ? 0.8 : 0.6
-                              }} 
-                            />
                             {getCurrentContextOption()?.icon && (
                               <Avatar 
                                 src={getCurrentContextOption()?.icon || ''} 

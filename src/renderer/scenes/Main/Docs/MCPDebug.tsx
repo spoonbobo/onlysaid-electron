@@ -237,20 +237,20 @@ const MCPDebug: React.FC<MCPDebugProps> = ({
     );
   }
 
-  // Main Content Component
+  // Main Content Component - Only show tool details or tool selection
   if (!selectedTool) {
-    // Service Overview
+    // ✅ Show tool selection interface for the specific service
     return (
       <Box sx={{ p: 3 }}>
         <Typography variant="h5" sx={{ mb: 2 }}>
           {services[selectedService]?.name}
         </Typography>
         <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
-          {services[selectedService]?.tools.length} tools available
+          {services[selectedService]?.tools.length} tools available. Select a tool to view its details.
         </Typography>
         
         <Paper sx={{ p: 2 }}>
-          <Typography variant="h6" sx={{ mb: 2 }}>Tools</Typography>
+          <Typography variant="h6" sx={{ mb: 2 }}>Available Tools</Typography>
           <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
             {services[selectedService]?.tools.map((tool: any, index: number) => (
               <Chip
@@ -282,7 +282,7 @@ const MCPDebug: React.FC<MCPDebugProps> = ({
     );
   }
 
-  // Tool Details
+  // Tool Details (same as before)
   return (
     <Box sx={{ p: 3 }}>
       {/* Breadcrumbs */}

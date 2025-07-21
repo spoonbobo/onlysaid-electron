@@ -9,6 +9,7 @@ import MenuHeader from "./Header";
 import React from "react";
 import CalendarMenu from "./Calendar";
 import MenuDefault from "./default";
+import DocsMenu from "./Docs";
 
 const MIN_CONTENT_HEIGHT = 50;
 
@@ -30,6 +31,7 @@ function Menu() {
       case "settings": return UserSettings;
       case "home": return HomeMenu;
       case "calendar": return CalendarMenu;
+      case "docs": return DocsMenu;
       default: return MenuDefault;
     }
   }, [selectedContextType]);
