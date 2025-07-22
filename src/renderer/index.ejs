@@ -282,6 +282,9 @@
             <div class="progress-fill"></div>
           </div>
         </div>
+        
+        <!-- THEi sentence display -->
+        <p class="app-subtitle" id="thei-sentence"></p>
       </div>
     </div>
 
@@ -346,7 +349,10 @@
           'loading.waitingGoogleServices': 'Waiting for Google services...',
           'loading.initializingMCP': 'Initializing MCP services (%CURRENT%/%TOTAL%)...',
           'loading.readyToStart': 'Ready to start!',
-          'loading.completed': 'completed'
+          'loading.completed': 'completed',
+          'loading.thei1': 'THEi offers vocationally-oriented degree programmes with industry collaboration.',
+          'loading.thei2': 'THEi develops competent professionals through real-life projects and industrial attachments.',
+          'loading.thei3': 'THEi provides practical education in technology, design, engineering, and business management.'
         },
         'ja': {
           'loading.subtitle': 'AI搭載コラボレーションプラットフォーム',
@@ -357,7 +363,10 @@
           'loading.waitingGoogleServices': 'Googleサービスを待機中...',
           'loading.initializingMCP': 'MCPサービスを初期化中 (%CURRENT%/%TOTAL%)...',
           'loading.readyToStart': '開始準備完了！',
-          'loading.completed': '完了'
+          'loading.completed': '完了',
+          'loading.thei1': 'THEiは業界と密接に連携した実践的な学位プログラムを提供しています。',
+          'loading.thei2': 'THEiは実際のプロジェクトと企業研修を通じて優秀な専門家を育成します。',
+          'loading.thei3': 'THEiは技術、デザイン、工学、経営管理の実践的教育を提供します。'
         },
         'zh-hk': {
           'loading.subtitle': 'AI 驅動的協作平台',
@@ -368,7 +377,10 @@
           'loading.waitingGoogleServices': '正在等待 Google 服務...',
           'loading.initializingMCP': '正在初始化 MCP 服務 (%CURRENT%/%TOTAL%)...',
           'loading.readyToStart': '準備就緒！',
-          'loading.completed': '已完成'
+          'loading.completed': '已完成',
+          'loading.thei1': 'THEi 提供與業界緊密合作的職業導向學位課程。',
+          'loading.thei2': 'THEi 透過實際項目和工業實習培育專業人才。',
+          'loading.thei3': 'THEi 在科技、設計、工程和商業管理方面提供實踐教育。'
         }
       };
 
@@ -428,17 +440,27 @@
         const appTitle = document.getElementById('app-title');
         const appSubtitle = document.getElementById('app-subtitle');
         const loadingText = document.getElementById('loading-text');
+        const theiSentence = document.getElementById('thei-sentence');
 
         if (appTitle) appTitle.textContent = appConfig.productName;
-        if (appSubtitle) appSubtitle.textContent = t('loading.subtitle');
+        if (appSubtitle) appSubtitle.textContent = getRandomTheISentence();
         if (loadingText) loadingText.textContent = t('loading.initializing');
+        // Remove the separate THEi sentence since we're using it as the main subtitle
+        if (theiSentence) theiSentence.style.display = 'none';
+      };
+
+      // ✅ Function to get random THEi sentence
+      const getRandomTheISentence = () => {
+        const theiSentences = ['loading.thei1', 'loading.thei2', 'loading.thei3'];
+        const randomIndex = Math.floor(Math.random() * theiSentences.length);
+        return t(theiSentences[randomIndex]);
       };
 
       // ✅ Progress tracking
       let currentProgress = 0;
       const progressFill = document.querySelector('.progress-fill');
       const loadingText = document.getElementById('loading-text');
-      
+
       const updateProgress = (percentage, textKey, params = {}) => {
         currentProgress = percentage;
         if (progressFill) {

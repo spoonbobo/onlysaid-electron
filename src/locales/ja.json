@@ -839,5 +839,8 @@
   
   "common.yes": "はい",
   "common.no": "いいえ",
-  "common.refresh": "更新"
+  "common.refresh": "更新",
+  "loading.thei1": "THEiは業界と密接に連携した実践的な学位プログラムを提供しています。",
+  "loading.thei2": "THEiは実際のプロジェクトと企業研修を通じて優秀な専門家を育成します。",
+  "loading.thei3": "THEiは技術、デザイン、工学、経営管理の実践的教育を提供します。"
 }

@@ -24,42 +24,54 @@ function AvatarMenu() {
   };
 
   return (
-    <Box>
-      {/* Show chats directly without section wrapper */}
-      <AvatarChatMenu />
+    <Box sx={{ 
+      height: 'calc(100vh - 200px)', // Take up available height minus header/footer space
+      display: 'flex', 
+      flexDirection: 'column',
+      minHeight: '400px' // Ensure minimum height
+    }}>
+      {/* Chat Menu - flexible content */}
+      <Box sx={{ flex: 1, overflow: 'auto', minHeight: 0 }}>
+        <AvatarChatMenu />
+      </Box>
 
-      <Divider sx={{ mx: 1, my: 1 }} />
-
-      {/* Design Buttons at Bottom */}
-      <List dense>
-        <MenuListItem
-          label={
-            <Box sx={{ display: 'flex', alignItems: 'center' }}>
-              <BrushIcon sx={{ mr: 1, fontSize: 'small' }} />
-              <Typography variant="body2">
-                <FormattedMessage id="workspace.avatar.appearance" />
-              </Typography>
-            </Box>
-          }
-          isSelected={selectedDesignSubsection === 'appearance'}
-          onClick={() => handleDesignSubsectionClick('appearance')}
-          sx={{ py: 0.5, pl: 2 }}
-        />
-        
-        <MenuListItem
-          label={
-            <Box sx={{ display: 'flex', alignItems: 'center' }}>
-              <VolumeUpIcon sx={{ mr: 1, fontSize: 'small' }} />
-              <Typography variant="body2">
-                <FormattedMessage id="workspace.avatar.voice" />
-              </Typography>
-            </Box>
-          }
-          isSelected={selectedDesignSubsection === 'voice'}
-          onClick={() => handleDesignSubsectionClick('voice')}
-          sx={{ py: 0.5, pl: 2 }}
-        />
-      </List>
+      {/* Design Buttons - Fixed at bottom */}
+      <Box sx={{ 
+        flexShrink: 0,
+        borderTop: '1px solid',
+        borderColor: 'divider',
+        bgcolor: 'background.paper'
+      }}>
+        <List dense sx={{ py: 0 }}>
+          <MenuListItem
+            label={
+              <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                <BrushIcon sx={{ mr: 1, fontSize: 'small' }} />
+                <Typography variant="body2">
+                  <FormattedMessage id="workspace.avatar.appearance" />
+                </Typography>
+              </Box>
+            }
+            isSelected={selectedDesignSubsection === 'appearance'}
+            onClick={() => handleDesignSubsectionClick('appearance')}
+            sx={{ py: 0.5, pl: 2 }}
+          />
+          
+          <MenuListItem
+            label={
+              <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                <VolumeUpIcon sx={{ mr: 1, fontSize: 'small' }} />
+                <Typography variant="body2">
+                  <FormattedMessage id="workspace.avatar.voice" />
+                </Typography>
+              </Box>
+            }
+            isSelected={selectedDesignSubsection === 'voice'}
+            onClick={() => handleDesignSubsectionClick('voice')}
+            sx={{ py: 0.5, pl: 2 }}
+          />
+        </List>
+      </Box>
     </Box>
   );
 }

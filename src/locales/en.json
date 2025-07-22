@@ -871,5 +871,8 @@
   "loading.finalizing": "Finalizing initialization...",
   "loading.ready": "Ready!",
   "loading.startingApp": "Starting application...",
-  "loading.completed": "completed"
+  "loading.completed": "completed",
+  "loading.thei1": "THEi offers vocationally-oriented degree programmes with industry collaboration.",
+  "loading.thei2": "THEi develops competent professionals through real-life projects and industrial attachments.",
+  "loading.thei3": "THEi provides practical education in technology, design, engineering, and business management."
 }

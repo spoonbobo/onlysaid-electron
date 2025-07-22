@@ -1,9 +1,10 @@
-import { Box, Tooltip, IconButton, Menu, MenuItem, Avatar, Badge } from "@mui/material";
+import { Box, Tooltip, IconButton, Menu, MenuItem, Avatar, Badge, Fab, Zoom } from "@mui/material";
 import HomeIcon from "@mui/icons-material/Home";
 import AddIcon from "@mui/icons-material/Add";
 import GroupIcon from "@mui/icons-material/Group";
 import CalendarTodayIcon from "@mui/icons-material/CalendarToday";
 import AdminPanelSettingsIcon from "@mui/icons-material/AdminPanelSettings";
+import ChevronRightIcon from "@mui/icons-material/ChevronRight";
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import AddTeamDialog from "@/renderer/components/Dialog/Workspace/AddWorkspace";
 import ExitWorkspaceDialog from "@/renderer/components/Dialog/Workspace/ExitWorkspace";
@@ -18,8 +19,15 @@ import { useIntl } from "react-intl";
 import { useWorkspaceIcons } from '@/renderer/hooks/useWorkspaceIcons';
 import SupervisorAccountIcon from "@mui/icons-material/SupervisorAccount";
 import PortalIcon from "@mui/icons-material/Web";
+import ExpandedTabs from "./ExpandedTabs";
 
-function SidebarTabs() {
+interface SidebarTabsProps {
+  onExpandChange?: (expanded: boolean) => void;
+  onAgentToggle?: (show: boolean) => void;
+  agentOverlayVisible?: boolean;
+}
+
+function SidebarTabs({ onExpandChange, onAgentToggle, agentOverlayVisible = false }: SidebarTabsProps) {
   const { selectedContext, contexts, setSelectedContext, removeContext, addContext } = useTopicStore();
   const { workspaces, getWorkspace, exitWorkspace, isLoading, setWorkspaceCreatedCallback } = useWorkspaceStore();
   const {
@@ -35,9 +43,12 @@ function SidebarTabs() {
   const [workspaceToExit, setWorkspaceToExit] = useState<TopicContext | null>(null);
   const [pendingWorkspaceSelection, setPendingWorkspaceSelection] = useState<string | null>(null);
   const [dialogCreation, setDialogCreation] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(false);
+  const [showExpandButton, setShowExpandButton] = useState(false);
   const intl = useIntl();
   const previousUserRef = useRef(user);
   const [renderKey, setRenderKey] = useState(0);
+  const sidebarRef = useRef<HTMLDivElement>(null);
   
   // Memoize and stabilize workspaces reference to prevent unnecessary icon refetching
   const stableWorkspaces = useMemo(() => {
@@ -56,6 +67,37 @@ function SidebarTabs() {
     const foundContext = contexts.find(context => context.name === "home" && context.type === "home");
     return foundContext || { name: "home", type: "home" };
   }, [contexts]);
+
+  // Handle hover for expand button
+  const handleMouseEnter = useCallback(() => {
+    if (!isExpanded) {
+      setShowExpandButton(true);
+    }
+  }, [isExpanded]);
+
+  const handleMouseLeave = useCallback(() => {
+    setShowExpandButton(false);
+  }, []);
+
+  // Handle expand/collapse
+  const handleExpand = useCallback(() => {
+    setIsExpanded(true);
+    onExpandChange?.(true);
+    setShowExpandButton(false);
+  }, [onExpandChange]);
+
+  const handleCollapse = useCallback(() => {
+    setIsExpanded(false);
+    onExpandChange?.(false);
+  }, [onExpandChange]);
+
+  // Handle mouse leave from expanded state
+  const handleExpandedMouseLeave = useCallback(() => {
+    // Remove auto-collapse behavior - user must manually collapse
+    // setTimeout(() => {
+    //   handleCollapse();
+    // }, 300);
+  }, [handleCollapse]);
 
   useEffect(() => {
     const previousUser = previousUserRef.current;
@@ -93,7 +135,7 @@ function SidebarTabs() {
       if (!existingContext) {
         addContext({
           id: workspace.id,
-          name: workspace.name,
+          name: workspace.name?.toLowerCase() || 'unnamed workspace',
           type: "workspace"
         });
       }
@@ -327,9 +369,37 @@ function SidebarTabs() {
   // Check if user has admin privileges (you can modify this logic)
   const isAdmin = true;
 
+  // If expanded, show the expanded version
+  if (isExpanded) {
+    return (
+      <ExpandedTabs 
+        onCollapse={handleCollapse}
+        onAgentToggle={onAgentToggle}
+        agentOverlayVisible={agentOverlayVisible}
+        // onMouseLeave={handleExpandedMouseLeave} // Remove this to disable auto-collapse
+      />
+    );
+  }
+
   return (
     <>
+      {/* Extended hover area for expand button - larger trigger zone */}
       <Box
+        sx={{
+          position: "absolute",
+          top: 0,
+          right: -40, // Extend hover area beyond sidebar
+          width: 100, // Much larger hover area
+          height: "100%",
+          zIndex: 999, // Below button but above tooltips
+          pointerEvents: showExpandButton ? "none" : "auto" // Disable when button is visible
+        }}
+        onMouseEnter={handleMouseEnter}
+        onMouseLeave={handleMouseLeave}
+      />
+
+      <Box
+        ref={sidebarRef}
         sx={{
           width: 72,
           height: "100%",
@@ -340,12 +410,42 @@ function SidebarTabs() {
           flexDirection: "column",
           alignItems: "center",
           py: 2,
-          gap: 2
+          gap: 2,
+          position: "relative"
         }}
+        onMouseEnter={handleMouseEnter}
+        onMouseLeave={handleMouseLeave}
       >
+        {/* Expand Button - improved positioning and z-index */}
+        <Zoom in={showExpandButton}>
+          <Fab
+            size="small"
+            onClick={handleExpand}
+            sx={{
+              position: "absolute",
+              top: 16,
+              right: -24, // Moved slightly closer for easier access
+              zIndex: 1001, // Higher than tooltips
+              width: 36, // Slightly larger for easier clicking
+              height: 36,
+              minHeight: 36,
+              bgcolor: "primary.main",
+              color: "white",
+              boxShadow: 3,
+              "&:hover": {
+                bgcolor: "primary.dark",
+                boxShadow: 6
+              }
+            }}
+          >
+            <ChevronRightIcon sx={{ fontSize: 18 }} />
+          </Fab>
+        </Zoom>
+
         <Tooltip
           title="Home"
           placement="right"
+          // Remove disableHoverListener to keep tooltips working
         >
           <Box
             key={`home-${renderKey}`}
@@ -393,6 +493,7 @@ function SidebarTabs() {
               key={`workspace-${workspaceContext.id || workspaceContext.name}`}
               title={`${intl.formatMessage({ id: "workspace.title", defaultMessage: "Workspace" })}: ${workspaceContext.name}${workspaceContext.id ? ` (${workspaceContext.id.slice(0, 8)})` : ''}`}
               placement="right"
+              // Remove disableHoverListener to keep tooltips working
             >
               <Box
                 sx={{
@@ -446,6 +547,7 @@ function SidebarTabs() {
           <Tooltip
             title={intl.formatMessage({ id: "workspace.create.title", defaultMessage: "Add Workspace" })}
             placement="right"
+            // Remove disableHoverListener to keep tooltips working
           >
             <Box>
               <IconButton
@@ -463,6 +565,7 @@ function SidebarTabs() {
           <Tooltip
             title={intl.formatMessage({ id: "calendar.title", defaultMessage: "Calendar" })}
             placement="right"
+            // Remove disableHoverListener to keep tooltips working
           >
             <Box
               sx={{
@@ -486,41 +589,11 @@ function SidebarTabs() {
           </Tooltip>
         )}
 
-        {/* {user && (
-          <Tooltip
-            title={intl.formatMessage({ id: "portal.title", defaultMessage: "Portal" })}
-            placement="right"
-          >
-            <Box
-              sx={{
-                borderBottom: selectedContext?.name === "portal" && selectedContext?.type === "portal"
-                  ? "3px solid"
-                  : "3px solid transparent",
-                borderColor: selectedContext?.name === "portal" && selectedContext?.type === "portal"
-                  ? "primary.main"
-                  : "transparent",
-                borderRadius: 0,
-              }}
-            >
-              <IconButton
-                color="primary"
-                size="large"
-                onClick={() => setSelectedContext({
-                  name: "portal",
-                  type: "portal",
-                  section: "dashboard"
-                })}
-              >
-                <PortalIcon />
-              </IconButton>
-            </Box>
-          </Tooltip>
-        )} */}
-
         {user && isAdmin && (
           <Tooltip
             title={intl.formatMessage({ id: "admin.title", defaultMessage: "Admin Panel" })}
             placement="right"
+            // Remove disableHoverListener to keep tooltips working
           >
             <Box
               sx={{

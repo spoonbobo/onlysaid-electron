@@ -18,6 +18,7 @@ function MainInterface() {
   const mainInterfaceRenderCountRef = useRef(0);
   
   const [showAgentOverlay, setShowAgentOverlay] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(false);
   
   const mainInterfaceRef = useRef<HTMLDivElement>(null);
 
@@ -75,7 +76,8 @@ function MainInterface() {
         }
 
         animationFrameId = requestAnimationFrame(() => {
-          const newWidth = Math.max(120, Math.min(e.clientX - 72, 400));
+          const baseWidth = isExpanded ? 280 : 72;
+          const newWidth = Math.max(120, Math.min(e.clientX - baseWidth, 400));
           throttledSetMenuWidth(newWidth);
         });
       }
@@ -106,7 +108,7 @@ function MainInterface() {
         cancelAnimationFrame(animationFrameId);
       }
     };
-  }, []);
+  }, [isExpanded]);
 
   const handleAgentToggle = useCallback((show: boolean) => {
     setShowAgentOverlay(show);
@@ -115,6 +117,8 @@ function MainInterface() {
   const handleOverlayClose = useCallback(() => {
     setShowAgentOverlay(false);
   }, []);
+
+  const sidebarWidth = isExpanded ? 280 : 72;
 
   return (
     <Box
@@ -140,25 +144,27 @@ function MainInterface() {
           minHeight: 0,
         }}
       >
+        {/* Sidebar + Menu Container */}
         <Box
           sx={{
             display: "flex",
             flexDirection: "column",
             height: "100%",
-            width: 72 + menuWidth,
-            minWidth: 72 + menuWidth,
-            maxWidth: 72 + menuWidth,
+            width: sidebarWidth + menuWidth,
+            minWidth: sidebarWidth + menuWidth,
+            maxWidth: sidebarWidth + menuWidth,
             borderRight: "1px solid",
             borderColor: "divider",
             bgcolor: "background.paper",
             flexShrink: 0,
             position: "relative",
+            // transition: "width 0.3s ease-in-out", // Removed animation
           }}
         >
           <Box sx={{ display: "flex", flexDirection: "row", flex: 1, minHeight: 0 }}>
             <Box
               sx={{
-                width: 72,
+                width: sidebarWidth,
                 borderRight: "1px solid",
                 borderColor: "divider",
                 flexShrink: 0,
@@ -166,7 +172,11 @@ function MainInterface() {
                 flexDirection: "column",
               }}
             >
-              <SidebarTabs />
+              <SidebarTabs 
+                onExpandChange={setIsExpanded} 
+                onAgentToggle={handleAgentToggle}
+                agentOverlayVisible={showAgentOverlay}
+              />
             </Box>
             <Box
               sx={{
@@ -179,10 +189,14 @@ function MainInterface() {
               <Menu />
             </Box>
           </Box>
-          <UserInfoBar 
-            onAgentToggle={handleAgentToggle}
-            agentOverlayVisible={showAgentOverlay}
-          />
+          
+          {/* Only show UserInfoBar when sidebar is NOT expanded */}
+          {!isExpanded && (
+            <UserInfoBar 
+              onAgentToggle={handleAgentToggle}
+              agentOverlayVisible={showAgentOverlay}
+            />
+          )}
 
           <Box
             sx={{
@@ -200,6 +214,7 @@ function MainInterface() {
           />
         </Box>
 
+        {/* Main Content - gets smaller when expanded */}
         <Box sx={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", position: "relative" }}>
           <Box sx={{ flex: 1, overflow: "hidden", p: 3 }}>
             <Main />

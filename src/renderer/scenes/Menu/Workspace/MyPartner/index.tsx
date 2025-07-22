@@ -1,11 +1,15 @@
 import { Box, Typography } from "@mui/material";
-import { FormattedMessage } from "react-intl";
+import { FormattedMessage, useIntl } from "react-intl";
 import { useTopicStore } from "@/renderer/stores/Topic/TopicStore";
 import MenuListItem from "@/renderer/components/Navigation/MenuListItem";
 import { useCurrentTopicContext } from "@/renderer/stores/Topic/TopicStore";
 import SchoolIcon from "@mui/icons-material/School";
+import QuizIcon from "@mui/icons-material/Quiz";
+import AssignmentIcon from "@mui/icons-material/Assignment";
+import LibraryBooksIcon from "@mui/icons-material/LibraryBooks";
 
 export default function MyPartnerMenu() {
+  const intl = useIntl();
   const { selectedContext } = useCurrentTopicContext();
   const selectedTopics = useTopicStore((state) => state.selectedTopics);
   const setSelectedTopic = useTopicStore((state) => state.setSelectedTopic);
@@ -18,16 +22,47 @@ export default function MyPartnerMenu() {
     setSelectedTopic(section, partnerType);
   };
 
+  const handleSelectCourseworkTab = (tabId: string) => {
+    setSelectedTopic('coursework-helper-tabs', tabId);
+  };
+
   // Available partner services
   const partnerServices = [
     {
       id: 'coursework-helper',
-      name: 'Coursework Helper',
+      name: intl.formatMessage({ id: "workspace.mypartner.services.courseworkHelper", defaultMessage: "Coursework Helper" }),
       icon: SchoolIcon,
-      description: 'AI assistant for coursework, assignments, and academic support',
       disabled: false
     }
   ];
+
+  // Coursework Helper tabs configuration
+  const courseworkTabs = [
+    {
+      id: 'assignments',
+      label: intl.formatMessage({ id: "workspace.mypartner.coursework.tabs.assignments", defaultMessage: "Assignments" }),
+      icon: AssignmentIcon,
+      disabled: false
+    },
+    {
+      id: 'quiz-help',
+      label: intl.formatMessage({ id: "workspace.mypartner.coursework.tabs.quizHelp", defaultMessage: "Quiz Help" }),
+      icon: QuizIcon,
+      disabled: false
+    },
+    {
+      id: 'research',
+      label: intl.formatMessage({ id: "workspace.mypartner.coursework.tabs.research", defaultMessage: "Research" }),
+      icon: LibraryBooksIcon,
+      disabled: true
+    }
+  ];
+
+  // Get current selected tab for coursework helper
+  const selectedCourseworkTab = selectedTopics['coursework-helper-tabs'] || 'assignments';
+
+  // Check if Coursework Helper is selected
+  const isCourseworkSelected = selectedSubcategory === 'coursework-helper';
 
   try {
     return (
@@ -36,50 +71,93 @@ export default function MyPartnerMenu() {
           {partnerServices.length > 0 ? (
             partnerServices.map((service) => {
               const IconComponent = service.icon;
+              const isServiceSelected = selectedSubcategory === service.id;
               
               return (
-                <MenuListItem
-                  key={service.id}
-                  label={
-                    <Box sx={{ 
-                      display: 'flex', 
-                      flexDirection: 'column',
-                      alignItems: 'flex-start',
-                      width: '100%',
-                      pr: 1
-                    }}>
-                      <Box sx={{ display: 'flex', alignItems: 'center', width: '100%' }}>
+                <Box key={service.id}>
+                  <MenuListItem
+                    label={
+                      <Box sx={{ 
+                        display: 'flex', 
+                        alignItems: 'center',
+                        width: '100%',
+                        pr: 1
+                      }}>
                         <IconComponent sx={{ mr: 1, fontSize: 16, color: 'text.secondary' }} />
                         <Typography variant="body2" sx={{ fontWeight: 'medium' }}>
                           {service.name}
                         </Typography>
                       </Box>
-                      <Typography 
-                        variant="caption" 
-                        sx={{ 
-                          color: 'text.secondary', 
-                          ml: 3, 
-                          fontSize: '0.7rem',
-                          lineHeight: 1.2
-                        }}
-                      >
-                        {service.description}
-                      </Typography>
-                    </Box>
-                  }
-                  isSelected={selectedSubcategory === service.id}
-                  onClick={() => !service.disabled && handleSelectPartner(service.id)}
-                  sx={{ 
-                    pl: 4,
-                    py: 1.5,
-                    opacity: service.disabled ? 0.5 : 1,
-                    cursor: service.disabled ? 'not-allowed' : 'pointer',
-                    pointerEvents: service.disabled ? 'none' : 'auto',
-                    '& .MuiListItemText-root': {
-                      margin: 0,
                     }
-                  }}
-                />
+                    isSelected={isServiceSelected}
+                    onClick={() => !service.disabled && handleSelectPartner(service.id)}
+                    sx={{ 
+                      pl: 4,
+                      py: 1.5,
+                      opacity: service.disabled ? 0.5 : 1,
+                      cursor: service.disabled ? 'not-allowed' : 'pointer',
+                      pointerEvents: service.disabled ? 'none' : 'auto',
+                      '& .MuiListItemText-root': {
+                        margin: 0,
+                      }
+                    }}
+                  />
+                  
+                  {/* Show Coursework tabs when Coursework Helper is selected */}
+                  {service.id === 'coursework-helper' && isServiceSelected && (
+                    <Box sx={{ ml: 2, mt: 1, mb: 1 }}>
+                      {courseworkTabs.map((tab) => {
+                        const TabIconComponent = tab.icon;
+                        const isTabSelected = selectedCourseworkTab === tab.id;
+                        
+                        return (
+                          <MenuListItem
+                            key={tab.id}
+                            label={
+                              <Box sx={{ 
+                                display: 'flex', 
+                                alignItems: 'center',
+                                width: '100%',
+                                pr: 1
+                              }}>
+                                <TabIconComponent sx={{ mr: 1, fontSize: 14, color: 'text.secondary' }} />
+                                <Typography
+                                  variant="body2"
+                                  sx={{
+                                    fontWeight: isTabSelected ? 'medium' : 'regular',
+                                    color: tab.disabled 
+                                      ? 'text.disabled' 
+                                      : isTabSelected 
+                                        ? 'primary.main' 
+                                        : 'text.primary',
+                                    fontSize: '0.8rem'
+                                  }}
+                                >
+                                  {tab.label}
+                                </Typography>
+                              </Box>
+                            }
+                            isSelected={isTabSelected}
+                            onClick={() => !tab.disabled && handleSelectCourseworkTab(tab.id)}
+                            sx={{ 
+                              pl: 6,
+                              py: 1,
+                              opacity: tab.disabled ? 0.4 : 1,
+                              cursor: tab.disabled ? 'not-allowed' : 'pointer',
+                              pointerEvents: tab.disabled ? 'none' : 'auto',
+                              '& .MuiListItemText-root': {
+                                margin: 0,
+                              },
+                              '&.Mui-selected': {
+                                bgcolor: 'action.selected',
+                              }
+                            }}
+                          />
+                        );
+                      })}
+                    </Box>
+                  )}
+                </Box>
               );
             })
           ) : (

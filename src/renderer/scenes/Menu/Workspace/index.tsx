@@ -18,10 +18,6 @@ export default function WorkspaceMenu() {
 
   const workspaceId = selectedContext?.id;
   const section = selectedContext?.section || '';
-  const sectionName = section.split(':')[1] || '';
-
-  // Get the active context (like chatId) for the current section
-  const activeContextId = selectedContext?.section ? selectedTopics[selectedContext.section] || null : null;
 
   useEffect(() => {
     if (workspaceId && user?.id && isConnected) {
@@ -31,7 +27,12 @@ export default function WorkspaceMenu() {
 
   // Remove the key that causes unnecessary remounts
   return (
-    <Box sx={{ p: 1 }}>
+    <Box sx={{ 
+      height: '100%', 
+      display: 'flex', 
+      flexDirection: 'column',
+      p: 1 
+    }}>
       {section.includes('chatroom') && <WorkspaceChatMenu />}
       {section.includes('avatar') && <AvatarMenu />}
       {selectedContext?.type === 'workspace' && section.includes('knowledgeBase') && <KnowledgeBaseMenu />}

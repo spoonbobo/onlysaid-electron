@@ -24,6 +24,8 @@
   "home.noAgents": "沒有與代理的對話, 按『新增聊天』以開始",
   "home.Agents": "代理",
 
+  "sidebar.home": "主頁",
+
   "app.title": "OnlySaid",
   "app.welcome": "歡迎使用 {appName}",
 
@@ -986,6 +988,9 @@
   "loading.ready": "準備就緒！",
   "loading.startingApp": "正在啟動應用程式...",
   "loading.completed": "已完成",
+  "loading.thei1": "THEi 提供與業界緊密合作的職業導向學位課程。",
+  "loading.thei2": "THEi 透過實際項目和工業實習培育專業人才。",
+  "loading.thei3": "THEi 在科技、設計、工程和商業管理方面提供實踐教育。",
 
   "agent.graph.taskDescription": "任務描述",
   "agent.graph.assignedAgent": "指派代理",
@@ -1451,5 +1456,6 @@
   "workspace.insights.serviceNotImplemented": "{service} 服務尚未實現。",
   "workspace.insights.meetingSummarizer.description": "{name} 的會議分析和摘要洞察",
   "workspace.insights.meetingSummarizer.comingSoon": "會議摘要和洞察功能即將推出...",
-  "docs.mcp-tools": "MCP 工具和測試"
+  "docs.mcp-tools": "MCP 工具和測試",
+  "calendar.title": "日曆"
 }

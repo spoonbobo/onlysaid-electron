@@ -1,6 +1,10 @@
 import { Box, Typography, Card, CardContent, Alert } from "@mui/material";
 import { FormattedMessage, useIntl } from "react-intl";
+import { useTopicStore } from "@/renderer/stores/Topic/TopicStore";
 import SchoolIcon from "@mui/icons-material/School";
+import AssignmentHelper from "./AssignmentHelper";
+import QuizHelper from "./QuizHelper";
+import ResearchHelper from "./ResearchHelper";
 
 interface CourseworkHelperProps {
   workspaceId: string;
@@ -8,6 +12,10 @@ interface CourseworkHelperProps {
 
 function CourseworkHelper({ workspaceId }: CourseworkHelperProps) {
   const intl = useIntl();
+  const { selectedTopics } = useTopicStore();
+  
+  // Get the selected tab from the coursework helper tabs
+  const selectedTab = selectedTopics['coursework-helper-tabs'] || 'assignments';
 
   if (!workspaceId) {
     return (
@@ -22,10 +30,46 @@ function CourseworkHelper({ workspaceId }: CourseworkHelperProps) {
     );
   }
 
+  const renderTabContent = () => {
+    switch (selectedTab) {
+      case 'assignments':
+        return <AssignmentHelper workspaceId={workspaceId} />;
+      case 'quiz-help':
+        return <QuizHelper workspaceId={workspaceId} />;
+      case 'research':
+        return <ResearchHelper workspaceId={workspaceId} />;
+      default:
+        return (
+          <Box sx={{ p: 3 }}>
+            <Card sx={{ mb: 3 }}>
+              <CardContent>
+                <Typography variant="h6" gutterBottom>
+                  <FormattedMessage 
+                    id="workspace.mypartner.courseworkHelper.welcomeTitle" 
+                    defaultMessage="Welcome to your Coursework Helper"
+                  />
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  <FormattedMessage 
+                    id="workspace.mypartner.courseworkHelper.welcomeMessage" 
+                    defaultMessage="This AI assistant is designed to help you with your coursework, assignments, and academic tasks. Select a specific tool from the menu to get started."
+                  />
+                </Typography>
+              </CardContent>
+            </Card>
+          </Box>
+        );
+    }
+  };
+
   return (
-    <Box sx={{ p: 3 }}>
+    <Box sx={{ 
+      height: "100%",
+      overflow: "auto",
+      bgcolor: "background.default"
+    }}>
       {/* Header */}
-      <Box sx={{ mb: 4 }}>
+      <Box sx={{ p: 3, pb: 0 }}>
         <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
           <SchoolIcon sx={{ mr: 2, fontSize: 32, color: 'primary.main' }} />
           <Typography variant="h4" sx={{ fontWeight: 'bold' }}>
@@ -35,7 +79,7 @@ function CourseworkHelper({ workspaceId }: CourseworkHelperProps) {
             />
           </Typography>
         </Box>
-        <Typography variant="body1" color="text.secondary">
+        <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
           <FormattedMessage 
             id="workspace.mypartner.courseworkHelper.description" 
             defaultMessage="AI assistant for coursework, assignments, and academic support"
@@ -43,33 +87,8 @@ function CourseworkHelper({ workspaceId }: CourseworkHelperProps) {
         </Typography>
       </Box>
 
-      {/* Main Content */}
-      <Card sx={{ mb: 3 }}>
-        <CardContent>
-          <Typography variant="h6" gutterBottom>
-            <FormattedMessage 
-              id="workspace.mypartner.courseworkHelper.welcomeTitle" 
-              defaultMessage="Welcome to your Coursework Helper"
-            />
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            <FormattedMessage 
-              id="workspace.mypartner.courseworkHelper.welcomeMessage" 
-              defaultMessage="This AI assistant is designed to help you with your coursework, assignments, and academic tasks. Start by asking questions or uploading your course materials."
-            />
-          </Typography>
-        </CardContent>
-      </Card>
-
-      {/* Features Coming Soon */}
-      <Alert severity="info">
-        <Typography variant="body2">
-          <FormattedMessage 
-            id="workspace.mypartner.courseworkHelper.comingSoon" 
-            defaultMessage="Features coming soon: Assignment analysis, Citation help, Research assistance, Study planning, and more..."
-          />
-        </Typography>
-      </Alert>
+      {/* Tab Content */}
+      {renderTabContent()}
     </Box>
   );
 }
