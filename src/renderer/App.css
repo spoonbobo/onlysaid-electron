@@ -3,6 +3,9 @@
  *        See https://github.com/webpack-contrib/sass-loader#imports
  */
 
+/* Import KaTeX CSS for mathematical expressions */
+@import '~katex/dist/katex.min.css';
+
 /* CSS Custom Properties for better performance */
 :root {
   --primary-color: #4f5bd5;

@@ -1,9 +1,11 @@
 import { Box } from "@mui/material";
 import { useRef, useState, useEffect, useMemo, useCallback } from "react";
 import MarkdownIt from 'markdown-it';
+import markdownItKatex from '@iktakahiro/markdown-it-katex';
 import hljs from 'highlight.js';
 import * as React from 'react';
 import { toast } from "@/utils/toast";
+import 'katex/dist/katex.min.css'; // Import KaTeX CSS
 
 // Optimized styles - reduced nesting and simplified selectors
 const markdownStyles = {
@@ -215,6 +217,31 @@ const markdownStyles = {
   '& .image-container[data-error="true"] .image-error-message': {
     display: 'block',
   },
+  
+  // Enhanced mathematical expressions styling
+  '& sub': {
+    fontSize: '0.85em !important',
+    lineHeight: '1 !important',
+    verticalAlign: 'sub',
+    fontWeight: 'inherit'
+  },
+  '& sup': {
+    fontSize: '0.85em !important', 
+    lineHeight: '1 !important',
+    verticalAlign: 'super',
+    fontWeight: 'inherit'
+  },
+  '& span[style*="font-size: 1.1em"]': {
+    fontWeight: '600 !important',
+    display: 'inline-block'
+  },
+  // Mathematical formulas get Times New Roman for better readability
+  '& span[style*="Times New Roman"]': {
+    fontFamily: '"Times New Roman", "Times", serif !important',
+    fontSize: '1.05em !important',
+    fontWeight: '500 !important',
+    letterSpacing: '0.02em'
+  },
 };
 
 const COPY_SVG_PATH = 'M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z';
@@ -256,11 +283,19 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = React.memo(({
   // Optimized markdown instance with better caching
   const md = useMemo(() => {
     const mdInstance = new MarkdownIt({
-      html: false,
+      html: true, // Enable HTML for enhanced mathematical expressions
       breaks: true,
       linkify: true,
       typographer: false // Disable for better performance
     });
+
+    mdInstance.use(markdownItKatex, {
+      throwOnError: false,
+      errorColor: '#cc0000',
+      strict: false,
+      trust: true,
+      output: 'html'
+    }); // Add KaTeX plugin with configuration
 
     mdInstance.renderer.rules.fence = (tokens, idx) => {
       const token = tokens[idx];
