@@ -2,7 +2,7 @@ import { create } from "zustand";
 import { v4 as uuidv4 } from 'uuid';
 import * as R from 'ramda';
 import { getUserFromStore, getUserTokenFromStore } from "@/utils/user";
-import { IWorkspace, IWorkspaceUser, IWorkspaceWithRole, IWorkspaceInvitation, IWorkspaceJoin } from "@/../../types/Workspace/Workspace";
+import { IWorkspace, IWorkspaceUser, IWorkspaceWithRole, IWorkspaceInvitation, IWorkspaceJoin, IAddUserToWorkspaceRequest } from "@/../../types/Workspace/Workspace";
 import { toast } from "@/utils/toast";
 import { useToastStore } from "../Notification/ToastStore";
 import { useKBStore } from "@/renderer/stores/KB/KBStore";
@@ -21,14 +21,14 @@ interface WorkspaceCreateData extends Partial<IWorkspace> {
   users?: string[];
 }
 
-type WORKSPACE_ROLE = 'super_admin' | 'admin' | 'member';
-
 interface WorkspaceState {
   workspaces: IWorkspace[];
   isLoading: boolean;
   error: string | null;
   workspaceUsers: IWorkspaceUser[];
   pendingInvitations: IWorkspaceInvitation[];
+  lastFetchedUserId: string | null; // Track which user's workspaces were last fetched
+  isInitialized: boolean; // Track if workspaces have been initialized
 
   createWorkspace: (data: WorkspaceCreateData) => Promise<IWorkspace>;
   deleteWorkspace: (workspaceId: string) => Promise<void>;
@@ -36,11 +36,12 @@ interface WorkspaceState {
   getWorkspaceById: (workspaceId: string) => IWorkspace | undefined;
   fetchWorkspaceById: (workspaceId: string) => Promise<IWorkspace | null>;
   getWorkspace: (userId: string) => Promise<void>;
+  initializeWorkspaces: (userId: string) => Promise<void>; // New centralized initialization
   joinWorkspaceByInviteCode: (inviteCode: string) => Promise<IWorkspace>;
 
-  addUserToWorkspace: (workspaceId: string, userId: string | undefined, role: string, email?: string) => Promise<void>;
+  addUserToWorkspace: (workspaceId: string, userId: string | undefined, roleIdOrName: string, email?: string) => Promise<void>;
   removeUserFromWorkspace: (workspaceId: string, userId: string) => Promise<void>;
-  getUsersByWorkspace: (workspaceId: string, role?: string) => Promise<IWorkspaceUser[]>;
+  getUsersByWorkspace: (workspaceId: string, roleId?: string) => Promise<IWorkspaceUser[]>;
 
   sendInvitation: (workspaceId: string, email: string) => Promise<any>;
   getInvitations: (workspaceId: string, status?: string) => Promise<IWorkspaceInvitation[]>;
@@ -57,7 +58,13 @@ interface WorkspaceState {
 
   getUserInWorkspace: (workspaceId: string, userId: string) => Promise<IWorkspaceUser | null>;
 
-  updateUserRole: (workspaceId: string, userId: string, role: string) => Promise<void>;
+  updateUserRole: (workspaceId: string, userId: string, roleId: string) => Promise<void>;
+
+  // Policy management methods
+  getUserPolicies: (workspaceId: string, userId: string) => Promise<any[]>;
+  getAvailablePolicies: (workspaceId: string) => Promise<any[]>;
+  grantUserPolicy: (workspaceId: string, userId: string, policyId: string) => Promise<void>;
+  revokeUserPolicy: (workspaceId: string, userId: string, policyId: string) => Promise<void>;
 
   getUserInvitations: (status?: string) => Promise<IWorkspaceInvitation[]>;
   getUserJoinRequests: (status?: string) => Promise<IWorkspaceJoin[]>;
@@ -79,7 +86,7 @@ async function checkManagementPermission(workspaceId: string, get: () => Workspa
 
   if (!currentlyLoading) set({ isLoading: false }); // Reset isLoading if we set it
 
-  if (!actorInWorkspace || (actorInWorkspace.role !== 'admin' && actorInWorkspace.role !== 'super_admin')) {
+  if (!actorInWorkspace || (actorInWorkspace.role.name !== 'admin' && actorInWorkspace.role.name !== 'super_admin')) {
     toast.error("You do not have permission for this action.");
     return false;
   }
@@ -92,14 +99,26 @@ export const useWorkspaceStore = create<WorkspaceState>()((set, get) => ({
   error: null,
   workspaceUsers: [],
   pendingInvitations: [],
+  lastFetchedUserId: null,
+  isInitialized: false,
 
   createWorkspace: async (data) => {
+    const currentState = get();
+    if (currentState.isLoading) {
+      console.warn("Workspace creation already in progress, ignoring duplicate request");
+      return currentState.workspaces[0] || {} as IWorkspace;
+    }
+    
     set({ isLoading: true, error: null });
     try {
+      if (!data.name || data.name.trim().length === 0) {
+        throw new Error("Workspace name is required");
+      }
+
       const newWorkspace: IWorkspace = {
         id: uuidv4(),
-        name: data.name || 'New Workspace',
-        image: '/workspace-icon.png',
+        name: data.name.trim(),
+        image: data.image || '/default-workspace.png',
         invite_code: data.invite_code || '',
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
@@ -111,18 +130,38 @@ export const useWorkspaceStore = create<WorkspaceState>()((set, get) => ({
         request: newWorkspace
       });
 
+      console.log("🔍 Workspace creation API response:", response);
+
       let createdWorkspace: IWorkspace;
       if (response.data?.data && Array.isArray(response.data.data) && response.data.data.length > 0) {
         createdWorkspace = response.data.data[0];
+      } else if (response.data?.data) {
+        // API returns { message: "Workspace created", data: result } - use data directly
+        createdWorkspace = response.data.data;
       } else if (response.data) {
         createdWorkspace = response.data;
       } else {
         createdWorkspace = newWorkspace;
       }
 
+      // Validate that we have a proper workspace with an ID
+      if (!createdWorkspace || !createdWorkspace.id) {
+        console.error("Created workspace does not have a valid ID:", createdWorkspace);
+        throw new Error("Failed to create workspace: Invalid workspace response");
+      }
+
       if (data.imageFile) {
         try {
           const workspaceId = createdWorkspace.id;
+          
+          // Additional validation before proceeding with file upload
+          if (!workspaceId || workspaceId === 'undefined' || typeof workspaceId !== 'string') {
+            console.error("❌ Invalid workspaceId for file upload:", { workspaceId, createdWorkspace });
+            throw new Error("Cannot upload workspace image: Invalid workspace ID");
+          }
+          
+          console.log("✅ Proceeding with workspace image upload for workspaceId:", workspaceId);
+          
           const extension = data.imageFile.name.split('.').pop() || 'png';
           const filename = `logo-${uuidv4().slice(0, 8)}.${extension}`;
           const targetPath = `/storage/${workspaceId}/${filename}`;
@@ -167,26 +206,18 @@ export const useWorkspaceStore = create<WorkspaceState>()((set, get) => ({
         } catch (uploadError) {
           console.error("Error uploading workspace image:", uploadError);
           toast.error("Failed to upload workspace image, using default");
-          createdWorkspace.image = '/workspace-icon.png';
+          createdWorkspace.image = '/default-workspace.png';
         }
       }
 
-      const currentUser = getUserFromStore();
-      if (currentUser?.id) {
-        const newWorkspaceId = createdWorkspace.id || newWorkspace.id;
-        await window.electron.workspace.add_users({
-          token: getUserTokenFromStore() || '',
-          workspaceId: newWorkspaceId,
-          request: [{
-            user_id: currentUser.id,
-            role: 'super_admin'
-          }]
-        });
-      }
+      // NO LONGER NEEDED: Workspace creation API already adds creator as super_admin
+      // This was causing duplicate key violations in the database
+      // The new role-based system handles this automatically in the API
 
       set(state => ({
         workspaces: [...state.workspaces, createdWorkspace],
-        isLoading: false
+        isLoading: false,
+        isInitialized: true
       }));
 
       get().onWorkspaceCreated?.(createdWorkspace);
@@ -223,6 +254,12 @@ export const useWorkspaceStore = create<WorkspaceState>()((set, get) => ({
   },
 
   getWorkspace: async (userId: string) => {
+    const currentState = get();
+    if (currentState.isLoading) {
+      console.warn("getWorkspace already in progress, skipping duplicate request");
+      return;
+    }
+    
     set({ isLoading: true, error: null });
     try {
       const response = await window.electron.workspace.get({
@@ -232,10 +269,19 @@ export const useWorkspaceStore = create<WorkspaceState>()((set, get) => ({
 
       if (response.data?.data && Array.isArray(response.data.data)) {
         const ws: IWorkspaceWithRole[] = response.data.data;
+        
+        // Filter out invalid workspaces before setting state
+        const validWorkspaces = ws.filter(workspace => 
+          workspace && 
+          workspace.id && 
+          workspace.name && 
+          workspace.name.trim().length > 0
+        );
 
         set({
-          workspaces: ws,
-          isLoading: false
+          workspaces: validWorkspaces,
+          isLoading: false,
+          isInitialized: true
         });
       } else {
         set({ isLoading: false });
@@ -331,7 +377,7 @@ export const useWorkspaceStore = create<WorkspaceState>()((set, get) => ({
 
       const fetchedWorkspace = response.data as IWorkspace | undefined;
 
-      if (fetchedWorkspace) {
+      if (fetchedWorkspace && fetchedWorkspace.id && fetchedWorkspace.name && fetchedWorkspace.name.trim().length > 0) {
         set(state => ({
           workspaces: R.uniqBy(R.prop('id'), [...state.workspaces, fetchedWorkspace]),
           isLoading: false
@@ -348,17 +394,28 @@ export const useWorkspaceStore = create<WorkspaceState>()((set, get) => ({
     }
   },
 
-  addUserToWorkspace: async (workspaceId, userId, role, email?: string) => {
+  addUserToWorkspace: async (workspaceId, userId, roleIdOrName, email?: string) => {
     set({ isLoading: true, error: null });
     try {
+      // Prepare request using new role system
+      const userRequest: IAddUserToWorkspaceRequest = {
+        user_id: userId,
+        email: email
+      };
+
+      // Check if roleIdOrName is a UUID (role_id) or a string (role_name)
+      const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(roleIdOrName);
+      
+      if (isUUID) {
+        userRequest.role_id = roleIdOrName;
+      } else {
+        userRequest.role_name = roleIdOrName;
+      }
+
       const response = await window.electron.workspace.add_users({
         token: getUserTokenFromStore() || '',
         workspaceId,
-        request: [{
-          user_id: userId,
-          role: role as WORKSPACE_ROLE,
-          email: email
-        }]
+        request: [userRequest]
       });
 
       if (response.error) {
@@ -366,10 +423,8 @@ export const useWorkspaceStore = create<WorkspaceState>()((set, get) => ({
       }
 
       await get().getUsersByWorkspace(workspaceId);
-
       set({ isLoading: false });
       toast.success("User added to workspace successfully");
-
       return response.data;
     } catch (error: any) {
       set({ error: error.message, isLoading: false });
@@ -401,7 +456,7 @@ export const useWorkspaceStore = create<WorkspaceState>()((set, get) => ({
     }
   },
 
-  getUsersByWorkspace: async (workspaceId: string, role?: string) => {
+  getUsersByWorkspace: async (workspaceId: string, roleId?: string) => {
     try {
       set({ isLoading: true, error: null });
       const { data, error } = await window.electron.workspace.get_users({
@@ -416,8 +471,8 @@ export const useWorkspaceStore = create<WorkspaceState>()((set, get) => ({
 
       set({ workspaceUsers: data.data, isLoading: false });
 
-      if (role) {
-        return get().workspaceUsers.filter(user => user.role === role);
+      if (roleId) {
+        return get().workspaceUsers.filter(user => user.role_id === roleId);
       }
 
       return get().workspaceUsers;
@@ -465,7 +520,7 @@ export const useWorkspaceStore = create<WorkspaceState>()((set, get) => ({
       return {
         id: workspace.id,
         name: workspace.name,
-        image: workspace.image || '/workspace-icon.png',
+        image: workspace.image || '/default-workspace.png',
         invite_code: inviteCode,
         created_at: workspace.created_at || new Date().toISOString(),
         updated_at: workspace.updated_at || new Date().toISOString(),
@@ -702,7 +757,7 @@ export const useWorkspaceStore = create<WorkspaceState>()((set, get) => ({
     }
   },
 
-  updateUserRole: async (workspaceId: string, userId: string, role: string) => {
+  updateUserRole: async (workspaceId: string, userId: string, roleId: string) => {
     set({ isLoading: true, error: null });
     let operationCompletedSuccessfully = false;
     try {
@@ -710,7 +765,7 @@ export const useWorkspaceStore = create<WorkspaceState>()((set, get) => ({
       if (!get().isLoading) { // Ensure store is still marked as loading for the addUser part
         set({ isLoading: true });
       }
-      await get().addUserToWorkspace(workspaceId, userId, role);
+      await get().addUserToWorkspace(workspaceId, userId, roleId);
       operationCompletedSuccessfully = true;
       toast.success("User role updated successfully");
     } catch (error: any) {
@@ -788,6 +843,98 @@ export const useWorkspaceStore = create<WorkspaceState>()((set, get) => ({
     } catch (error: any) {
       set({ error: error.message, isLoading: false });
       console.error("Error fetching user join requests:", error);
+      throw error;
+    }
+  },
+
+  initializeWorkspaces: async (userId: string) => {
+    if (get().lastFetchedUserId === userId && get().isInitialized) {
+      console.log(`🚀 Workspaces for user ${userId} already initialized. Skipping.`);
+      return;
+    }
+
+    set({ lastFetchedUserId: userId, isInitialized: true });
+    await get().getWorkspace(userId);
+  },
+
+  // Policy management implementations
+  getUserPolicies: async (workspaceId: string, userId: string) => {
+    try {
+      const response = await window.electron.workspace.get_user_policies({
+        token: getUserTokenFromStore() || '',
+        workspaceId,
+        userId
+      });
+
+      if (response.error) {
+        throw new Error(response.error);
+      }
+
+      return response.data?.data || [];
+    } catch (error: any) {
+      console.error("Error fetching user policies:", error);
+      toast.error(error.message || "Failed to fetch user policies");
+      return [];
+    }
+  },
+
+  getAvailablePolicies: async (workspaceId: string) => {
+    try {
+      const response = await window.electron.workspace.get_policies({
+        token: getUserTokenFromStore() || '',
+        workspaceId
+      });
+
+      if (response.error) {
+        throw new Error(response.error);
+      }
+
+      return response.data?.data || [];
+    } catch (error: any) {
+      console.error("Error fetching available policies:", error);
+      toast.error(error.message || "Failed to fetch available policies");
+      return [];
+    }
+  },
+
+  grantUserPolicy: async (workspaceId: string, userId: string, policyId: string) => {
+    try {
+      const response = await window.electron.workspace.grant_user_policy({
+        token: getUserTokenFromStore() || '',
+        workspaceId,
+        userId,
+        policy_id: policyId
+      });
+
+      if (response.error) {
+        throw new Error(response.error);
+      }
+
+      toast.success("Policy granted successfully");
+    } catch (error: any) {
+      console.error("Error granting policy:", error);
+      toast.error(error.message || "Failed to grant policy");
+      throw error;
+    }
+  },
+
+  revokeUserPolicy: async (workspaceId: string, userId: string, policyId: string) => {
+    try {
+      const response = await window.electron.workspace.revoke_user_policy({
+        token: getUserTokenFromStore() || '',
+        workspaceId,
+        userId,
+        policy_id: policyId
+      });
+
+      if (response.error) {
+        throw new Error(response.error);
+      }
+
+      toast.success("Policy revoked successfully");
+    } catch (error: any) {
+      console.error("Error revoking policy:", error);
+      toast.error(error.message || "Failed to revoke policy");
       throw error;
     }
   },

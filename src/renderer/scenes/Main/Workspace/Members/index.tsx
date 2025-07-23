@@ -7,11 +7,13 @@ import { IUser } from '@/../../types/User/User';
 import SearchIcon from '@mui/icons-material/Search';
 import AdminPanelSettingsOutlinedIcon from '@mui/icons-material/AdminPanelSettingsOutlined';
 import PersonRemoveOutlinedIcon from '@mui/icons-material/PersonRemoveOutlined';
+import SecurityIcon from '@mui/icons-material/Security';
 import EmojiEventsIcon from '@mui/icons-material/EmojiEvents';
 import { useIntl } from 'react-intl';
 import { getUserFromStore, getUserTokenFromStore } from '@/utils/user';
 import RemoveUserDialog from '@/renderer/components/Dialog/Workspace/RemoveUser';
 import ChangePermissionDialog from '@/renderer/components/Dialog/Workspace/ChangePermission';
+import PoliciesModify from '@/renderer/components/Dialog/Workspace/PoliciesModify';
 
 interface MembersProps {
   workspaceId: string;
@@ -21,6 +23,14 @@ interface UserWithAgent extends IWorkspaceUser {
   agent?: IUser | null;
 }
 
+// Helper functions to handle role compatibility
+const getRoleName = (role: any): string => {
+  if (typeof role === 'string') return role;
+  if (typeof role === 'object' && role?.name) return role.name;
+  return 'member';
+};
+
+
 const Members = ({ workspaceId }: MembersProps) => {
   const intl = useIntl();
   const {
@@ -28,7 +38,8 @@ const Members = ({ workspaceId }: MembersProps) => {
     removeUserFromWorkspace,
     updateUserRole,
     fetchWorkspaceById,
-    getWorkspaceById
+    getWorkspaceById,
+    getUserPolicies // Add this to the destructured methods
   } = useWorkspaceStore();
   const { fetchAgent } = useAgentStore();
 
@@ -54,6 +65,9 @@ const Members = ({ workspaceId }: MembersProps) => {
   const [permissionDialogOpen, setPermissionDialogOpen] = useState(false);
   const [userToChangePermission, setUserToChangePermission] = useState<UserWithAgent | null>(null);
 
+  const [policiesDialogOpen, setPoliciesDialogOpen] = useState(false);
+  const [userToModifyPolicies, setUserToModifyPolicies] = useState<UserWithAgent | null>(null);
+
   const [workspaceName, setWorkspaceName] = useState('');
 
   const handleOpenPermissionDialog = (user: UserWithAgent) => {
@@ -66,6 +80,16 @@ const Members = ({ workspaceId }: MembersProps) => {
     setUserToChangePermission(null);
   };
 
+  const handleOpenPoliciesDialog = (user: UserWithAgent) => {
+    setUserToModifyPolicies(user);
+    setPoliciesDialogOpen(true);
+  };
+
+  const handleClosePoliciesDialog = () => {
+    setPoliciesDialogOpen(false);
+    setUserToModifyPolicies(null);
+  };
+
   const handleConfirmPermissionChange = async (newRole: "super_admin" | "admin" | "member") => {
     if (!userToChangePermission || !userToChangePermission.user_id) {
       console.error('No user selected or user_id is missing');
@@ -74,13 +98,8 @@ const Members = ({ workspaceId }: MembersProps) => {
     try {
       setLocalError(null);
       await updateUserRole(workspaceId, userToChangePermission.user_id, newRole);
-      setUsers(prevUsers =>
-        prevUsers.map(user =>
-          user.user_id === userToChangePermission.user_id
-            ? { ...user, role: newRole }
-            : user
-        )
-      );
+      // Refresh the users list to get updated role data
+      setRefreshTrigger(prev => prev + 1);
     } catch (err: any) {
       console.error("Error changing permission:", err);
       setLocalError(err?.message || "Failed to change user permission");
@@ -158,7 +177,19 @@ const Members = ({ workspaceId }: MembersProps) => {
         if (currentUser?.id) {
           setCurrentUserId(currentUser.id);
           const userInWorkspace = await getUserInWorkspace(workspaceId, currentUser.id);
-          setCurrentUserRole(userInWorkspace ? userInWorkspace.role : 'member');
+          setCurrentUserRole(userInWorkspace ? getRoleName(userInWorkspace.role) : 'member');
+          
+          // 🔍 NEW: Fetch and console log current user's policies
+          try {
+            const currentUserPolicies = await getUserPolicies(workspaceId, currentUser.id);
+            console.log('🔐 Current user policies:', {
+              userId: currentUser.id,
+              workspaceId: workspaceId,
+              policies: currentUserPolicies
+            });
+          } catch (policyError) {
+            console.error('Error fetching current user policies:', policyError);
+          }
         } else {
           setCurrentUserId('');
           setCurrentUserRole('member');
@@ -210,7 +241,7 @@ const Members = ({ workspaceId }: MembersProps) => {
     };
 
     loadMemberData();
-  }, [workspaceId, refreshTrigger, token, getUsersByWorkspace, getUserInWorkspace]);
+  }, [workspaceId, refreshTrigger, token, getUsersByWorkspace, getUserInWorkspace, getUserPolicies]); // Add getUserPolicies to dependencies
 
   const roleOptions = [
     { value: 'all', label: intl.formatMessage({ id: 'workspace.roles.all', defaultMessage: 'All Roles' }) },
@@ -243,7 +274,7 @@ const Members = ({ workspaceId }: MembersProps) => {
   };
 
   const filteredUsers = users.filter(user =>
-    (selectedRole === 'all' || user.role === selectedRole) &&
+    (selectedRole === 'all' || getRoleName(user.role) === selectedRole) &&
     (searchTerm === '' ||
       (user.username && user.username.toLowerCase().includes(searchTerm.toLowerCase())) ||
       (user.email && user.email.toLowerCase().includes(searchTerm.toLowerCase())))
@@ -253,8 +284,8 @@ const Members = ({ workspaceId }: MembersProps) => {
     if (a.user_id === currentUserId) return -1;
     if (b.user_id === currentUserId) return 1;
 
-    if (roleHierarchy[a.role] !== roleHierarchy[b.role]) {
-      return roleHierarchy[b.role] - roleHierarchy[a.role];
+    if (roleHierarchy[getRoleName(a.role)] !== roleHierarchy[getRoleName(b.role)]) {
+      return roleHierarchy[getRoleName(b.role)] - roleHierarchy[getRoleName(a.role)];
     }
 
     const aLevel = a.agent?.level ?? a.level ?? 0;
@@ -401,7 +432,7 @@ const Members = ({ workspaceId }: MembersProps) => {
                               )}
                             </Typography>
                             <Chip
-                              label={getRoleTranslation(user.role)}
+                              label={getRoleTranslation(getRoleName(user.role))}
                               color="primary"
                               size="small"
                               sx={{ minWidth: 80, mt: 0.5, height: 22 }}
@@ -445,10 +476,22 @@ const Members = ({ workspaceId }: MembersProps) => {
                       <TableCell>{formatDate(user.last_login || '')}</TableCell>
                       <TableCell align="right">
                         {user.user_id === currentUserId ? (
-                          <Typography variant="caption" color="text.secondary">
-                            {intl.formatMessage({ id: 'user.currentUser', defaultMessage: "It's you" })}
-                          </Typography>
-                        ) : (roleHierarchy[currentUserRole] > roleHierarchy[user.role]) && (
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <Typography variant="caption" color="text.secondary">
+                              {intl.formatMessage({ id: 'user.currentUser', defaultMessage: "It's you" })}
+                            </Typography>
+                            {currentUserRole === 'super_admin' && (
+                              <IconButton
+                                size="small"
+                                sx={{ color: 'text.secondary' }}
+                                onClick={() => handleOpenPoliciesDialog(user)}
+                                title={intl.formatMessage({ id: 'actions.managePolicies', defaultMessage: 'Manage Policies' })}
+                              >
+                                <SecurityIcon fontSize="small" />
+                              </IconButton>
+                            )}
+                          </Box>
+                        ) : (roleHierarchy[currentUserRole] > roleHierarchy[getRoleName(user.role)]) && (
                           <>
                             <IconButton
                               size="small"
@@ -458,6 +501,16 @@ const Members = ({ workspaceId }: MembersProps) => {
                             >
                               <AdminPanelSettingsOutlinedIcon fontSize="small" />
                             </IconButton>
+                            {currentUserRole === 'super_admin' && (
+                              <IconButton
+                                size="small"
+                                sx={{ color: 'text.secondary', ml: 0.5 }}
+                                onClick={() => handleOpenPoliciesDialog(user)}
+                                title={intl.formatMessage({ id: 'actions.managePolicies', defaultMessage: 'Manage Policies' })}
+                              >
+                                <SecurityIcon fontSize="small" />
+                              </IconButton>
+                            )}
                             <IconButton
                               size="small"
                               sx={{ color: 'text.secondary', ml: 0.5 }}
@@ -505,6 +558,14 @@ const Members = ({ workspaceId }: MembersProps) => {
         user={userToChangePermission}
         workspaceName={workspaceName}
         currentUserRole={currentUserRole}
+      />
+
+      <PoliciesModify
+        open={policiesDialogOpen}
+        onClose={handleClosePoliciesDialog}
+        user={userToModifyPolicies}
+        workspaceId={workspaceId}
+        workspaceName={workspaceName}
       />
     </Box>
   );

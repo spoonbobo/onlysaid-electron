@@ -10,7 +10,7 @@ import { toast } from "@/utils/toast";
 
 function WorkspaceSettings() {
   const intl = useIntl();
-  const { selectedContext } = useTopicStore();
+  const { selectedContext, selectedTopics } = useTopicStore();
   const workspaceId = selectedContext?.id;
 
   const {
@@ -28,6 +28,10 @@ function WorkspaceSettings() {
   const [moodleApiToken, setMoodleApiToken] = useState<string>("");
   const [hasChanges, setHasChanges] = useState(false);
   const [initialLoad, setInitialLoad] = useState(true);
+
+  // Get current category from selectedTopics
+  const section = selectedContext?.section || '';
+  const selectedCategory = selectedTopics[section] || 'general';
 
   // Load settings when component mounts or workspace changes
   useEffect(() => {
@@ -100,10 +104,8 @@ function WorkspaceSettings() {
       };
 
       if (currentSettings) {
-        // Update existing settings
         await updateSettings(workspaceId, settingsData);
       } else {
-        // Create new settings
         await createSettings(workspaceId, settingsData);
       }
 
@@ -154,111 +156,155 @@ function WorkspaceSettings() {
 
   if (initialLoad) {
     return (
-      <Box sx={{ p: 3, display: 'flex', justifyContent: 'center' }}>
-        <CircularProgress />
+      <Box sx={{ p: 3, display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: 200 }}>
+        <Box sx={{ textAlign: 'center' }}>
+          <CircularProgress sx={{ mb: 2 }} />
+          <Typography variant="body2" color="text.secondary">
+            {intl.formatMessage({ id: "workspace.settings.loading", defaultMessage: "Loading workspace settings..." })}
+          </Typography>
+        </Box>
       </Box>
     );
   }
 
-  return (
-    <Box sx={{ p: 3 }}>
-      <Typography variant="h4" sx={{ mb: 3, fontWeight: 'bold' }}>
-        {intl.formatMessage({ id: "workspace.settings.title" })}
-      </Typography>
+  const renderCategoryContent = () => {
+    switch (selectedCategory) {
+      // case 'general':
+      //   return (
+      //     <Box sx={{ p: 3 }}>
+      //       <Box sx={{ mb: 4 }}>
+      //         <Typography variant="h4" sx={{ fontWeight: 'bold', mb: 1 }}>
+      //           {intl.formatMessage({ id: "workspace.settings.categories.general", defaultMessage: "General Settings" })}
+      //         </Typography>
+      //         <Typography variant="body2" color="text.secondary">
+      //           {intl.formatMessage({ id: "workspace.settings.general.description", defaultMessage: "Basic workspace configuration and preferences" })}
+      //         </Typography>
+      //       </Box>
 
-      <Typography variant="body1" color="text.secondary" sx={{ mb: 4 }}>
-        {intl.formatMessage(
-          { id: "workspace.settings.description" },
-          { workspaceName: selectedContext?.name }
-        )}
-      </Typography>
+      //       <Alert severity="info">
+      //         {intl.formatMessage({ id: "workspace.settings.general.comingSoon", defaultMessage: "General workspace settings coming soon..." })}
+      //       </Alert>
+      //     </Box>
+      //   );
 
-      {error && (
-        <Alert severity="error" sx={{ mb: 3 }}>
-          {error}
-        </Alert>
-      )}
+      case 'moodle':
+        return (
+          <Box sx={{ p: 3 }}>
+            <Box sx={{ mb: 4 }}>
+              <Typography variant="h4" sx={{ fontWeight: 'bold', mb: 1 }}>
+                {intl.formatMessage({ id: "workspace.settings.categories.moodle", defaultMessage: "Moodle Integration" })}
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                {intl.formatMessage({ id: "workspace.settings.moodle.description", defaultMessage: "Configure Moodle integration settings and API access" })}
+              </Typography>
+            </Box>
 
-      {/* Moodle Integration Section */}
-      <SettingsSection title={intl.formatMessage({ id: "workspace.settings.moodle.title" })} sx={{ mb: 4 }}>
-        <Box sx={{ py: 2 }}>
-          <Typography variant="body1" sx={{ mb: 3 }}>
-            {intl.formatMessage({ id: "workspace.settings.moodle.description" })}
-          </Typography>
+            {error && (
+              <Alert severity="error" sx={{ mb: 3 }}>
+                {error}
+              </Alert>
+            )}
 
-          <SettingsFormField label={intl.formatMessage({ id: "workspace.settings.moodle.apiToken" })}>
-            <TextFieldWithOptions
-              fullWidth
-              size="small"
-              isPassword={true}
-              value={moodleApiToken}
-              onChange={handleMoodleApiTokenChange}
-              onClear={handleClearMoodleApiToken}
-              placeholder={intl.formatMessage({ id: "workspace.settings.moodle.apiTokenPlaceholder" })}
-              helperText={intl.formatMessage({ id: "workspace.settings.moodle.apiTokenHelperText" })}
-            />
-          </SettingsFormField>
+            <SettingsSection title={intl.formatMessage({ id: "workspace.settings.moodle.title" })} sx={{ mb: 4 }}>
+              <Box sx={{ py: 2 }}>
+                <Typography variant="body1" sx={{ mb: 3 }}>
+                  {intl.formatMessage({ id: "workspace.settings.moodle.description" })}
+                </Typography>
 
-          <SettingsFormField label={intl.formatMessage({ id: "workspace.settings.moodle.courseId" })}>
-            <TextFieldWithOptions
-              fullWidth
-              size="small"
-              value={moodleCourseId}
-              onChange={handleMoodleCourseIdChange}
-              onClear={handleClearMoodleCourseId}
-              placeholder={intl.formatMessage({ id: "workspace.settings.moodle.courseIdPlaceholder" })}
-              helperText={intl.formatMessage({ id: "workspace.settings.moodle.courseIdHelperText" })}
-            />
-          </SettingsFormField>
+                <SettingsFormField label={intl.formatMessage({ id: "workspace.settings.moodle.apiToken" })}>
+                  <TextFieldWithOptions
+                    fullWidth
+                    size="small"
+                    isPassword={true}
+                    value={moodleApiToken}
+                    onChange={handleMoodleApiTokenChange}
+                    onClear={handleClearMoodleApiToken}
+                    placeholder={intl.formatMessage({ id: "workspace.settings.moodle.apiTokenPlaceholder" })}
+                    helperText={intl.formatMessage({ id: "workspace.settings.moodle.apiTokenHelperText" })}
+                  />
+                </SettingsFormField>
 
-          {hasChanges && (
-            <Alert severity="info" sx={{ mt: 2, mb: 2 }}>
-              {intl.formatMessage({ id: "workspace.settings.unsavedChanges" })}
-            </Alert>
-          )}
+                <SettingsFormField label={intl.formatMessage({ id: "workspace.settings.moodle.courseId" })}>
+                  <TextFieldWithOptions
+                    fullWidth
+                    size="small"
+                    value={moodleCourseId}
+                    onChange={handleMoodleCourseIdChange}
+                    onClear={handleClearMoodleCourseId}
+                    placeholder={intl.formatMessage({ id: "workspace.settings.moodle.courseIdPlaceholder" })}
+                    helperText={intl.formatMessage({ id: "workspace.settings.moodle.courseIdHelperText" })}
+                  />
+                </SettingsFormField>
 
-          <Box sx={{ display: 'flex', gap: 2, mt: 3, flexWrap: 'wrap' }}>
-            <Button
-              variant="contained"
-              onClick={handleSaveSettings}
-              disabled={isLoading || !hasChanges}
-              startIcon={isLoading ? <CircularProgress size={16} /> : null}
-            >
-              {isLoading 
-                ? intl.formatMessage({ id: "workspace.settings.saving" })
-                : intl.formatMessage({ id: "workspace.settings.saveSettings" })
-              }
-            </Button>
+                {hasChanges && (
+                  <Alert severity="info" sx={{ mt: 2, mb: 2 }}>
+                    {intl.formatMessage({ id: "workspace.settings.unsavedChanges" })}
+                  </Alert>
+                )}
 
-            <Button
-              variant="outlined"
-              onClick={handleResetSettings}
-              disabled={isLoading || !hasChanges}
-            >
-              {intl.formatMessage({ id: "workspace.settings.resetChanges" })}
-            </Button>
+                <Box sx={{ display: 'flex', gap: 2, mt: 3, flexWrap: 'wrap' }}>
+                  <Button
+                    variant="contained"
+                    onClick={handleSaveSettings}
+                    disabled={isLoading || !hasChanges}
+                    startIcon={isLoading ? <CircularProgress size={16} /> : null}
+                  >
+                    {isLoading 
+                      ? intl.formatMessage({ id: "workspace.settings.saving" })
+                      : intl.formatMessage({ id: "workspace.settings.saveSettings" })
+                    }
+                  </Button>
 
-            <Button
-              variant="outlined"
-              color="error"
-              onClick={handleDeleteSettings}
-              disabled={isLoading}
-              sx={{ ml: 'auto' }}
-            >
-              {intl.formatMessage({ id: "workspace.settings.deleteAllSettings" })}
-            </Button>
+                  <Button
+                    variant="outlined"
+                    onClick={handleResetSettings}
+                    disabled={isLoading || !hasChanges}
+                  >
+                    {intl.formatMessage({ id: "workspace.settings.resetChanges" })}
+                  </Button>
+
+                  <Button
+                    variant="outlined"
+                    color="error"
+                    onClick={handleDeleteSettings}
+                    disabled={isLoading}
+                    sx={{ ml: 'auto' }}
+                  >
+                    {intl.formatMessage({ id: "workspace.settings.deleteAllSettings" })}
+                  </Button>
+                </Box>
+              </Box>
+            </SettingsSection>
           </Box>
-        </Box>
-      </SettingsSection>
+        );
 
-      {/* Future Settings Sections */}
-      <SettingsSection title={intl.formatMessage({ id: "workspace.settings.additional.title" })} sx={{ mb: 4 }}>
-        <Box sx={{ py: 2 }}>
-          <Typography variant="body2" color="text.secondary">
-            {intl.formatMessage({ id: "workspace.settings.additional.description" })}
-          </Typography>
-        </Box>
-      </SettingsSection>
+      default:
+        return (
+          <Box sx={{ p: 3 }}>
+            <Box sx={{ mb: 4 }}>
+              <Typography variant="h4" sx={{ fontWeight: 'bold', mb: 1 }}>
+                {intl.formatMessage({ id: "workspace.settings.categories.moodle", defaultMessage: "Moodle Integration" })}
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                {intl.formatMessage({ id: "workspace.settings.moodle.description", defaultMessage: "Configure Moodle integration settings and API access" })}
+              </Typography>
+            </Box>
+
+            <Alert severity="info">
+              {intl.formatMessage({ id: "workspace.settings.selectCategory", defaultMessage: "Please select a settings category from the menu" })}
+            </Alert>
+          </Box>
+        );
+    }
+  };
+
+  return (
+    <Box sx={{ 
+      height: "100%",
+      overflow: "auto",
+      bgcolor: "background.default"
+    }}>
+      {renderCategoryContent()}
     </Box>
   );
 }

@@ -52,6 +52,54 @@ function Chat() {
 
   const contextId = selectedContext ? `${selectedContext.name}:${selectedContext.type}` : '';
   const activeChatId = selectedContext?.section ? selectedTopics[selectedContext.section] || null : null;
+
+  // 🔍 DEBUG: Check chat store and validation
+  useEffect(() => {
+    if (selectedContext?.section === 'workspace:avatar' && activeChatId) {
+      const { chats } = useChatStore.getState();
+      const foundChat = chats.find(chat => chat.id === activeChatId);
+      
+      // Avatar chat type calculation
+      const workspaceId = selectedContext?.id;
+      const avatarName = 'alice'; // This should match your avatar name
+      const expectedAvatarChatType = `${workspaceId}:${avatarName}`;
+      
+      console.log('🐛 Avatar Chat Validation:', {
+        activeChatId,
+        foundChat: foundChat ? {
+          id: foundChat.id,
+          name: foundChat.name,
+          type: foundChat.type,
+          workspace_id: foundChat.workspace_id
+        } : null,
+        expectedAvatarChatType,
+        chatMatches: foundChat?.type === expectedAvatarChatType,
+        hasNoWorkspaceId: foundChat && !foundChat.workspace_id,
+        allChats: chats.map(c => ({
+          id: c.id,
+          name: c.name,
+          type: c.type,
+          workspace_id: c.workspace_id
+        }))
+      });
+    }
+  }, [selectedContext, activeChatId]);
+
+  // 🔍 DEBUG: Add this debugging code to identify the issue
+  useEffect(() => {
+    if (selectedContext?.section === 'workspace:avatar') {
+      console.log('🐛 Avatar Chat Debug:', {
+        selectedContext: selectedContext,
+        section: selectedContext?.section,
+        selectedTopics: selectedTopics,
+        activeChatId: activeChatId,
+        topicKeys: Object.keys(selectedTopics),
+        avatarTopicValue: selectedTopics['workspace:avatar'],
+        workspaceId: selectedContext?.id
+      });
+    }
+  }, [selectedContext, selectedTopics, activeChatId]);
+
   const { user: currentUser } = useUserStore();
   const {
     agent,
@@ -354,6 +402,15 @@ function Chat() {
       console.log('[Chat] Guest user detected, creating guest agent');
     }
   }, [isGuest, agent, createGuestAgent]);
+
+  // 🔍 DEBUG: Final render decision
+  if (selectedContext?.section === 'workspace:avatar') {
+    console.log('🐛 Avatar Render Decision:', {
+      activeChatId,
+      willShowNoChat: !activeChatId,
+      willShowChatUI: !!activeChatId
+    });
+  }
 
   return (
     <Box

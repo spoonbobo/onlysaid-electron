@@ -23,8 +23,7 @@ function MenuHeader() {
   const createChat = useChatStore((state) => state.createChat);
   const setActiveChat = useChatStore((state) => state.setActiveChat);
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
-  const [menuPosition, setMenuPosition] = useState<{ top: number, left: number } | null>(null);
-  const open = Boolean(anchorEl) || Boolean(menuPosition);
+  const open = Boolean(anchorEl);
   const [showAddFriendDialog, setShowAddFriendDialog] = useState(false);
   const isLocal = user?.id ? false : true
 
@@ -52,13 +51,11 @@ function MenuHeader() {
   };
 
   const handleClick = (event: React.MouseEvent<HTMLElement>) => {
-    setMenuPosition(null);
     setAnchorEl(event.currentTarget);
   };
 
   const handleClose = () => {
     setAnchorEl(null);
-    setMenuPosition(null);
     // Ensure focus is properly managed when menu closes
     if (document.activeElement && document.activeElement !== document.body) {
       (document.activeElement as HTMLElement).blur();
@@ -97,15 +94,6 @@ function MenuHeader() {
 
   const handleDocsAction = (action: string) => {
     console.log('Docs action:', action);
-  };
-
-  const handleContextMenu = (event: React.MouseEvent<HTMLElement>) => {
-    event.preventDefault();
-    setAnchorEl(null);
-    setMenuPosition({
-      top: event.clientY,
-      left: event.clientX,
-    });
   };
 
   const renderMenuItems = () => {
@@ -233,7 +221,6 @@ function MenuHeader() {
         width: '100%',
         overflow: 'hidden'
       }}
-      onContextMenu={handleContextMenu}
     >
       <Box sx={{
         borderBottom: 1,
@@ -261,8 +248,6 @@ function MenuHeader() {
 
           <Menu
             anchorEl={anchorEl}
-            anchorReference={menuPosition ? 'anchorPosition' : 'anchorEl'}
-            anchorPosition={menuPosition || undefined}
             open={open}
             onClose={handleClose}
             anchorOrigin={{

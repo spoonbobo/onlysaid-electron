@@ -14,26 +14,30 @@ import { IWorkspace } from "@/../../types/Workspace/Workspace";
 import { useChatStore } from "@/renderer/stores/Chat/ChatStore";
 import { useTopicStore, TopicContext } from "@/renderer/stores/Topic/TopicStore";
 import { useWorkspaceStore } from "@/renderer/stores/Workspace/WorkspaceStore";
+import { useWorkspaceInitialization } from "@/renderer/hooks/useWorkspaceInitialization";
 import { useUserStore } from "@/renderer/stores/User/UserStore";
+import { useAgentStore } from "@/renderer/stores/Agent/AgentStore";
 import { useNotificationStore } from "@/renderer/stores/Notification/NotificationStore";
 import { useIntl } from "react-intl";
 import { useWorkspaceIcons } from '@/renderer/hooks/useWorkspaceIcons';
-import UserInfoBar from "../Interface/UserInfoBar";
+import UserInfoBar from "@/renderer/scenes/Interface/UserInfoBar";
 
 interface ExpandedTabsProps {
   onCollapse: () => void;
   onAgentToggle?: (show: boolean) => void;
   agentOverlayVisible?: boolean;
+  onWidthChange?: (width: number) => void; // Add width change callback
 }
 
-function ExpandedTabs({ onCollapse, onAgentToggle, agentOverlayVisible = false }: ExpandedTabsProps) {
+function ExpandedTabs({ onCollapse, onAgentToggle, agentOverlayVisible = false, onWidthChange }: ExpandedTabsProps) {
   const { selectedContext, contexts, setSelectedContext, removeContext, addContext } = useTopicStore();
-  const { workspaces, getWorkspace, exitWorkspace, isLoading, setWorkspaceCreatedCallback } = useWorkspaceStore();
+  const { workspaces, exitWorkspace, isLoading, setWorkspaceCreatedCallback } = useWorkspaceStore();
   const {
     hasHomeNotifications,
     hasWorkspaceNotifications
   } = useNotificationStore();
-  const user = useUserStore(state => state.user);
+  const { user } = useWorkspaceInitialization(); // Use centralized initialization
+  const agent = useAgentStore(state => state.agent);
   const [showAddTeamDialog, setShowAddTeamDialog] = useState(false);
   const [showExitDialog, setShowExitDialog] = useState(false);
   const [workspaceLastSections, setWorkspaceLastSections] = useState<Record<string, string>>({});
@@ -57,6 +61,53 @@ function ExpandedTabs({ onCollapse, onAgentToggle, agentOverlayVisible = false }
   
   const { workspaceIcons, getWorkspaceIcon } = useWorkspaceIcons(stableWorkspaces as IWorkspace[]);
 
+  // Calculate adaptive width based on content
+  const adaptiveWidth = useMemo(() => {
+    const minWidth = 200; // Minimum width
+    const maxWidth = 400; // Increased max width to accommodate UserInfoBar
+    const iconAreaWidth = 56; // Icon area width
+    const leftPadding = 12; // Balanced left padding
+    const rightPadding = 12; // Balanced right padding
+    
+    // Get all text content that will be displayed in navigation
+    const navigationTextItems = [
+      intl.formatMessage({ id: "sidebar.home", defaultMessage: "Home" }),
+      intl.formatMessage({ id: "workspace.create.title", defaultMessage: "Add Workspace" }),
+      intl.formatMessage({ id: "calendar.title", defaultMessage: "Calendar" }),
+      intl.formatMessage({ id: "admin.title", defaultMessage: "Admin Panel" }),
+      ...workspaces.map(w => w.name || 'Unnamed Workspace')
+    ];
+    
+    // Calculate navigation content width
+    const maxNavigationTextLength = Math.max(...navigationTextItems.map(text => text.length));
+    const estimatedNavigationTextWidth = maxNavigationTextLength * 7;
+    const navigationContentWidth = iconAreaWidth + estimatedNavigationTextWidth + leftPadding + rightPadding;
+    
+    // Calculate UserInfoBar content width
+    let userInfoBarContentWidth = 0;
+    if (user) {
+      const avatarAreaWidth = 48; // Overlapping avatars area
+      const userNameLength = (user.username || "Guest User").length;
+      const statusTextLength = 10; // Approximate length for status text
+      const userTextWidth = Math.max(userNameLength, statusTextLength) * 7;
+      const buttonsWidth = 80; // AgentTaskToggle + Settings button
+      const userInfoBarPadding = 24; // Balanced left and right padding for UserInfoBar
+      
+      userInfoBarContentWidth = avatarAreaWidth + userTextWidth + buttonsWidth + userInfoBarPadding;
+    }
+    
+    // Use the wider of navigation content or UserInfoBar content
+    const calculatedWidth = Math.max(navigationContentWidth, userInfoBarContentWidth);
+    
+    // Clamp between min and max
+    return Math.max(minWidth, Math.min(maxWidth, calculatedWidth));
+  }, [workspaces, intl, user, agent]);
+
+  // Notify parent of width changes
+  useEffect(() => {
+    onWidthChange?.(adaptiveWidth);
+  }, [adaptiveWidth, onWidthChange]);
+
   const homeContext = useMemo(() => {
     const foundContext = contexts.find(context => context.name === "home" && context.type === "home");
     return foundContext || { name: "home", type: "home" };
@@ -70,25 +121,20 @@ function ExpandedTabs({ onCollapse, onAgentToggle, agentOverlayVisible = false }
       setSelectedContext(homeContext as TopicContext);
       const workspaceContexts = [...contexts].filter(ctx => ctx.type === "workspace");
       workspaceContexts.forEach(ctx => removeContext(ctx));
-      useWorkspaceStore.setState({ workspaces: [] });
+      useWorkspaceStore.setState({ workspaces: [], isInitialized: false, lastFetchedUserId: null });
     }
-
-    if (!previousUser && user && user.id) {
-      getWorkspace(user.id);
-    }
-  }, [user, setSelectedContext, removeContext, contexts, getWorkspace]);
-
-  useEffect(() => {
-    const currentUser = getUserFromStore();
-    if (currentUser?.id) {
-      getWorkspace(currentUser.id);
-    }
-  }, [getWorkspace]);
+  }, [user, setSelectedContext, removeContext, contexts]);
 
   useEffect(() => {
     if (!user) return;
 
     workspaces.forEach(workspace => {
+      // Skip workspaces without valid names to prevent "unnamed workspace" spam
+      if (!workspace.name || workspace.name.trim().length === 0) {
+        console.warn(`Skipping workspace ${workspace.id} - missing name`);
+        return;
+      }
+
       const existingContext = contexts.find(
         context => context.type === "workspace" && context.id === workspace.id
       );
@@ -96,7 +142,7 @@ function ExpandedTabs({ onCollapse, onAgentToggle, agentOverlayVisible = false }
       if (!existingContext) {
         addContext({
           id: workspace.id,
-          name: workspace.name?.toLowerCase() || 'unnamed workspace',
+          name: workspace.name.toLowerCase(),
           type: "workspace"
         });
       }
@@ -245,10 +291,7 @@ function ExpandedTabs({ onCollapse, onAgentToggle, agentOverlayVisible = false }
         setSelectedContext(homeContext as TopicContext);
       }
 
-      const currentUser = getUserFromStore();
-      if (currentUser?.id) {
-        await getWorkspace(currentUser.id);
-      }
+      // Workspace list will be automatically refreshed through the store
     } catch (error) {
       console.error("Error exiting workspace:", error);
     }
@@ -266,17 +309,14 @@ function ExpandedTabs({ onCollapse, onAgentToggle, agentOverlayVisible = false }
     if (workspace && workspace.id) {
       const workspaceContext: TopicContext = {
         id: workspace.id,
-        name: workspace.name?.toLowerCase() || 'unnamed workspace',
+        name: workspace.name?.toLowerCase() || `workspace-${workspace.id.slice(0, 8)}`,
         type: "workspace",
         section: "workspace:chatroom"
       };
       setSelectedContext(workspaceContext);
     }
 
-    const currentUser = getUserFromStore();
-    if (currentUser?.id) {
-      await getWorkspace(currentUser.id);
-    }
+    // Workspace creation will automatically trigger re-initialization
 
     setShowAddTeamDialog(false);
     setDialogCreation(false);
@@ -326,7 +366,7 @@ function ExpandedTabs({ onCollapse, onAgentToggle, agentOverlayVisible = false }
 
   const isAdmin = true;
 
-  // Handle hover for collapse button
+  // Simplified hover handlers without timeouts
   const handleMouseEnter = useCallback(() => {
     setShowCollapseButton(true);
   }, []);
@@ -335,48 +375,40 @@ function ExpandedTabs({ onCollapse, onAgentToggle, agentOverlayVisible = false }
     setShowCollapseButton(false);
   }, []);
 
+  const handleCollapseClick = useCallback(() => {
+    onCollapse();
+    setShowCollapseButton(false);
+  }, [onCollapse]);
+
   return (
     <>
-      {/* Extended hover area for collapse button - larger trigger zone */}
       <Box
         sx={{
-          position: "absolute",
-          top: 0,
-          right: -60, // Extend hover area beyond sidebar
-          width: 120, // Much larger hover area
-          height: "100%",
-          zIndex: 999,
-          pointerEvents: showCollapseButton ? "none" : "auto" // Disable when button is visible
-        }}
-        onMouseEnter={handleMouseEnter}
-        onMouseLeave={handleMouseLeave}
-      />
-
-      <Box
-        sx={{
-          width: 280,
+          width: adaptiveWidth, // Use calculated adaptive width
           height: "100%",
           bgcolor: "background.paper",
           display: "flex",
           flexDirection: "column",
           position: "relative",
           borderRight: "1px solid",
-          borderColor: "divider"
+          borderColor: "divider",
+          transition: "width 0.2s ease-in-out", // Smooth width transitions
+          px: 1.5, // Balanced horizontal padding (12px on both sides)
         }}
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
       >
-        {/* Collapse Button - improved positioning and z-index */}
+        {/* Collapse Button */}
         <Zoom in={showCollapseButton}>
           <Fab
             size="small"
-            onClick={onCollapse}
+            onClick={handleCollapseClick}
             sx={{
               position: "absolute",
               top: 16,
-              right: -24, // Moved slightly closer for easier access
-              zIndex: 1001, // Higher than any tooltips
-              width: 36, // Slightly larger for easier clicking
+              right: -18,
+              zIndex: 1001,
+              width: 36,
               height: 36,
               minHeight: 36,
               bgcolor: "primary.main",
@@ -392,14 +424,14 @@ function ExpandedTabs({ onCollapse, onAgentToggle, agentOverlayVisible = false }
           </Fab>
         </Zoom>
 
-        {/* Navigation - preserve exact same positioning as compact mode */}
+        {/* Navigation */}
         <Box sx={{ 
           flex: 1, 
           overflow: "auto", 
           display: "flex",
           flexDirection: "column",
-          py: 2,  // Same as compact mode
-          gap: 2, // Same as compact mode
+          py: 2,
+          gap: 2,
           position: "relative"
         }}>
           {/* Home */}
@@ -416,12 +448,12 @@ function ExpandedTabs({ onCollapse, onAgentToggle, agentOverlayVisible = false }
             }}
             onClick={() => handleNavigate(homeContext as TopicContext)}
           >
-            {/* Icon area - exact same positioning as compact mode */}
+            {/* Icon area */}
             <Box
               sx={{
-                width: 72, // Exact same width as compact sidebar
+                width: 56, // Reduced width since we have outer padding
                 display: "flex",
-                justifyContent: "center", // Center icon exactly like compact mode
+                justifyContent: "center",
                 alignItems: "center",
                 position: "relative",
                 flexShrink: 0,
@@ -460,14 +492,14 @@ function ExpandedTabs({ onCollapse, onAgentToggle, agentOverlayVisible = false }
               </Badge>
             </Box>
             
-            {/* Text area - only visible in expanded mode */}
+            {/* Text area */}
             <Box sx={{ 
               flex: 1,
-              pl: 1, // Small padding from icon area
               overflow: "hidden"
             }}>
               <Typography
                 variant="body2"
+                noWrap
                 sx={{
                   fontWeight: selectedContext?.name === "home" ? 600 : 400,
                   color: "text.primary"
@@ -478,10 +510,11 @@ function ExpandedTabs({ onCollapse, onAgentToggle, agentOverlayVisible = false }
             </Box>
           </Box>
 
-          <Divider sx={{ mx: 2 }} />
+          {/* Only show divider if user is logged in (has access to Calendar/Admin) */}
+          {user && <Divider />}
 
-          {/* Apply the same pattern to all other items */}
-          {WorkspaceContexts.map(workspaceContext => {
+          {/* Workspace items */}
+          {WorkspaceContexts.map((workspaceContext, index) => {
             const workspace = workspaces.find(w => w.id === workspaceContext.id);
             const imageUrl = getWorkspaceIcon(workspaceContext.id || '') || workspace?.image;
             const workspaceNameInitial = workspaceContext.name[0]?.toUpperCase();
@@ -490,7 +523,7 @@ function ExpandedTabs({ onCollapse, onAgentToggle, agentOverlayVisible = false }
 
             return (
               <Box 
-                key={`workspace-${workspaceContext.id || workspaceContext.name}`}
+                key={`workspace-${workspaceContext.id || `${workspaceContext.name}-${index}`}`}
                 sx={{ 
                   display: "flex", 
                   alignItems: "center",
@@ -504,12 +537,12 @@ function ExpandedTabs({ onCollapse, onAgentToggle, agentOverlayVisible = false }
                 onClick={() => handleNavigate(workspaceContext)}
                 onContextMenu={(e) => handleContextMenu(e, workspaceContext)}
               >
-                {/* Icon area - exact same positioning as compact mode */}
+                {/* Icon area */}
                 <Box
                   sx={{
-                    width: 72, // Exact same width as compact sidebar
+                    width: 56, // Reduced width since we have outer padding
                     display: "flex",
-                    justifyContent: "center", // Center icon exactly like compact mode
+                    justifyContent: "center",
                     alignItems: "center",
                     position: "relative",
                     flexShrink: 0,
@@ -558,10 +591,9 @@ function ExpandedTabs({ onCollapse, onAgentToggle, agentOverlayVisible = false }
                   </Badge>
                 </Box>
                 
-                {/* Text area - only visible in expanded mode */}
+                {/* Text area */}
                 <Box sx={{ 
                   flex: 1,
-                  pl: 1, // Small padding from icon area
                   overflow: "hidden"
                 }}>
                   <Typography
@@ -577,6 +609,7 @@ function ExpandedTabs({ onCollapse, onAgentToggle, agentOverlayVisible = false }
                   {workspaceContext.id && (
                     <Typography
                       variant="caption"
+                      noWrap
                       sx={{
                         color: "text.secondary",
                         fontSize: '0.75rem'
@@ -607,9 +640,9 @@ function ExpandedTabs({ onCollapse, onAgentToggle, agentOverlayVisible = false }
             >
               <Box
                 sx={{
-                  width: 72, // Exact same width as compact sidebar
+                  width: 56, // Reduced width since we have outer padding
                   display: "flex",
-                  justifyContent: "center", // Center icon exactly like compact mode
+                  justifyContent: "center",
                   alignItems: "center",
                   flexShrink: 0
                 }}
@@ -622,9 +655,10 @@ function ExpandedTabs({ onCollapse, onAgentToggle, agentOverlayVisible = false }
                   <AddIcon />
                 </IconButton>
               </Box>
-              <Box sx={{ ml: 1, flex: 1 }}>
+              <Box sx={{ flex: 1, overflow: "hidden" }}>
                 <Typography
                   variant="body2"
+                  noWrap
                   sx={{
                     color: "text.primary"
                   }}
@@ -635,7 +669,8 @@ function ExpandedTabs({ onCollapse, onAgentToggle, agentOverlayVisible = false }
             </Box>
           )}
 
-          <Divider sx={{ mx: 2 }} />
+          {/* Only show divider if user is logged in (has access to Calendar/Admin) */}
+          {user && <Divider />}
 
           {/* Calendar */}
           {user && (
@@ -654,9 +689,9 @@ function ExpandedTabs({ onCollapse, onAgentToggle, agentOverlayVisible = false }
             >
               <Box
                 sx={{
-                  width: 72, // Exact same width as compact sidebar
+                  width: 56, // Reduced width since we have outer padding
                   display: "flex",
-                  justifyContent: "center", // Center icon exactly like compact mode
+                  justifyContent: "center",
                   alignItems: "center",
                   position: "relative",
                   flexShrink: 0,
@@ -681,9 +716,10 @@ function ExpandedTabs({ onCollapse, onAgentToggle, agentOverlayVisible = false }
                   <CalendarTodayIcon />
                 </IconButton>
               </Box>
-              <Box sx={{ ml: 1, flex: 1 }}>
+              <Box sx={{ flex: 1, overflow: "hidden" }}>
                 <Typography
                   variant="body2"
+                  noWrap
                   sx={{
                     fontWeight: selectedContext?.name === "calendar" ? 600 : 400,
                     color: "text.primary"
@@ -712,9 +748,9 @@ function ExpandedTabs({ onCollapse, onAgentToggle, agentOverlayVisible = false }
             >
               <Box
                 sx={{
-                  width: 72, // Exact same width as compact sidebar
+                  width: 56, // Reduced width since we have outer padding
                   display: "flex",
-                  justifyContent: "center", // Center icon exactly like compact mode
+                  justifyContent: "center",
                   alignItems: "center",
                   position: "relative",
                   flexShrink: 0,
@@ -739,9 +775,10 @@ function ExpandedTabs({ onCollapse, onAgentToggle, agentOverlayVisible = false }
                   <AdminPanelSettingsIcon />
                 </IconButton>
               </Box>
-              <Box sx={{ ml: 1, flex: 1 }}>
+              <Box sx={{ flex: 1, overflow: "hidden" }}>
                 <Typography
                   variant="body2"
+                  noWrap
                   sx={{
                     fontWeight: selectedContext?.name === "admin" ? 600 : 400,
                     color: "text.primary"

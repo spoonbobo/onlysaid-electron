@@ -13,6 +13,7 @@ import { IWorkspace } from "@/../../types/Workspace/Workspace";
 import { useChatStore } from "@/renderer/stores/Chat/ChatStore";
 import { useTopicStore, TopicContext } from "@/renderer/stores/Topic/TopicStore";
 import { useWorkspaceStore } from "@/renderer/stores/Workspace/WorkspaceStore";
+import { useWorkspaceInitialization } from "@/renderer/hooks/useWorkspaceInitialization";
 import { useUserStore } from "@/renderer/stores/User/UserStore";
 import { useNotificationStore } from "@/renderer/stores/Notification/NotificationStore";
 import { useIntl } from "react-intl";
@@ -25,16 +26,17 @@ interface SidebarTabsProps {
   onExpandChange?: (expanded: boolean) => void;
   onAgentToggle?: (show: boolean) => void;
   agentOverlayVisible?: boolean;
+  onWidthChange?: (width: number) => void; // Add width change callback
 }
 
-function SidebarTabs({ onExpandChange, onAgentToggle, agentOverlayVisible = false }: SidebarTabsProps) {
+function SidebarTabs({ onExpandChange, onAgentToggle, agentOverlayVisible = false, onWidthChange }: SidebarTabsProps) {
   const { selectedContext, contexts, setSelectedContext, removeContext, addContext } = useTopicStore();
-  const { workspaces, getWorkspace, exitWorkspace, isLoading, setWorkspaceCreatedCallback } = useWorkspaceStore();
+  const { workspaces, exitWorkspace, isLoading, setWorkspaceCreatedCallback } = useWorkspaceStore();
   const {
     hasHomeNotifications,
     hasWorkspaceNotifications
   } = useNotificationStore();
-  const user = useUserStore(state => state.user);
+  const { user } = useWorkspaceInitialization(); // Use centralized initialization
   const [showAddTeamDialog, setShowAddTeamDialog] = useState(false);
   const [showExitDialog, setShowExitDialog] = useState(false);
   const [workspaceLastSections, setWorkspaceLastSections] = useState<Record<string, string>>({});
@@ -68,7 +70,7 @@ function SidebarTabs({ onExpandChange, onAgentToggle, agentOverlayVisible = fals
     return foundContext || { name: "home", type: "home" };
   }, [contexts]);
 
-  // Handle hover for expand button
+  // Simplified hover handlers without timeouts
   const handleMouseEnter = useCallback(() => {
     if (!isExpanded) {
       setShowExpandButton(true);
@@ -79,13 +81,13 @@ function SidebarTabs({ onExpandChange, onAgentToggle, agentOverlayVisible = fals
     setShowExpandButton(false);
   }, []);
 
-  // Handle expand/collapse
   const handleExpand = useCallback(() => {
     setIsExpanded(true);
     onExpandChange?.(true);
     setShowExpandButton(false);
   }, [onExpandChange]);
 
+  // Add the missing handleCollapse function
   const handleCollapse = useCallback(() => {
     setIsExpanded(false);
     onExpandChange?.(false);
@@ -109,25 +111,20 @@ function SidebarTabs({ onExpandChange, onAgentToggle, agentOverlayVisible = fals
       const workspaceContexts = [...contexts].filter(ctx => ctx.type === "workspace");
       workspaceContexts.forEach(ctx => removeContext(ctx));
 
-      useWorkspaceStore.setState({ workspaces: [] });
+      useWorkspaceStore.setState({ workspaces: [], isInitialized: false, lastFetchedUserId: null });
     }
-
-    if (!previousUser && user && user.id) {
-      getWorkspace(user.id);
-    }
-  }, [user, setSelectedContext, removeContext, contexts, getWorkspace]);
-
-  useEffect(() => {
-    const currentUser = getUserFromStore();
-    if (currentUser?.id) {
-      getWorkspace(currentUser.id);
-    }
-  }, [getWorkspace]);
+  }, [user, setSelectedContext, removeContext, contexts]);
 
   useEffect(() => {
     if (!user) return;
 
     workspaces.forEach(workspace => {
+      // Skip workspaces without valid names to prevent "unnamed workspace" spam
+      if (!workspace.name || workspace.name.trim().length === 0) {
+        console.warn(`Skipping workspace ${workspace.id} - missing name`);
+        return;
+      }
+
       const existingContext = contexts.find(
         context => context.type === "workspace" && context.id === workspace.id
       );
@@ -135,7 +132,7 @@ function SidebarTabs({ onExpandChange, onAgentToggle, agentOverlayVisible = fals
       if (!existingContext) {
         addContext({
           id: workspace.id,
-          name: workspace.name?.toLowerCase() || 'unnamed workspace',
+          name: workspace.name.toLowerCase(),
           type: "workspace"
         });
       }
@@ -286,10 +283,7 @@ function SidebarTabs({ onExpandChange, onAgentToggle, agentOverlayVisible = fals
         setSelectedContext(homeContext as TopicContext);
       }
 
-      const currentUser = getUserFromStore();
-      if (currentUser?.id) {
-        await getWorkspace(currentUser.id);
-      }
+      // Workspace list will be automatically refreshed through the store
     } catch (error) {
       console.error("Error exiting workspace:", error);
     }
@@ -307,7 +301,7 @@ function SidebarTabs({ onExpandChange, onAgentToggle, agentOverlayVisible = fals
     if (workspace && workspace.id) {
       const workspaceContext: TopicContext = {
         id: workspace.id,
-        name: workspace.name?.toLowerCase() || 'unnamed workspace',
+        name: workspace.name?.toLowerCase() || `workspace-${workspace.id.slice(0, 8)}`,
         type: "workspace",
         section: "workspace:chatroom"
       };
@@ -315,10 +309,7 @@ function SidebarTabs({ onExpandChange, onAgentToggle, agentOverlayVisible = fals
       setSelectedContext(workspaceContext);
     }
 
-    const currentUser = getUserFromStore();
-    if (currentUser?.id) {
-      await getWorkspace(currentUser.id);
-    }
+    // Workspace creation will automatically trigger re-initialization
 
     setShowAddTeamDialog(false);
     setDialogCreation(false);
@@ -330,7 +321,7 @@ function SidebarTabs({ onExpandChange, onAgentToggle, agentOverlayVisible = fals
       if (workspaceToSelect) {
         const workspaceContext: TopicContext = {
           id: workspaceToSelect.id,
-          name: (workspaceToSelect.name || 'Unnamed Workspace').toLowerCase(),
+          name: (workspaceToSelect.name || `workspace-${workspaceToSelect.id.slice(0, 8)}`).toLowerCase(),
           type: "workspace",
           section: "workspace:chatroom"
         };
@@ -376,28 +367,13 @@ function SidebarTabs({ onExpandChange, onAgentToggle, agentOverlayVisible = fals
         onCollapse={handleCollapse}
         onAgentToggle={onAgentToggle}
         agentOverlayVisible={agentOverlayVisible}
-        // onMouseLeave={handleExpandedMouseLeave} // Remove this to disable auto-collapse
+        onWidthChange={onWidthChange} // Pass width callback to ExpandedTabs
       />
     );
   }
 
   return (
     <>
-      {/* Extended hover area for expand button - larger trigger zone */}
-      <Box
-        sx={{
-          position: "absolute",
-          top: 0,
-          right: -40, // Extend hover area beyond sidebar
-          width: 100, // Much larger hover area
-          height: "100%",
-          zIndex: 999, // Below button but above tooltips
-          pointerEvents: showExpandButton ? "none" : "auto" // Disable when button is visible
-        }}
-        onMouseEnter={handleMouseEnter}
-        onMouseLeave={handleMouseLeave}
-      />
-
       <Box
         ref={sidebarRef}
         sx={{
@@ -416,7 +392,7 @@ function SidebarTabs({ onExpandChange, onAgentToggle, agentOverlayVisible = fals
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
       >
-        {/* Expand Button - improved positioning and z-index */}
+        {/* Expand Button */}
         <Zoom in={showExpandButton}>
           <Fab
             size="small"
@@ -424,9 +400,9 @@ function SidebarTabs({ onExpandChange, onAgentToggle, agentOverlayVisible = fals
             sx={{
               position: "absolute",
               top: 16,
-              right: -24, // Moved slightly closer for easier access
-              zIndex: 1001, // Higher than tooltips
-              width: 36, // Slightly larger for easier clicking
+              right: -18,
+              zIndex: 1001,
+              width: 36,
               height: 36,
               minHeight: 36,
               bgcolor: "primary.main",
@@ -441,6 +417,9 @@ function SidebarTabs({ onExpandChange, onAgentToggle, agentOverlayVisible = fals
             <ChevronRightIcon sx={{ fontSize: 18 }} />
           </Fab>
         </Zoom>
+
+        {/* Remove the separate hover extension area - it's causing conflicts */}
+        {/* The main sidebar Box already handles hover events */}
 
         <Tooltip
           title="Home"
@@ -482,7 +461,7 @@ function SidebarTabs({ onExpandChange, onAgentToggle, agentOverlayVisible = fals
           </Box>
         </Tooltip>
 
-        {WorkspaceContexts.map(workspaceContext => {
+        {WorkspaceContexts.map((workspaceContext, index) => {
           const workspace = workspaces.find(w => w.id === workspaceContext.id);
           const imageUrl = getWorkspaceIcon(workspaceContext.id || '') || workspace?.image;
           const workspaceNameInitial = workspaceContext.name[0]?.toUpperCase();
@@ -490,7 +469,7 @@ function SidebarTabs({ onExpandChange, onAgentToggle, agentOverlayVisible = fals
 
           return (
             <Tooltip
-              key={`workspace-${workspaceContext.id || workspaceContext.name}`}
+              key={`workspace-${workspaceContext.id || `${workspaceContext.name}-${index}`}`}
               title={`${intl.formatMessage({ id: "workspace.title", defaultMessage: "Workspace" })}: ${workspaceContext.name}${workspaceContext.id ? ` (${workspaceContext.id.slice(0, 8)})` : ''}`}
               placement="right"
               // Remove disableHoverListener to keep tooltips working

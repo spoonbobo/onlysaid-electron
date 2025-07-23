@@ -212,7 +212,7 @@ const Join = () => {
           >
             <Stack direction="row" alignItems="center" spacing={2}>
               <Avatar
-                src="/workspace-icon.png"
+                                        src="/default-workspace.png"
                 sx={{
                   width: 44,
                   height: 44,

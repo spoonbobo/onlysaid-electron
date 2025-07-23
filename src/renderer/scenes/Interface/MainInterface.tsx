@@ -1,7 +1,7 @@
 import { Box } from "@mui/material";
 import Menu from "../Menu";
 import Main from "../Main";
-import SidebarTabs from "../SidebarTabs";
+import SidebarTabs from "./SidebarTabs";
 import { useLayoutResize } from "@/renderer/stores/Layout/LayoutResize";
 import { useTopicStore } from "@/renderer/stores/Topic/TopicStore";
 import { useRef, useEffect, useCallback, useState } from "react";
@@ -19,6 +19,7 @@ function MainInterface() {
   
   const [showAgentOverlay, setShowAgentOverlay] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
+  const [adaptiveSidebarWidth, setAdaptiveSidebarWidth] = useState(280); // Add state for adaptive width
   
   const mainInterfaceRef = useRef<HTMLDivElement>(null);
 
@@ -76,7 +77,7 @@ function MainInterface() {
         }
 
         animationFrameId = requestAnimationFrame(() => {
-          const baseWidth = isExpanded ? 280 : 72;
+          const baseWidth = isExpanded ? adaptiveSidebarWidth : 72; // Use adaptive width
           const newWidth = Math.max(120, Math.min(e.clientX - baseWidth, 400));
           throttledSetMenuWidth(newWidth);
         });
@@ -108,7 +109,7 @@ function MainInterface() {
         cancelAnimationFrame(animationFrameId);
       }
     };
-  }, [isExpanded]);
+  }, [isExpanded, adaptiveSidebarWidth]); // Add adaptiveSidebarWidth dependency
 
   const handleAgentToggle = useCallback((show: boolean) => {
     setShowAgentOverlay(show);
@@ -118,7 +119,12 @@ function MainInterface() {
     setShowAgentOverlay(false);
   }, []);
 
-  const sidebarWidth = isExpanded ? 280 : 72;
+  // Callback to receive width from ExpandedTabs
+  const handleSidebarWidthChange = useCallback((width: number) => {
+    setAdaptiveSidebarWidth(width);
+  }, []);
+
+  const sidebarWidth = isExpanded ? adaptiveSidebarWidth : 72; // Use adaptive width when expanded
 
   return (
     <Box
@@ -158,7 +164,7 @@ function MainInterface() {
             bgcolor: "background.paper",
             flexShrink: 0,
             position: "relative",
-            // transition: "width 0.3s ease-in-out", // Removed animation
+            transition: "width 0.2s ease-in-out", // Add smooth transition
           }}
         >
           <Box sx={{ display: "flex", flexDirection: "row", flex: 1, minHeight: 0 }}>
@@ -176,6 +182,7 @@ function MainInterface() {
                 onExpandChange={setIsExpanded} 
                 onAgentToggle={handleAgentToggle}
                 agentOverlayVisible={showAgentOverlay}
+                onWidthChange={handleSidebarWidthChange} // Pass width callback
               />
             </Box>
             <Box

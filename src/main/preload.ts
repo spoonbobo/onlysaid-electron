@@ -102,7 +102,11 @@ type ApiWorkspaceChannels =
   | 'workspace:get_settings'
   | 'workspace:create_settings'
   | 'workspace:update_settings'
-  | 'workspace:delete_settings';
+  | 'workspace:delete_settings'
+  | 'workspace:get_policies'
+  | 'workspace:get_user_policies'
+  | 'workspace:grant_user_policy'
+  | 'workspace:revoke_user_policy';
 
 // Add new storage channels
 type ApiStorageChannels = 'storage:list-contents';
@@ -387,6 +391,16 @@ const electronHandler = {
     }) => ipcRenderer.invoke('workspace:update_settings', args),
     delete_settings: (args: { token: string; workspaceId: string }) =>
       ipcRenderer.invoke('workspace:delete_settings', args),
+    
+    // Policy management methods
+    get_policies: (args: { token: string; workspaceId: string; resource_type?: string; action?: string }) =>
+      ipcRenderer.invoke('workspace:get_policies', args),
+    get_user_policies: (args: { token: string; workspaceId: string; userId: string }) =>
+      ipcRenderer.invoke('workspace:get_user_policies', args),
+    grant_user_policy: (args: { token: string; workspaceId: string; userId: string; policy_id: string }) =>
+      ipcRenderer.invoke('workspace:grant_user_policy', args),
+    revoke_user_policy: (args: { token: string; workspaceId: string; userId: string; policy_id: string }) =>
+      ipcRenderer.invoke('workspace:revoke_user_policy', args),
   },
   chat: {
     get: (...args: unknown[]) => ipcRenderer.invoke('chat:get', ...args),

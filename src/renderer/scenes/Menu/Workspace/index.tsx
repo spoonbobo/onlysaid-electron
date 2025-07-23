@@ -10,6 +10,7 @@ import MembersMenu from "./Members";
 import WorkspaceInsightsMenu from "./Insights";
 import AvatarMenu from "./Avatar";
 import MyPartnerMenu from "./MyPartner";
+import WorkspaceSettingsMenu from "./Settings";
 
 export default function WorkspaceMenu() {
   const { selectedContext, selectedTopics } = useCurrentTopicContext();
@@ -39,6 +40,7 @@ export default function WorkspaceMenu() {
       {selectedContext?.type === 'workspace' && section.includes('members') && <MembersMenu />}
       {selectedContext?.type === 'workspace' && section.includes('insights') && <WorkspaceInsightsMenu />}
       {selectedContext?.type === 'workspace' && section.includes('learningPartner') && <MyPartnerMenu />}
+      {selectedContext?.type === 'workspace' && section.includes('workspaceSettings') && <WorkspaceSettingsMenu />}
     </Box>
   );
 }

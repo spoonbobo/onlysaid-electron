@@ -125,19 +125,21 @@ const TitleBar = () => {
 
     // Add workspaces if user is logged in
     if (user && workspaces.length > 0) {
-      const workspaceContexts = workspaces.map(workspace => ({
-        name: workspace.name || 'Unnamed Workspace',
-        type: 'workspace',
-        section: 'Workspaces',
-        value: { 
-          id: workspace.id,
-          name: workspace.name?.toLowerCase() || 'unnamed workspace',
+      const workspaceContexts = workspaces
+        .filter(workspace => workspace && workspace.id && workspace.name) // Filter out invalid workspaces
+        .map(workspace => ({
+          name: workspace.name || `Workspace-${workspace.id.slice(0, 8)}`,
           type: 'workspace',
-          section: 'workspace:chatroom'
-        },
-        icon: getWorkspaceIcon(workspace.id) || workspace.image,
-        workspaceId: workspace.id
-      }));
+          section: 'Workspaces',
+          value: { 
+            id: workspace.id,
+            name: workspace.name.toLowerCase(),
+            type: 'workspace',
+            section: 'workspace:chatroom'
+          },
+          icon: getWorkspaceIcon(workspace.id) || workspace.image,
+          workspaceId: workspace.id
+        }));
       
       contexts.push(...workspaceContexts);
     }
@@ -208,6 +210,13 @@ const TitleBar = () => {
   const handleClose = useCallback(() => {
     setAnchorEl(null);
     setActiveMenu(null);
+    // ✅ Ensure focus returns to appropriate element
+    setTimeout(() => {
+      const activeElement = document.activeElement as HTMLElement;
+      if (activeElement && activeElement.blur) {
+        activeElement.blur();
+      }
+    }, 0);
   }, []);
 
   const handleMenuAction = useCallback((action: string) => {
@@ -280,6 +289,13 @@ const TitleBar = () => {
     setSearchOpen(false);
     // Reset to empty when closing without selection
     setSearchInputValue('');
+    // ✅ Ensure focus is properly managed
+    setTimeout(() => {
+      const searchInput = document.querySelector('[role="combobox"]') as HTMLElement;
+      if (searchInput && searchInput.blur) {
+        searchInput.blur();
+      }
+    }, 0);
   }, []);
 
   // Function to get current topic display name - memoized
@@ -632,6 +648,21 @@ const TitleBar = () => {
                        option.workspaceId === value.workspaceId &&
                        option.name === value.name;
               }}
+              // ✅ Fix accessibility issues
+              disablePortal={true}
+              componentsProps={{
+                popper: {
+                  placement: 'bottom-start',
+                  modifiers: [
+                    {
+                      name: 'offset',
+                      options: {
+                        offset: [0, 4],
+                      },
+                    },
+                  ],
+                },
+              }}
               sx={{
                 minWidth: 280,
                 maxWidth: 380,
@@ -664,13 +695,33 @@ const TitleBar = () => {
                 },
                 '& .MuiInputAdornment-root': {
                   marginRight: '6px'
-                }
+                },
+                // ✅ Fix accessibility for dropdown options
+                '& .MuiAutocomplete-listbox': {
+                  '& .MuiAutocomplete-option': {
+                    '&[aria-selected="true"]': {
+                      backgroundColor: 'action.selected',
+                      '&.Mui-focused': {
+                        backgroundColor: 'action.selected',
+                      },
+                    },
+                    '&.Mui-focused': {
+                      backgroundColor: 'action.hover',
+                    },
+                  },
+                },
               }}
               renderInput={(params) => (
                 <TextField
                   {...params}
                   variant="outlined"
                   placeholder="Search contexts..."
+                  // ✅ Add accessibility attributes
+                  inputProps={{
+                    ...params.inputProps,
+                    'aria-label': 'Search application contexts',
+                    'aria-describedby': 'context-search-helper',
+                  }}
                   slotProps={{
                     input: {
                       ...params.InputProps,
@@ -685,6 +736,8 @@ const TitleBar = () => {
                                   height: 16,
                                   fontSize: '10px'
                                 }}
+                                // ✅ Add accessibility for avatar
+                                alt={`${getCurrentContextOption()?.name} icon`}
                               >
                                 {getCurrentContextOption()?.name[0]?.toUpperCase()}
                               </Avatar>
@@ -852,6 +905,18 @@ const TitleBar = () => {
           transformOrigin={{ vertical: 'top', horizontal: 'left' }}
           TransitionComponent={undefined}
           transitionDuration={0}
+          // ✅ Fix accessibility issues
+          disablePortal={true}
+          sx={{
+            '& .MuiPaper-root': {
+              mt: 0.5,
+            },
+            '& .MuiMenuItem-root': {
+              '&.Mui-focusVisible': {
+                backgroundColor: 'action.hover',
+              },
+            },
+          }}
         >
           <MenuItem onClick={() => handleMenuAction('file:open')}>
             <Typography variant="body2">
@@ -880,6 +945,18 @@ const TitleBar = () => {
           transformOrigin={{ vertical: 'top', horizontal: 'left' }}
           TransitionComponent={undefined}
           transitionDuration={0}
+          // ✅ Fix accessibility issues
+          disablePortal={true}
+          sx={{
+            '& .MuiPaper-root': {
+              mt: 0.5,
+            },
+            '& .MuiMenuItem-root': {
+              '&.Mui-focusVisible': {
+                backgroundColor: 'action.hover',
+              },
+            },
+          }}
         >
           <MenuItem onClick={() => handleMenuAction('edit:undo')}>
             <Undo sx={{ fontSize: 16, mr: 1 }} />
@@ -948,6 +1025,18 @@ const TitleBar = () => {
           transformOrigin={{ vertical: 'top', horizontal: 'left' }}
           TransitionComponent={undefined}
           transitionDuration={0}
+          // ✅ Fix accessibility issues
+          disablePortal={true}
+          sx={{
+            '& .MuiPaper-root': {
+              mt: 0.5,
+            },
+            '& .MuiMenuItem-root': {
+              '&.Mui-focusVisible': {
+                backgroundColor: 'action.hover',
+              },
+            },
+          }}
         >
           <MenuItem onClick={() => handleMenuAction('view:reload')}>
             <Refresh sx={{ fontSize: 16, mr: 1 }} />
@@ -1022,6 +1111,18 @@ const TitleBar = () => {
           transformOrigin={{ vertical: 'top', horizontal: 'left' }}
           TransitionComponent={undefined}
           transitionDuration={0}
+          // ✅ Fix accessibility issues
+          disablePortal={true}
+          sx={{
+            '& .MuiPaper-root': {
+              mt: 0.5,
+            },
+            '& .MuiMenuItem-root': {
+              '&.Mui-focusVisible': {
+                backgroundColor: 'action.hover',
+              },
+            },
+          }}
         >
           <MenuItem onClick={() => handleMenuAction('help:learn-more')}>
             <Typography variant="body2">

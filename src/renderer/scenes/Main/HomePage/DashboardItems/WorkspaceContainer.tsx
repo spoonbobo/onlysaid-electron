@@ -1,7 +1,7 @@
 import { Box, Typography, Card, CardContent, Chip, IconButton, Menu, MenuItem, Badge, Button, FormControl, InputLabel, Select, SelectChangeEvent } from "@mui/material";
 import { useIntl } from "react-intl";
 import { useWorkspaceStore } from "@/renderer/stores/Workspace/WorkspaceStore";
-import { useUserStore } from "@/renderer/stores/User/UserStore";
+import { useWorkspaceInitialization } from "@/renderer/hooks/useWorkspaceInitialization";
 import { useTopicStore } from "@/renderer/stores/Topic/TopicStore";
 import { useNotificationStore } from "@/renderer/stores/Notification/NotificationStore";
 import { useEffect, useState, useMemo } from "react";
@@ -13,26 +13,17 @@ import { useContextNotificationClearing } from '@/renderer/hooks/useContextNotif
 
 function WorkspaceContainer() {
   const intl = useIntl();
-  const { workspaces, getWorkspace, isLoading } = useWorkspaceStore();
-  const user = useUserStore(state => state.user);
+  const { workspaces, isLoading } = useWorkspaceStore();
+  const { user } = useWorkspaceInitialization();
   const { setSelectedContext } = useTopicStore();
   
-  // Get notification data using direct selector pattern
   const allNotifications = useNotificationStore(state => state.notifications);
   const workspaceCounts = useNotificationStore(state => state.counts.workspaces);
   
-  // Layout and UI state
-  const [itemsPerRow, setItemsPerRow] = useState(2); // Default to 2 items per row
+  const [itemsPerRow, setItemsPerRow] = useState(2);
   const [showAddWorkspaceDialog, setShowAddWorkspaceDialog] = useState(false);
 
-  useEffect(() => {
-    if (user?.id) {
-      getWorkspace(user.id);
-    }
-  }, [user?.id, getWorkspace]);
-
   const handleWorkspaceClick = (workspace: any) => {
-    // ✅ Just set the context - let useContextNotificationClearing handle the clearing logic
     setSelectedContext({
       name: workspace.name,
       type: "workspace",
@@ -50,17 +41,12 @@ function WorkspaceContainer() {
   };
 
   const handleWorkspaceAdded = async () => {
-    if (user?.id) {
-      await getWorkspace(user.id);
-    }
   };
 
-  // Calculate total slots and rows based on items per row
-  const totalItemsIncludingAdd = workspaces.length + 1; // +1 for add button
+  const totalItemsIncludingAdd = workspaces.length + 1;
   const totalRows = Math.ceil(totalItemsIncludingAdd / itemsPerRow);
-  const showAddButton = true; // Always show add button
+  const showAddButton = true;
 
-  // Memoize notification calculations to prevent re-computation on every render
   const workspaceNotifications = useMemo(() => {
     const notificationsByWorkspace: Record<string, any[]> = {};
     
@@ -73,19 +59,15 @@ function WorkspaceContainer() {
     return notificationsByWorkspace;
   }, [allNotifications, workspaces]);
 
-  // Get workspace notifications (optimized)
   const getWorkspaceNotifications = (workspaceId: string) => {
     return workspaceNotifications[workspaceId] || [];
   };
 
-  // Get workspace notification count (optimized)
   const getWorkspaceNotifCount = (workspaceId: string) => {
     return workspaceCounts[workspaceId] || 0;
   };
 
-  // Format notification for display
   const formatNotificationForDisplay = (notification: any) => {
-    // For message notifications, show a more user-friendly format
     if (notification.type === 'message') {
       return {
         message: notification.content,
@@ -94,7 +76,6 @@ function WorkspaceContainer() {
       };
     }
     
-    // For other notification types, use title + content
     return {
       message: notification.title + (notification.content ? `: ${notification.content}` : ''),
       type: notification.type,
@@ -102,7 +83,6 @@ function WorkspaceContainer() {
     };
   };
 
-  // Add this hook call
   useContextNotificationClearing();
 
   return (
@@ -111,7 +91,6 @@ function WorkspaceContainer() {
       gap: 3,
       mb: 4
     }}>
-      {/* Left Side - Workspaces */}
       <Box sx={{ flex: 1 }}>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
           <Typography variant="h6" sx={{ color: 'text.primary' }}>
@@ -141,16 +120,15 @@ function WorkspaceContainer() {
           display: 'grid', 
           gridTemplateColumns: `repeat(${itemsPerRow}, 1fr)`, 
           gap: 2,
-          minHeight: `${totalRows * 160 + (totalRows - 1) * 8}px` // Dynamic height based on rows
+          minHeight: `${totalRows * 160 + (totalRows - 1) * 8}px`
         }}>
-          {/* Existing Workspaces */}
-          {workspaces.map((workspace) => {
+          {workspaces.map((workspace, index) => {
             const notifications = getWorkspaceNotifications(workspace.id);
             const notificationCount = getWorkspaceNotifCount(workspace.id);
             
             return (
               <Card 
-                key={workspace.id}
+                key={`workspace-${workspace.id || workspace.name || 'unknown'}-${index}`}
                 sx={{ 
                   cursor: 'pointer',
                   transition: 'all 0.2s ease-in-out',
@@ -172,7 +150,6 @@ function WorkspaceContainer() {
                   display: 'flex',
                   flexDirection: 'column'
                 }}>
-                  {/* Workspace Header */}
                   <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1 }}>
                     <Typography 
                       variant="subtitle1" 
@@ -207,7 +184,6 @@ function WorkspaceContainer() {
                     )}
                   </Box>
                   
-                  {/* Notifications Area */}
                   <Box sx={{ 
                     flex: 1, 
                     display: 'flex', 
@@ -286,7 +262,6 @@ function WorkspaceContainer() {
             );
           })}
 
-          {/* Add Workspace Button */}
           {showAddButton && (
             <Card 
               sx={{ 
@@ -329,14 +304,12 @@ function WorkspaceContainer() {
         </Box>
       </Box>
 
-      {/* Right Side - Calendar and Scheduled Tasks */}
       <Box sx={{ 
         flex: '0 0 320px',
         display: 'flex',
         flexDirection: 'column',
         gap: 2
       }}>
-        {/* Calendar Section - Top Right */}
         <Card sx={{ 
           bgcolor: 'background.paper',
           border: '1px solid',
@@ -347,7 +320,6 @@ function WorkspaceContainer() {
           </CardContent>
         </Card>
 
-        {/* Scheduled Tasks & Reminders Section - Bottom Right */}
         <Card sx={{ 
           bgcolor: 'background.paper',
           border: '1px solid',
@@ -360,7 +332,6 @@ function WorkspaceContainer() {
         </Card>
       </Box>
 
-      {/* Add Workspace Dialog */}
       <AddWorkspaceDialog
         open={showAddWorkspaceDialog}
         onClose={() => setShowAddWorkspaceDialog(false)}

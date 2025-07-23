@@ -35,7 +35,7 @@ function AddWorkspaceDialog({ open, onClose, onWorkspaceAdded }: AddWorkspaceDia
   const [joinInviteCode, setJoinInviteCode] = useState("");
   const [error, setError] = useState("");
   const [imageError, setImageError] = useState("");
-  const [workspaceImage, setWorkspaceImage] = useState<string>("/workspace-icon.png");
+  const [workspaceImage, setWorkspaceImage] = useState<string>("/default-workspace.png");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [fileSize, setFileSize] = useState<number | null>(null);
   const [imageFile, setImageFile] = useState<File | null>(null);
@@ -55,7 +55,7 @@ function AddWorkspaceDialog({ open, onClose, onWorkspaceAdded }: AddWorkspaceDia
   useEffect(() => {
     if (open) {
       setInviteCode(generateInviteCode());
-      setWorkspaceImage("/workspace-icon.png");
+      setWorkspaceImage("/default-workspace.png");
       setJoinInviteCode("");
       setError("");
     }
@@ -103,7 +103,7 @@ function AddWorkspaceDialog({ open, onClose, onWorkspaceAdded }: AddWorkspaceDia
 
       const newWorkspace = await createWorkspace({
         name: workspaceName.trim(),
-        image: '/workspace-icon.png', // Default image, will be replaced if imageFile exists
+        image: '/default-workspace.png', // Default image, will be replaced if imageFile exists
         imageFile, // The actual file to upload
         invite_code: inviteCode,
         settings: {},
@@ -149,7 +149,7 @@ function AddWorkspaceDialog({ open, onClose, onWorkspaceAdded }: AddWorkspaceDia
     setWorkspaceName("");
     setInviteCode("");
     setJoinInviteCode("");
-    setWorkspaceImage("/workspace-icon.png");
+    setWorkspaceImage("/default-workspace.png");
     setImageFile(null);
     setError("");
     setTabValue(0);

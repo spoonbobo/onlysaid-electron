@@ -157,7 +157,7 @@ const Invitation = () => {
           >
             <Stack direction="row" alignItems="center" spacing={2}>
               <Avatar
-                src={invitation.workspace_image || '/workspace-icon.png'}
+                                        src={invitation.workspace_image || '/default-workspace.png'}
                 sx={{
                   width: 44,
                   height: 44,

@@ -23,19 +23,36 @@ import {
   IGetWorkspaceSettingsArgs,
   ICreateWorkspaceSettingsArgs,
   IUpdateWorkspaceSettingsArgs,
-  IDeleteWorkspaceSettingsArgs
+  IDeleteWorkspaceSettingsArgs,
+  IUpdateUserRoleArgs,
+  IGetUserInvitationsArgs
 } from '@/../../types/Workspace/Workspace';
 
-interface IUpdateUserRoleArgs {
+interface IGetPoliciesArgs {
+  token: string;
+  workspaceId: string;
+  resource_type?: string;
+  action?: string;
+}
+
+interface IGetUserPoliciesArgs {
   token: string;
   workspaceId: string;
   userId: string;
-  role: 'super_admin' | 'admin' | 'member';
 }
 
-interface IGetUserInvitationsArgs {
+interface IGrantUserPolicyArgs {
   token: string;
-  status?: string;
+  workspaceId: string;
+  userId: string;
+  policy_id: string;
+}
+
+interface IRevokeUserPolicyArgs {
+  token: string;
+  workspaceId: string;
+  userId: string;
+  policy_id: string;
 }
 
 interface IGetUserJoinRequestsArgs {
@@ -395,8 +412,8 @@ export const setupWorkspaceHandlers = () => {
   ipcMain.handle('workspace:update_user_role', async (event, args: IUpdateUserRoleArgs) => {
     try {
       const response = await onlysaidServiceInstance.put<IWorkspaceUser>(
-        `/workspace/${args.workspaceId}/users/${args.userId}/role`,
-        { role: args.role },
+        `/workspace/${args.workspaceId}/users/${args.userId}/roles`,
+        { role_id: args.role_id },
         {
           headers: {
             Authorization: `Bearer ${args.token}`
@@ -533,6 +550,95 @@ export const setupWorkspaceHandlers = () => {
       return { data: response.data };
     } catch (error: any) {
       console.error('Error in main process API call (delete_workspace_settings):', error.message);
+      return {
+        error: error.response?.data?.message || error.message,
+        status: error.response?.status
+      };
+    }
+  });
+
+  // Policy management handlers
+  ipcMain.handle('workspace:get_policies', async (event, args: IGetPoliciesArgs) => {
+    try {
+      let url = `/workspace/${args.workspaceId}/policies`;
+      const params = new URLSearchParams();
+      
+      if (args.resource_type) params.append('resource_type', args.resource_type);
+      if (args.action) params.append('action', args.action);
+      
+      if (params.toString()) {
+        url += `?${params.toString()}`;
+      }
+
+      const response = await onlysaidServiceInstance.get(url, {
+        headers: {
+          Authorization: `Bearer ${args.token}`
+        }
+      });
+      return { data: response.data };
+    } catch (error: any) {
+      console.error('Error in main process API call (get_policies):', error.message);
+      return {
+        error: error.response?.data?.message || error.message,
+        status: error.response?.status
+      };
+    }
+  });
+
+  ipcMain.handle('workspace:get_user_policies', async (event, args: IGetUserPoliciesArgs) => {
+    try {
+      const response = await onlysaidServiceInstance.get(
+        `/workspace/${args.workspaceId}/users/${args.userId}/permissions`,
+        {
+          headers: {
+            Authorization: `Bearer ${args.token}`
+          }
+        }
+      );
+      return { data: response.data };
+    } catch (error: any) {
+      console.error('Error in main process API call (get_user_policies):', error.message);
+      return {
+        error: error.response?.data?.message || error.message,
+        status: error.response?.status
+      };
+    }
+  });
+
+  ipcMain.handle('workspace:grant_user_policy', async (event, args: IGrantUserPolicyArgs) => {
+    try {
+      const response = await onlysaidServiceInstance.post(
+        `/workspace/${args.workspaceId}/users/${args.userId}/policies`,
+        { policy_id: args.policy_id },
+        {
+          headers: {
+            Authorization: `Bearer ${args.token}`
+          }
+        }
+      );
+      return { data: response.data };
+    } catch (error: any) {
+      console.error('Error in main process API call (grant_user_policy):', error.message);
+      return {
+        error: error.response?.data?.message || error.message,
+        status: error.response?.status
+      };
+    }
+  });
+
+  ipcMain.handle('workspace:revoke_user_policy', async (event, args: IRevokeUserPolicyArgs) => {
+    try {
+      const response = await onlysaidServiceInstance.delete(
+        `/workspace/${args.workspaceId}/users/${args.userId}/policies?policy_id=${args.policy_id}`,
+        {
+          headers: {
+            Authorization: `Bearer ${args.token}`
+          }
+        }
+      );
+      return { data: response.data };
+    } catch (error: any) {
+      console.error('Error in main process API call (revoke_user_policy):', error.message);
       return {
         error: error.response?.data?.message || error.message,
         status: error.response?.status
