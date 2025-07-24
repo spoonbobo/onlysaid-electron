@@ -1492,5 +1492,16 @@
   "workspace.policies.error.loadFailed": "載入權限數據失敗",
   "workspace.policies.error.updateFailed": "更新權限失敗",
   "workspace.policies.success.granted": "權限授予成功",
-  "workspace.policies.success.revoked": "權限撤銷成功"
+  "workspace.policies.success.revoked": "權限撤銷成功",
+  "settings.llmModels.public.h20Configuration": "H20 Llama 4 設定",
+  "settings.llmModels.public.h20Key": "H20 API 密鑰",
+  "settings.llmModels.public.h20KeyPlaceholder": "請輸入您的 H20 API 密鑰（可選）",
+  "settings.llmModels.public.enableH20Models": "啟用 H20 Llama 4 模型",
+
+  "workflow.preset.quickSelect": "快速選擇",
+  "workflow.preset.5min": "5分鐘後",
+  "workflow.preset.30min": "30分鐘後",
+  "workflow.preset.1hour": "1小時後",
+  "workflow.preset.1day": "1天後",
+  "workflow.preset.1week": "1週後"
 }

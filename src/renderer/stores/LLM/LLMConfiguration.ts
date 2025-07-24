@@ -17,12 +17,12 @@ interface LLMConfigurationState {
   aiMode: AIMode;
 
   // Current selected model (merged from SelectedModelStore)
-  provider: "openai" | "deepseek" | "ollama" | "oneasia" | null;
+  provider: "openai" | "deepseek" | "ollama" | "oneasia" | "h20" | null;
   modelId: string | null;
   modelName: string | null;
 
   // Saved model state for when switching back from "none" mode
-  savedProvider: "openai" | "deepseek" | "ollama" | "oneasia" | null;
+  savedProvider: "openai" | "deepseek" | "ollama" | "oneasia" | "h20" | null;
   savedModelId: string | null;
   savedModelName: string | null;
 
@@ -38,12 +38,15 @@ interface LLMConfigurationState {
   openAIKey: string;
   deepSeekKey: string;
   oneasiaKey: string;
+  h20Key: string;
   openAIEnabled: boolean;
   deepSeekEnabled: boolean;
   oneasiaEnabled: boolean;
+  h20Enabled: boolean;
   openAIVerified: boolean;
   deepSeekVerified: boolean;
   oneasiaVerified: boolean;
+  h20Verified: boolean;
 
   // Private LLM settings
   ollamaBaseURL: string;
@@ -55,8 +58,8 @@ interface LLMConfigurationState {
   setTemperature: (value: number) => void;
   setTrustMode: (trustMode: boolean) => void;
   setAIMode: (mode: AIMode) => void;
-  setSelectedModel: (provider: "openai" | "deepseek" | "ollama" | "oneasia" | null, modelId: string | null, modelName: string | null) => void;
-  setSavedModel: (provider: "openai" | "deepseek" | "ollama" | "oneasia" | null, modelId: string | null, modelName: string | null) => void;
+  setSelectedModel: (provider: "openai" | "deepseek" | "ollama" | "oneasia" | "h20" | null, modelId: string | null, modelName: string | null) => void;
+  setSavedModel: (provider: "openai" | "deepseek" | "ollama" | "oneasia" | "h20" | null, modelId: string | null, modelName: string | null) => void;
   resetSelection: () => void;
   
   // Rules management
@@ -82,6 +85,9 @@ interface LLMConfigurationState {
   setOllamaModel: (model: string) => void;
   setOllamaEnabled: (enabled: boolean) => void;
   setOllamaVerified: (verified: boolean) => void;
+  setH20Key: (key: string) => void;
+  setH20Enabled: (enabled: boolean) => void;
+  setH20Verified: (verified: boolean) => void;
   resetToDefaults: () => void;
 }
 
@@ -117,6 +123,9 @@ const DEFAULT_CONFIG = {
   ollamaModel: "",
   ollamaEnabled: false,
   ollamaVerified: false,
+  h20Key: "",
+  h20Enabled: false,
+  h20Verified: false,
 };
 
 export const useLLMConfigurationStore = create<LLMConfigurationState>()(
@@ -239,6 +248,9 @@ export const useLLMConfigurationStore = create<LLMConfigurationState>()(
       setOllamaModel: (model) => set({ ollamaModel: model, ollamaVerified: false }),
       setOllamaEnabled: (enabled) => set({ ollamaEnabled: enabled }),
       setOllamaVerified: (verified) => set({ ollamaVerified: verified }),
+      setH20Key: (key) => set({ h20Key: key, h20Verified: false }),
+      setH20Enabled: (enabled) => set({ h20Enabled: enabled }),
+      setH20Verified: (verified) => set({ h20Verified: verified }),
       resetToDefaults: () => set(DEFAULT_CONFIG),
     }),
     {

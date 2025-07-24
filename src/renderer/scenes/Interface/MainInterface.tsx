@@ -164,7 +164,7 @@ function MainInterface() {
             bgcolor: "background.paper",
             flexShrink: 0,
             position: "relative",
-            transition: "width 0.2s ease-in-out", // Add smooth transition
+            transition: "width 0.2s ease-in-out",
           }}
         >
           <Box sx={{ display: "flex", flexDirection: "row", flex: 1, minHeight: 0 }}>
@@ -221,9 +221,59 @@ function MainInterface() {
           />
         </Box>
 
-        {/* Main Content - gets smaller when expanded */}
-        <Box sx={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", position: "relative" }}>
-          <Box sx={{ flex: 1, overflow: "hidden", p: 3 }}>
+        {/* Main Content - with custom scrollbar styling */}
+        <Box 
+          sx={{ 
+            flex: 1, 
+            display: "flex", 
+            flexDirection: "column", 
+            overflow: "hidden", 
+            position: "relative",
+            // Custom scrollbar styling
+            '& ::-webkit-scrollbar': {
+              width: '12px',
+            },
+            '& ::-webkit-scrollbar-track': {
+              backgroundColor: 'background.paper',
+              borderRadius: '6px',
+            },
+            '& ::-webkit-scrollbar-thumb': {
+              backgroundColor: 'action.disabled',
+              borderRadius: '6px',
+              '&:hover': {
+                backgroundColor: 'action.hover',
+              },
+            },
+          }}
+        >
+          <Box 
+            sx={{ 
+              flex: 1, 
+              overflow: "auto",
+              pl: 3, // Left padding
+              pr: 2, // Reduced right padding to give space for scrollbar
+              pt: 3,
+              pb: 3,
+              // Ensure scrollbar appears at the right edge
+              '&::-webkit-scrollbar': {
+                width: '12px',
+              },
+              '&::-webkit-scrollbar-track': {
+                backgroundColor: 'rgba(0,0,0,0.1)',
+                borderRadius: '6px',
+                marginRight: '4px',
+              },
+              '&::-webkit-scrollbar-thumb': {
+                backgroundColor: 'rgba(0,0,0,0.3)',
+                borderRadius: '6px',
+                border: '2px solid transparent',
+                backgroundClip: 'padding-box',
+                '&:hover': {
+                  backgroundColor: 'rgba(0,0,0,0.5)',
+                },
+              },
+            }}
+          >
             <Main />
           </Box>
           <Box sx={{ position: "absolute", bottom: 0, left: 0, right: 0, zIndex: 9999 }}>

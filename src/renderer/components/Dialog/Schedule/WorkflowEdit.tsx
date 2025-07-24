@@ -103,10 +103,17 @@ export function WorkflowEdit({ open, item, onClose, onSave, onDelete }: Workflow
     return now.toISOString().split('T')[0];
   };
 
+  // Helper function to calculate days until execution
   const getDaysUntil = (date: Date) => {
     const now = new Date();
-    const diffMs = date.getTime() - now.getTime();
-    const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+    
+    // Create date-only versions in local timezone
+    const nowDateOnly = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const targetDateOnly = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    
+    // Calculate difference in days
+    const diffMs = targetDateOnly.getTime() - nowDateOnly.getTime();
+    const diffDays = Math.round(diffMs / (1000 * 60 * 60 * 24));
     
     if (diffDays < 0) {
       return intl.formatMessage({ id: 'workflow.preview.overdue', defaultMessage: 'Overdue' });
@@ -132,7 +139,10 @@ export function WorkflowEdit({ open, item, onClose, onSave, onDelete }: Workflow
     if (editedItem.periodType === 'one-time') {
       if (editedItem.schedule.date && editedItem.schedule.time) {
         const [hours, minutes] = editedItem.schedule.time.split(':');
-        const date = new Date(editedItem.schedule.date);
+        
+        // ✅ FIX: Parse date string as local timezone to avoid UTC conversion
+        const [year, month, day] = editedItem.schedule.date.split('-').map(Number);
+        const date = new Date(year, month - 1, day); // month is 0-indexed
         date.setHours(parseInt(hours), parseInt(minutes), 0, 0);
         previewDates.push(date);
       }
@@ -165,7 +175,7 @@ export function WorkflowEdit({ open, item, onClose, onSave, onDelete }: Workflow
               if (week === 0 && daysUntilTarget === 0) {
                 const currentTime = today.getHours() * 60 + today.getMinutes();
                 const scheduleTime = parseInt(hours) * 60 + parseInt(minutes);
-                if (scheduleTime <= currentTime) {
+                if (scheduleTime < currentTime) { // Changed from <= to <
                   daysUntilTarget = 7;
                 }
               }
@@ -236,39 +246,38 @@ export function WorkflowEdit({ open, item, onClose, onSave, onDelete }: Workflow
       node.type === 'n8n-nodes-base.scheduleTrigger'
     );
     
-    if (!triggerNode?.parameters?.triggerRules) return null;
-    
-    const rule = triggerNode.parameters.triggerRules[0];
-    if (!rule) return null;
+    // ✅ FIX: Use correct n8n Schedule Trigger parameter structure
+    if (!triggerNode?.parameters) return null;
     
     const parsedData: Partial<ScheduledItem> = {
       active: workflow.active || false
     };
     
-    if (rule.interval === 'cronExpression') {
+    // ✅ FIX: Use the correct n8n Schedule Trigger parameter names
+    if (triggerNode.parameters.triggerInterval === 'custom') {
       parsedData.periodType = 'one-time';
       parsedData.schedule = {
-        date: getCurrentDate(), // Could parse from cron
+        date: getCurrentDate(),
         time: getCurrentTime(),
         duration: 60
       };
-    } else if (rule.interval === 'days') {
+    } else if (triggerNode.parameters.triggerInterval === 'days') {
       parsedData.periodType = 'recurring';
       parsedData.schedule = {
         frequency: 'daily',
-        time: `${rule.triggerAtHour?.toString().padStart(2, '0') || '00'}:${rule.triggerAtMinute?.toString().padStart(2, '0') || '00'}`,
+        time: `${triggerNode.parameters.triggerAtHour?.toString().padStart(2, '0') || '00'}:${triggerNode.parameters.triggerAtMinute?.toString().padStart(2, '0') || '00'}`,
         duration: 60
       };
-    } else if (rule.interval === 'weeks') {
+    } else if (triggerNode.parameters.triggerInterval === 'weeks') {
       parsedData.periodType = 'recurring';
-      const days = rule.triggerOnWeekdays?.map((day: string) => 
+      const days = triggerNode.parameters.triggerOnWeekdays?.map((day: string) => 
         day.charAt(0).toUpperCase() + day.slice(1)
       ) || [];
       
       parsedData.schedule = {
         frequency: 'weekly',
         days: days,
-        time: `${rule.triggerAtHour?.toString().padStart(2, '0') || '00'}:${rule.triggerAtMinute?.toString().padStart(2, '0') || '00'}`,
+        time: `${triggerNode.parameters.triggerAtHour?.toString().padStart(2, '0') || '00'}:${triggerNode.parameters.triggerAtMinute?.toString().padStart(2, '0') || '00'}`,
         duration: 60
       };
     }

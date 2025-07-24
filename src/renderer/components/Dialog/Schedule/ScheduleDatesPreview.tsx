@@ -40,10 +40,33 @@ export function ScheduleDatesPreview({
 
   // Helper function to calculate days until execution
   const getDaysUntil = (date: Date | string) => {
-    const targetDate = typeof date === 'string' ? new Date(date) : date;
+    // ✅ FIX: Handle timezone consistently for both string and Date inputs
+    let targetDate: Date;
+    
+    if (typeof date === 'string') {
+      // For string dates (like "2024-01-15" or "2024-01-15T10:30"), 
+      // parse them as local timezone to avoid UTC conversion issues
+      if (date.includes('T')) {
+        // Has time component
+        targetDate = new Date(date);
+      } else {
+        // Date only - parse as local date to avoid UTC midnight issue
+        const [year, month, day] = date.split('-').map(Number);
+        targetDate = new Date(year, month - 1, day); // month is 0-indexed
+      }
+    } else {
+      targetDate = date;
+    }
+    
     const now = new Date();
-    const diffMs = targetDate.getTime() - now.getTime();
-    const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+    
+    // Create date-only versions in local timezone
+    const nowDateOnly = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const targetDateOnly = new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate());
+    
+    // Calculate difference in days
+    const diffMs = targetDateOnly.getTime() - nowDateOnly.getTime();
+    const diffDays = Math.round(diffMs / (1000 * 60 * 60 * 24));
     
     if (diffDays < 0) {
       return intl.formatMessage({ id: 'workflow.preview.overdue', defaultMessage: 'Overdue' });
@@ -67,9 +90,28 @@ export function ScheduleDatesPreview({
     if (selectedPeriodType === 'one-time') {
       if (scheduleData.date && scheduleData.time) {
         const [hours, minutes] = scheduleData.time.split(':');
-        const date = new Date(scheduleData.date);
+        
+        // ✅ FIX: Parse date string as local timezone to avoid UTC conversion
+        const [year, month, day] = scheduleData.date.split('-').map(Number);
+        const date = new Date(year, month - 1, day); // month is 0-indexed
         date.setHours(parseInt(hours), parseInt(minutes), 0, 0);
-        previewDates.push(date);
+        
+        // Check if this is today and time has already passed
+        const isToday = date.toDateString() === today.toDateString();
+        
+        if (isToday) {
+          const currentTime = today.getHours() * 60 + today.getMinutes();
+          const scheduleTime = parseInt(hours) * 60 + parseInt(minutes);
+          
+          // Only add if time hasn't passed
+          if (scheduleTime > currentTime) {
+            previewDates.push(date);
+          }
+        } else if (date > today) {
+          // Future date
+          previewDates.push(date);
+        }
+        // If it's today but time has passed, don't add anything
       }
     } else if (selectedPeriodType === 'recurring') {
       if (scheduleData.frequency && scheduleData.time) {
@@ -102,7 +144,7 @@ export function ScheduleDatesPreview({
                 if (week === 0 && daysUntilTarget === 0) {
                   const currentTime = today.getHours() * 60 + today.getMinutes();
                   const scheduleTime = parseInt(hours) * 60 + parseInt(minutes);
-                  if (scheduleTime <= currentTime) {
+                  if (scheduleTime < currentTime) { // Changed from <= to <
                     daysUntilTarget = 7;
                   }
                 }

@@ -63,9 +63,14 @@ interface IGetUserJoinRequestsArgs {
 export const setupWorkspaceHandlers = () => {
   ipcMain.handle('workspace:create', async (event, args: ICreateWorkspaceArgs) => {
     try {
+      console.log('🔍 Electron main: workspace:create called with args:', JSON.stringify(args, null, 2));
+      
+      // The API endpoint expects the full ICreateWorkspaceArgs structure in the body
       const response = await onlysaidServiceInstance.post<IWorkspace>(
         '/workspace',
-        args.request,
+        {
+          request: args.request
+        },
         {
           headers: {
             Authorization: `Bearer ${args.token}`
