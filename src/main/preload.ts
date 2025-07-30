@@ -50,11 +50,15 @@ type FileSystemChannels =
 // Add dialog channels
 type DialogChannels = 'dialog:showSaveDialog';
 
+type FileChannels = 
+  | 'file:upload'
+  | 'file:download'
+  | 'file:status'
+  | 'file:remove'
+  | 'file:progress-update';
+
 type KnowledgeBaseChannels =
   | 'kb:list'
-  | 'kb:query'
-  | 'kb:queryNonStreaming'
-  | 'kb:retrieve'
   | 'kb:create'
   | 'kb:get'
   | 'kb:update'
@@ -63,14 +67,15 @@ type KnowledgeBaseChannels =
   | 'kb:register'
   | 'kb:getStatus'
   | 'kb:synchronize'
-  | 'kb:scan'  // ✅ NEW: Add the new scan channel
+  | 'kb:scan'
   | 'kb:fullUpdate'
-  | 'kb:get-members'
+  | 'kb:queryNonStreaming'
+  | 'kb:retrieve'
   | 'kb:add-member'
-  | 'kb:update-member-role'
   | 'kb:remove-member'
-  | 'kb:get-url'  // ✅ NEW: Add the new URL channel
-  | 'kb:get-url';
+  | 'kb:get-members'
+  | 'kb:get-url'
+  | 'kb:health-check';
 
 type AIChannels = 'ai:get_completion';
 
@@ -260,6 +265,7 @@ export type Channels =
   | SSEChannels
   | MCPChannels
   | FileSystemChannels
+  | FileChannels
   | DialogChannels
   | RedisChannels
   | SocketChannels
@@ -533,6 +539,17 @@ const electronHandler = {
     
     // ✅ NEW: Add getUrl method
     getUrl: () => ipcRenderer.invoke('kb:get-url'),
+    
+    // ✅ NEW: Add health check method
+    healthCheck: () => ipcRenderer.invoke('kb:health-check'),
+    
+    // ✅ NEW: Document management methods
+    getDocuments: (args: { workspaceId: string; kbId: string; token: string }) =>
+      ipcRenderer.invoke('kb:get-documents', args),
+    uploadDocument: (args: { workspaceId: string; kbId: string; token: string; file: File; onProgress?: (progress: number) => void }) =>
+      ipcRenderer.invoke('kb:upload-document', args),
+    deleteDocument: (args: { workspaceId: string; kbId: string; token: string; filePath: string }) =>
+      ipcRenderer.invoke('kb:delete-document', args),
     
     // Member management methods
     getMembers: (args: { token: string; workspaceId: string; kbId: string }) =>

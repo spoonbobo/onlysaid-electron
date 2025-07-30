@@ -1492,5 +1492,117 @@
   "workspace.policies.error.loadFailed": "載入權限數據失敗",
   "workspace.policies.error.updateFailed": "更新權限失敗",
   "workspace.policies.success.granted": "權限授予成功",
-  "workspace.policies.success.revoked": "權限撤銷成功"
+  "workspace.policies.success.revoked": "權限撤銷成功",
+
+  "workspace.mypartner.coursework.quizHelp.title": "測驗助手",
+  "workspace.mypartner.coursework.quizHelp.description": "從您的知識庫內容生成**練習題**以進行考試準備。\n\n✨ **進階功能:**\n• 選擇題、簡答題和是非題\n• **AI 驅動的答案評估**，提供詳細反饋\n• **可讀的數學表達式**: C<sub style=\"font-size: 0.85em;\">0</sub> = ε<sub style=\"font-size: 0.85em;\">0</sub> A/d, E = mc<sup style=\"font-size: 0.85em;\">2</sup>\n• **⚡ 進階並行處理** - 最多 8 個並發 AI 分析\n• **🎯 智能任務優先級** - 評估優先處理\n• **🔄 智能重試邏輯**，指數退避\n• **📊 實時進度追蹤**，含吞吐量指標\n• **🚀 優化性能**，加快題目檢查",
+  "workspace.mypartner.courseworkHelper.noWorkspaceSelected": "未選擇工作空間",
+  
+  "quizHelper.form.questionCount": "題目數量",
+  "quizHelper.form.questionType": "題目類型",
+  "quizHelper.form.difficulty": "難度等級",
+  "quizHelper.form.selectKnowledgeBases": "選擇知識庫：",
+  "quizHelper.form.noKnowledgeBases": "未找到知識庫。請先創建知識庫。",
+  
+  "quizHelper.questionType.multipleChoice": "選擇題",
+  "quizHelper.questionType.shortAnswer": "簡答題",
+  "quizHelper.questionType.trueFalse": "是非題",
+  "quizHelper.questionType.mixed": "混合類型",
+  
+  "quizHelper.difficulty.easy": "簡單",
+  "quizHelper.difficulty.medium": "中等",
+  "quizHelper.difficulty.hard": "困難",
+  "quizHelper.difficulty.mixed": "混合難度",
+  
+  "quizHelper.button.generateQuestions": "生成練習題",
+  "quizHelper.button.generating": "生成中...",
+  "quizHelper.button.checkAnswers": "檢查答案",
+  "quizHelper.button.checking": "檢查中...",
+  "quizHelper.button.reset": "重置",
+  
+  "quizHelper.questions.title": "練習題 ({count})",
+  "quizHelper.questions.question": "題目 {number}",
+  "quizHelper.questions.true": "正確",
+  "quizHelper.questions.false": "錯誤",
+  "quizHelper.questions.answerPlaceholder": "在此輸入您的答案...",
+  
+  "quizHelper.answers.correctAnswer": "正確答案：",
+  "quizHelper.answers.yourAnswer": "您的答案：",
+  "quizHelper.answers.explanation": "額外說明：",
+  "quizHelper.answers.answerAnalysis": "答案分析",
+  "quizHelper.answers.answerEvaluation": "答案評估",
+  "quizHelper.answers.score": "分數：",
+  "quizHelper.answers.detailedFeedback": "詳細反饋：",
+  
+  "quizHelper.answers.scoreGrade.excellent": "優秀",
+  "quizHelper.answers.scoreGrade.good": "良好",
+  "quizHelper.answers.scoreGrade.adequate": "及格",
+  "quizHelper.answers.scoreGrade.poor": "較差",
+  "quizHelper.answers.scoreGrade.incorrect": "錯誤",
+  
+  "quizHelper.explanation.whyIncorrect": "為什麼您的答案是錯誤的：",
+  "quizHelper.explanation.correctUnderstanding": "正確的理解：",
+  "quizHelper.explanation.keyLearningPoint": "重點學習要點：",
+  
+  "quizHelper.progress.title": "🧠 AI 分析進行中",
+  "quizHelper.progress.complete": "{current}/{total}",
+  "quizHelper.progress.percentComplete": "{percent}% 完成",
+  "quizHelper.progress.processingRate": "處理速度",
+  "quizHelper.progress.estimatedTime": "預計時間",
+  "quizHelper.progress.analysesPerSecond": "{rate} 分析/秒",
+  "quizHelper.progress.remainingTime": "{eta}秒 剩餘",
+  "quizHelper.progress.calculating": "計算中...",
+  "quizHelper.progress.parallelProcessing": "並行處理",
+  
+  "quizHelper.generation.freshQuestionSet": "生成全新題目集 - ID: {id}",
+  "quizHelper.generation.focus": "重點: {focus}",
+  "quizHelper.generation.style": "風格: {style}",
+  "quizHelper.generation.approach": "方法: {approach}",
+  "quizHelper.generation.generationNumber": "第 {number} 次生成 - 每次生成創建具有不同重點領域和方法的獨特題目。",
+  
+  "quizHelper.status.evaluating": "使用 AI 評估您的答案...",
+  "quizHelper.status.analyzingAnswer": "分析您的答案並生成個性化解釋...",
+  "quizHelper.status.evaluationNotCompleted": "評估無法完成。",
+  "quizHelper.status.explanationNotGenerated": "此時無法生成解釋。",
+  
+  "quizHelper.toast.selectKnowledgeBase": "請至少選擇一個知識庫",
+  "quizHelper.toast.questionsGenerated": "生成了 {count} 道練習題！",
+  "quizHelper.toast.basicQuestionGenerated": "生成了基本題目。為獲得更好的結果，請確保您的知識庫有足夠的內容。",
+  "quizHelper.toast.failedToGenerate": "生成題目失敗：{error}",
+  "quizHelper.toast.loadKnowledgeBasesFailed": "載入知識庫失敗",
+  "quizHelper.toast.analysesRunning": "🚀 正在運行 {count} 個 AI 分析，{concurrency} 個並發流...",
+  "quizHelper.toast.analysesFailed": "⚠️ {failed}/{total} 分析失敗（{successRate}% 成功率）在 {time}秒內",
+  "quizHelper.toast.analysesCompleted": "🚀 所有 {count} 個分析在 {time}秒內成功完成（{throughput} 任務/秒 吞吐量）！",
+  "quizHelper.toast.scoreResult": "🎯 分數：{correct}/{total} 正確！",
+  "quizHelper.toast.withAnalyses": "（✨ {count} 個 AI 分析完成）",
+
+  "workspace.mypartner.courseworkHelper.title": "課業助手",
+  "workspace.mypartner.courseworkHelper.description": "AI 助手，用於**課業**、**作業**和**學術支援**。功能包括：\n\n• **測驗助手** - 從您的知識庫生成練習題\n• **作業助手** - 獲得學術任務協助\n• **研究助手** - 支援研究和分析\n\n從選單選擇工具開始您的學術工作。",
+  "workspace.mypartner.courseworkHelper.welcomeTitle": "歡迎使用課業助手",
+  "workspace.mypartner.courseworkHelper.welcomeMessage": "此 AI 助手旨在幫助您完成**課業**、**作業**和**學術任務**。\n\n## 可用工具：\n\n### 📝 **測驗助手**\n- 從您的知識庫生成練習題\n- 支援選擇題、簡答題和是非題\n- AI 驅動的答案評估，提供詳細反饋\n- 數學表達式：*a = Δv/Δt*、*F = ma*、*E = mc²*\n\n### 📚 **作業助手**\n- 獲得學術寫作和研究協助\n- 結構化方法處理複雜作業\n- 引用和參考支援\n\n### 🔬 **研究助手**\n- 進階研究和分析工具\n- 文獻回顧協助\n- 數據分析和解讀\n\n**從選單選擇特定工具開始使用！**",
+
+  "workspace.mypartner.coursework.assignments.title": "作業助手",
+  "workspace.mypartner.coursework.assignments.description": "獲得作業、論文和書面作品的協助。",
+  "workspace.mypartner.coursework.assignments.comingSoon": "作業分析、結構建議、引用幫助和抄襲檢查即將推出...",
+
+  "kb.nav.overview": "概覽",
+  "kb.nav.documents": "文檔",
+  "kb.nav.settings": "設置",
+  "kb.nav.members": "成員",
+  
+  "kb.overview.title": "知識庫概覽",
+  "kb.overview.description": "查看知識庫詳細信息和狀態。",
+  
+  "kb.documents.title": "文檔管理",
+  "kb.documents.description": "管理知識庫中的文檔和內容。",
+  
+  "kb.settings.title": "知識庫設置",
+  "kb.settings.description": "配置知識庫設置和首選項。",
+  "kb.settings.configuration": "配置",
+  "kb.settings.dangerZone": "危險區域",
+  "kb.settings.edit": "編輯設置",
+  "kb.settings.delete": "刪除知識庫",
+  "kb.settings.deleteDescription": "永久刪除此知識庫及其所有數據。此操作無法撤銷。",
+  
+  "kb.members.comingSoon": "成員管理即將推出..."
 }

@@ -212,15 +212,12 @@ const Join = () => {
           >
             <Stack direction="row" alignItems="center" spacing={2}>
               <Avatar
-                                        src="/default-workspace.png"
                 sx={{
                   width: 44,
                   height: 44,
                   bgcolor: 'background.default'
                 }}
-              >
-                <Business sx={{ color: 'text.secondary' }} />
-              </Avatar>
+              />
 
               <Box sx={{ flex: 1, minWidth: 0 }}>
                 <Typography variant="subtitle1" sx={{ fontWeight: 500, color: 'text.primary' }}>

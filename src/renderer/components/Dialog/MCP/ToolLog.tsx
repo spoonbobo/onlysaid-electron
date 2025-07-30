@@ -12,7 +12,8 @@ import {
   Divider,
 } from "@mui/material";
 import { memo } from "react";
-import { IToolLog } from "@/renderer/stores/LLM/LLMStore"; // Import IToolLog
+import { FormattedMessage, useIntl } from "react-intl";
+import { IToolLog } from "@/renderer/stores/LLM/LLMStore";
 
 interface ToolLogDialogProps {
   open: boolean;
@@ -23,8 +24,10 @@ interface ToolLogDialogProps {
 
 const ToolLogDialog = memo(
   ({ open, onClose, logContent, toolName }: ToolLogDialogProps) => {
+    const intl = useIntl();
+    
     const formatTimestamp = (isoString: string) => {
-      if (!isoString) return "Invalid date";
+      if (!isoString) return intl.formatMessage({ id: "dialog.toolLog.invalidDate", defaultMessage: "Invalid date" });
       try {
         const date = new Date(isoString);
         return date.toLocaleString([], {
@@ -32,14 +35,19 @@ const ToolLogDialog = memo(
           hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false
         });
       } catch (e) {
-        return "Invalid date";
+        return intl.formatMessage({ id: "dialog.toolLog.invalidDate", defaultMessage: "Invalid date" });
       }
     };
 
     return (
       <Dialog open={open} onClose={onClose} maxWidth="lg" fullWidth>
         <DialogTitle>
-          Logs for {toolName || "Tool Call"}
+          {intl.formatMessage({ 
+            id: "dialog.toolLog.title", 
+            defaultMessage: "Logs for {toolName}" 
+          }, { 
+            toolName: toolName || intl.formatMessage({ id: "dialog.toolLog.defaultTitle", defaultMessage: "Tool Call" }) 
+          })}
         </DialogTitle>
         <DialogContent dividers sx={{ p: 0 }}>
           {logContent && logContent.length > 0 ? (

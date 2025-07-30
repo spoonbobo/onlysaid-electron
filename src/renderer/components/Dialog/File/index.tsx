@@ -10,7 +10,7 @@ import {
   CircularProgress,
 } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
-import { FormattedMessage } from "react-intl";
+import { FormattedMessage, useIntl } from "react-intl";
 import { useFileExplorerStore, selectors } from "@/renderer/stores/File/FileExplorerStore";
 import { useEffect, useState } from "react";
 import { IFile } from "@/../../types/File/File";
@@ -40,6 +40,7 @@ export default function FileDropDialog({
   targetNodeId,
   externalFileDetails
 }: FileDropDialogProps) {
+  const intl = useIntl();
   const sourceNode = useFileExplorerStore(selectors.selectNodeById(sourceNodeId));
   const targetNode = useFileExplorerStore(selectors.selectNodeById(targetNodeId));
 
@@ -47,7 +48,7 @@ export default function FileDropDialog({
   const [targetFileDetails, setTargetFileDetails] = useState<IFile | null>(null);
   const [isLoadingMetadata, setIsLoadingMetadata] = useState(false);
 
-  const targetNameString = targetNode?.label || targetNode?.name || "Unknown Target";
+  const targetNameString = targetNode?.label || targetNode?.name || intl.formatMessage({ id: "dialog.file.unknownTarget", defaultMessage: "Unknown Target" });
   let sourceNameDisplay: string;
   let sourcePathDisplay: string | null = null;
   let targetPathDisplay: string | null = null;
@@ -56,10 +57,15 @@ export default function FileDropDialog({
 
   if (isExternalDrop && externalFileDetails) {
     const fileNamesSample = externalFileDetails.names.join(", ");
-    sourceNameDisplay = `External Files (${fileNamesSample}${externalFileDetails.count > externalFileDetails.names.length ? '...' : ''})`;
-    sourcePathDisplay = externalFileDetails.names.join(", ") + (externalFileDetails.count > externalFileDetails.names.length ? ` and ${externalFileDetails.count - externalFileDetails.names.length} more` : "");
+    sourceNameDisplay = intl.formatMessage({ 
+      id: "dialog.file.externalFiles", 
+      defaultMessage: "External Files ({fileNames})" 
+    }, { 
+      fileNames: fileNamesSample + (externalFileDetails.count > externalFileDetails.names.length ? '...' : '') 
+    });
+    sourcePathDisplay = externalFileDetails.names.join(", ") + (externalFileDetails.count > externalFileDetails.names.length ? ` ${intl.formatMessage({ id: "dialog.file.andMore", defaultMessage: "and {count} more" }, { count: externalFileDetails.count - externalFileDetails.names.length })}` : "");
   } else if (sourceNode) {
-    sourceNameDisplay = sourceNode.label || sourceNode.name || "Unknown Source";
+    sourceNameDisplay = sourceNode.label || sourceNode.name || intl.formatMessage({ id: "dialog.file.unknownSource", defaultMessage: "Unknown Source" });
     if (sourceNode.source === 'local') {
       sourcePathDisplay = sourceNode.path;
     } else if (sourceNode.source === 'remote' && sourceNode.workspaceId) {
@@ -75,7 +81,7 @@ export default function FileDropDialog({
       sourcePathDisplay = sourceNode.path === '' ? sourceNode.name : sourceNode.path;
     }
   } else {
-    sourceNameDisplay = "Unknown Source";
+    sourceNameDisplay = intl.formatMessage({ id: "dialog.file.unknownSource", defaultMessage: "Unknown Source" });
   }
 
   if (targetNode) {

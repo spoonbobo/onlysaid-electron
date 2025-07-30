@@ -4,7 +4,7 @@ import NotificationsIcon from "@mui/icons-material/Notifications";
 import { useUserStore } from "@/renderer/stores/User/UserStore";
 import { useAgentStore } from "@/renderer/stores/Agent/AgentStore";
 import { IUser } from "@/../../types/User/User";
-import { FormattedMessage } from "react-intl";
+import { FormattedMessage, useIntl } from "react-intl";
 import { useTopicStore } from "@/renderer/stores/Topic/TopicStore";
 import { useState } from "react";
 import { getTotalNotificationCount } from "@/utils/notifications";
@@ -18,11 +18,12 @@ interface UserInfoBarProps {
 }
 
 export default function UserInfoBar({ onAgentToggle, agentOverlayVisible = false }: UserInfoBarProps) {
+  const intl = useIntl();
   const user: IUser | null = useUserStore((state) => state.user);
   const agent: IUser | null = useAgentStore((state) => state.agent);
   const setSelectedContext = useTopicStore((state) => state.setSelectedContext);
 
-  const displayName = user?.username || "Guest User";
+  const displayName = user?.username || intl.formatMessage({ id: "user.guest", defaultMessage: "Guest User" });
   const status = user === null ? "offline" : "online";
   const userAvatarSrc = user?.avatar || "";
   const isOffline = status === "offline";

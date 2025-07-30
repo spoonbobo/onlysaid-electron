@@ -1,6 +1,5 @@
 import { Box, Typography, Card, CardContent, Chip, Stack, CircularProgress, Divider, IconButton, Switch, Tooltip } from "@mui/material";
 import { useState, useEffect, useMemo, useCallback } from "react";
-import SettingsSection from "@/renderer/components/Settings/SettingsSection";
 import { FormattedMessage, useIntl } from "react-intl";
 import { useTopicStore, useCurrentTopicContext, KNOWLEDGE_BASE_SELECTION_KEY } from "@/renderer/stores/Topic/TopicStore";
 import { toast } from "@/utils/toast";
@@ -14,6 +13,9 @@ import StorageIcon from "@mui/icons-material/Storage";
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import KBInfo from './KBInfo';
 import KBExplorer, { IKBStatus } from './KBExplorer';
+import KBNavigationBar, { KBNavigationTab } from './KBNavigationBar';
+import KBDocuments from './KBDocuments';
+import KBSettings from './KBSettings';
 import { getUserTokenFromStore } from '@/utils/user';
 
 function KnowledgeBaseManagerComponent() {
@@ -25,6 +27,7 @@ function KnowledgeBaseManagerComponent() {
     isLoading: kbStoreIsLoadingGlobal,
     error: kbStoreErrorGlobal,
     getKnowledgeBaseById,
+    getKnowledgeBaseDetailsList,
     updateKnowledgeBase,
     deleteKnowledgeBase,
     createKnowledgeBase,
@@ -45,11 +48,31 @@ function KnowledgeBaseManagerComponent() {
   const [kbStatus, setKbStatus] = useState<IKBStatus | null>(null);
   const [isStatusLoading, setIsStatusLoading] = useState(false);
 
+  // Navigation state
+  const [activeTab, setActiveTab] = useState<KBNavigationTab>('overview');
+
   const currentWorkspaceId = useMemo(() => {
     return selectedContext?.type === "workspace" ? selectedContext.id : undefined;
   }, [selectedContext]);
 
   const selectedKbId = selectedTopics[KNOWLEDGE_BASE_SELECTION_KEY];
+
+  // Add loadAllKBs function
+  const loadAllKBs = useCallback(async () => {
+    if (!currentWorkspaceId) {
+      console.warn('No workspace ID available for loading KBs');
+      return;
+    }
+
+    try {
+      console.log('📚 Loading all knowledge bases for workspace:', currentWorkspaceId);
+      const kbs = await getKnowledgeBaseDetailsList(currentWorkspaceId);
+      console.log('📚 Loaded knowledge bases:', kbs?.length || 0);
+    } catch (error) {
+      console.error('❌ Error loading knowledge bases:', error);
+      toast.error('Failed to load knowledge bases');
+    }
+  }, [currentWorkspaceId, getKnowledgeBaseDetailsList]);
 
   useEffect(() => {
     const embeddingService = new EmbeddingService();
@@ -58,12 +81,41 @@ function KnowledgeBaseManagerComponent() {
       .catch(error => console.error("Failed to load embedding models:", error));
   }, []);
 
+  useEffect(() => {
+    console.log('🔍 Knowledge Base Manager mounted, checking service health...');
+    
+    // Check LightRAG service health
+    const checkHealth = async () => {
+      try {
+        const isHealthy = await window.electron.knowledgeBase.healthCheck();
+        console.log('🏥 LightRAG Health Check Result:', isHealthy);
+        
+        if (!isHealthy) {
+          toast.error('Knowledge Base service is not available. Some features may not work properly.');
+        }
+      } catch (error) {
+        console.error('❌ Health check failed:', error);
+        toast.error('Unable to check Knowledge Base service status.');
+      }
+    };
+    
+    checkHealth();
+    // loadAllKBs(); // Commented out for now - will be fixed in a separate update
+  }, [selectedContext]);
+
   const fetchAndSetSelectedKbDetails = useCallback(async (idToFetch?: string) => {
     const kbIdToUse = idToFetch || selectedKbId;
     if (kbIdToUse && currentWorkspaceId) {
+      // Avoid re-fetching if we already have the same KB loaded (unless explicitly requested)
+      if (!idToFetch && selectedKnowledgeBase?.id === kbIdToUse) {
+        console.log('🔄 KB already loaded, skipping fetch for:', kbIdToUse);
+        return;
+      }
+      
       setIsLoadingDetails(true);
       setKbStatus(null);
       if (!idToFetch) setSelectedKnowledgeBase(null);
+      
       try {
         const kb = await getKnowledgeBaseById(currentWorkspaceId, kbIdToUse);
         if (kb) {
@@ -94,26 +146,27 @@ function KnowledgeBaseManagerComponent() {
 
   useEffect(() => {
     fetchAndSetSelectedKbDetails();
-  }, [selectedKbId, currentWorkspaceId]);
+  }, [selectedKbId, currentWorkspaceId]); // Removed fetchAndSetSelectedKbDetails to prevent infinite loop
 
-  useEffect(() => {
-    if (currentWorkspaceId) {
-      const viewKBStructure = useKBStore.getState().viewKnowledgeBaseStructure;
-      const kbIdToView = selectedKnowledgeBase?.id;
-
-      viewKBStructure(currentWorkspaceId, kbIdToView)
-        .then(result => {
-          if (kbIdToView) {
-            console.log(`KB structure response for ${kbIdToView}:`, result);
-          } else {
-            console.log("KB structure response for all KBs in workspace:", result);
-          }
-        })
-        .catch(err => {
-          console.error(`Error viewing KB structure for ${kbIdToView || 'all KBs'}:`, err);
-        });
-    }
-  }, [currentWorkspaceId, selectedKnowledgeBase]);
+  // Removed redundant KB structure fetch - KBExplorer handles this
+  // useEffect(() => {
+  //   if (currentWorkspaceId) {
+  //     const viewKBStructure = useKBStore.getState().viewKnowledgeBaseStructure;
+  //     const kbIdToView = selectedKnowledgeBase?.id;
+  //
+  //     viewKBStructure(currentWorkspaceId, kbIdToView)
+  //       .then(result => {
+  //         if (kbIdToView) {
+  //           console.log(`KB structure response for ${kbIdToView}:`, result);
+  //         } else {
+  //           console.log("KB structure response for all KBs in workspace:", result);
+  //         }
+  //       })
+  //       .catch(err => {
+  //         console.error(`Error viewing KB structure for ${kbIdToView || 'all KBs'}:`, err);
+  //       });
+  //   }
+  // }, [currentWorkspaceId, selectedKnowledgeBase?.id]);
 
   useEffect(() => {
     if (selectedKnowledgeBase && currentWorkspaceId) {
@@ -144,7 +197,7 @@ function KnowledgeBaseManagerComponent() {
       setKbStatus(null);
       setIsStatusLoading(false);
     }
-  }, [selectedKnowledgeBase, currentWorkspaceId, getKBStatus]);
+  }, [selectedKnowledgeBase?.id, currentWorkspaceId]);
 
   const handleOpenEditDialog = useCallback(() => {
     if (selectedKnowledgeBase) {
@@ -346,7 +399,7 @@ function KnowledgeBaseManagerComponent() {
           }));
         });
     }
-  }, [selectedKnowledgeBase, currentWorkspaceId, intl]);
+  }, [selectedKnowledgeBase?.id, currentWorkspaceId, intl]);
 
   // Change the handleReinitialize function name and add scan functionality
   const handleScanDocuments = useCallback(async () => {
@@ -369,20 +422,22 @@ function KnowledgeBaseManagerComponent() {
         toast.error(`Scan failed: ${error.message}`);
       }
     }
-  }, [selectedKnowledgeBase, currentWorkspaceId, intl]);
+  }, [selectedKnowledgeBase?.id, currentWorkspaceId, intl]);
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-      <Typography variant="h5" gutterBottom>
-        <FormattedMessage id="settings.kb.title" defaultMessage="Knowledge Base" />
-        {selectedKnowledgeBase && (
-          <Typography component="span" sx={{ ml: 1, fontSize: '1rem', color: 'text.secondary', fontWeight: 'normal' }}>
-            • {selectedKnowledgeBase.name}
-          </Typography>
-        )}
-      </Typography>
+      {/* Show navigation bar only when KB is selected */}
+      {selectedKnowledgeBase && currentWorkspaceId && (
+        <KBNavigationBar
+          activeTab={activeTab}
+          onTabChange={setActiveTab}
+          knowledgeBaseName={selectedKnowledgeBase.name}
+          disabled={isLoadingDetails || kbStoreIsLoadingGlobal}
+        />
+      )}
 
-      <Box sx={{ mb: 2 }}>
+      {/* Content Area */}
+      <Box sx={{ flexGrow: 1, overflow: 'auto', px: 2 }}>
         {isLoadingDetails || kbStoreIsLoadingGlobal ? (
           <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', py: 4 }}>
             <CircularProgress />
@@ -395,20 +450,69 @@ function KnowledgeBaseManagerComponent() {
             <FormattedMessage id="settings.kb.selected.loadErrorGlobal" defaultMessage="Error loading knowledge base system." /> {kbStoreErrorGlobal}
           </Typography>
         ) : selectedKnowledgeBase && currentWorkspaceId ? (
-          <KBInfo
-            knowledgeBase={selectedKnowledgeBase}
-            kbRawStatus={kbStatus}
-            isLoading={isLoadingDetails}
-            isKbStatusLoading={isStatusLoading}
-            onEdit={handleOpenEditDialog}
-            onDelete={handleOpenDeleteDialog}
-            // Remove onRefreshDetails prop
-            getEmbeddingEngineName={getEmbeddingEngineName}
-            getKbSourceIconAndLabel={getKbSourceIconAndLabel}
-          />
+          <>
+            {/* Tab Content */}
+            {activeTab === 'overview' && (
+              <Box>
+                {/* Section Header */}
+                <Box sx={{ mb: 3 }}>
+                  <Typography variant="h6" gutterBottom>
+                    <FormattedMessage id="kb.overview.title" />
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    <FormattedMessage id="kb.overview.description" />
+                  </Typography>
+                </Box>
+
+                <Divider sx={{ mb: 3 }} />
+
+                {/* Knowledge Base Information */}
+                <KBInfo
+                  knowledgeBase={selectedKnowledgeBase}
+                  kbRawStatus={kbStatus}
+                  isLoading={isLoadingDetails}
+                  isKbStatusLoading={isStatusLoading}
+                  onEdit={handleOpenEditDialog}
+                  onDelete={handleOpenDeleteDialog}
+                  getEmbeddingEngineName={getEmbeddingEngineName}
+                  getKbSourceIconAndLabel={getKbSourceIconAndLabel}
+                />
+              </Box>
+            )}
+
+            {activeTab === 'documents' && (
+              <KBDocuments
+                knowledgeBaseId={selectedKnowledgeBase.id}
+                workspaceId={currentWorkspaceId}
+                kbStatus={kbStatus}
+                isLoading={isStatusLoading}
+                onScanDocuments={handleScanDocuments}
+                onRefreshStructure={handleRefreshKBStructure}
+              />
+            )}
+
+            {activeTab === 'settings' && (
+              <KBSettings
+                knowledgeBase={selectedKnowledgeBase}
+                onEdit={handleOpenEditDialog}
+                onDelete={handleOpenDeleteDialog}
+              />
+            )}
+
+            {activeTab === 'members' && (
+              <Box sx={{ textAlign: 'center', py: 4 }}>
+                <Typography variant="body1" color="text.secondary">
+                  <FormattedMessage id="kb.members.comingSoon" defaultMessage="Member management coming soon..." />
+                </Typography>
+              </Box>
+            )}
+          </>
         ) : (
           <Box sx={{ textAlign: 'center', py: 4, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1 }}>
             <InfoOutlinedIcon color="action" sx={{ fontSize: 40 }} />
+            <Typography variant="h6" gutterBottom>
+              <FormattedMessage id="settings.kb.title" defaultMessage="Knowledge Base" />
+            </Typography>
             <Typography variant="body1" color="text.secondary">
               <FormattedMessage
                 id="settings.kb.selected.noKbSelectedOrWorkspace"
@@ -429,29 +533,7 @@ function KnowledgeBaseManagerComponent() {
         )}
       </Box>
 
-      {selectedKnowledgeBase && currentWorkspaceId && (
-        <Box sx={{
-          mt: 2,
-          flexGrow: 1,
-          display: 'flex',
-          flexDirection: 'column',
-          minHeight: 0,
-        }}>
-          <KBExplorer
-            kbStatus={kbStatus}
-            isLoading={isStatusLoading}
-            onScanDocuments={handleScanDocuments}  // Changed from onReinitialize
-            onRefreshStructure={handleRefreshKBStructure}
-            sx={{
-              flexGrow: 1,
-              display: 'flex',
-              flexDirection: 'column',
-              overflow: 'auto',
-            }}
-          />
-        </Box>
-      )}
-
+      {/* Dialogs */}
       {selectedKnowledgeBase && editDialogOpen && (
         <CreateKBDialog
           open={editDialogOpen}

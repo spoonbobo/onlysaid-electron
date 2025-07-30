@@ -115,7 +115,7 @@ function QuizHelper({ workspaceId }: QuizHelperProps) {
         }
       } catch (error) {
         console.error('Failed to load knowledge bases:', error);
-        toast.error('Failed to load knowledge bases');
+        toast.error(intl.formatMessage({ id: 'quizHelper.toast.loadKnowledgeBasesFailed' }));
         store.setError('Failed to load knowledge bases');
       }
     };
@@ -198,7 +198,7 @@ function QuizHelper({ workspaceId }: QuizHelperProps) {
 
   const generateQuestions = async () => {
     if (formData.selectedKbIds.length === 0) {
-      toast.error('Please select at least one knowledge base');
+      toast.error(intl.formatMessage({ id: 'quizHelper.toast.selectKnowledgeBase' }));
       return;
     }
 
@@ -352,7 +352,10 @@ Return only the JSON array, no additional text.`;
           if (Array.isArray(questions) && questions.length > 0) {
             const processedQuestions = processQuestionsWithMath(questions);
             currentSession.createSession(processedQuestions, generationDetailsObj);
-            toast.success(`Generated ${questions.length} practice questions!`);
+            toast.success(intl.formatMessage(
+              { id: 'quizHelper.toast.questionsGenerated' },
+              { count: questions.length }
+            ));
           } else {
             throw new Error('Invalid question format received');
           }
@@ -371,14 +374,17 @@ Return only the JSON array, no additional text.`;
           
           const processedFallbackQuestions = processQuestionsWithMath(fallbackQuestions);
           currentSession.createSession(processedFallbackQuestions, generationDetailsObj);
-          toast.warning('Generated a basic question. For better results, ensure your knowledge base has sufficient content.');
+          toast.warning(intl.formatMessage({ id: 'quizHelper.toast.basicQuestionGenerated' }));
         }
       } else {
         throw new Error('No response received from knowledge base');
       }
     } catch (error: any) {
       console.error('Error generating questions:', error);
-      toast.error(`Failed to generate questions: ${error.message || 'Unknown error'}`);
+      toast.error(intl.formatMessage(
+        { id: 'quizHelper.toast.failedToGenerate' },
+        { error: error.message || 'Unknown error' }
+      ));
       store.setError(`Failed to generate questions: ${error.message || 'Unknown error'}`);
     } finally {
       store.setIsGenerating(false);
@@ -504,7 +510,7 @@ Use information from the knowledge base to support your explanations. Keep each 
             <ErrorOutlineIcon sx={{ color: 'error.main', fontSize: 20, mt: 0.5, flexShrink: 0 }} />
             <Box sx={{ flexGrow: 1 }}>
               <Typography variant="subtitle2" color="error.dark" sx={{ fontWeight: 600, mb: 0.5 }}>
-                Why Your Answer is Incorrect:
+                {intl.formatMessage({ id: 'quizHelper.explanation.whyIncorrect' })}
               </Typography>
               <Box sx={{ color: 'error.dark', '& p': { lineHeight: 1.5, margin: 0 } }}>
                 <MarkdownRenderer content={sections.incorrect} />
@@ -518,7 +524,7 @@ Use information from the knowledge base to support your explanations. Keep each 
             <CheckCircleIcon sx={{ color: 'success.main', fontSize: 20, mt: 0.5, flexShrink: 0 }} />
             <Box sx={{ flexGrow: 1 }}>
               <Typography variant="subtitle2" color="success.dark" sx={{ fontWeight: 600, mb: 0.5 }}>
-                The Correct Understanding:
+                {intl.formatMessage({ id: 'quizHelper.explanation.correctUnderstanding' })}
               </Typography>
               <Box sx={{ color: 'success.dark', '& p': { lineHeight: 1.5, margin: 0 } }}>
                 <MarkdownRenderer content={sections.correct} />
@@ -532,7 +538,7 @@ Use information from the knowledge base to support your explanations. Keep each 
             <LightbulbIcon sx={{ color: 'warning.main', fontSize: 20, mt: 0.5, flexShrink: 0 }} />
             <Box sx={{ flexGrow: 1 }}>
               <Typography variant="subtitle2" color="warning.dark" sx={{ fontWeight: 600, mb: 0.5 }}>
-                Key Learning Point:
+                {intl.formatMessage({ id: 'quizHelper.explanation.keyLearningPoint' })}
               </Typography>
               <Box sx={{ color: 'warning.dark', '& p': { lineHeight: 1.5, margin: 0, fontWeight: 500 } }}>
                 <MarkdownRenderer content={sections.keyPoint} />
@@ -666,7 +672,10 @@ Be fair but thorough in your evaluation. Consider partial credit for partially c
       const maxConcurrency = Math.min(8, Math.max(3, Math.ceil(totalAsyncTasks / 2))); // Optimized for LightRAG API
       const rateLimitDelay = totalAsyncTasks > 10 ? 200 : 100; // Adaptive rate limiting
       
-      toast.info(`🚀 Running ${totalAsyncTasks} AI analyses with ${maxConcurrency} concurrent streams...`);
+      toast.info(intl.formatMessage(
+        { id: 'quizHelper.toast.analysesRunning' },
+        { count: totalAsyncTasks, concurrency: maxConcurrency }
+      ));
       
       // Prepare analysis tasks with retry logic and enhanced metadata
       const analysisTasksWithRetry = [
@@ -804,10 +813,25 @@ Be fair but thorough in your evaluation. Consider partial credit for partially c
 
         // Enhanced user feedback with performance insights
         if (failed > 0) {
-          toast.warning(`⚠️ ${failed}/${totalAsyncTasks} analyses failed (${Math.round((successful / totalAsyncTasks) * 100)}% success rate) in ${processingTime}s`);
+          toast.warning(intl.formatMessage(
+            { id: 'quizHelper.toast.analysesFailed' },
+            { 
+              failed, 
+              total: totalAsyncTasks, 
+              successRate: Math.round((successful / totalAsyncTasks) * 100),
+              time: processingTime 
+            }
+          ));
         } else {
           const throughput = (totalAsyncTasks / parseFloat(processingTime)).toFixed(1);
-          toast.success(`🚀 All ${totalAsyncTasks} analyses completed successfully in ${processingTime}s (${throughput} tasks/s throughput)!`);
+          toast.success(intl.formatMessage(
+            { id: 'quizHelper.toast.analysesCompleted' },
+            { 
+              count: totalAsyncTasks, 
+              time: processingTime, 
+              throughput 
+            }
+          ));
         }
 
              } catch (error) {
@@ -837,8 +861,13 @@ Be fair but thorough in your evaluation. Consider partial credit for partially c
     
     // Enhanced success message with analysis summary
     const analysisCount = totalAsyncTasks;
-    const scoreMessage = `🎯 Score: ${correct}/${generatedQuestions.length} correct!`;
-    const analysisMessage = analysisCount > 0 ? ` (✨ ${analysisCount} AI analyses completed)` : '';
+    const scoreMessage = intl.formatMessage(
+      { id: 'quizHelper.toast.scoreResult' },
+      { correct, total: generatedQuestions.length }
+    );
+    const analysisMessage = analysisCount > 0 
+      ? intl.formatMessage({ id: 'quizHelper.toast.withAnalyses' }, { count: analysisCount })
+      : '';
     
     toast.success(scoreMessage + analysisMessage);
   };
@@ -993,7 +1022,10 @@ Be fair but thorough in your evaluation. Consider partial credit for partially c
         <CardContent>
           <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
             <Typography variant="h6" sx={{ flexGrow: 1 }}>
-              Question {index + 1}
+              {intl.formatMessage(
+                { id: 'quizHelper.questions.question' },
+                { number: index + 1 }
+              )}
             </Typography>
             <Chip 
               label={question.type.replace('_', ' ')} 
@@ -1052,7 +1084,7 @@ Be fair but thorough in your evaluation. Consider partial credit for partially c
               <FormControlLabel
                 value="true"
                 control={<Radio disabled={showAnswers} />}
-                label="True"
+                label={intl.formatMessage({ id: 'quizHelper.questions.true' })}
                 sx={{
                   bgcolor: showAnswers
                     ? question.correctAnswer === 'true'
@@ -1069,7 +1101,7 @@ Be fair but thorough in your evaluation. Consider partial credit for partially c
               <FormControlLabel
                 value="false"
                 control={<Radio disabled={showAnswers} />}
-                label="False"
+                label={intl.formatMessage({ id: 'quizHelper.questions.false' })}
                 sx={{
                   bgcolor: showAnswers
                     ? question.correctAnswer === 'false'
@@ -1090,7 +1122,7 @@ Be fair but thorough in your evaluation. Consider partial credit for partially c
               fullWidth
               multiline
               rows={3}
-              placeholder="Enter your answer here..."
+              placeholder={intl.formatMessage({ id: 'quizHelper.questions.answerPlaceholder' })}
               value={userAnswer || ''}
               onChange={(e) => handleAnswerChange(question.id, e.target.value)}
               disabled={showAnswers}
@@ -1103,7 +1135,7 @@ Be fair but thorough in your evaluation. Consider partial credit for partially c
               <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
                 <CheckCircleIcon sx={{ color: 'success.main', mr: 1, fontSize: 20 }} />
                 <Typography variant="subtitle2" color="success.dark" sx={{ fontWeight: 600 }}>
-                  Correct Answer:
+                  {intl.formatMessage({ id: 'quizHelper.answers.correctAnswer' })}
                 </Typography>
               </Box>
               <Box sx={{ mb: 2 }}>
@@ -1134,7 +1166,7 @@ Be fair but thorough in your evaluation. Consider partial credit for partially c
                       <InfoIcon sx={{ color: 'warning.main', mr: 1, fontSize: 24 }} />
                     )}
                     <Typography variant="h6" color={isCorrect ? 'success.dark' : 'warning.dark'} sx={{ fontWeight: 600 }}>
-                      Answer Evaluation
+                      {intl.formatMessage({ id: 'quizHelper.answers.answerEvaluation' })}
                     </Typography>
                     {evaluatingAnswers[question.id] && (
                       <CircularProgress size={20} sx={{ ml: 'auto', color: 'primary.main' }} />
@@ -1145,7 +1177,7 @@ Be fair but thorough in your evaluation. Consider partial credit for partially c
                     <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', py: 3 }}>
                       <CircularProgress size={24} sx={{ mr: 2, color: 'primary.main' }} />
                       <Typography variant="body2" color="text.secondary" sx={{ fontStyle: 'italic' }}>
-                        Evaluating your answer using AI...
+                        {intl.formatMessage({ id: 'quizHelper.status.evaluating' })}
                       </Typography>
                     </Box>
                   ) : shortAnswerEvaluations[question.id] ? (
@@ -1153,7 +1185,7 @@ Be fair but thorough in your evaluation. Consider partial credit for partially c
                       {/* Score Display */}
                       <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
                         <Typography variant="subtitle2" sx={{ mr: 2, fontWeight: 600 }}>
-                          Score:
+                          {intl.formatMessage({ id: 'quizHelper.answers.score' })}
                         </Typography>
                         <Chip 
                           label={`${shortAnswerEvaluations[question.id].score}/100`} 
@@ -1164,10 +1196,16 @@ Be fair but thorough in your evaluation. Consider partial credit for partially c
                           sx={{ fontWeight: 600 }}
                         />
                         <Typography variant="body2" sx={{ ml: 2, fontStyle: 'italic' }}>
-                          {shortAnswerEvaluations[question.id].score >= 80 ? 'Excellent' :
-                           shortAnswerEvaluations[question.id].score >= 60 ? 'Good' :
-                           shortAnswerEvaluations[question.id].score >= 40 ? 'Adequate' :
-                           shortAnswerEvaluations[question.id].score >= 20 ? 'Poor' : 'Incorrect'}
+                          {shortAnswerEvaluations[question.id].score >= 80 
+                            ? intl.formatMessage({ id: 'quizHelper.answers.scoreGrade.excellent' })
+                            : shortAnswerEvaluations[question.id].score >= 60 
+                            ? intl.formatMessage({ id: 'quizHelper.answers.scoreGrade.good' })
+                            : shortAnswerEvaluations[question.id].score >= 40 
+                            ? intl.formatMessage({ id: 'quizHelper.answers.scoreGrade.adequate' })
+                            : shortAnswerEvaluations[question.id].score >= 20 
+                            ? intl.formatMessage({ id: 'quizHelper.answers.scoreGrade.poor' })
+                            : intl.formatMessage({ id: 'quizHelper.answers.scoreGrade.incorrect' })
+                          }
                         </Typography>
                       </Box>
                       
@@ -1180,7 +1218,7 @@ Be fair but thorough in your evaluation. Consider partial credit for partially c
                         borderColor: 'divider' 
                       }}>
                         <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>
-                          Detailed Feedback:
+                          {intl.formatMessage({ id: 'quizHelper.answers.detailedFeedback' })}
                         </Typography>
                         <MarkdownRenderer content={shortAnswerEvaluations[question.id].feedback} />
                       </Box>
@@ -1188,7 +1226,7 @@ Be fair but thorough in your evaluation. Consider partial credit for partially c
                   ) : (
                     <Box sx={{ textAlign: 'center', py: 2 }}>
                       <Typography variant="body2" color="text.secondary" sx={{ fontStyle: 'italic' }}>
-                        Evaluation could not be completed.
+                        {intl.formatMessage({ id: 'quizHelper.status.evaluationNotCompleted' })}
                       </Typography>
                     </Box>
                   )}
@@ -1209,7 +1247,7 @@ Be fair but thorough in your evaluation. Consider partial credit for partially c
                   <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
                     <InfoIcon sx={{ color: 'error.main', mr: 1, fontSize: 24 }} />
                     <Typography variant="h6" color="error.dark" sx={{ fontWeight: 600 }}>
-                      Answer Analysis
+                      {intl.formatMessage({ id: 'quizHelper.answers.answerAnalysis' })}
                     </Typography>
                     {loadingExplanations[question.id] && (
                       <CircularProgress size={20} sx={{ ml: 'auto', color: 'error.main' }} />
@@ -1226,7 +1264,7 @@ Be fair but thorough in your evaluation. Consider partial credit for partially c
                     borderColor: 'info.dark' 
                   }}>
                     <Typography variant="subtitle2" color="text.primary" sx={{ mb: 0.5, fontWeight: 600 }}>
-                      Your Answer:
+                      {intl.formatMessage({ id: 'quizHelper.answers.yourAnswer' })}
                     </Typography>
                     <Box sx={{ color: 'text.primary' }}>
                       <MarkdownRenderer 
@@ -1243,7 +1281,7 @@ Be fair but thorough in your evaluation. Consider partial credit for partially c
                     <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', py: 3 }}>
                       <CircularProgress size={24} sx={{ mr: 2, color: 'error.main' }} />
                       <Typography variant="body2" color="text.secondary" sx={{ fontStyle: 'italic' }}>
-                        Analyzing your answer and generating personalized explanation...
+                        {intl.formatMessage({ id: 'quizHelper.status.analyzingAnswer' })}
                       </Typography>
                     </Box>
                   ) : wrongAnswerExplanations[question.id] ? (
@@ -1251,7 +1289,7 @@ Be fair but thorough in your evaluation. Consider partial credit for partially c
                   ) : (
                     <Box sx={{ textAlign: 'center', py: 2 }}>
                       <Typography variant="body2" color="text.secondary" sx={{ fontStyle: 'italic' }}>
-                        Explanation could not be generated at this time.
+                        {intl.formatMessage({ id: 'quizHelper.status.explanationNotGenerated' })}
                       </Typography>
                     </Box>
                   )}
@@ -1270,7 +1308,7 @@ Be fair but thorough in your evaluation. Consider partial credit for partially c
                   <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
                     <LightbulbIcon sx={{ color: 'info.main', mr: 1, fontSize: 20 }} />
                     <Typography variant="subtitle2" color="info.dark" sx={{ fontWeight: 600 }}>
-                      Additional Explanation:
+                      {intl.formatMessage({ id: 'quizHelper.answers.explanation' })}
                     </Typography>
                   </Box>
                   <MarkdownRenderer content={question.explanation} />
@@ -1308,7 +1346,7 @@ Be fair but thorough in your evaluation. Consider partial credit for partially c
           {/* Configuration Form */}
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
             <TextField
-              label="Number of Questions"
+              label={intl.formatMessage({ id: 'quizHelper.form.questionCount' })}
               type="number"
               value={formData.questionCount}
               onChange={(e) => handleFormChange('questionCount', parseInt(e.target.value) || 1)}
@@ -1317,37 +1355,45 @@ Be fair but thorough in your evaluation. Consider partial credit for partially c
             />
 
             <FormControl sx={{ maxWidth: 300 }}>
-              <InputLabel>Question Type</InputLabel>
+              <InputLabel>{intl.formatMessage({ id: 'quizHelper.form.questionType' })}</InputLabel>
               <Select
                 value={formData.questionType}
-                label="Question Type"
+                label={intl.formatMessage({ id: 'quizHelper.form.questionType' })}
                 onChange={(e) => handleFormChange('questionType', e.target.value)}
               >
-                <MenuItem value="multiple_choice">Multiple Choice</MenuItem>
-                <MenuItem value="short_answer">Short Answer</MenuItem>
-                <MenuItem value="true_false">True/False</MenuItem>
-                <MenuItem value="mixed">Mixed Types</MenuItem>
+                <MenuItem value="multiple_choice">
+                  {intl.formatMessage({ id: 'quizHelper.questionType.multipleChoice' })}
+                </MenuItem>
+                <MenuItem value="short_answer">
+                  {intl.formatMessage({ id: 'quizHelper.questionType.shortAnswer' })}
+                </MenuItem>
+                <MenuItem value="true_false">
+                  {intl.formatMessage({ id: 'quizHelper.questionType.trueFalse' })}
+                </MenuItem>
+                <MenuItem value="mixed">
+                  {intl.formatMessage({ id: 'quizHelper.questionType.mixed' })}
+                </MenuItem>
               </Select>
             </FormControl>
 
             <FormControl sx={{ maxWidth: 300 }}>
-              <InputLabel>Difficulty Level</InputLabel>
+              <InputLabel>{intl.formatMessage({ id: 'quizHelper.form.difficulty' })}</InputLabel>
               <Select
                 value={formData.difficulty}
-                label="Difficulty Level"
+                label={intl.formatMessage({ id: 'quizHelper.form.difficulty' })}
                 onChange={(e) => handleFormChange('difficulty', e.target.value)}
               >
-                <MenuItem value="easy">Easy</MenuItem>
-                <MenuItem value="medium">Medium</MenuItem>
-                <MenuItem value="hard">Hard</MenuItem>
-                <MenuItem value="mixed">Mixed Levels</MenuItem>
+                <MenuItem value="easy">{intl.formatMessage({ id: 'quizHelper.difficulty.easy' })}</MenuItem>
+                <MenuItem value="medium">{intl.formatMessage({ id: 'quizHelper.difficulty.medium' })}</MenuItem>
+                <MenuItem value="hard">{intl.formatMessage({ id: 'quizHelper.difficulty.hard' })}</MenuItem>
+                <MenuItem value="mixed">{intl.formatMessage({ id: 'quizHelper.difficulty.mixed' })}</MenuItem>
               </Select>
             </FormControl>
 
             {/* Knowledge Base Selection */}
             <Box>
               <Typography variant="subtitle2" sx={{ mb: 2 }}>
-                Select Knowledge Bases:
+                {intl.formatMessage({ id: 'quizHelper.form.selectKnowledgeBases' })}
               </Typography>
               {availableKbs.length > 0 ? (
                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
@@ -1366,7 +1412,7 @@ Be fair but thorough in your evaluation. Consider partial credit for partially c
                 </Box>
               ) : (
                 <Alert severity="info">
-                  No knowledge bases found. Please create a knowledge base first.
+                  {intl.formatMessage({ id: 'quizHelper.form.noKnowledgeBases' })}
                 </Alert>
               )}
             </Box>
@@ -1378,7 +1424,10 @@ Be fair but thorough in your evaluation. Consider partial credit for partially c
               disabled={isGenerating || formData.selectedKbIds.length === 0}
               sx={{ maxWidth: 300 }}
             >
-              {isGenerating ? 'Generating Questions...' : 'Generate Practice Questions'}
+              {isGenerating 
+                ? intl.formatMessage({ id: 'quizHelper.button.generating' })
+                : intl.formatMessage({ id: 'quizHelper.button.generateQuestions' })
+              }
             </Button>
           </Box>
         </CardContent>
@@ -1392,7 +1441,10 @@ Be fair but thorough in your evaluation. Consider partial credit for partially c
           <CardContent>
             <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 3 }}>
               <Typography variant="h6">
-                Practice Questions ({generatedQuestions.length})
+                {intl.formatMessage(
+                  { id: 'quizHelper.questions.title' },
+                  { count: generatedQuestions.length }
+                )}
               </Typography>
               <Box sx={{ display: 'flex', gap: 1 }}>
                 {!showAnswers && (
@@ -1402,14 +1454,17 @@ Be fair but thorough in your evaluation. Consider partial credit for partially c
                     onClick={checkAnswers}
                     disabled={Object.keys(userAnswers).length === 0 || isCheckingAnswers}
                   >
-                    {isCheckingAnswers ? 'Checking Answers...' : 'Check Answers'}
+                    {isCheckingAnswers 
+                      ? intl.formatMessage({ id: 'quizHelper.button.checking' })
+                      : intl.formatMessage({ id: 'quizHelper.button.checkAnswers' })
+                    }
                   </Button>
                 )}
                 <Button
                   variant="outlined"
                   onClick={resetQuiz}
                 >
-                  Reset
+                  {intl.formatMessage({ id: 'quizHelper.button.reset' })}
                 </Button>
               </Box>
             </Box>
@@ -1428,14 +1483,20 @@ Be fair but thorough in your evaluation. Consider partial credit for partially c
                 <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
                   <CircularProgress size={24} sx={{ mr: 2, color: 'info.main' }} />
                   <Typography variant="h6" color="info.dark" sx={{ fontWeight: 600 }}>
-                    🧠 AI Analysis in Progress
+                    {intl.formatMessage({ id: 'quizHelper.progress.title' })}
                   </Typography>
                   <Box sx={{ ml: 'auto', textAlign: 'right' }}>
                     <Typography variant="h6" color="info.dark" sx={{ fontWeight: 700 }}>
-                      {analysisProgress.current}/{analysisProgress.total}
+                      {intl.formatMessage(
+                        { id: 'quizHelper.progress.complete' },
+                        { current: analysisProgress.current, total: analysisProgress.total }
+                      )}
                     </Typography>
                     <Typography variant="caption" color="text.secondary">
-                      {Math.round((analysisProgress.current / analysisProgress.total) * 100)}% Complete
+                      {intl.formatMessage(
+                        { id: 'quizHelper.progress.percentComplete' },
+                        { percent: Math.round((analysisProgress.current / analysisProgress.total) * 100) }
+                      )}
                     </Typography>
                   </Box>
                 </Box>
@@ -1459,23 +1520,32 @@ Be fair but thorough in your evaluation. Consider partial credit for partially c
                   <Box sx={{ display: 'flex', gap: 3 }}>
                     <Box>
                       <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
-                        Processing Rate
+                        {intl.formatMessage({ id: 'quizHelper.progress.processingRate' })}
                       </Typography>
                       <Typography variant="body2" color="info.dark" sx={{ fontWeight: 600 }}>
-                        {analysisProgress.rate} analyses/sec
+                        {intl.formatMessage(
+                          { id: 'quizHelper.progress.analysesPerSecond' },
+                          { rate: analysisProgress.rate }
+                        )}
                       </Typography>
                     </Box>
                     <Box>
                       <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
-                        Estimated Time
+                        {intl.formatMessage({ id: 'quizHelper.progress.estimatedTime' })}
                       </Typography>
                       <Typography variant="body2" color="info.dark" sx={{ fontWeight: 600 }}>
-                        {analysisProgress.eta > 0 ? `${analysisProgress.eta}s remaining` : 'Calculating...'}
+                        {analysisProgress.eta > 0 
+                          ? intl.formatMessage(
+                              { id: 'quizHelper.progress.remainingTime' },
+                              { eta: analysisProgress.eta }
+                            )
+                          : intl.formatMessage({ id: 'quizHelper.progress.calculating' })
+                        }
                       </Typography>
                     </Box>
                   </Box>
                   <Chip 
-                    label="Parallel Processing" 
+                    label={intl.formatMessage({ id: 'quizHelper.progress.parallelProcessing' })} 
                     size="small" 
                     color="info" 
                     variant="outlined"
@@ -1491,31 +1561,46 @@ Be fair but thorough in your evaluation. Consider partial credit for partially c
                 <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
                   <AutoAwesomeIcon sx={{ color: 'primary.main', mr: 1, fontSize: 20 }} />
                   <Typography variant="subtitle2" color="primary.dark" sx={{ fontWeight: 600 }}>
-                    Generated Fresh Question Set - ID: {generationDetails.seed}
+                    {intl.formatMessage(
+                      { id: 'quizHelper.generation.freshQuestionSet' },
+                      { id: generationDetails.seed }
+                    )}
                   </Typography>
                 </Box>
                 <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
                   <Chip 
-                    label={`Focus: ${generationDetails.focus}`} 
+                    label={intl.formatMessage(
+                      { id: 'quizHelper.generation.focus' },
+                      { focus: generationDetails.focus }
+                    )} 
                     size="small" 
                     color="primary" 
                     variant="outlined" 
                   />
                   <Chip 
-                    label={`Style: ${generationDetails.style}`} 
+                    label={intl.formatMessage(
+                      { id: 'quizHelper.generation.style' },
+                      { style: generationDetails.style }
+                    )} 
                     size="small" 
                     color="secondary" 
                     variant="outlined" 
                   />
                   <Chip 
-                    label={`Approach: ${generationDetails.approach}`} 
+                    label={intl.formatMessage(
+                      { id: 'quizHelper.generation.approach' },
+                      { approach: generationDetails.approach }
+                    )} 
                     size="small" 
                     color="info" 
                     variant="outlined" 
                   />
                 </Box>
                 <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block', fontStyle: 'italic' }}>
-                  Generation #{generationCount} - Each generation creates unique questions with different focus areas and approaches.
+                  {intl.formatMessage(
+                    { id: 'quizHelper.generation.generationNumber' },
+                    { number: generationCount }
+                  )}
                 </Typography>
               </Box>
             )}
