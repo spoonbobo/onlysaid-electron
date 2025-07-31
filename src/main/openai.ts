@@ -13,7 +13,7 @@ interface LightRAGStreamData {
 const activeStreams: Record<string, AbortController> = {};
 
 // Update to use LightRAG URL
-const LIGHTRAG_BASE_URL = process.env.LIGHTRAG_BASE_URL || 'http://lightrag.onlysaid-dev.com';
+const LIGHTRAG_BASE_URL = process.env.KB_BASE_URL || 'http://lightrag.onlysaid-dev.com';
 let lightragServiceInstance: LightRAGService | null = null;
 
 const getLightRAGService = () => {
