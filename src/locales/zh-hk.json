@@ -1604,5 +1604,39 @@
   "kb.settings.delete": "刪除知識庫",
   "kb.settings.deleteDescription": "永久刪除此知識庫及其所有數據。此操作無法撤銷。",
   
-  "kb.members.comingSoon": "成員管理即將推出..."
+  "kb.members.comingSoon": "成員管理即將推出...",
+
+  "workspace.mypartner.title": "我的夥伴",
+  "workspace.mypartner.noWorkspaceSelected": "未選擇工作空間。請選擇工作空間以使用夥伴服務。",
+  "workspace.mypartner.selectService": "選擇夥伴服務",
+  "workspace.mypartner.selectServiceDescription": "從選單中選擇夥伴服務，開始使用 AI 驅動的學術協助。",
+  "workspace.mypartner.serviceNotImplemented": "服務「{service}」尚未實作。",
+  "workspace.mypartner.noServices": "沒有可用的夥伴服務",
+  "workspace.mypartner.error": "載入夥伴選單時發生錯誤。",
+  "workspace.mypartner.services.assignment": "作業助手",
+  "workspace.mypartner.services.quizHelper": "測驗助手",
+  "workspace.mypartner.services.research": "研究助手",
+  "workspace.mypartner.services.courseworkHelper": "課業助手",
+  "workspace.mypartner.coursework.tabs.assignments": "作業",
+  "workspace.mypartner.coursework.tabs.quizHelp": "測驗輔助",
+  "workspace.mypartner.coursework.tabs.research": "研究",
+
+  "workspace.mypartner.assignment.title": "作業助手",
+  "workspace.mypartner.assignment.description": "獲得各種作業和學術寫作任務的幫助。",
+  "workspace.mypartner.assignment.noWorkspaceSelected": "未選擇工作空間",
+  "workspace.mypartner.assignment.comingSoon": "作業助手功能即將推出！將包括論文寫作、研究論文、項目提案、文獻綜述和案例研究的協助。",
+  "workspace.mypartner.assignment.essayWriting": "論文寫作",
+  "workspace.mypartner.assignment.researchPaper": "研究論文",
+  "workspace.mypartner.assignment.projectProposal": "項目提案",
+  "workspace.mypartner.assignment.literatureReview": "文獻綜述",
+  "workspace.mypartner.assignment.caseStudy": "案例研究",
+
+  "workspace.mypartner.research.title": "研究助手",
+  "workspace.mypartner.research.description": "獲得研究方法、資料搜尋和學術調查的支援。",
+  "workspace.mypartner.research.noWorkspaceSelected": "未選擇工作空間",
+  "workspace.mypartner.research.comingSoon": "研究助手功能即將推出！將包括主題探索、文獻搜尋、資料評估、引用幫助和研究方法的協助。",
+  "workspace.mypartner.research.disabled": "研究助手即將推出。",
+
+  "workspace.mypartner.coursework.research.title": "研究助手",
+  "workspace.mypartner.coursework.research.description": "獲得研究方法論、資料評估和學術調查的協助。"
 }
