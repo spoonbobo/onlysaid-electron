@@ -35,7 +35,14 @@ const QuizHelperFunctionalityDialog: React.FC<QuizHelperFunctionalityDialogProps
       PaperProps={{
         sx: {
           borderRadius: 2,
-          background: 'linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%)'
+          background: (theme) => theme.palette.mode === 'dark' 
+            ? `linear-gradient(135deg, ${theme.palette.background.paper} 0%, ${theme.palette.background.default} 100%)`
+            : `linear-gradient(135deg, ${theme.palette.grey[50]} 0%, ${theme.palette.grey[100]} 100%)`,
+          color: 'text.primary',
+          border: (theme) => theme.palette.mode === 'dark' ? `1px solid ${theme.palette.divider}` : 'none',
+          boxShadow: (theme) => theme.palette.mode === 'dark' 
+            ? '0 8px 32px rgba(0, 0, 0, 0.6)' 
+            : '0 8px 32px rgba(0, 0, 0, 0.1)'
         }
       }}
     >
@@ -45,7 +52,10 @@ const QuizHelperFunctionalityDialog: React.FC<QuizHelperFunctionalityDialogProps
         justifyContent: 'space-between',
         pb: 1,
         borderBottom: '1px solid',
-        borderColor: 'divider'
+        borderColor: 'divider',
+        bgcolor: (theme) => theme.palette.mode === 'dark' 
+          ? 'rgba(255, 255, 255, 0.02)' 
+          : 'rgba(0, 0, 0, 0.02)'
       }}>
         <Box sx={{ display: 'flex', alignItems: 'center' }}>
           <QuizIcon sx={{ mr: 2, color: 'primary.main', fontSize: 28 }} />
@@ -58,7 +68,15 @@ const QuizHelperFunctionalityDialog: React.FC<QuizHelperFunctionalityDialogProps
         </Box>
         <IconButton 
           onClick={onClose}
-          sx={{ color: 'text.secondary' }}
+          sx={{ 
+            color: 'text.secondary',
+            '&:hover': {
+              bgcolor: (theme) => theme.palette.mode === 'dark' 
+                ? 'rgba(255, 255, 255, 0.08)' 
+                : 'rgba(0, 0, 0, 0.04)',
+              color: 'text.primary'
+            }
+          }}
         >
           <CloseIcon />
         </IconButton>
@@ -92,10 +110,19 @@ const QuizHelperFunctionalityDialog: React.FC<QuizHelperFunctionalityDialogProps
           
           <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 2 }}>
             {/* Feature 1: Knowledge Base Integration */}
-            <Card sx={{ p: 2, bgcolor: 'primary.lighter', border: '1px solid', borderColor: 'primary.light' }}>
+            <Card sx={{ 
+              p: 2, 
+              bgcolor: 'primary.lighter', 
+              border: '1px solid', 
+              borderColor: 'primary.light',
+              boxShadow: (theme) => theme.palette.mode === 'dark' ? 2 : 1,
+              '&:hover': {
+                boxShadow: (theme) => theme.palette.mode === 'dark' ? 4 : 2
+              }
+            }}>
               <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
                 <AutoAwesomeIcon sx={{ mr: 1, color: 'primary.main' }} />
-                <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+                <Typography variant="subtitle1" sx={{ fontWeight: 600, color: 'primary.dark' }}>
                   <FormattedMessage 
                     id="quizHelper.dialog.feature.kbIntegration.title" 
                     defaultMessage="Knowledge Base Integration"
@@ -111,10 +138,19 @@ const QuizHelperFunctionalityDialog: React.FC<QuizHelperFunctionalityDialogProps
             </Card>
 
             {/* Feature 2: Multiple Question Types */}
-            <Card sx={{ p: 2, bgcolor: 'secondary.lighter', border: '1px solid', borderColor: 'secondary.light' }}>
+            <Card sx={{ 
+              p: 2, 
+              bgcolor: 'secondary.lighter', 
+              border: '1px solid', 
+              borderColor: 'secondary.light',
+              boxShadow: (theme) => theme.palette.mode === 'dark' ? 2 : 1,
+              '&:hover': {
+                boxShadow: (theme) => theme.palette.mode === 'dark' ? 4 : 2
+              }
+            }}>
               <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
                 <QuizIcon sx={{ mr: 1, color: 'secondary.main' }} />
-                <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+                <Typography variant="subtitle1" sx={{ fontWeight: 600, color: 'secondary.dark' }}>
                   <FormattedMessage 
                     id="quizHelper.dialog.feature.questionTypes.title" 
                     defaultMessage="Multiple Question Types"
@@ -130,10 +166,19 @@ const QuizHelperFunctionalityDialog: React.FC<QuizHelperFunctionalityDialogProps
             </Card>
 
             {/* Feature 3: AI-Powered Evaluation */}
-            <Card sx={{ p: 2, bgcolor: 'success.lighter', border: '1px solid', borderColor: 'success.light' }}>
+            <Card sx={{ 
+              p: 2, 
+              bgcolor: 'success.lighter', 
+              border: '1px solid', 
+              borderColor: 'success.light',
+              boxShadow: (theme) => theme.palette.mode === 'dark' ? 2 : 1,
+              '&:hover': {
+                boxShadow: (theme) => theme.palette.mode === 'dark' ? 4 : 2
+              }
+            }}>
               <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
                 <CheckCircleIcon sx={{ mr: 1, color: 'success.main' }} />
-                <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+                <Typography variant="subtitle1" sx={{ fontWeight: 600, color: 'success.dark' }}>
                   <FormattedMessage 
                     id="quizHelper.dialog.feature.aiEvaluation.title" 
                     defaultMessage="AI-Powered Evaluation"
@@ -149,10 +194,19 @@ const QuizHelperFunctionalityDialog: React.FC<QuizHelperFunctionalityDialogProps
             </Card>
 
             {/* Feature 4: Advanced Processing */}
-            <Card sx={{ p: 2, bgcolor: 'warning.lighter', border: '1px solid', borderColor: 'warning.light' }}>
+            <Card sx={{ 
+              p: 2, 
+              bgcolor: 'warning.lighter', 
+              border: '1px solid', 
+              borderColor: 'warning.light',
+              boxShadow: (theme) => theme.palette.mode === 'dark' ? 2 : 1,
+              '&:hover': {
+                boxShadow: (theme) => theme.palette.mode === 'dark' ? 4 : 2
+              }
+            }}>
               <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
                 <LightbulbIcon sx={{ mr: 1, color: 'warning.main' }} />
-                <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+                <Typography variant="subtitle1" sx={{ fontWeight: 600, color: 'warning.dark' }}>
                   <FormattedMessage 
                     id="quizHelper.dialog.feature.advancedProcessing.title" 
                     defaultMessage="Advanced Processing"
@@ -268,9 +322,14 @@ const QuizHelperFunctionalityDialog: React.FC<QuizHelperFunctionalityDialogProps
                 bgcolor: 'success.lighter', 
                 borderRadius: 1,
                 border: '1px solid',
-                borderColor: 'success.light'
+                borderColor: 'success.light',
+                boxShadow: (theme) => theme.palette.mode === 'dark' ? 1 : 0,
+                '&:hover': {
+                  bgcolor: 'success.light',
+                  boxShadow: (theme) => theme.palette.mode === 'dark' ? 2 : 1
+                }
               }}>
-                <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                <Typography variant="body2" sx={{ fontWeight: 500, color: 'success.dark' }}>
                   <FormattedMessage 
                     id={benefit.id}
                     defaultMessage={benefit.default}
@@ -282,11 +341,25 @@ const QuizHelperFunctionalityDialog: React.FC<QuizHelperFunctionalityDialogProps
         </Box>
       </DialogContent>
 
-      <DialogActions sx={{ p: 3, pt: 1 }}>
+      <DialogActions sx={{ 
+        p: 3, 
+        pt: 1,
+        borderTop: '1px solid',
+        borderColor: 'divider',
+        bgcolor: (theme) => theme.palette.mode === 'dark' 
+          ? 'rgba(255, 255, 255, 0.02)' 
+          : 'rgba(0, 0, 0, 0.02)'
+      }}>
         <Button 
           onClick={onClose}
           variant="contained"
-          sx={{ minWidth: 120 }}
+          sx={{ 
+            minWidth: 120,
+            boxShadow: (theme) => theme.palette.mode === 'dark' ? 2 : 1,
+            '&:hover': {
+              boxShadow: (theme) => theme.palette.mode === 'dark' ? 4 : 2
+            }
+          }}
         >
           <FormattedMessage 
             id="quizHelper.dialog.getStarted" 

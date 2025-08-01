@@ -543,6 +543,9 @@
   "menu.home.homepage": "ホームページ",
   "menu.home.general": "一般",
   "menu.workspace.general": "一般",
+  "menu.workspace.avatar": "アバター",
+  "menu.workspace.workspaceSettings": "ワークスペース設定",
+  "menu.workspace.workspaceGeneralSettings": "一般設定",
 
   "notifications.title": "通知",
   "notifications.empty": "通知がありません",
@@ -618,6 +621,7 @@
   "titleBar.topic.workspace": "ワークスペース",
   "titleBar.topic.settings": "設定",
   "titleBar.topic.file": "ファイル",
+  "titleBar.topic.docs": "ドキュメント",
   "titleBar.topic.playground": "プレイグラウンド",
   "titleBar.topic.calendar": "カレンダー",
 

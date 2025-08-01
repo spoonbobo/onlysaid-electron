@@ -134,12 +134,26 @@ export const useTopicStore = create<TopicStore>()(
       },
 
       addContext: (context) =>
-        set((state) => ({
-          contexts: [...state.contexts, {
-            ...context,
-            id: context.id || `${context.name}:${context.type}`
-          }]
-        })),
+        set((state) => {
+          // Check if context already exists to prevent duplicates
+          const contextId = context.id || `${context.name}:${context.type}`;
+          const existingContext = state.contexts.find(
+            (c) => (c.id === contextId) || 
+                   (c.name === context.name && c.type === context.type)
+          );
+          
+          // If context already exists, don't add it again
+          if (existingContext) {
+            return state;
+          }
+          
+          return {
+            contexts: [...state.contexts, {
+              ...context,
+              id: contextId
+            }]
+          };
+        }),
 
       removeContext: (context) =>
         set((state) => ({

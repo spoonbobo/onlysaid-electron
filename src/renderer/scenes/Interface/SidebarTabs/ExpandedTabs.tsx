@@ -125,35 +125,19 @@ function ExpandedTabs({ onCollapse, onAgentToggle, agentOverlayVisible = false, 
     }
   }, [user, setSelectedContext, removeContext, contexts]);
 
-  useEffect(() => {
-    if (!user) return;
-
-    workspaces.forEach(workspace => {
-      // Skip workspaces without valid names to prevent "unnamed workspace" spam
-      if (!workspace.name || workspace.name.trim().length === 0) {
-        console.warn(`Skipping workspace ${workspace.id} - missing name`);
-        return;
-      }
-
-      const existingContext = contexts.find(
-        context => context.type === "workspace" && context.id === workspace.id
-      );
-
-      if (!existingContext) {
-        addContext({
-          id: workspace.id,
-          name: workspace.name.toLowerCase(),
-          type: "workspace"
-        });
-      }
-    });
-  }, [workspaces, contexts, addContext, user]);
+  // Note: Workspace context management is handled by SidebarTabs component
+  // to avoid duplicate context creation when both components are mounted
 
   const WorkspaceContexts = user
-    ? contexts.filter(context =>
-      context.type === "workspace" &&
-      !(context.name === "workspace" && context.type === "workspace")
-    )
+    ? contexts
+        .filter(context =>
+          context.type === "workspace" &&
+          !(context.name === "workspace" && context.type === "workspace")
+        )
+        .filter((context, index, array) => {
+          // Deduplicate by workspace ID to prevent duplicate keys
+          return array.findIndex(ctx => ctx.id === context.id) === index;
+        })
     : [];
 
   useEffect(() => {
@@ -540,7 +524,7 @@ function ExpandedTabs({ onCollapse, onAgentToggle, agentOverlayVisible = false, 
                 {/* Icon area */}
                 <Box
                   sx={{
-                    width: 56, // Reduced width since we have outer padding
+                    width: 56,
                     display: "flex",
                     justifyContent: "center",
                     alignItems: "center",
@@ -606,22 +590,12 @@ function ExpandedTabs({ onCollapse, onAgentToggle, agentOverlayVisible = false, 
                   >
                     {displayName}
                   </Typography>
-                  {workspaceContext.id && (
-                    <Typography
-                      variant="caption"
-                      noWrap
-                      sx={{
-                        color: "text.secondary",
-                        fontSize: '0.75rem'
-                      }}
-                    >
-                      {workspaceContext.id.slice(0, 8)}
-                    </Typography>
-                  )}
                 </Box>
               </Box>
             );
           })}
+
+          {user && <Divider sx={{ my: 1 }} />}
 
           {/* Add Workspace */}
           {user && (
@@ -640,7 +614,7 @@ function ExpandedTabs({ onCollapse, onAgentToggle, agentOverlayVisible = false, 
             >
               <Box
                 sx={{
-                  width: 56, // Reduced width since we have outer padding
+                  width: 56,
                   display: "flex",
                   justifyContent: "center",
                   alignItems: "center",
@@ -655,11 +629,16 @@ function ExpandedTabs({ onCollapse, onAgentToggle, agentOverlayVisible = false, 
                   <AddIcon />
                 </IconButton>
               </Box>
-              <Box sx={{ flex: 1, overflow: "hidden" }}>
+              
+              <Box sx={{ 
+                flex: 1,
+                overflow: "hidden"
+              }}>
                 <Typography
                   variant="body2"
                   noWrap
                   sx={{
+                    fontWeight: 400,
                     color: "text.primary"
                   }}
                 >
@@ -668,9 +647,6 @@ function ExpandedTabs({ onCollapse, onAgentToggle, agentOverlayVisible = false, 
               </Box>
             </Box>
           )}
-
-          {/* Only show divider if user is logged in (has access to Calendar/Admin) */}
-          {user && <Divider />}
 
           {/* Calendar */}
           {user && (
@@ -689,7 +665,7 @@ function ExpandedTabs({ onCollapse, onAgentToggle, agentOverlayVisible = false, 
             >
               <Box
                 sx={{
-                  width: 56, // Reduced width since we have outer padding
+                  width: 56,
                   display: "flex",
                   justifyContent: "center",
                   alignItems: "center",
@@ -716,7 +692,11 @@ function ExpandedTabs({ onCollapse, onAgentToggle, agentOverlayVisible = false, 
                   <CalendarTodayIcon />
                 </IconButton>
               </Box>
-              <Box sx={{ flex: 1, overflow: "hidden" }}>
+              
+              <Box sx={{ 
+                flex: 1,
+                overflow: "hidden"
+              }}>
                 <Typography
                   variant="body2"
                   noWrap
@@ -748,7 +728,7 @@ function ExpandedTabs({ onCollapse, onAgentToggle, agentOverlayVisible = false, 
             >
               <Box
                 sx={{
-                  width: 56, // Reduced width since we have outer padding
+                  width: 56,
                   display: "flex",
                   justifyContent: "center",
                   alignItems: "center",
@@ -775,7 +755,11 @@ function ExpandedTabs({ onCollapse, onAgentToggle, agentOverlayVisible = false, 
                   <AdminPanelSettingsIcon />
                 </IconButton>
               </Box>
-              <Box sx={{ flex: 1, overflow: "hidden" }}>
+              
+              <Box sx={{ 
+                flex: 1,
+                overflow: "hidden"
+              }}>
                 <Typography
                   variant="body2"
                   noWrap
@@ -791,16 +775,22 @@ function ExpandedTabs({ onCollapse, onAgentToggle, agentOverlayVisible = false, 
           )}
         </Box>
 
-        {/* UserInfoBar at bottom */}
-        <Box sx={{ borderTop: "1px solid", borderColor: "divider" }}>
-          <UserInfoBar 
-            onAgentToggle={onAgentToggle}
-            agentOverlayVisible={agentOverlayVisible}
-          />
-        </Box>
+        {/* User Info Bar at bottom */}
+        {user && (
+          <Box sx={{ 
+            borderTop: '1px solid',
+            borderColor: 'divider',
+            pt: 1,
+            px: 0 // Remove padding since UserInfoBar has its own
+          }}>
+            <UserInfoBar 
+              onAgentToggle={onAgentToggle}
+              agentOverlayVisible={agentOverlayVisible}
+            />
+          </Box>
+        )}
       </Box>
 
-      {/* Existing menus and dialogs */}
       <Menu
         anchorEl={menuAnchorEl}
         open={Boolean(menuAnchorEl)}

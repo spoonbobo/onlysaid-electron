@@ -262,6 +262,9 @@
   "menu.home.homepage": "Homepage",
   "menu.home.general": "General",
   "menu.workspace.general": "General",
+  "menu.workspace.avatar": "Avatar",
+  "menu.workspace.workspaceSettings": "Workspace Settings",
+  "menu.workspace.workspaceGeneralSettings": "General Settings",
 
   "settings.general": "General",
   "settings.user": "User",
@@ -702,6 +705,7 @@
   "titleBar.topic.workspace": "Workspace",
   "titleBar.topic.settings": "Settings",
   "titleBar.topic.file": "File",
+  "titleBar.topic.docs": "Documentation",
   "titleBar.topic.playground": "Playground",
   "titleBar.topic.calendar": "Calendar",
   "titleBar.menu.file": "File",
