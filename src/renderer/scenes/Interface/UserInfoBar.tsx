@@ -2,7 +2,7 @@ import { Box, Avatar, Typography, IconButton } from "@mui/material";
 import SettingsIcon from "@mui/icons-material/Settings";
 import { useUserStore } from "@/renderer/stores/User/UserStore";
 import { IUser } from "@/../../types/User/User";
-import { FormattedMessage } from "react-intl";
+import { FormattedMessage, useIntl } from "react-intl";
 import { useTopicStore } from "@/renderer/stores/Topic/TopicStore";
 import AgentTaskToggle from "../Main/Chat/ChatInput/ActionButtons/AgentTaskToggle";
 
@@ -12,10 +12,11 @@ interface UserInfoBarProps {
 }
 
 export default function UserInfoBar({ onAgentToggle, agentOverlayVisible = false }: UserInfoBarProps) {
+  const intl = useIntl();
   const user: IUser | null = useUserStore((state) => state.user);
   const setSelectedContext = useTopicStore((state) => state.setSelectedContext);
 
-  const displayName = user?.username || "Guest User";
+  const displayName = user?.username || intl.formatMessage({ id: "user.guest", defaultMessage: "Guest User" });
   const status = user === null ? "offline" : "online";
   const userAvatarSrc = user?.avatar || "";
   const isOffline = status === "offline";

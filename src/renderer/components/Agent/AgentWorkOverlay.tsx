@@ -98,7 +98,7 @@ function AgentModelSelector() {
   return (
     <>
       <Chip
-        label={modelName || "Select Model"}
+        label={modelName || intl.formatMessage({ id: "chat.selectModel" })}
         onClick={handleMenuOpen}
         deleteIcon={<ExpandMoreIcon fontSize="small" />}
         onDelete={handleMenuOpen}

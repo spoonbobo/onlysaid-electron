@@ -1,5 +1,5 @@
 import { ipcMain } from 'electron';
-import { LightRAGService } from '@/service/knowledge_base/lightrag_kb';
+import { LightRAGService } from '../../../service/knowledge_base/lightrag_kb';
 import {
   IKnowledgeBase,
   IKnowledgeBaseRegisterArgs,
@@ -38,9 +38,35 @@ interface IKBScanIPCArgs {
   kbId: string;
 }
 
-const KB_BASE_URL = process.env.KB_BASE_URL || 'https://lightrag.onlysaid.com';
+const KB_BASE_URL = process.env.KB_BASE_URL || 'http://localhost:9621';
 console.log('KB_BASE_URL', KB_BASE_URL);
 const kbService = new LightRAGService(KB_BASE_URL);
+
+// Add health check for LightRAG service
+async function checkLightRAGHealth() {
+  try {
+    console.log('🏥 Checking LightRAG service health...');
+    console.log('🔗 Testing URL:', `${KB_BASE_URL}/health`);
+    
+    const health = await kbService.getHealth();
+    console.log('✅ LightRAG service is healthy:', health);
+    return true;
+  } catch (error: any) {
+    console.error('❌ LightRAG service health check failed:', error.message);
+    console.error('🔗 Attempted URL:', `${KB_BASE_URL}/health`);
+    
+    // More detailed error information
+    if (error.code === 'ECONNREFUSED') {
+      console.error('🚫 Connection refused - service may not be running');
+    } else if (error.code === 'ENOTFOUND') {
+      console.error('🌐 DNS resolution failed - check hostname');
+    } else if (error.response?.status) {
+      console.error(`📊 HTTP ${error.response.status} - ${error.response.statusText}`);
+    }
+    
+    return false;
+  }
+}
 
 function handleAxiosError(error: any, context: string, method?: string, url?: string, requestData?: any): Error {
   if (axios.isAxiosError(error)) {
@@ -62,6 +88,18 @@ function handleAxiosError(error: any, context: string, method?: string, url?: st
 }
 
 export function initializeKnowledgeBaseHandlers(): void {
+  // Run health check on initialization
+  checkLightRAGHealth().then(isHealthy => {
+    if (!isHealthy) {
+      console.warn('⚠️ LightRAG service is not available. Document upload and knowledge base features may not work.');
+    }
+  });
+
+  // Add health check handler
+  ipcMain.handle('kb:health-check', async () => {
+    return await checkLightRAGHealth();
+  });
+
   ipcMain.handle('kb:list', async (event, args: IKBListIPCArgs) => {
     const { workspaceId, token } = args;
     if (!token) {
@@ -484,5 +522,116 @@ export function initializeKnowledgeBaseHandlers(): void {
   // ✅ NEW: Add KB URL handler
   ipcMain.handle('kb:get-url', async () => {
     return KB_BASE_URL;
+  });
+
+  // ✅ NEW: Document Management Handlers
+  ipcMain.handle('kb:get-documents', async (event, args: IKBScanIPCArgs) => {
+    const { workspaceId, kbId, token } = args;
+    if (!token) {
+      console.error(`Error getting documents for KB ${kbId}: Token is missing`);
+      throw new Error('Authentication token is required.');
+    }
+    
+    try {
+      console.log(`Getting documents for KB: ${kbId} in workspace ${workspaceId}`);
+      
+      // Use the existing listDocuments method and transform the response
+      const documents = await kbService.listDocuments();
+      
+      // Transform to match expected structure
+      const response = {
+        documents: {
+          PROCESSED: documents.map(doc => ({
+            file_path: doc.id || doc.source || doc.path || 'unknown',
+            status: 'PROCESSED' as const,
+            total_chunks: doc.chunks?.length || 0,
+            processed_chunks: doc.chunks?.length || 0,
+            failed_chunks: 0,
+            last_modified: doc.last_modified || new Date().toISOString(),
+            file_size: doc.size || 0
+          })),
+          PENDING: [],
+          PROCESSING: [],
+          FAILED: []
+        }
+      };
+      
+      console.log(`Documents retrieved successfully for KB ${kbId}:`, documents.length, 'documents');
+      return response;
+    } catch (error) {
+      console.error(`Error getting documents for KB ${kbId}:`, error);
+      throw handleAxiosError(
+        error,
+        `getting documents for KB ${kbId}`,
+        'GET',
+        `${KB_BASE_URL}/documents`,
+        args
+      );
+    }
+  });
+
+  ipcMain.handle('kb:upload-document', async (event, args: { workspaceId: string; kbId: string; token: string; file: any; onProgress?: (progress: number) => void }) => {
+    const { workspaceId, kbId, token, file, onProgress } = args;
+    if (!token) {
+      console.error(`Error uploading document to KB ${kbId}: Token is missing`);
+      throw new Error('Authentication token is required.');
+    }
+    
+    try {
+      console.log(`Uploading document ${file.name} to KB: ${kbId} in workspace ${workspaceId}`);
+      
+      // Simulate progress updates
+      const progressCallback = onProgress || (() => {});
+      progressCallback(25);
+      
+      // Create a File-like object for the LightRAG service
+      const fileBlob = new File([file.buffer || file.data], file.name, { type: file.type || 'application/octet-stream' });
+      
+      progressCallback(50);
+      
+      // Use the existing insertFile method
+      const response = await kbService.insertFile(fileBlob);
+      
+      progressCallback(100);
+      console.log(`Document ${file.name} uploaded successfully to KB ${kbId}`);
+      return { status: 'success', message: `File ${file.name} uploaded successfully`, data: response };
+    } catch (error) {
+      console.error(`Error uploading document ${file.name} to KB ${kbId}:`, error);
+      throw handleAxiosError(
+        error,
+        `uploading document ${file.name} to KB ${kbId}`,
+        'POST',
+        `${KB_BASE_URL}/documents/upload`,
+        { fileName: file.name, kbId, workspaceId }
+      );
+    }
+  });
+
+  ipcMain.handle('kb:delete-document', async (event, args: { workspaceId: string; kbId: string; token: string; filePath: string }) => {
+    const { workspaceId, kbId, token, filePath } = args;
+    if (!token) {
+      console.error(`Error deleting document from KB ${kbId}: Token is missing`);
+      throw new Error('Authentication token is required.');
+    }
+    
+    try {
+      console.log(`Deleting document ${filePath} from KB: ${kbId} in workspace ${workspaceId}`);
+      
+      // Extract document ID from filePath (if needed)
+      const docId = filePath.split('/').pop() || filePath;
+      const response = await kbService.deleteDocument(docId);
+      
+      console.log(`Document ${filePath} deleted successfully from KB ${kbId}`);
+      return { status: 'success', message: `Document ${filePath} deleted successfully`, data: response };
+    } catch (error) {
+      console.error(`Error deleting document ${filePath} from KB ${kbId}:`, error);
+      throw handleAxiosError(
+        error,
+        `deleting document ${filePath} from KB ${kbId}`,
+        'DELETE',
+        `${KB_BASE_URL}/documents`,
+        { filePath, kbId, workspaceId }
+      );
+    }
   });
 }

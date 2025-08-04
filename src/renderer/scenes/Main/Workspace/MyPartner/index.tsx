@@ -1,7 +1,9 @@
 import { Box, Alert, Typography } from "@mui/material";
 import { useIntl } from "react-intl";
 import { useTopicStore } from "@/renderer/stores/Topic/TopicStore";
-import CourseworkHelper from "./CourseworkHelper";
+import AssignmentHelper from "./AssignmentHelper";
+import QuizHelper from "./QuizHelper";
+import ResearchHelper from "./ResearchHelper";
 
 function MyPartner() {
   const intl = useIntl();
@@ -39,8 +41,15 @@ function MyPartner() {
 
   const renderPartnerService = () => {
     switch (selectedPartnerService) {
+      case 'assignment':
+        return <AssignmentHelper workspaceId={workspaceId || ''} />;
+      case 'quiz-helper':
+        return <QuizHelper workspaceId={workspaceId || ''} />;
+      case 'research':
+        return <ResearchHelper workspaceId={workspaceId || ''} />;
+      // Keep backward compatibility for old coursework-helper
       case 'coursework-helper':
-        return <CourseworkHelper workspaceId={workspaceId || ''} />;
+        return <QuizHelper workspaceId={workspaceId || ''} />;
       default:
         return (
           <Box sx={{ p: 3 }}>
@@ -56,11 +65,7 @@ function MyPartner() {
   };
 
   return (
-    <Box sx={{ 
-      height: "100%",
-      overflow: "auto",
-      bgcolor: "background.default"
-    }}>
+    <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
       {renderPartnerService()}
     </Box>
   );

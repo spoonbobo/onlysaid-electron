@@ -57,8 +57,43 @@ export class LightRAGService {
   }
 
   async listDocuments(): Promise<any[]> {
-    const response = await this.instance.get('/documents');
-    return response.data;
+    try {
+      console.log('📄 Calling LightRAG /documents endpoint:', `${this.baseURL}/documents`);
+      const response = await this.instance.get('/documents');
+      console.log('📄 LightRAG documents response:', response.data);
+      
+      // Ensure we always return an array
+      if (!response.data) {
+        console.warn('⚠️ LightRAG returned null/undefined documents data');
+        return [];
+      }
+      
+      // LightRAG returns {statuses: {processed: [...], failed: [...], ...}}
+      // Extract the processed documents array
+      if (response.data.statuses && response.data.statuses.processed && Array.isArray(response.data.statuses.processed)) {
+        console.log('📄 Extracted processed documents:', response.data.statuses.processed.length);
+        return response.data.statuses.processed;
+      }
+      
+      // Fallback: if it's already an array (for backward compatibility)
+      if (Array.isArray(response.data)) {
+        return response.data;
+      }
+      
+      console.warn('⚠️ LightRAG response does not contain expected structure:', response.data);
+      return [];
+    } catch (error: any) {
+      console.error('❌ Error calling LightRAG /documents endpoint:', error.message);
+      console.error('🔗 URL attempted:', `${this.baseURL}/documents`);
+      
+      if (error.response) {
+        console.error('📊 Response status:', error.response.status);
+        console.error('📊 Response data:', error.response.data);
+      }
+      
+      // Return empty array on error instead of throwing
+      return [];
+    }
   }
 
   async deleteDocument(docId: string): Promise<any> {
@@ -245,8 +280,41 @@ export class LightRAGService {
     return this.getHealth();
   }
 
-  async viewKnowledgeBaseStructure(workspaceId: string, kbId?: string): Promise<any[]> {
-    return this.listDocuments();
+  async viewKnowledgeBaseStructure(workspaceId: string, kbId?: string): Promise<{
+    dataSources: any[];
+    folderStructures: Record<string, any>;
+    documents: Record<string, any>;
+    statuses?: { processed: any[] };
+  }> {
+    try {
+      const processedDocuments = await this.listDocuments();
+      console.log('📄 LightRAG processed documents:', processedDocuments.length, 'documents');
+      
+      // Transform the response to match the expected frontend structure
+      const result: {
+        dataSources: any[];
+        folderStructures: Record<string, any>;
+        documents: Record<string, any>;
+        statuses: { processed: any[] };
+      } = {
+        dataSources: [],
+        folderStructures: {},
+        documents: {},
+        statuses: {
+          processed: processedDocuments
+        }
+      };
+      
+      // If we have a specific kbId, organize documents under that ID
+      if (kbId && processedDocuments.length > 0) {
+        result.documents[kbId] = processedDocuments;
+      }
+      
+      return result;
+    } catch (error: any) {
+      console.error('❌ Error in viewKnowledgeBaseStructure:', error);
+      throw error;
+    }
   }
 
   async updateKnowledgeBaseStatus(kbData: IKnowledgeBase): Promise<any> {

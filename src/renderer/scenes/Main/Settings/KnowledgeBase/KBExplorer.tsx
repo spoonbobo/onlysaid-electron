@@ -80,8 +80,8 @@ const KBExplorer: React.FC<KBExplorerProps> = ({
   const [kbStructureData, setKbStructureData] = useState<any>(null);
   const [isLoadingStructure, setIsLoadingStructure] = useState(false);
 
-  // Add a refresh trigger state
-  const [refreshTrigger, setRefreshTrigger] = useState(0);
+  // Remove the refresh trigger state - it's causing infinite loops
+  // const [refreshTrigger, setRefreshTrigger] = useState(0);
 
   const currentWorkspaceId = useMemo(() => {
     return selectedContext?.type === "workspace" ? selectedContext.id : undefined;
@@ -93,29 +93,37 @@ const KBExplorer: React.FC<KBExplorerProps> = ({
   useEffect(() => {
     if (currentWorkspaceId && selectedKbId) {
       setIsLoadingStructure(true);
-      viewKnowledgeBaseStructure(currentWorkspaceId, selectedKbId)
-        .then((result) => {
-          console.log('KB Structure data:', result);
-          setKbStructureData(result);
-        })
-        .catch((err) => {
-          console.error('Error fetching KB structure:', err);
-          setKbStructureData(null);
-        })
-        .finally(() => {
-          setIsLoadingStructure(false);
-        });
+      
+      // Add a small delay to debounce rapid calls
+      const timeoutId = setTimeout(() => {
+        viewKnowledgeBaseStructure(currentWorkspaceId, selectedKbId)
+          .then((result) => {
+            setKbStructureData(result);
+          })
+          .catch((err) => {
+            console.error('Error fetching KB structure:', err);
+            setKbStructureData(null);
+          })
+          .finally(() => {
+            setIsLoadingStructure(false);
+          });
+      }, 100); // 100ms debounce
+
+      return () => {
+        clearTimeout(timeoutId);
+        setIsLoadingStructure(false);
+      };
     } else {
       setKbStructureData(null);
+      setIsLoadingStructure(false);
     }
-  }, [currentWorkspaceId, selectedKbId, viewKnowledgeBaseStructure, refreshTrigger]); // Add refreshTrigger
+  }, [currentWorkspaceId, selectedKbId]); // Removed refreshTrigger to prevent infinite loop
 
   // Use parent's refresh function, but also trigger internal refresh
   const handleRefresh = useCallback(() => {
-    setRefreshTrigger(prev => prev + 1); // This will trigger the useEffect for internal data
-    
-    // Note: Don't call toast here since parent's onRefreshStructure already shows toast
-  }, []);
+    // Instead of using a trigger, directly call the parent refresh
+    onRefreshStructure();
+  }, [onRefreshStructure]);
 
   // Process documents from the raw structure data
   const documents = useMemo(() => {
@@ -200,228 +208,203 @@ const KBExplorer: React.FC<KBExplorerProps> = ({
     return lastSlash >= 0 ? filePath.substring(lastSlash + 1) : filePath;
   };
 
-  if (isLoading || isLoadingStructure) {
-    return (
-      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', p: 2, flexGrow: 1 }}>
-        <CircularProgress size={24} sx={{ mr: 1 }} />
-        <Typography variant="body2">
-          <FormattedMessage id="kbExplorer.loadingFiles" defaultMessage="Loading files..." />
-        </Typography>
-      </Box>
-    );
-  }
-
-  if (!currentWorkspaceId || !selectedKbId) {
-    return (
-      <Paper
-        elevation={0}
-        sx={{
-          p: 2,
-          backgroundColor: 'transparent',
-          ...(sx || {}),
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          flexGrow: 1,
-        }}
-      >
-        <Typography variant="body2" color="text.secondary">
-          <FormattedMessage 
-            id="kbExplorer.noSelection" 
-            defaultMessage="Select a knowledge base to explore its files" 
-          />
-        </Typography>
-      </Paper>
-    );
-  }
-
-  if (documents.length === 0) {
-    return (
-      <Paper
-        elevation={0}
-        sx={{
-          p: 2,
-          backgroundColor: 'transparent',
-          ...(sx || {}),
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          flexGrow: 1,
-        }}
-      >
-        <Box sx={{ textAlign: 'center' }}>
-          <FolderIcon sx={{ fontSize: 48, color: 'text.disabled', mb: 1 }} />
-          <Typography variant="body2" color="text.secondary">
-            <FormattedMessage 
-              id="kbExplorer.noFiles" 
-              defaultMessage="No files found in this knowledge base" 
-            />
-          </Typography>
-        </Box>
-      </Paper>
-    );
-  }
-
   return (
-    <Paper
-      elevation={0}
+    <Box 
       sx={{
-        backgroundColor: 'transparent',
-        ...(sx || {}),
+        ...sx,
         display: 'flex',
         flexDirection: 'column',
-        flexGrow: 1,
-        overflow: 'hidden',
+        overflow: 'hidden'
       }}
     >
-      {/* Header with title and action buttons */}
-      <Box sx={{ mb: 2, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <Typography variant="h6">
-            <FormattedMessage id="settings.kb.explorerSection.title" defaultMessage="KB Explorer" />
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
+      {/* Loading State */}
+      {(isLoading || isLoadingStructure) && (
+        <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', p: 4 }}>
+          <CircularProgress />
+          <Typography variant="body2" sx={{ ml: 2 }}>
             <FormattedMessage 
-              id="kbExplorer.fileCount" 
-              defaultMessage="{count} {count, plural, one {file} other {files}} found"
-              values={{ count: documents.length }}
+              id="kbExplorer.loadingFiles" 
+              defaultMessage="Loading files..."
             />
           </Typography>
         </Box>
-        
-        <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'center' }}>
-          <Tooltip title={intl.formatMessage({ id: "settings.kb.explorer.refresh", defaultMessage: "Refresh File List" })}>
-            <span>
-              <IconButton size="small" color="info" onClick={handleRefresh} disabled={isLoading || isLoadingStructure}>
-                <RefreshIcon />
-              </IconButton>
-            </span>
-          </Tooltip>
-          <Tooltip title={intl.formatMessage({ id: "kbExplorer.scanDocuments", defaultMessage: "Scan for New Documents" })}>
-            <span>
-              <IconButton size="small" color="secondary" onClick={onScanDocuments} disabled={isLoading}>
-                <SearchIcon />
-              </IconButton>
-            </span>
-          </Tooltip>
-        </Box>
-      </Box>
+      )}
 
-      <TableContainer sx={{ flexGrow: 1, overflow: 'auto' }}>
-        <Table stickyHeader size="small">
-          <TableHead>
-            <TableRow>
-              <TableCell sx={{ width: 40 }}>
-                {/* Icon column */}
-              </TableCell>
-              <TableCell>
-                <FormattedMessage id="kbExplorer.table.name" defaultMessage="Name" />
-              </TableCell>
-              <TableCell>
-                <FormattedMessage id="kbExplorer.table.path" defaultMessage="Path" />
-              </TableCell>
-              <TableCell>
-                <FormattedMessage id="kbExplorer.table.type" defaultMessage="Type" />
-              </TableCell>
-              <TableCell>
-                <FormattedMessage id="kbExplorer.table.size" defaultMessage="Size" />
-              </TableCell>
-              <TableCell>
-                <FormattedMessage id="kbExplorer.table.status" defaultMessage="Status" />
-              </TableCell>
-              <TableCell sx={{ width: 60 }}>
-                <FormattedMessage id="kbExplorer.table.actions" defaultMessage="Actions" />
-              </TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {documents.map((doc: any) => {
-              const fileName = getFileName(doc.filePath);
-              const directoryPath = getDirectoryPath(doc.filePath);
-              const extension = getFileExtension(doc.filePath);
-              
-              return (
-                <TableRow 
-                  key={doc.id}
-                  hover
-                  sx={{ 
-                    '&:hover': { 
-                      backgroundColor: 'action.hover' 
-                    }
-                  }}
-                >
-                  <TableCell sx={{ padding: '8px' }}>
-                    {getFileIcon(doc.filePath)}
-                  </TableCell>
-                  
+      {/* No Selection State */}
+      {!selectedKbId && (
+        <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', p: 4 }}>
+          <Typography variant="body2" color="text.secondary">
+            <FormattedMessage 
+              id="kbExplorer.noSelection" 
+              defaultMessage="Select a knowledge base to browse its files"
+            />
+          </Typography>
+        </Box>
+      )}
+
+      {/* Header with title and action buttons */}
+      {selectedKbId && !isLoading && !isLoadingStructure && (
+        <Box sx={{ mb: 2, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Typography variant="h6">
+              <FormattedMessage id="settings.kb.explorerSection.title" defaultMessage="KB Explorer" />
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              <FormattedMessage 
+                id="kbExplorer.fileCount" 
+                defaultMessage="{count} {count, plural, one {file} other {files}} found"
+                values={{ count: documents.length }}
+              />
+            </Typography>
+          </Box>
+          
+          <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'center' }}>
+            <Tooltip title={intl.formatMessage({ id: "settings.kb.explorer.refresh", defaultMessage: "Refresh File List" })}>
+              <span>
+                <IconButton size="small" color="info" onClick={handleRefresh} disabled={isLoading || isLoadingStructure}>
+                  <RefreshIcon />
+                </IconButton>
+              </span>
+            </Tooltip>
+            <Tooltip title={intl.formatMessage({ id: "kbExplorer.scanDocuments", defaultMessage: "Scan for New Documents" })}>
+              <span>
+                <IconButton size="small" color="secondary" onClick={onScanDocuments} disabled={isLoading}>
+                  <SearchIcon />
+                </IconButton>
+              </span>
+            </Tooltip>
+          </Box>
+        </Box>
+      )}
+
+      {/* Documents Table */}
+      {selectedKbId && !isLoading && !isLoadingStructure && (
+        documents.length === 0 ? (
+          <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', p: 4 }}>
+            <FolderIcon sx={{ fontSize: 48, color: 'text.disabled', mb: 1 }} />
+            <Typography variant="body2" color="text.secondary">
+              <FormattedMessage 
+                id="kbExplorer.noFiles" 
+                defaultMessage="No files found in this knowledge base. Upload some documents to get started!" 
+              />
+            </Typography>
+          </Box>
+        ) : (
+          <TableContainer sx={{ flexGrow: 1, overflow: 'auto' }}>
+            <Table stickyHeader>
+              <TableHead>
+                <TableRow>
+                  <TableCell sx={{ width: 40, padding: '8px' }}></TableCell>
                   <TableCell>
-                    <Box>
-                      <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                        {fileName}
-                      </Typography>
-                      {doc.contentSummary && (
-                        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
-                          {doc.contentSummary.substring(0, 100)}...
-                        </Typography>
-                      )}
-                    </Box>
+                    <FormattedMessage id="kbExplorer.table.filename" defaultMessage="File Name" />
                   </TableCell>
-                  
                   <TableCell>
-                    <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.75rem' }}>
-                      {directoryPath ? formatFilePath(directoryPath) : '/'}
-                    </Typography>
+                    <FormattedMessage id="kbExplorer.table.path" defaultMessage="Path" />
                   </TableCell>
-                  
                   <TableCell>
-                    {extension && (
-                      <Chip 
-                        label={extension.toUpperCase()} 
-                        size="small" 
-                        variant="outlined"
-                        sx={{ fontSize: '0.6rem', height: 20 }}
-                      />
-                    )}
+                    <FormattedMessage id="kbExplorer.table.type" defaultMessage="Type" />
                   </TableCell>
-                  
                   <TableCell>
-                    <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.75rem' }}>
-                      {formatFileSize(doc.contentLength || 0)}
-                    </Typography>
+                    <FormattedMessage id="kbExplorer.table.size" defaultMessage="Size" />
                   </TableCell>
-                  
                   <TableCell>
-                    <Chip 
-                      label={doc.status} 
-                      size="small" 
-                      color={doc.status === 'processed' ? 'success' : 'default'}
-                      sx={{ fontSize: '0.6rem', height: 20 }}
-                    />
+                    <FormattedMessage id="kbExplorer.table.status" defaultMessage="Status" />
                   </TableCell>
-                  
-                  <TableCell>
-                    <Tooltip title={intl.formatMessage({ 
-                      id: "kbExplorer.openOriginal", 
-                      defaultMessage: "View file details" 
-                    })}>
-                      <IconButton 
-                        size="small" 
-                        onClick={() => {
-                          // Handle viewing file details
-                          console.log('File details:', doc);
-                        }}
-                      >
-                        <OpenInNewIcon fontSize="small" />
-                      </IconButton>
-                    </Tooltip>
+                  <TableCell sx={{ width: 60 }}>
+                    <FormattedMessage id="kbExplorer.table.actions" defaultMessage="Actions" />
                   </TableCell>
                 </TableRow>
-              );
-            })}
-          </TableBody>
-        </Table>
-      </TableContainer>
-    </Paper>
+              </TableHead>
+              <TableBody>
+                {documents.map((doc: any) => {
+                  const fileName = getFileName(doc.filePath);
+                  const directoryPath = getDirectoryPath(doc.filePath);
+                  const extension = getFileExtension(doc.filePath);
+                  
+                  return (
+                    <TableRow 
+                      key={doc.id}
+                      hover
+                      sx={{ 
+                        '&:hover': { 
+                          backgroundColor: 'action.hover' 
+                        }
+                      }}
+                    >
+                      <TableCell sx={{ padding: '8px' }}>
+                        {getFileIcon(doc.filePath)}
+                      </TableCell>
+                      
+                      <TableCell>
+                        <Box>
+                          <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                            {fileName}
+                          </Typography>
+                          {doc.contentSummary && (
+                            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+                              {doc.contentSummary.substring(0, 100)}...
+                            </Typography>
+                          )}
+                        </Box>
+                      </TableCell>
+                      
+                      <TableCell>
+                        <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.75rem' }}>
+                          {directoryPath ? formatFilePath(directoryPath) : '/'}
+                        </Typography>
+                      </TableCell>
+                      
+                      <TableCell>
+                        {extension && (
+                          <Chip 
+                            label={extension.toUpperCase()} 
+                            size="small" 
+                            variant="outlined"
+                            sx={{ fontSize: '0.6rem', height: 20 }}
+                          />
+                        )}
+                      </TableCell>
+                      
+                      <TableCell>
+                        <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.75rem' }}>
+                          {formatFileSize(doc.contentLength || 0)}
+                        </Typography>
+                      </TableCell>
+                      
+                      <TableCell>
+                        <Chip 
+                          label={doc.status} 
+                          size="small" 
+                          color={doc.status === 'processed' ? 'success' : 'default'}
+                          sx={{ fontSize: '0.6rem', height: 20 }}
+                        />
+                      </TableCell>
+                      
+                      <TableCell>
+                        <Tooltip title={intl.formatMessage({ 
+                          id: "kbExplorer.openOriginal", 
+                          defaultMessage: "View file details" 
+                        })}>
+                          <IconButton 
+                            size="small" 
+                            onClick={() => {
+                              // Handle viewing file details
+                              console.log('File details:', doc);
+                            }}
+                          >
+                            <OpenInNewIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        )
+      )}
+    </Box>
   );
 };
 
