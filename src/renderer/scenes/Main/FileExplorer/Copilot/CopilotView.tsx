@@ -16,9 +16,13 @@ import {
   ZoomIn as ZoomInIcon,
   ZoomOut as ZoomOutIcon,
   Save as SaveIcon,
-  FiberManualRecord as UnsavedIcon
+  FiberManualRecord as UnsavedIcon,
+  ViewStream as StructuredIcon,
+  Code as HtmlIcon,
+  TextFields as TextIcon,
+  ContentCopy as CopyIcon
 } from '@mui/icons-material';
-import DocumentPreview from '../FileRenderer/Docs';
+import FilePreview from '../FileRenderer';
 import Chat from '../../Chat';
 import { useCurrentTopicContext } from '@/renderer/stores/Topic/TopicStore';
 import { useCopilotStore } from '@/renderer/stores/Copilot/CopilotStore';
@@ -26,7 +30,6 @@ import { useChatStore } from '@/renderer/stores/Chat/ChatStore';
 import { useTopicStore } from '@/renderer/stores/Topic/TopicStore';
 import { getUserFromStore } from '@/utils/user';
 import { createCodeDiff, CodeDiff, DiffBlock, applyDiffBlock } from '@/utils/codeDiff';
-import OverlayDiff from '@/renderer/components/OverlayDiff';
 
 interface CopilotViewProps {
   // Props will be passed via context/store rather than direct props
@@ -43,6 +46,9 @@ export default function CopilotView({}: CopilotViewProps) {
   const [autoSaveTimer, setAutoSaveTimer] = useState<NodeJS.Timeout | null>(null);
   const [showInlineDiff, setShowInlineDiff] = useState(false);
   const [currentDiff, setCurrentDiff] = useState<CodeDiff | null>(null);
+  
+  // Document viewing controls
+  const [renderMode, setRenderMode] = useState<'text' | 'html' | 'structured'>('structured');
   
   const { selectedContext, setSelectedContext } = useCurrentTopicContext();
   
@@ -69,11 +75,6 @@ export default function CopilotView({}: CopilotViewProps) {
   const computedHasUnsavedChanges = useMemo(() => {
     return editedContent !== lastSavedContent && editedContent.trim().length > 0;
   }, [editedContent, lastSavedContent]);
-
-  // Calculate max height for the document area to utilize available space
-  const maxHeight = useMemo(() => {
-    return Math.max(window.innerHeight - 200, 400);
-  }, []);
 
   // Get document info from context or store and clean up name
   const contextInfo = getContextInfo();
@@ -351,8 +352,43 @@ export default function CopilotView({}: CopilotViewProps) {
   };
 
   // Font control functions
-  const handleFontSizeIncrease = () => setFontSize(prev => Math.min(prev + 2, 24));
-  const handleFontSizeDecrease = () => setFontSize(prev => Math.max(prev - 2, 10));
+  const handleFontSizeIncrease = () => {
+    const newSize = Math.min(fontSize + 2, 24);
+    setFontSize(newSize);
+    toast.success(`Font size: ${newSize}px`);
+  };
+  const handleFontSizeDecrease = () => {
+    const newSize = Math.max(fontSize - 2, 10);
+    setFontSize(newSize);
+    toast.success(`Font size: ${newSize}px`);
+  };
+
+  // Document viewing controls
+  const handleRenderModeChange = (mode: 'text' | 'html' | 'structured') => {
+    setRenderMode(mode);
+    const modeNames = { text: 'Text', html: 'HTML', structured: 'Structured' };
+    toast.success(`View mode: ${modeNames[mode]}`);
+  };
+
+
+
+  const handleCopyText = async () => {
+    if (documentData?.text) {
+      try {
+        await navigator.clipboard.writeText(documentData.text);
+        toast.success('Text copied to clipboard');
+      } catch (err) {
+        toast.error('Failed to copy text');
+      }
+    }
+  };
+
+  // Check if current document is a DOCX file
+  const isDOCXFile = (fileName: string): boolean => {
+    if (!fileName) return false;
+    const ext = fileName.toLowerCase().substring(fileName.lastIndexOf('.'));
+    return ['.docx', '.doc'].includes(ext);
+  };
   
   // Save function
   const handleSave = async () => {
@@ -360,16 +396,28 @@ export default function CopilotView({}: CopilotViewProps) {
     
     setIsSaving(true);
     try {
-      // Debug: Check if the function exists
-      console.log('Electron object:', window.electron);
-      console.log('FileSystem object:', window.electron?.fileSystem);
-      console.log('SaveDocumentText function:', window.electron?.fileSystem?.saveDocumentText);
       
-      if (!window.electron?.fileSystem?.saveDocumentText) {
-        throw new Error('saveDocumentText function is not available. Please restart the application.');
+      let result;
+      
+      if (isDOCXFile(currentDocument.name)) {
+        // Use DOCX-specific save handler with file locking retry logic
+        console.log('Saving DOCX file with enhanced handler:', currentDocument.path);
+        
+        if (!window.electron?.fileSystem?.saveDocxTextContent) {
+          throw new Error('DOCX save function is not available. Please restart the application.');
+        }
+        
+        result = await window.electron.fileSystem.saveDocxTextContent(currentDocument.path, editedContent);
+      } else {
+        // Use regular text save for other file types
+        console.log('Saving regular text file:', currentDocument.path);
+        
+        if (!window.electron?.fileSystem?.saveDocumentText) {
+          throw new Error('saveDocumentText function is not available. Please restart the application.');
+        }
+        
+        result = await window.electron.fileSystem.saveDocumentText(currentDocument.path, editedContent);
       }
-      
-      const result = await window.electron.fileSystem.saveDocumentText(currentDocument.path, editedContent);
       
       if (result?.success) {
         // Update document data to reflect the saved content
@@ -378,8 +426,17 @@ export default function CopilotView({}: CopilotViewProps) {
         toast.success('File saved successfully!');
         console.log('File saved successfully');
       } else {
-        toast.error(`Failed to save file: ${result?.error || 'Unknown error'}`);
-        console.error('Failed to save file:', result?.error || 'Unknown error');
+        // Show user-friendly error message
+        const errorMessage = result?.error || 'Unknown error';
+        toast.error(`Failed to save file: ${errorMessage}`);
+        console.error('Failed to save file:', errorMessage);
+        
+        // Show additional help for EBUSY errors
+        if (result?.errorCode === 'EBUSY') {
+          setTimeout(() => {
+            toast.info('💡 Tip: Close the file in Microsoft Word or other applications to allow saving.');
+          }, 2000);
+        }
       }
     } catch (error: any) {
       toast.error(error.message || 'An unexpected error occurred while saving');
@@ -397,12 +454,22 @@ export default function CopilotView({}: CopilotViewProps) {
     if (editedContent === lastSavedContent) return;
     
     try {
-      if (!window.electron?.fileSystem?.saveDocumentText) {
-        console.error('Auto-save failed: saveDocumentText function not available');
-        return;
-      }
+      let result;
       
-      const result = await window.electron.fileSystem.saveDocumentText(currentDocument.path, editedContent);
+      if (isDOCXFile(currentDocument.name)) {
+        // Use DOCX-specific save handler for auto-save too
+        if (!window.electron?.fileSystem?.saveDocxTextContent) {
+          console.error('Auto-save failed: DOCX save function not available');
+          return;
+        }
+        result = await window.electron.fileSystem.saveDocxTextContent(currentDocument.path, editedContent);
+      } else {
+        if (!window.electron?.fileSystem?.saveDocumentText) {
+          console.error('Auto-save failed: saveDocumentText function not available');
+          return;
+        }
+        result = await window.electron.fileSystem.saveDocumentText(currentDocument.path, editedContent);
+      }
       
       if (result?.success) {
         // Update document data to reflect the saved content
@@ -412,6 +479,10 @@ export default function CopilotView({}: CopilotViewProps) {
         console.log('Auto-saved file');
       } else {
         console.error('Auto-save failed:', result?.error || 'Unknown error');
+        // Don't show auto-save failures as prominently to avoid spam
+        if (result?.errorCode === 'EBUSY') {
+          console.log('Auto-save skipped: file is locked by another application');
+        }
       }
     } catch (error) {
       console.error('Auto-save failed:', error);
@@ -532,19 +603,65 @@ export default function CopilotView({}: CopilotViewProps) {
         </Box>
 
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+          {/* Font size controls */}
           <Tooltip title="Decrease Font Size">
             <IconButton size="small" onClick={handleFontSizeDecrease} disabled={fontSize <= 10}>
               <ZoomOutIcon />
             </IconButton>
           </Tooltip>
           
-          <Typography variant="body2" sx={{ alignSelf: 'center', minWidth: '32px', textAlign: 'center', fontSize: '11px' }}>
-            {fontSize}px
-          </Typography>
-          
           <Tooltip title="Increase Font Size">
             <IconButton size="small" onClick={handleFontSizeIncrease} disabled={fontSize >= 24}>
               <ZoomInIcon />
+            </IconButton>
+          </Tooltip>
+          
+          {/* Document controls - only show for DOCX files */}
+          {currentDocument && isDOCXFile(currentDocument.name) && (
+            <>
+              <Divider orientation="vertical" flexItem sx={{ mx: 0.5, height: 20 }} />
+              
+              {/* View mode controls */}
+              <Tooltip title="Structured View">
+                <IconButton 
+                  size="small" 
+                  onClick={() => handleRenderModeChange('structured')}
+                  color={renderMode === 'structured' ? 'primary' : 'default'}
+                >
+                  <StructuredIcon />
+                </IconButton>
+              </Tooltip>
+              
+              <Tooltip title="HTML View">
+                <IconButton 
+                  size="small" 
+                  onClick={() => handleRenderModeChange('html')}
+                  color={renderMode === 'html' ? 'primary' : 'default'}
+                >
+                  <HtmlIcon />
+                </IconButton>
+              </Tooltip>
+              
+              <Tooltip title="Text View">
+                <IconButton 
+                  size="small" 
+                  onClick={() => handleRenderModeChange('text')}
+                  color={renderMode === 'text' ? 'primary' : 'default'}
+                >
+                  <TextIcon />
+                </IconButton>
+              </Tooltip>
+              
+
+            </>
+          )}
+          
+          <Divider orientation="vertical" flexItem sx={{ mx: 0.5, height: 20 }} />
+          
+          {/* Copy text control */}
+          <Tooltip title="Copy Text">
+            <IconButton size="small" onClick={handleCopyText}>
+              <CopyIcon />
             </IconButton>
           </Tooltip>
           
@@ -588,30 +705,33 @@ export default function CopilotView({}: CopilotViewProps) {
           }}
         >
           {/* Document Content */}
-          <Box sx={{ flex: 1, overflow: 'auto', p: 2, position: 'relative' }}>
-            {/* Always show DocumentPreview */}
-            {useMemo(() => (
-              <DocumentPreview 
-                key={`${documentNode.id}-${documentNode.path}`}
-                node={documentNode} 
-                maxHeight={maxHeight}
-                fontSize={fontSize}
-                hideControls={true}
-                isEditable={true}
-                externalContent={editedContent}
-                showDiff={showInlineDiff}
-                diff={currentDiff || undefined}
-                onApplyDiffBlock={handleApplyDiffBlock}
-                onDeclineDiffBlock={handleDeclineDiffBlock}
-                onDocumentLoad={(data) => {
-                  setDocumentData(data);
-                  setEditedContent(data.text);
-                  setLastSavedContent(data.text);
-                  setCurrentFileContent(data.text);
-                }}
-                onContentChange={handleContentChange}
-              />
-            ), [documentNode.id, documentNode.path, fontSize, editedContent, showInlineDiff, currentDiff])}
+          <Box sx={{ flex: 1, overflow: 'auto', position: 'relative', height: '100%', display: 'flex', flexDirection: 'column' }}>
+            {/* Always show FilePreview (automatically routes to correct renderer) */}
+            <Box sx={{ flex: 1, height: '100%' }}>
+              {useMemo(() => (
+                <FilePreview 
+                  key={`${documentNode.id}-${documentNode.path}`}
+                  node={documentNode} 
+                  fontSize={fontSize}
+                  hideControls={true}
+                  isEditable={true}
+                  externalContent={editedContent}
+                  showDiff={showInlineDiff}
+                  diff={currentDiff || undefined}
+                  onApplyDiffBlock={handleApplyDiffBlock}
+                  onDeclineDiffBlock={handleDeclineDiffBlock}
+                  renderMode={isDOCXFile(documentNode.name) ? renderMode : undefined}
+                  onRenderModeChange={isDOCXFile(documentNode.name) ? handleRenderModeChange : undefined}
+                  onDocumentLoad={(data) => {
+                    setDocumentData(data);
+                    setEditedContent(data.text);
+                    setLastSavedContent(data.text);
+                    setCurrentFileContent(data.text);
+                  }}
+                  onContentChange={handleContentChange}
+                />
+              ), [documentNode.id, documentNode.path, fontSize, editedContent, showInlineDiff, currentDiff, renderMode])}
+            </Box>
 
             {/* Remove the separate OverlayDiff component since it's now integrated */}
           </Box>

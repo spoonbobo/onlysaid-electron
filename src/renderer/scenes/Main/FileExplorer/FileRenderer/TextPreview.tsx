@@ -24,7 +24,7 @@ import { FileNode } from '@/renderer/stores/File/FileExplorerStore';
 import { getUserTokenFromStore } from '@/utils/user';
 import { CodeDiff, DiffBlock } from '@/utils/codeDiff';
 
-interface DocumentPreviewProps {
+interface TextPreviewProps {
   node: FileNode;
   maxHeight?: number;
   fontSize?: number;
@@ -53,7 +53,7 @@ interface DocumentData {
   type: string;
 }
 
-export default function DocumentPreview({ 
+export default function TextPreview({ 
   node, 
   maxHeight = 500, 
   fontSize: externalFontSize, 
@@ -67,7 +67,7 @@ export default function DocumentPreview({
   diff,
   onApplyDiffBlock,
   onDeclineDiffBlock
-}: DocumentPreviewProps) {
+}: TextPreviewProps) {
   const [documentData, setDocumentData] = useState<DocumentData | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -86,8 +86,8 @@ export default function DocumentPreview({
   
   const token = getUserTokenFromStore();
 
-  // Check if file is a supported document
-  const isSupportedDocument = (fileName: string): { isSupported: boolean; type: string } => {
+  // Check if file is a supported text document
+  const isSupportedTextDocument = (fileName: string): { isSupported: boolean; type: string } => {
     const ext = fileName.toLowerCase().substring(fileName.lastIndexOf('.'));
     
     // Text formats
@@ -96,27 +96,27 @@ export default function DocumentPreview({
       return { isSupported: true, type: 'text' };
     }
     
-    // Microsoft Office formats
-    const officeExts = ['.docx', '.doc', '.xlsx', '.xls', '.pptx', '.ppt'];
-    if (officeExts.includes(ext)) {
-      return { isSupported: true, type: 'office' };
-    }
-    
-    // PDF format
+    // PDF format (text extraction)
     if (ext === '.pdf') {
       return { isSupported: true, type: 'pdf' };
     }
     
-    // OpenDocument formats
-    const odExts = ['.odt', '.ods', '.odp'];
-    if (odExts.includes(ext)) {
+    // OpenDocument text formats (text extraction)
+    const odTextExts = ['.odt', '.ods', '.odp'];
+    if (odTextExts.includes(ext)) {
       return { isSupported: true, type: 'opendocument' };
     }
     
-    // Rich text and other formats
+    // Rich text and web formats
     const richTextExts = ['.rtf', '.html', '.htm', '.xml'];
     if (richTextExts.includes(ext)) {
       return { isSupported: true, type: 'richtext' };
+    }
+    
+    // Legacy Office formats (Excel/PowerPoint only - Word is handled by DocxPreview)
+    const legacyOfficeExts = ['.xlsx', '.xls', '.pptx', '.ppt'];
+    if (legacyOfficeExts.includes(ext)) {
+      return { isSupported: true, type: 'office' };
     }
     
     return { isSupported: false, type: 'unknown' };
@@ -139,7 +139,7 @@ export default function DocumentPreview({
 
 
   const loadDocument = async () => {
-    const docInfo = isSupportedDocument(node.name);
+    const docInfo = isSupportedTextDocument(node.name);
     if (!docInfo.isSupported) {
       setError('Document format not supported');
       return;
@@ -246,7 +246,7 @@ export default function DocumentPreview({
   };
 
   useEffect(() => {
-    const docInfo = isSupportedDocument(node.name);
+    const docInfo = isSupportedTextDocument(node.name);
     if (docInfo.isSupported) {
       loadDocument();
     } else {
@@ -351,7 +351,7 @@ export default function DocumentPreview({
 
 
 
-  const docInfo = isSupportedDocument(node.name);
+  const docInfo = isSupportedTextDocument(node.name);
 
   if (!docInfo.isSupported) {
     return (
@@ -690,7 +690,7 @@ export default function DocumentPreview({
         <Box
           sx={{
             width: '100%',
-            height: maxHeight ? `${maxHeight - 100}px` : 'calc(100vh - 200px)',
+            flex: 1,
             minHeight: '400px',
             fontSize: `${fontSize}px`,
             lineHeight: 1.6,
@@ -743,7 +743,7 @@ export default function DocumentPreview({
         onChange={handleContentChange}
         style={{
           width: '100%',
-          height: maxHeight ? `${maxHeight - 100}px` : 'calc(100vh - 200px)',
+          flex: 1,
           minHeight: '400px',
           fontSize: `${fontSize}px`,
           lineHeight: 1.6,
@@ -762,13 +762,13 @@ export default function DocumentPreview({
   };
 
   return (
-    <Box sx={{ width: '100%', position: 'relative' }}>
+    <Box sx={{ width: '100%', height: '100%', position: 'relative' }}>
       {/* Document content */}
       <Paper 
         variant="outlined" 
         sx={{ 
           p: 3,
-          maxHeight: maxHeight,
+          height: maxHeight ? maxHeight : '100%',
           overflow: 'auto',
           bgcolor: 'background.paper',
           position: 'relative'
@@ -820,7 +820,7 @@ export default function DocumentPreview({
         )}
 
 {isEditable ? (
-  <Box sx={{ position: 'relative' }}>
+  <Box sx={{ position: 'relative', height: '100%', display: 'flex', flexDirection: 'column' }}>
     {renderDiffTextarea()}
     {/* Only show diff highlights when actually showing diff */}
     {showDiff && diff && renderDiffHighlights()}

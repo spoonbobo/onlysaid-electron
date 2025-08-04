@@ -18,7 +18,7 @@ import {
 } from '@mui/icons-material';
 import { FormattedMessage } from 'react-intl';
 import { FileNode } from '@/renderer/stores/File/FileExplorerStore';
-import DocumentPreview from '../FileRenderer/Docs';
+import TextPreview from '../FileRenderer/TextPreview';
 import Chat from '../../Chat';
 import { useCurrentTopicContext } from '@/renderer/stores/Topic/TopicStore';
 import { useCopilotStore } from '@/renderer/stores/Copilot/CopilotStore';
@@ -321,20 +321,21 @@ export default function Copilot({ node, onClose }: CopilotProps) {
           }}
         >
           {/* Document Content */}
-          <Box sx={{ flex: 1, overflow: 'auto', p: 2 }}>
-            <DocumentPreview 
-              node={node} 
-              maxHeight={Math.max(window.innerHeight - 200, 400)}
-              fontSize={fontSize}
-              hideControls={true}
-              isEditable={true}
-              onDocumentLoad={(data) => {
-                setDocumentData(data);
-                setEditedContent(data.text);
-                setLastSavedContent(data.text);
-              }}
-              onContentChange={handleContentChange}
-            />
+          <Box sx={{ flex: 1, overflow: 'auto', height: '100%', display: 'flex', flexDirection: 'column' }}>
+            <Box sx={{ flex: 1, height: '100%' }}>
+              <TextPreview 
+                node={node} 
+                fontSize={fontSize}
+                hideControls={true}
+                isEditable={true}
+                onDocumentLoad={(data) => {
+                  setDocumentData(data);
+                  setEditedContent(data.text);
+                  setLastSavedContent(data.text);
+                }}
+                onContentChange={handleContentChange}
+              />
+            </Box>
           </Box>
         </Box>
 

@@ -4,6 +4,7 @@ import path from 'path';
 import { promisify } from 'util';
 import axios from 'axios';
 import officeParser from 'officeparser';
+import { setupDocxHandlers } from './msft_docx';
 
 const readdir = promisify(fs.readdir);
 const stat = promisify(fs.stat);
@@ -11,6 +12,8 @@ const readFile = promisify(fs.readFile);
 
 // Setup all file system related IPC handlers
 export function setupFileSystemHandlers() {
+  // Setup enhanced DOCX handlers
+  setupDocxHandlers();
   // Dialog to open folder
   ipcMain.handle('folder:open-dialog', async (event) => {
     const window = BrowserWindow.fromWebContents(event.sender);

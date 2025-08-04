@@ -50,7 +50,12 @@ type FileSystemChannels =
   | 'file:create-backup'
   | 'assets:get-local-asset'
   | 'submission:read-content'
-  | 'submission:download-and-read';
+  | 'submission:download-and-read'
+  | 'docx:read-document'
+  | 'docx:write-document'
+  | 'docx:text-to-structure'
+  | 'docx:structure-to-html'
+  | 'docx:save-text-content';
 
 // Add dialog channels
 type DialogChannels = 'dialog:showSaveDialog';
@@ -497,6 +502,18 @@ const electronHandler = {
       ipcRenderer.invoke('file:save-document-text', filePath, content),
     createBackup: (filePath: string) =>
       ipcRenderer.invoke('file:create-backup', filePath),
+    
+    // Enhanced DOCX handlers
+    readDocxDocument: (filePath: string) =>
+      ipcRenderer.invoke('docx:read-document', filePath),
+    writeDocxDocument: (filePath: string, document: any) =>
+      ipcRenderer.invoke('docx:write-document', filePath, document),
+    textToDocxStructure: (textContent: string) =>
+      ipcRenderer.invoke('docx:text-to-structure', textContent),
+    structureToHtml: (structure: any[]) =>
+      ipcRenderer.invoke('docx:structure-to-html', structure),
+    saveDocxTextContent: (filePath: string, textContent: string) =>
+      ipcRenderer.invoke('docx:save-text-content', filePath, textContent),
   },
   dialog: {
     showSaveDialog: (options: any) => ipcRenderer.invoke('dialog:showSaveDialog', options),

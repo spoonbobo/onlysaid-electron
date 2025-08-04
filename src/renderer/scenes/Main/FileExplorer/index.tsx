@@ -34,9 +34,6 @@ import { getUserTokenFromStore } from '@/utils/user';
 import FileClickDialog from '@/renderer/components/Dialog/File/FileClickDialog';
 import { useCopilotStore } from '@/renderer/stores/Copilot/CopilotStore';
 import { useCurrentTopicContext } from '@/renderer/stores/Topic/TopicStore';
-import { useChatStore } from '@/renderer/stores/Chat/ChatStore';
-import { useTopicStore } from '@/renderer/stores/Topic/TopicStore';
-import { Tooltip } from '@mui/material';
 
 // Helper functions for path operations
 const getPathExtension = (filePath: string): string => {
@@ -61,8 +58,8 @@ const getPathBasename = (filePath: string, ext?: string): string => {
 const supportsCopilot = (fileName: string): boolean => {
   if (!fileName) return false;
   const ext = fileName.toLowerCase().substring(fileName.lastIndexOf('.'));
-  // Only txt files are supported for copilot mode for now
-  const supportedExts = ['.txt'];
+  // TXT and DOCX files are supported for copilot mode
+  const supportedExts = ['.txt', '.docx', '.doc'];
   return supportedExts.includes(ext);
 };
 
