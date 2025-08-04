@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Box,
   Typography,
@@ -22,13 +22,21 @@ import {
   Home as HomeIcon,
   CloudDone as CloudDoneIcon,
   ArrowBack as ArrowBackIcon,
-  Refresh as RefreshIcon
+  Refresh as RefreshIcon,
+  Image as ImageIcon,
+  Description as DocumentIcon,
+  ArrowForward as ArrowForwardIcon
 } from '@mui/icons-material';
 import { FormattedMessage } from 'react-intl';
 import { useFileExplorerStore as useFilesStore, selectors, FileNode } from '@/renderer/stores/File/FileExplorerStore';
 import { useKBStore } from '@/renderer/stores/KB/KBStore';
 import { getUserTokenFromStore } from '@/utils/user';
 import FileClickDialog from '@/renderer/components/Dialog/File/FileClickDialog';
+import { useCopilotStore } from '@/renderer/stores/Copilot/CopilotStore';
+import { useCurrentTopicContext } from '@/renderer/stores/Topic/TopicStore';
+import { useChatStore } from '@/renderer/stores/Chat/ChatStore';
+import { useTopicStore } from '@/renderer/stores/Topic/TopicStore';
+import { Tooltip } from '@mui/material';
 
 // Helper functions for path operations
 const getPathExtension = (filePath: string): string => {
@@ -47,6 +55,34 @@ const getPathBasename = (filePath: string, ext?: string): string => {
     return fileName.substring(0, fileName.length - ext.length);
   }
   return fileName;
+};
+
+// Helper function to check if file supports copilot
+const supportsCopilot = (fileName: string): boolean => {
+  if (!fileName) return false;
+  const ext = fileName.toLowerCase().substring(fileName.lastIndexOf('.'));
+  // Only txt files are supported for copilot mode for now
+  const supportedExts = ['.txt'];
+  return supportedExts.includes(ext);
+};
+
+// Helper function to get file type for icon
+const getFileType = (fileName: string): string => {
+  const ext = fileName.toLowerCase().substring(fileName.lastIndexOf('.'));
+  
+  // Image formats
+  const imageExts = ['.jpg', '.jpeg', '.png', '.gif', '.svg', '.webp', '.bmp', '.ico'];
+  if (imageExts.includes(ext)) {
+    return 'image';
+  }
+  
+  // Document formats - keeping full list for display purposes, but copilot only supports txt
+  const docExts = ['.txt', '.md', '.markdown', '.csv', '.docx', '.doc', '.xlsx', '.xls', '.pptx', '.ppt', '.pdf', '.odt', '.ods', '.odp', '.rtf', '.html', '.htm', '.xml'];
+  if (docExts.includes(ext)) {
+    return 'document';
+  }
+  
+  return 'unknown';
 };
 
 // Helper function to build path breadcrumbs
@@ -115,11 +151,16 @@ interface FileListItemProps {
   node: FileNode;
   onNodeClick: (node: FileNode) => void;
   onFileClick: (node: FileNode) => void;
+  onEditClick: (node: FileNode, event: React.MouseEvent) => void;
 }
 
-function FileListItem({ node, onNodeClick, onFileClick }: FileListItemProps) {
+function FileListItem({ node, onNodeClick, onFileClick, onEditClick }: FileListItemProps) {
   const { processedKbDocuments } = useKBStore();
   const [isSynced, setIsSynced] = useState(false);
+
+  // Get file type for icon and check copilot support
+  const fileType = node.type === 'file' ? getFileType(node.name) : 'unknown';
+  const canUseCopilot = node.type === 'file' && supportsCopilot(node.name);
 
   useEffect(() => {
     if (node.type === 'file' && node.source === 'remote' && node.workspaceId && node.fileDbId) {
@@ -169,7 +210,13 @@ function FileListItem({ node, onNodeClick, onFileClick }: FileListItemProps) {
         {node.type === 'directory' ? (
           <FolderIcon color="primary" />
         ) : (
-          <FileIcon color="inherit" />
+          fileType === 'image' ? (
+            <ImageIcon color="secondary" />
+          ) : fileType === 'document' ? (
+            <DocumentIcon color="info" />
+          ) : (
+            <FileIcon color="inherit" />
+          )
         )}
       </ListItemIcon>
       <ListItemText
@@ -178,6 +225,33 @@ function FileListItem({ node, onNodeClick, onFileClick }: FileListItemProps) {
             <Typography variant="body1" sx={{ flexGrow: 1 }}>
               {node.name}
             </Typography>
+            {canUseCopilot && (
+              <Box 
+                onClick={(event) => onEditClick(node, event)}
+                sx={{ 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  gap: 0.3,
+                  color: 'primary.main',
+                  fontSize: '0.75rem',
+                  mr: isSynced ? 1 : 0,
+                  cursor: 'pointer',
+                  padding: '2px 4px',
+                  borderRadius: 1,
+                  transition: 'all 0.2s ease-in-out',
+                  '&:hover': {
+                    bgcolor: 'primary.main',
+                    color: 'primary.contrastText',
+                    transform: 'scale(1.05)'
+                  }
+                }}
+              >
+                <Typography variant="caption" sx={{ fontSize: 'inherit', color: 'inherit' }}>
+                  Edit
+                </Typography>
+                <ArrowForwardIcon sx={{ fontSize: '0.8rem' }} />
+              </Box>
+            )}
             {isSynced && (
               <Chip
                 icon={<CloudDoneIcon sx={{ fontSize: '0.8rem !important' }} />}
@@ -209,6 +283,9 @@ function FileExplorer() {
     getCurrentNode 
   } = useFilesStore();
   
+  const { setCurrentDocument, setActive } = useCopilotStore();
+  const { setSelectedContext } = useCurrentTopicContext();
+  
   const currentNodeId = useFilesStore(selectors.selectCurrentNodeId);
   const [isLoading, setIsLoading] = useState(false);
   const [showFileDialog, setShowFileDialog] = useState(false);
@@ -221,8 +298,20 @@ function FileExplorer() {
   const currentNode = getCurrentNode();
   const breadcrumbs = buildPathBreadcrumbs(currentNode, allNodes);
 
-  // Get current directory contents
-  const currentContents = currentNode?.children || rootFolders;
+  // Get current directory contents and sort them: folders first, then files, both alphabetically
+  const currentContents = useMemo(() => {
+    const contents = currentNode?.children || rootFolders;
+    
+    // Sort: folders first, then files, both alphabetically
+    return contents.slice().sort((a, b) => {
+      // If one is directory and other is file, directory comes first
+      if (a.type === 'directory' && b.type === 'file') return -1;
+      if (a.type === 'file' && b.type === 'directory') return 1;
+      
+      // If both are same type, sort alphabetically by name (case-insensitive)
+      return a.name.toLowerCase().localeCompare(b.name.toLowerCase());
+    });
+  }, [currentNode?.children, rootFolders]);
 
   // Initialize current node from persisted state on mount
   useEffect(() => {
@@ -268,6 +357,27 @@ function FileExplorer() {
   const handleFileClick = (node: FileNode) => {
     setSelectedFileNode(node);
     setShowFileDialog(true);
+    
+    // Also set in copilot store for potential copilot mode
+    setCurrentDocument(node);
+  };
+
+  const handleEditClick = (node: FileNode, event: React.MouseEvent) => {
+    event.stopPropagation(); // Prevent file dialog from opening
+    
+    // Set the document in Copilot store
+    setCurrentDocument(node);
+    setActive(true);
+    
+    // Create copilot context and navigate to it
+    const copilotContext = {
+      id: `copilot-${node.id}`,
+      name: `Copilot: ${node.name}`,
+      type: 'copilot' as const,
+      section: 'local:copilot'
+    };
+    
+    setSelectedContext(copilotContext);
   };
 
   const handleBreadcrumbClick = async (nodeId: string) => {
@@ -307,47 +417,19 @@ function FileExplorer() {
   return (
     <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
       {/* Header with breadcrumbs and actions */}
-      <Paper 
-        elevation={1} 
-        sx={{ 
-          p: 2, 
-          mb: 2, 
-          borderRadius: 2,
-          bgcolor: 'background.paper'
-        }}
-      >
-        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
-          <Typography variant="h6" component="h1" sx={{ fontWeight: 600 }}>
-            <FormattedMessage id="menu.fileExplorer" defaultMessage="File Explorer" />
-          </Typography>
-          
-          <Box sx={{ display: 'flex', gap: 1 }}>
-            {currentNode && (
-              <>
-                <IconButton
-                  onClick={handleGoBack}
-                  size="small"
-                  sx={{ bgcolor: 'action.hover' }}
-                >
-                  <ArrowBackIcon />
-                </IconButton>
-                <IconButton
-                  onClick={handleRefresh}
-                  size="small"
-                  disabled={isLoading}
-                  sx={{ bgcolor: 'action.hover' }}
-                >
-                  <RefreshIcon />
-                </IconButton>
-              </>
-            )}
-          </Box>
-        </Box>
-
+      <Box sx={{ 
+        display: 'flex', 
+        alignItems: 'center', 
+        justifyContent: 'space-between', 
+        px: 2, 
+        py: 1,
+        mb: 1
+      }}>
         {/* Breadcrumb navigation */}
         <Breadcrumbs
           separator="›"
           sx={{
+            flex: 1,
             '& .MuiBreadcrumbs-separator': {
               mx: 1,
               color: 'text.secondary'
@@ -365,8 +447,14 @@ function FileExplorer() {
               textDecoration: 'none',
               color: currentNode ? 'primary.main' : 'text.primary',
               cursor: 'pointer',
+              px: 1,
+              py: 0.5,
+              borderRadius: 1,
+              transition: 'all 0.2s ease-in-out',
               '&:hover': {
-                textDecoration: 'underline'
+                bgcolor: 'action.hover',
+                color: 'primary.main',
+                transform: 'scale(1.02)'
               }
             }}
           >
@@ -390,8 +478,14 @@ function FileExplorer() {
                   color: isLast ? 'text.primary' : 'primary.main',
                   cursor: isLast ? 'default' : 'pointer',
                   fontWeight: isLast ? 600 : 400,
-                  '&:hover': {
-                    textDecoration: isLast ? 'none' : 'underline'
+                  px: 1,
+                  py: 0.5,
+                  borderRadius: 1,
+                  transition: 'all 0.2s ease-in-out',
+                  '&:hover': isLast ? {} : {
+                    bgcolor: 'action.hover',
+                    color: 'primary.dark',
+                    transform: 'scale(1.02)'
                   }
                 }}
               >
@@ -401,7 +495,28 @@ function FileExplorer() {
             );
           })}
         </Breadcrumbs>
-      </Paper>
+
+        {/* Action buttons */}
+        {currentNode && (
+          <Box sx={{ display: 'flex', gap: 1, ml: 2 }}>
+            <IconButton
+              onClick={handleGoBack}
+              size="small"
+              sx={{ bgcolor: 'action.hover' }}
+            >
+              <ArrowBackIcon />
+            </IconButton>
+            <IconButton
+              onClick={handleRefresh}
+              size="small"
+              disabled={isLoading}
+              sx={{ bgcolor: 'action.hover' }}
+            >
+              <RefreshIcon />
+            </IconButton>
+          </Box>
+        )}
+      </Box>
 
       {/* Content area */}
       <Box sx={{ flex: 1, overflow: 'auto' }}>
@@ -449,6 +564,7 @@ function FileExplorer() {
                     node={node}
                     onNodeClick={handleNodeClick}
                     onFileClick={handleFileClick}
+                    onEditClick={handleEditClick}
                   />
                 ))}
               </List>
@@ -470,4 +586,4 @@ function FileExplorer() {
   );
 }
 
-export default FileExplorer;
+export default FileExplorer; 

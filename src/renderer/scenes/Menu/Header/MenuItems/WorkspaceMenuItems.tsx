@@ -83,10 +83,11 @@ function WorkspaceMenuItems({ handleClose }: WorkspaceMenuItemsProps) {
           )}
         </Box>
       </MenuItem>
-      <MenuItem onClick={() => handleMenuItemClick('avatar')} sx={{ minHeight: 36, fontSize: 14 }}>
+      {/* Temporarily hidden avatar option */}
+      {/* <MenuItem onClick={() => handleMenuItemClick('avatar')} sx={{ minHeight: 36, fontSize: 14 }}>
         <PersonIcon fontSize="small" sx={{ mr: 1.5, color: "text.secondary" }} />
         <FormattedMessage id="menu.workspace.avatar" />
-      </MenuItem>
+      </MenuItem> */}
       <MenuItem onClick={() => handleMenuItemClick('learningPartner')} sx={{ minHeight: 36, fontSize: 14 }}>
         <GroupIcon fontSize="small" sx={{ mr: 1.5, color: "text.secondary" }} />
         <FormattedMessage id="menu.workspace.learningPartner" />
@@ -245,18 +246,19 @@ export const RenderWorkspaceActions = ({
         </Tooltip>
       );
       break;
-    case 'avatar':
-      actualContent = (
-        <Tooltip title={<FormattedMessage id="menu.workspace.newAvatarChat" />}>
-          <IconButton
-            size="small"
-            onClick={handleCreateAvatarChat}
-          >
-            <AddCommentIcon fontSize="small" />
-          </IconButton>
-        </Tooltip>
-      );
-      break;
+    /* Temporarily hidden avatar case */
+    // case 'avatar':
+    //   actualContent = (
+    //     <Tooltip title={<FormattedMessage id="menu.workspace.newAvatarChat" />}>
+    //       <IconButton
+    //         size="small"
+    //         onClick={handleCreateAvatarChat}
+    //       >
+    //         <AddCommentIcon fontSize="small" />
+    //       </IconButton>
+    //     </Tooltip>
+    //   );
+    //   break;
     case 'learningPartner':
       // Add action for learning partner section if needed
       actualContent = null;

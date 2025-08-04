@@ -1,4 +1,4 @@
-import { useCallback, useRef } from "react";
+import { useCallback, useRef, useState, useEffect } from "react";
 import { TextField, alpha } from "@mui/material";
 import { useIntl } from "react-intl";
 
@@ -17,19 +17,54 @@ export default function MessageTextField({
 }: MessageTextFieldProps) {
   const textFieldRef = useRef<HTMLTextAreaElement>(null);
   const intl = useIntl();
+  
+  // Local state for immediate UI updates
+  const [localInput, setLocalInput] = useState(input);
+  const debounceRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Sync local state with prop changes
+  useEffect(() => {
+    setLocalInput(input);
+  }, [input]);
+
+  // Debounced update to store
+  const debouncedSetInput = useCallback((value: string) => {
+    if (debounceRef.current) {
+      clearTimeout(debounceRef.current);
+    }
+    debounceRef.current = setTimeout(() => {
+      setInput(value);
+    }, 100); // 100ms debounce
+  }, [setInput]);
+
+  // Cleanup debounce on unmount
+  useEffect(() => {
+    return () => {
+      if (debounceRef.current) {
+        clearTimeout(debounceRef.current);
+      }
+    };
+  }, []);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
-      if (input.trim()) {
+      if (localInput.trim()) {
+        // Clear debounce and immediately sync before sending
+        if (debounceRef.current) {
+          clearTimeout(debounceRef.current);
+        }
+        setInput(localInput);
         onSend();
       }
     }
-  }, [input, onSend]);
+  }, [localInput, onSend, setInput]);
 
   const handleInputChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    setInput(e.target.value);
-  }, [setInput]);
+    const newValue = e.target.value;
+    setLocalInput(newValue);
+    debouncedSetInput(newValue);
+  }, [debouncedSetInput]);
 
   const handlePaste = useCallback((e: React.ClipboardEvent<HTMLDivElement>) => {
     const pastedText = e.clipboardData.getData('text/plain');
@@ -67,7 +102,8 @@ export default function MessageTextField({
         formattedText +
         currentValue.substring(target.selectionEnd);
 
-      setInput(newInput);
+      setLocalInput(newInput);
+      debouncedSetInput(newInput);
 
       setTimeout(() => {
         if (textFieldRef.current) {
@@ -84,7 +120,7 @@ export default function MessageTextField({
         }
       }, 0);
     }
-  }, [setInput]);
+  }, [debouncedSetInput]);
 
   return (
     <TextField
@@ -92,7 +128,7 @@ export default function MessageTextField({
       multiline
       minRows={1}
       maxRows={12}
-      value={input}
+      value={localInput}
       onChange={handleInputChange}
       onKeyDown={handleKeyDown}
       onPaste={handlePaste}

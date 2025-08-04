@@ -14,6 +14,7 @@ import { useUserStore } from "@/renderer/stores/User/UserStore";
 import AdminMenuItems, { renderAdminActions } from "./MenuItems/AdminMenuItems";
 import PortalMenuItems, { renderPortalActions } from "./MenuItems/PortalMenuItems";
 import DocsMenuItems, { renderDocsActions } from "./MenuItems/DocsMenuItems";
+import CopilotMenuItems, { RenderCopilotActions } from "./MenuItems/CopilotMenuItems";
 
 function MenuHeader() {
   const user = useUserStore((state) => state.user);
@@ -33,6 +34,8 @@ function MenuHeader() {
     selectedContext?.type === 'settings' ?
       selectedContext.section || null :
       selectedContext?.type === 'calendar' ?
+        selectedContext.section?.split(':')[1] || null :
+      selectedContext?.type === 'copilot' ?
         selectedContext.section?.split(':')[1] || null :
       selectedContext?.type === 'docs' ?
         selectedContext.section || null : null;
@@ -96,6 +99,10 @@ function MenuHeader() {
     console.log('Docs action:', action);
   };
 
+  const handleCopilotAction = (action: string) => {
+    console.log('Copilot action:', action);
+  };
+
   const renderMenuItems = () => {
     switch (selectedContext?.type) {
       case 'home':
@@ -126,6 +133,10 @@ function MenuHeader() {
         />;
       case 'portal':
         return <PortalMenuItems
+          handleClose={handleClose}
+        />;
+      case 'copilot':
+        return <CopilotMenuItems
           handleClose={handleClose}
         />;
       default:
@@ -190,6 +201,15 @@ function MenuHeader() {
           )}
         </>
       );
+    } else if (selectedContext?.type === 'copilot') {
+      return (
+        <>
+          <FormattedMessage id="menu.copilot" defaultMessage="AI Copilot" />
+          {selectedContext?.name && (
+            <> / {selectedContext.name.replace('Copilot: ', '')}</>
+          )}
+        </>
+      );
     } else {
       return (
         <>
@@ -236,7 +256,7 @@ function MenuHeader() {
           alignItems: "center",
           width: '100%',
           pb: ((selectedCategory && selectedContext?.type === 'home') ||
-            (selectedSection && (selectedContext?.type === 'workspace' || selectedContext?.type === 'settings' || selectedContext?.type === 'calendar' || selectedContext?.type === 'admin' || selectedContext?.type === 'docs'))) ? 0 : 1
+            (selectedSection && (selectedContext?.type === 'workspace' || selectedContext?.type === 'settings' || selectedContext?.type === 'calendar' || selectedContext?.type === 'admin' || selectedContext?.type === 'docs' || selectedContext?.type === 'copilot'))) ? 0 : 1
         }}>
           <Typography variant="subtitle1" sx={{ fontWeight: 500 }}>
             {renderHeaderTitle()}
@@ -312,6 +332,13 @@ function MenuHeader() {
               handleAction: (action) => console.log('Admin action:', action)
             });
             return adminActionContent ? <Box sx={actionBarBoxStyles}>{adminActionContent}</Box> : null;
+          }
+
+          if (selectedContext?.type === 'copilot' && selectedSection) {
+            return <RenderCopilotActions
+              selectedSection={selectedSection}
+              handleAction={handleCopilotAction}
+            />;
           }
 
           if (selectedContext?.type === 'portal' && selectedSection) {

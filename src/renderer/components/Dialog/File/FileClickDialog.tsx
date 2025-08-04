@@ -8,6 +8,7 @@ import {
   Box,
   IconButton,
   CircularProgress,
+  Divider,
 } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
 import DownloadIcon from "@mui/icons-material/Download";
@@ -18,6 +19,7 @@ import { IFile } from "@/../../types/File/File";
 import { getUserTokenFromStore } from "@/utils/user";
 import { toast } from "@/utils/toast";
 import { useToastStore } from "@/renderer/stores/Notification/ToastStore";
+import FilePreview from "@/renderer/scenes/Main/FileExplorer/FileRenderer";
 
 interface FileClickDialogProps {
   open: boolean;
@@ -37,6 +39,14 @@ export default function FileClickDialog({
   const [downloadToastId, setDownloadToastId] = useState<string | null>(null);
 
   const nodeDisplayNameFromStore = node?.label || node?.name || "Unknown Item";
+
+  // Check if file is an image that should show preview
+  const isImageFile = (fileName: string): boolean => {
+    if (!fileName) return false;
+    const ext = fileName.toLowerCase().substring(fileName.lastIndexOf('.'));
+    const imageExts = ['.jpg', '.jpeg', '.png', '.gif', '.svg', '.webp', '.bmp', '.ico'];
+    return imageExts.includes(ext);
+  };
 
   useEffect(() => {
     const fetchDetails = async () => {
@@ -267,6 +277,15 @@ export default function FileClickDialog({
             <Typography variant="body2" sx={{ mt: 2, textAlign: 'center' }} color="text.secondary">
               Could not load full metadata for this remote file.
             </Typography>
+          )}
+
+          {/* Image preview for image files */}
+          {node && node.type === 'file' && isImageFile(node.name) && (
+            <Box mt={2}>
+              <Divider sx={{ mb: 2 }} />
+              <Typography variant="subtitle2" gutterBottom>Preview:</Typography>
+              <FilePreview node={node} />
+            </Box>
           )}
         </Box>
       </DialogContent>

@@ -6,6 +6,8 @@ import hljs from 'highlight.js';
 import * as React from 'react';
 import { toast } from "@/utils/toast";
 import 'katex/dist/katex.min.css'; // Import KaTeX CSS
+import { useTopicStore } from '@/renderer/stores/Topic/TopicStore';
+import { useCopilotStore } from '@/renderer/stores/Copilot/CopilotStore';
 
 // Optimized styles - reduced nesting and simplified selectors
 const markdownStyles = {
@@ -100,8 +102,10 @@ const markdownStyles = {
     zIndex: 2,
     opacity: 1,
     transition: 'opacity 0.15s ease',
+    display: 'flex',
+    gap: '4px', // Add gap between buttons
   },
-  '& .copy-button': {
+  '& .copy-button, & .apply-button': {
     minWidth: 24,
     height: 24,
     display: 'flex',
@@ -109,16 +113,34 @@ const markdownStyles = {
     justifyContent: 'center',
     cursor: 'pointer',
     borderRadius: '12px',
-    backgroundColor: 'transparent',
+    backgroundColor: 'action.hover',
     border: 'none',
     padding: '4px',
-    transition: 'transform 0.15s ease',
+    transition: 'all 0.2s ease',
     '&:hover': {
       transform: 'scale(1.1)',
-      '& .copy-icon': {
+      backgroundColor: 'action.selected',
+      '& .copy-icon, & .apply-icon': {
         color: 'primary.main'
       }
     }
+  },
+  '& .apply-button': {
+    backgroundColor: 'success.light',
+    '&:hover': {
+      backgroundColor: 'success.main',
+      '& .apply-icon': {
+        color: 'success.contrastText'
+      }
+    }
+  },
+  '& .copy-icon, & .apply-icon': {
+    width: 16,
+    height: 16,
+    color: 'text.secondary'
+  },
+  '& .apply-icon': {
+    color: 'success.contrastText'
   },
   '& .copy-text': {
     display: 'none',
@@ -245,6 +267,7 @@ const markdownStyles = {
 };
 
 const COPY_SVG_PATH = 'M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z';
+const APPLY_SVG_PATH = 'M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z'; // Checkmark icon
 
 // Optimized cache with size limit
 const highlightCache = new Map<string, string>();
@@ -279,6 +302,10 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = React.memo(({
   const getNextCodeBlockId = useCallback(() => {
     return `${instanceId}-cb-${codeBlockIdRef.current++}`;
   }, [instanceId]);
+
+  // Check if we're in copilot mode
+  const isCopilotMode = useTopicStore((state) => state.selectedContext?.section === 'local:copilot');
+  const { currentDocument } = useCopilotStore();
 
   // Optimized markdown instance with better caching
   const md = useMemo(() => {
@@ -327,12 +354,23 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = React.memo(({
         }
       }
 
+      // Generate buttons based on mode
+      const copyButton = `
+        <button class="copy-button" data-id="${codeBlockId}" aria-label="Copy code" onclick="document.dispatchEvent(new CustomEvent('onlysaid-copy', {detail: '${codeBlockId}'}))">
+          <svg class="copy-icon" viewBox="0 0 24 24"><path d="${COPY_SVG_PATH}"></path></svg>
+        </button>
+      `;
+
+      const applyButton = isCopilotMode && currentDocument ? `
+        <button class="apply-button" data-id="${codeBlockId}" aria-label="Apply code" onclick="document.dispatchEvent(new CustomEvent('onlysaid-apply', {detail: '${codeBlockId}'}))">
+          <svg class="apply-icon" viewBox="0 0 24 24"><path d="${APPLY_SVG_PATH}"></path></svg>
+        </button>
+      ` : '';
+
       return `<div class="code-block-wrapper" data-id="${codeBlockId}">
         <div class="language-label">${language || 'text'}</div>
         <div class="copy-button-container" data-id="${codeBlockId}">
-          <button class="copy-button" data-id="${codeBlockId}" aria-label="Copy code" onclick="document.dispatchEvent(new CustomEvent('onlysaid-copy', {detail: '${codeBlockId}'}))">
-            <svg class="copy-icon" viewBox="0 0 24 24"><path d="${COPY_SVG_PATH}"></path></svg>
-          </button>
+          ${applyButton}${copyButton}
         </div>
         <div class="code-scroll-container">
           <pre class="language-${language}" data-id="${codeBlockId}"><code>${highlighted}</code></pre>
@@ -365,7 +403,7 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = React.memo(({
     };
 
     return mdInstance;
-  }, [getNextCodeBlockId]);
+  }, [getNextCodeBlockId, isCopilotMode, currentDocument]);
 
   // Optimized HTML rendering with debouncing for streaming
   const html = useMemo(() => {
@@ -394,6 +432,31 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = React.memo(({
     }
   }, []);
 
+  // Add apply functionality
+  const applyCodeToFile = useCallback(async (code: string): Promise<boolean> => {
+    if (!isCopilotMode || !currentDocument) {
+      toast.error('Apply is only available in copilot mode');
+      return false;
+    }
+
+    try {
+      // Check if DocumentPreview component exists and has content change handler
+      const event = new CustomEvent('onlysaid-apply-code', {
+        detail: { code, documentPath: currentDocument.path }
+      });
+      
+      // Dispatch event that CopilotView can listen to
+      document.dispatchEvent(event);
+      
+      toast.success('Code applied to file');
+      return true;
+    } catch (error) {
+      console.error('Failed to apply code:', error);
+      toast.error('Failed to apply code to file');
+      return false;
+    }
+  }, [isCopilotMode, currentDocument]);
+
   useEffect(() => {
     const handleCopyEvent = async (e: Event) => {
       const customEvent = e as CustomEvent;
@@ -414,11 +477,28 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = React.memo(({
       }
     };
 
+    const handleApplyEvent = async (e: Event) => {
+      const customEvent = e as CustomEvent;
+      const id = customEvent.detail;
+      if (!id || !markdownContainerRef.current) return;
+
+      const wrapper = markdownContainerRef.current.querySelector(`.code-block-wrapper[data-id="${id}"]`) as HTMLElement;
+      if (!wrapper) return;
+
+      const code = wrapper.querySelector('code');
+      const text = code?.textContent || '';
+
+      await applyCodeToFile(text);
+    };
+
     document.addEventListener('onlysaid-copy', handleCopyEvent);
+    document.addEventListener('onlysaid-apply', handleApplyEvent);
+    
     return () => {
       document.removeEventListener('onlysaid-copy', handleCopyEvent);
+      document.removeEventListener('onlysaid-apply', handleApplyEvent);
     };
-  }, [copyToClipboard]);
+  }, [copyToClipboard, applyCodeToFile]);
 
   // Simplified dynamic styles
   const dynamicStyles = useMemo(() => ({

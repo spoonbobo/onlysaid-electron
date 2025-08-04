@@ -2,46 +2,13 @@ import { v4 as uuidv4 } from 'uuid';
 import { IChatMessage } from '@/../../types/Chat/Message';
 import { IUser } from '@/../../types/User/User';
 import { OpenAIMessage } from '@/renderer/stores/Stream/StreamStore';
-import { useLLMConfigurationStore } from '@/renderer/stores/LLM/LLMConfiguration';
 import { useThreeStore } from '@/renderer/stores/Avatar/ThreeStore';
 import { useTopicStore } from '@/renderer/stores/Topic/TopicStore';
+import { useCopilotStore } from '@/renderer/stores/Copilot/CopilotStore';
 import { getAgentFromStore } from '@/utils/agent';
-import { appendRulesToSystemPrompt } from '@/utils/rules';
+import { getAskModeSystemPrompt, getToolSummarySystemPrompt } from '../prompts';
 
-export const askModeSystemPrompt = (user: IUser, agent: IUser, avatarName?: string) => {
-  const assistantName = avatarName || agent.username;
-  return `
-  Your name is ${assistantName} and you are assistant for your companion ${user.username}.
 
-  You and your companion ${user.username} will be hearing messages in chats.
-  Your responses should be short, concise, friendly, helpful, and professional.
-  Use emojis only when appropriate.
-
-  You will be provided a list of messages in a chat with timestamps as contexts for your references.
-  `;
-};
-
-// Helper function to get system prompt with fallback and rules
-const getSystemPrompt = (user: IUser, agent: IUser, avatarName?: string): string => {
-  const { askModeSystemPrompt: customPrompt } = useLLMConfigurationStore.getState();
-  const assistantName = avatarName || agent.username;
-  
-  let systemPrompt = '';
-  if (customPrompt && customPrompt.trim()) {
-    // Replace placeholders in custom prompt
-    systemPrompt = customPrompt
-      .replace(/\{agent\.username\}/g, assistantName)
-      .replace(/\{user\.username\}/g, user.username)
-      .replace(/\{agent_username\}/g, assistantName)
-      .replace(/\{user_username\}/g, user.username);
-  } else {
-    // Fallback to default prompt
-    systemPrompt = askModeSystemPrompt(user, agent, avatarName);
-  }
-  
-  // Append rules for ask mode
-  return appendRulesToSystemPrompt(systemPrompt, 'ask');
-};
 
 interface ProcessAskModeAIResponseParams {
   activeChatId: string;
@@ -59,6 +26,8 @@ interface ProcessAskModeAIResponseParams {
     messages: OpenAIMessage[],
     options: { model: string; streamId: string; provider: "openai" | "deepseek" | "ollama" }
   ) => Promise<string>;
+  // Optional file content for copilot mode
+  fileContent?: string;
 }
 
 export async function processAskModeAIResponse({
@@ -74,6 +43,7 @@ export async function processAskModeAIResponse({
   setStreamingState,
   markStreamAsCompleted,
   streamChatCompletion,
+  fileContent,
 }: ProcessAskModeAIResponseParams): Promise<{ success: boolean; responseText?: string; assistantMessageId?: string; error?: any }> {
   // Use provided agent or get from store
   const assistantSender = agent || getAgentFromStore();
@@ -110,7 +80,33 @@ export async function processAskModeAIResponse({
   let systemPrompt = "";
   if (currentUser && assistantSender) {
     const avatarName = isAvatarMode ? assistantSenderObject.username : undefined;
-    systemPrompt = getSystemPrompt(currentUser, assistantSender, avatarName);
+    
+    // Check if we're in copilot mode and extract file information
+    const isCopilotMode = topicStore.selectedContext?.section === 'local:copilot';
+    let fileName: string | undefined;
+    let fileExtension: string | undefined;
+    let actualFileContent: string | undefined;
+    
+    if (isCopilotMode) {
+      const { currentDocument } = useCopilotStore.getState();
+      if (currentDocument) {
+        fileName = currentDocument.name;
+        const lastDotIndex = fileName.lastIndexOf('.');
+        if (lastDotIndex > 0) {
+          fileExtension = fileName.substring(lastDotIndex + 1);
+        }
+      }
+      actualFileContent = fileContent;
+    }
+    
+    systemPrompt = getAskModeSystemPrompt(
+      currentUser, 
+      assistantSender, 
+      avatarName, 
+      actualFileContent,
+      fileName,
+      fileExtension
+    );
   }
 
   const assistantMessage: IChatMessage = {
@@ -225,14 +221,10 @@ export async function summarizeToolCallResults({
     console.warn("[AskMode] No agent available for tool result summarization.");
   }
 
-  const systemPrompt = `
-  Your name is ${assistantSender?.username || 'Assistant'} and you are summarizing tool execution results for ${currentUser?.username || 'the user'}.
-
-  You have just executed some tools and need to provide a clear, concise summary of what was accomplished.
-  Focus on the key results and insights from the tool executions.
-  Be helpful and explain what the results mean in practical terms.
-  Keep your response conversational and user-friendly.
-  `;
+  const systemPrompt = getToolSummarySystemPrompt(
+    assistantSender?.username || 'Assistant',
+    currentUser?.username || 'the user'
+  );
 
   const assistantMessage: IChatMessage = {
     id: uuidv4(),

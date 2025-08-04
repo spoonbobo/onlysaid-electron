@@ -18,6 +18,7 @@ import { summarizeToolCallResults } from "@/renderer/stores/Agent/mode/Ask";
 import { v4 as uuidv4 } from 'uuid';
 import { getCurrentWorkspaceId } from "@/utils/workspace";
 import { getHumanInTheLoopManager, requestApproval, HumanInteractionResponse, HumanInteractionRequest } from '@/service/langchain/human_in_the_loop/renderer/human_in_the_loop';
+import { useCopilotStore } from "@/renderer/stores/Copilot/CopilotStore";
 
 const rendererIpcTracker = new Map<string, { count: number; timestamps: number[] }>();
 
@@ -528,6 +529,16 @@ export const useAgentStore = create<AgentState>()(
 
             switch (aiMode) {
               case "ask":
+                // ADD: Get file content from CopilotStore if in copilot mode
+                const topicStore = useTopicStore.getState();
+                const isCopilotMode = topicStore.selectedContext?.section === 'local:copilot';
+                let fileContent: string | undefined;
+                
+                if (isCopilotMode) {
+                  const { currentFileContent } = useCopilotStore.getState();
+                  fileContent = currentFileContent || undefined;
+                }
+
                 result = await processAskModeAIResponse({
                   activeChatId,
                   userMessageText,
@@ -541,6 +552,7 @@ export const useAgentStore = create<AgentState>()(
                   setStreamingState,
                   markStreamAsCompleted,
                   streamChatCompletion,
+                  fileContent, // ADD: Pass file content
                 });
                 break;
 

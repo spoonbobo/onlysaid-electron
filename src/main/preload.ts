@@ -43,6 +43,11 @@ type FileSystemChannels =
   | 'file:get-workspace-icon'
   | 'file:get-files-in-path'
   | 'file:read-text-file'
+  | 'file:read-local-image'
+  | 'file:extract-document-text'
+  | 'file:extract-remote-document-text'
+  | 'file:save-document-text'
+  | 'file:create-backup'
   | 'assets:get-local-asset'
   | 'submission:read-content'
   | 'submission:download-and-read';
@@ -476,6 +481,16 @@ const electronHandler = {
       ipcRenderer.invoke('submission:read-content', args),
     downloadAndReadSubmission: (args: { fileUrl: string; fileName: string; apiToken: string }) =>
       ipcRenderer.invoke('submission:download-and-read', args),
+    readLocalImageFile: (filePath: string) =>
+      ipcRenderer.invoke('file:read-local-image', filePath),
+    extractDocumentText: (filePath: string) =>
+      ipcRenderer.invoke('file:extract-document-text', filePath),
+    extractRemoteDocumentText: (args: { workspaceId: string; fileId: string; token: string; fileName: string }) =>
+      ipcRenderer.invoke('file:extract-remote-document-text', args),
+    saveDocumentText: (filePath: string, content: string) =>
+      ipcRenderer.invoke('file:save-document-text', filePath, content),
+    createBackup: (filePath: string) =>
+      ipcRenderer.invoke('file:create-backup', filePath),
   },
   dialog: {
     showSaveDialog: (options: any) => ipcRenderer.invoke('dialog:showSaveDialog', options),
