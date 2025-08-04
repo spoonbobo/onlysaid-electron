@@ -8,10 +8,12 @@ import {
   Box,
   IconButton,
   CircularProgress,
+  Divider,
+  Paper
 } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
 import DownloadIcon from "@mui/icons-material/Download";
-import { FormattedMessage } from "react-intl";
+import { FormattedMessage, useIntl } from "react-intl";
 import { useFileExplorerStore, selectors, FileNode } from "@/renderer/stores/File/FileExplorerStore";
 import { useEffect, useState } from "react";
 import { IFile } from "@/../../types/File/File";
@@ -30,13 +32,14 @@ export default function FileClickDialog({
   onClose,
   nodeId
 }: FileClickDialogProps) {
+  const intl = useIntl();
   const node = useFileExplorerStore(selectors.selectNodeById(nodeId));
   const [fileDetails, setFileDetails] = useState<IFile | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
   const [downloadToastId, setDownloadToastId] = useState<string | null>(null);
 
-  const nodeDisplayNameFromStore = node?.label || node?.name || "Unknown Item";
+  const nodeDisplayNameFromStore = node?.label || node?.name || intl.formatMessage({ id: "dialog.file.unknownItem", defaultMessage: "Unknown Item" });
 
   useEffect(() => {
     const fetchDetails = async () => {

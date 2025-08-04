@@ -201,7 +201,7 @@ export function setupFileHandlers(): void {
     return { operationId: opId };
   });
 
-  // Get operation status
+  // Get file operation status
   ipcMain.handle('file:status', (event, { operationId }) => {
     return fileQueue.getStatus(operationId);
   });
@@ -250,7 +250,7 @@ export function setupFileHandlers(): void {
       );
 
       return { operationId };
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error processing file upload:', error);
       throw error;
     }

@@ -35,7 +35,7 @@ function AddWorkspaceDialog({ open, onClose, onWorkspaceAdded }: AddWorkspaceDia
   const [joinInviteCode, setJoinInviteCode] = useState("");
   const [error, setError] = useState("");
   const [imageError, setImageError] = useState("");
-  const [workspaceImage, setWorkspaceImage] = useState<string>("/default-workspace.png");
+  const [workspaceImage, setWorkspaceImage] = useState<string | undefined>(undefined);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [fileSize, setFileSize] = useState<number | null>(null);
   const [imageFile, setImageFile] = useState<File | null>(null);
@@ -55,7 +55,7 @@ function AddWorkspaceDialog({ open, onClose, onWorkspaceAdded }: AddWorkspaceDia
   useEffect(() => {
     if (open) {
       setInviteCode(generateInviteCode());
-      setWorkspaceImage("/default-workspace.png");
+      setWorkspaceImage(undefined);
       setJoinInviteCode("");
       setError("");
     }
@@ -101,6 +101,13 @@ function AddWorkspaceDialog({ open, onClose, onWorkspaceAdded }: AddWorkspaceDia
       const currentUser = getUserFromStore();
       const userId = currentUser?.id || "";
 
+      const workspaceData = {
+        name: workspaceName,
+        inviteCode,
+        // Only include image if a file was actually selected
+        ...(imageFile && { image: undefined }) // Will be set by file upload logic
+      };
+
       const newWorkspace = await createWorkspace({
         name: workspaceName.trim(),
         image: '/default-workspace.png', // Default image, will be replaced if imageFile exists
@@ -112,7 +119,7 @@ function AddWorkspaceDialog({ open, onClose, onWorkspaceAdded }: AddWorkspaceDia
         users: [userId]
       });
 
-      resetForm();
+      resetCreateForm();
       onClose();
 
       if (onWorkspaceAdded) {
@@ -145,14 +152,30 @@ function AddWorkspaceDialog({ open, onClose, onWorkspaceAdded }: AddWorkspaceDia
     }
   };
 
+  const resetCreateForm = () => {
+    setWorkspaceName("");
+    setInviteCode("");
+    setError("");
+    setImageError("");
+    setWorkspaceImage(undefined);
+    setImageFile(null);
+    setFileSize(null);
+  };
+
   const resetForm = () => {
     setWorkspaceName("");
     setInviteCode("");
     setJoinInviteCode("");
-    setWorkspaceImage("/default-workspace.png");
+    setWorkspaceImage(undefined);
     setImageFile(null);
     setError("");
     setTabValue(0);
+  };
+
+  const resetJoinForm = () => {
+    setJoinInviteCode("");
+    setError("");
+    setWorkspaceImage(undefined);
   };
 
   const handleCancel = () => {

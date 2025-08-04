@@ -25,7 +25,6 @@ function CourseworkHelper({ workspaceId }: CourseworkHelperProps) {
           <MarkdownRenderer 
             content={intl.formatMessage({
               id: "workspace.mypartner.courseworkHelper.noWorkspaceSelected",
-              defaultMessage: "⚠️ **No workspace selected**\n\nPlease select a workspace to access the Coursework Helper tools and features."
             })}
           />
         </Alert>
@@ -49,13 +48,11 @@ function CourseworkHelper({ workspaceId }: CourseworkHelperProps) {
                 <Typography variant="h6" gutterBottom>
                   <FormattedMessage 
                     id="workspace.mypartner.courseworkHelper.welcomeTitle" 
-                    defaultMessage="Welcome to your Coursework Helper"
                   />
                 </Typography>
                 <MarkdownRenderer 
                   content={intl.formatMessage({
                     id: "workspace.mypartner.courseworkHelper.welcomeMessage",
-                    defaultMessage: "This AI assistant is designed to help you with your **coursework**, **assignments**, and **academic tasks**.\n\n## Available Tools:\n\n### 📝 **Quiz Helper**\n- Generate practice questions from your knowledge base\n- Support for multiple choice, short answer, and true/false questions\n- AI-powered answer evaluation with detailed feedback\n- Mathematical expressions: *a = Δv/Δt*, *F = ma*, *E = mc²*\n\n### 📚 **Assignment Helper**\n- Get assistance with academic writing and research\n- Structured approach to complex assignments\n- Citation and reference support\n\n### 🔬 **Research Helper**\n- Advanced research and analysis tools\n- Literature review assistance\n- Data analysis and interpretation\n\n**Select a specific tool from the menu to get started!**"
                   })}
                 />
               </CardContent>
@@ -78,7 +75,6 @@ function CourseworkHelper({ workspaceId }: CourseworkHelperProps) {
           <Typography variant="h4" sx={{ fontWeight: 'bold' }}>
             <FormattedMessage 
               id="workspace.mypartner.courseworkHelper.title" 
-              defaultMessage="Coursework Helper"
             />
           </Typography>
         </Box>
@@ -86,7 +82,6 @@ function CourseworkHelper({ workspaceId }: CourseworkHelperProps) {
           <MarkdownRenderer 
             content={intl.formatMessage({
               id: "workspace.mypartner.courseworkHelper.description",
-              defaultMessage: "AI assistant for **coursework**, **assignments**, and **academic support**. Features include:\n\n• **Quiz Helper** - Generate practice questions from your knowledge base\n• **Assignment Helper** - Get assistance with academic tasks\n• **Research Helper** - Support for research and analysis\n\nSelect a tool from the menu to get started with your academic work."
             })}
           />
         </Box>

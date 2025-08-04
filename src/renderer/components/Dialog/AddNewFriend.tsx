@@ -25,7 +25,7 @@ function AddNewFriend({ open, onClose }: AddNewFriendDialogProps) {
   const handleSendRequest = () => {
     // Validate
     if (!username.trim()) {
-      setError("Username is required");
+      setError(intl.formatMessage({ id: "common.error.requiredField", defaultMessage: "This field is required" }));
       return;
     }
 

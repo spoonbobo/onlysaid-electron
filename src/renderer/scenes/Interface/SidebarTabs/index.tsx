@@ -140,10 +140,15 @@ function SidebarTabs({ onExpandChange, onAgentToggle, agentOverlayVisible = fals
   }, [workspaces, contexts, addContext, user]);
 
   const WorkspaceContexts = user
-    ? contexts.filter(context =>
-      context.type === "workspace" &&
-      !(context.name === "workspace" && context.type === "workspace")
-    )
+    ? contexts
+        .filter(context =>
+          context.type === "workspace" &&
+          !(context.name === "workspace" && context.type === "workspace")
+        )
+        .filter((context, index, array) => {
+          // Deduplicate by workspace ID to prevent duplicate keys
+          return array.findIndex(ctx => ctx.id === context.id) === index;
+        })
     : [];
 
   useEffect(() => {

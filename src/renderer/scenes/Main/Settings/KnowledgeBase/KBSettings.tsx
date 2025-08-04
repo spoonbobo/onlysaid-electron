@@ -1,143 +1,102 @@
-import { Typography, Box, FormControl, InputLabel, Select, MenuItem, Button, Chip } from "@mui/material";
-import SettingsSection from "@/renderer/components/Settings/SettingsSection";
-import SettingsFormField from "@/renderer/components/Settings/SettingsFormField";
-import SettingsActionBar from "@/renderer/components/Settings/SettingsActionBar";
-import { useKBSettingsStore } from "@/renderer/stores/KB/KBSettingStore";
-import { LLMService, LLMModel, EmbeddingModel, EmbeddingService } from "@/service/ai";
-import { useEffect, useState } from "react";
-import { FormattedMessage, useIntl } from "react-intl";
-import { toast } from "@/utils/toast";
+import React from 'react';
+import {
+  Box,
+  Typography,
+  Card,
+  CardContent,
+  Divider,
+  Button,
+  Stack,
+  Alert
+} from '@mui/material';
+import {
+  Settings as SettingsIcon,
+  Edit as EditIcon,
+  Delete as DeleteIcon
+} from '@mui/icons-material';
+import { FormattedMessage } from 'react-intl';
+import { IKnowledgeBase } from '@/../../types/KnowledgeBase/KnowledgeBase';
 
-function KBSettings() {
-  const intl = useIntl();
-  const { queryEngineLLM, embeddingEngine, setQueryEngineLLM, setEmbeddingEngine, resetToDefaults, isKBUsable } = useKBSettingsStore();
-  const [llms, setLlms] = useState<LLMModel[]>([]);
-  const [embeddingModels, setEmbeddingModels] = useState<EmbeddingModel[]>([]);
-
-  useEffect(() => {
-    const llmService = new LLMService();
-    llmService.GetEnabledLLM()
-      .then(enabledLLMs => {
-        setLlms(enabledLLMs);
-        console.log(enabledLLMs);
-
-        // Set default query engine if not set and there are available LLMs
-        if (!queryEngineLLM && enabledLLMs.length > 0) {
-          setQueryEngineLLM(enabledLLMs[0].id);
-        }
-      })
-      .catch(error => {
-        console.error("Failed to load LLMs:", error);
-      });
-
-    const embeddingService = new EmbeddingService();
-    embeddingService.GetEmbeddingModels()
-      .then(enabledEmbeddingModels => {
-        setEmbeddingModels(enabledEmbeddingModels);
-        console.log(enabledEmbeddingModels);
-      })
-      .catch(error => {
-        console.error("Failed to load embedding models:", error);
-      });
-  }, [queryEngineLLM, setQueryEngineLLM]);
-
-  const handleQueryEngineChange = (event: any) => {
-    setQueryEngineLLM(event.target.value);
-  };
-
-  const handleEmbeddingEngineChange = (event: any) => {
-    setEmbeddingEngine(event.target.value);
-  };
-
-  const handleSave = () => {
-    toast.success(intl.formatMessage({ id: "settings.savedSuccessfully" }));
-  };
-
-  return (
-    <>
-      <SettingsSection title={intl.formatMessage({ id: "settings.kbSettings" })} sx={{ mb: 3 }}>
-        <Box sx={{ mt: 2 }}>
-          <Typography variant="subtitle2">
-            <FormattedMessage id="settings.kb.status" defaultMessage="知識庫狀態" />: {isKBUsable() ? (
-              <Chip size="small" color="success" label={intl.formatMessage({ id: "settings.kb.configured" })} />
-            ) : (
-              <Chip size="small" color="error" label={intl.formatMessage({ id: "settings.kb.notConfigured" })} />
-            )}
-          </Typography>
-        </Box>
-
-        <SettingsFormField label={intl.formatMessage({ id: "settings.kb.queryEngine" })}>
-          <FormControl fullWidth>
-            <InputLabel id="query-engine-label">
-              {intl.formatMessage({ id: "settings.kb.selectQueryEngine" })}
-            </InputLabel>
-            <Select
-              labelId="query-engine-label"
-              value={queryEngineLLM}
-              onChange={handleQueryEngineChange}
-              label={intl.formatMessage({ id: "settings.kb.selectQueryEngine" })}
-            >
-              {llms.length > 0 ? (
-                llms.map((llm) => (
-                  <MenuItem key={llm.id} value={llm.id}>
-                    {llm.name}
-                  </MenuItem>
-                ))
-              ) : (
-                <MenuItem value="" disabled>
-                  {intl.formatMessage({ id: "settings.kb.noLLMsAvailable" })}
-                </MenuItem>
-              )}
-            </Select>
-            <Typography variant="caption" color="text.secondary" sx={{ mt: 1 }}>
-              {intl.formatMessage({ id: "settings.kb.queryEngineDescription" })}
-            </Typography>
-          </FormControl>
-        </SettingsFormField>
-
-        <SettingsFormField label={intl.formatMessage({ id: "settings.kb.embeddingEngine" })}>
-          <FormControl fullWidth>
-            <InputLabel id="embedding-engine-label">
-              {intl.formatMessage({ id: "settings.kb.selectEmbeddingEngine" })}
-            </InputLabel>
-            <Select
-              labelId="embedding-engine-label"
-              value={embeddingEngine}
-              onChange={handleEmbeddingEngineChange}
-              label={intl.formatMessage({ id: "settings.kb.selectEmbeddingEngine" })}
-            >
-              <MenuItem value="none">
-                {intl.formatMessage({ id: "settings.kb.none" })}
-              </MenuItem>
-              {embeddingModels.length > 0 ? (
-                embeddingModels.map((model) => (
-                  <MenuItem key={model.id} value={model.id}>
-                    {model.name}
-                  </MenuItem>
-                ))
-              ) : (
-                <MenuItem value="" disabled>
-                  {intl.formatMessage({ id: "settings.kb.noEmbeddingModelsAvailable" })}
-                </MenuItem>
-              )}
-            </Select>
-            <Typography variant="caption" color="text.secondary" sx={{ mt: 1 }}>
-              {intl.formatMessage({ id: "settings.kb.embeddingEngineDescription" })}
-            </Typography>
-          </FormControl>
-        </SettingsFormField>
-      </SettingsSection>
-
-      <SettingsActionBar>
-        <Button variant="contained" onClick={handleSave}>
-          {intl.formatMessage({ id: "common.save" })}
-        </Button>
-        <Button variant="outlined" onClick={resetToDefaults} sx={{ ml: 2 }}>
-          {intl.formatMessage({ id: "common.resetToDefaults" })}
-        </Button>
-      </SettingsActionBar>
-    </>
-  );
+interface KBSettingsProps {
+  knowledgeBase: IKnowledgeBase;
+  onEdit: () => void;
+  onDelete: () => void;
 }
 
-export default KBSettings;
+export default function KBSettings({
+  knowledgeBase,
+  onEdit,
+  onDelete
+}: KBSettingsProps) {
+  return (
+    <Box>
+      {/* Section Header */}
+      <Box sx={{ mb: 3 }}>
+        <Typography variant="h6" gutterBottom>
+          <FormattedMessage id="kb.settings.title" />
+        </Typography>
+        <Typography variant="body2" color="text.secondary">
+          <FormattedMessage id="kb.settings.description" />
+        </Typography>
+      </Box>
+
+      <Divider sx={{ mb: 3 }} />
+
+      {/* Settings Sections */}
+      <Stack spacing={3}>
+        {/* Configuration Settings */}
+        <Card variant="outlined">
+          <CardContent>
+            <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+              <SettingsIcon sx={{ mr: 1, color: 'primary.main' }} />
+              <Typography variant="h6">
+                <FormattedMessage id="kb.settings.configuration" defaultMessage="Configuration" />
+              </Typography>
+            </Box>
+            
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+              <FormattedMessage 
+                id="kb.settings.configuration.description" 
+                defaultMessage="Modify knowledge base settings, embedding model, and other configuration options." 
+              />
+            </Typography>
+
+            <Button
+              variant="outlined"
+              startIcon={<EditIcon />}
+              onClick={onEdit}
+              sx={{ mt: 1 }}
+            >
+              <FormattedMessage id="kb.settings.edit" defaultMessage="Edit Settings" />
+            </Button>
+          </CardContent>
+        </Card>
+
+        {/* Danger Zone */}
+        <Card variant="outlined" sx={{ borderColor: 'error.main', bgcolor: 'error.lighter' }}>
+          <CardContent>
+            <Typography variant="h6" color="error.main" gutterBottom>
+              <FormattedMessage id="kb.settings.dangerZone" defaultMessage="Danger Zone" />
+            </Typography>
+            
+            <Alert severity="warning" sx={{ mb: 2 }}>
+              <FormattedMessage 
+                id="kb.settings.deleteWarning" 
+                defaultMessage="Deleting a knowledge base is permanent and cannot be undone. All documents and data will be lost." 
+              />
+            </Alert>
+
+            <Button
+              variant="outlined"
+              color="error"
+              startIcon={<DeleteIcon />}
+              onClick={onDelete}
+            >
+              <FormattedMessage id="kb.settings.delete" defaultMessage="Delete Knowledge Base" />
+            </Button>
+          </CardContent>
+        </Card>
+      </Stack>
+    </Box>
+  );
+}
