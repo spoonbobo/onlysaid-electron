@@ -362,7 +362,7 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = React.memo(({
       `;
 
       const applyButton = isCopilotMode && currentDocument ? `
-        <button class="apply-button" data-id="${codeBlockId}" aria-label="Apply code" onclick="document.dispatchEvent(new CustomEvent('onlysaid-apply', {detail: '${codeBlockId}'}))">
+        <button class="apply-button" data-id="${codeBlockId}" data-language="${language}" aria-label="Apply code" onclick="document.dispatchEvent(new CustomEvent('onlysaid-apply', {detail: '${codeBlockId}'}))">
           <svg class="apply-icon" viewBox="0 0 24 24"><path d="${APPLY_SVG_PATH}"></path></svg>
         </button>
       ` : '';
@@ -487,8 +487,20 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = React.memo(({
 
       const code = wrapper.querySelector('code');
       const text = code?.textContent || '';
+      
+      // Get the language from the button or language label
+      const applyButton = wrapper.querySelector('.apply-button') as HTMLElement;
+      const languageLabel = wrapper.querySelector('.language-label') as HTMLElement;
+      const language = applyButton?.dataset?.language || languageLabel?.textContent || '';
+      
+      // Reconstruct the proper format for DOCX patches
+      let formattedCode = text;
+      if (language && ['docx-structure-patch', 'docx-patch', 'anchor-patch', 'docx-content'].includes(language.toLowerCase())) {
+        formattedCode = `\`\`\`${language}\n${text}\n\`\`\``;
+        console.log('🔧 [APPLY] Reconstructed code block format:', formattedCode.substring(0, 100) + '...');
+      }
 
-      await applyCodeToFile(text);
+      await applyCodeToFile(formattedCode);
     };
 
     document.addEventListener('onlysaid-copy', handleCopyEvent);

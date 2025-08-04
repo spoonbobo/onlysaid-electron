@@ -88,7 +88,7 @@ export async function processAskModeAIResponse({
     let actualFileContent: string | undefined;
     
     if (isCopilotMode) {
-      const { currentDocument } = useCopilotStore.getState();
+      const { currentDocument, currentFileContent } = useCopilotStore.getState();
       if (currentDocument) {
         fileName = currentDocument.name;
         const lastDotIndex = fileName.lastIndexOf('.');
@@ -96,7 +96,9 @@ export async function processAskModeAIResponse({
           fileExtension = fileName.substring(lastDotIndex + 1);
         }
       }
-      actualFileContent = fileContent;
+      actualFileContent = currentFileContent || undefined;
+      
+
     }
     
     systemPrompt = getAskModeSystemPrompt(
@@ -107,6 +109,8 @@ export async function processAskModeAIResponse({
       fileName,
       fileExtension
     );
+    
+
   }
 
   const assistantMessage: IChatMessage = {

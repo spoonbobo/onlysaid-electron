@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { FileNode } from "@/renderer/stores/File/FileExplorerStore";
+import { DocxElement } from "@/utils/docxPatch";
 
 interface CopilotStore {
   // Current document being analyzed
@@ -8,6 +9,9 @@ interface CopilotStore {
   
   // ADD: Store the actual file content
   currentFileContent: string | null;
+  
+  // ADD: Store document structure for DOCX files
+  currentDocumentStructure: DocxElement[] | null;
   
   // Copilot UI state
   splitRatio: number;
@@ -21,6 +25,10 @@ interface CopilotStore {
   
   // ADD: Action to set file content
   setCurrentFileContent: (content: string | null) => void;
+  
+  // ADD: Action to set document structure
+  setCurrentDocumentStructure: (structure: DocxElement[] | null) => void;
+  
   setSplitRatio: (ratio: number) => void;
   setActive: (active: boolean) => void;
   setHasUnsavedChanges: (hasChanges: boolean) => void;
@@ -29,6 +37,8 @@ interface CopilotStore {
   getContextInfo: () => {
     documentName: string;
     contextId: string;
+    fileContent: string | null;
+    documentStructure: DocxElement[] | null;
   } | null;
 }
 
@@ -40,6 +50,7 @@ export const useCopilotStore = create<CopilotStore>()(
     (set, get) => ({
       currentDocument: null,
       currentFileContent: null, // ADD: Initialize file content
+      currentDocumentStructure: null, // ADD: Initialize document structure
       splitRatio: 50,
       isActive: false,
       hasUnsavedChanges: false,
@@ -48,6 +59,9 @@ export const useCopilotStore = create<CopilotStore>()(
       
       // ADD: Action to set file content
       setCurrentFileContent: (content) => set({ currentFileContent: content }),
+      
+      // ADD: Action to set document structure
+      setCurrentDocumentStructure: (structure) => set({ currentDocumentStructure: structure }),
       
       setSplitRatio: (ratio) => {
         const clampedRatio = Math.min(80, Math.max(20, ratio));
@@ -77,7 +91,9 @@ export const useCopilotStore = create<CopilotStore>()(
         
         return {
           documentName: state.currentDocument.name,
-          contextId: `copilot-${state.currentDocument.id}`
+          contextId: `copilot-${state.currentDocument.id}`,
+          fileContent: state.currentFileContent,
+          documentStructure: state.currentDocumentStructure
         };
       }
     }),

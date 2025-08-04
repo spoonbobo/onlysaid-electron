@@ -22,9 +22,9 @@ interface FilePreviewProps {
   onApplyDiffBlock?: (block: DiffBlock) => void;
   onDeclineDiffBlock?: (block: DiffBlock) => void;
   // External control props for DOCX
-  renderMode?: 'text' | 'html' | 'structured';
+  renderMode?: 'text' | 'view';
   useEnhancedReader?: boolean;
-  onRenderModeChange?: (mode: 'text' | 'html' | 'structured') => void;
+  onRenderModeChange?: (mode: 'text' | 'view') => void;
   onReaderTypeChange?: (useEnhanced: boolean) => void;
 }
 

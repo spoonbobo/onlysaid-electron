@@ -691,7 +691,6 @@ export default function TextPreview({
           sx={{
             width: '100%',
             flex: 1,
-            minHeight: '400px',
             fontSize: `${fontSize}px`,
             lineHeight: 1.6,
             fontFamily: 'monospace',
@@ -702,7 +701,6 @@ export default function TextPreview({
             padding: 0,
             margin: 0,
             paddingRight: hideControls ? 0 : '48px',
-            overflow: 'auto',
             whiteSpace: 'pre-wrap',
             cursor: 'default',
             position: 'relative'
@@ -744,7 +742,6 @@ export default function TextPreview({
         style={{
           width: '100%',
           flex: 1,
-          minHeight: '400px',
           fontSize: `${fontSize}px`,
           lineHeight: 1.6,
           fontFamily: 'monospace',
@@ -762,87 +759,84 @@ export default function TextPreview({
   };
 
   return (
-    <Box sx={{ width: '100%', height: '100%', position: 'relative' }}>
-      {/* Document content */}
-      <Paper 
-        variant="outlined" 
-        sx={{ 
-          p: 3,
-          height: maxHeight ? maxHeight : '100%',
-          overflow: 'auto',
-          bgcolor: 'background.paper',
-          position: 'relative'
-        }}
-      >
-{!hideControls && (
-          <Box 
-            sx={{ 
-              position: 'absolute',
-              top: 8,
-              right: 8,
-              display: 'flex',
-              gap: 0.5,
-              bgcolor: 'background.paper',
-              borderRadius: 1,
-              boxShadow: 1,
-              p: 0.5,
-              zIndex: 1
+    <Box sx={{ width: '100%', height: '100%', overflow: 'auto', position: 'relative' }}>
+      {isEditable ? (
+        // Editable mode - fill full height like Docx.tsx
+        <Box sx={{ position: 'relative', height: '100%', display: 'flex', flexDirection: 'column' }}>
+          {renderDiffTextarea()}
+          {showDiff && diff && renderDiffHighlights()}
+        </Box>
+      ) : (
+        // Read-only mode with Paper container
+        <Paper 
+          variant="outlined" 
+          sx={{ 
+            p: 3,
+            minHeight: maxHeight ? maxHeight : '100%',
+            bgcolor: 'background.paper',
+            position: 'relative'
+          }}
+        >
+          {!hideControls && (
+            <Box 
+              sx={{ 
+                position: 'absolute',
+                top: 8,
+                right: 8,
+                display: 'flex',
+                gap: 0.5,
+                bgcolor: 'background.paper',
+                borderRadius: 1,
+                boxShadow: 1,
+                p: 0.5,
+                zIndex: 1
+              }}
+            >
+              <Tooltip title="Decrease Font Size">
+                <IconButton size="small" onClick={handleFontSizeDecrease} disabled={fontSize <= 10}>
+                  <ZoomOutIcon />
+                </IconButton>
+              </Tooltip>
+              
+              <Typography variant="body2" sx={{ alignSelf: 'center', minWidth: '32px', textAlign: 'center', fontSize: '11px' }}>
+                {fontSize}px
+              </Typography>
+              
+              <Tooltip title="Increase Font Size">
+                <IconButton size="small" onClick={handleFontSizeIncrease} disabled={fontSize >= 24}>
+                  <ZoomInIcon />
+                </IconButton>
+              </Tooltip>
+              
+              <Tooltip title="Copy Text">
+                <IconButton size="small" onClick={handleCopyText}>
+                  <CopyIcon />
+                </IconButton>
+              </Tooltip>
+              
+              <Tooltip title="Download as Text">
+                <IconButton size="small" onClick={handleDownload}>
+                  <DownloadIcon />
+                </IconButton>
+              </Tooltip>
+            </Box>
+          )}
+
+          <Typography
+            variant="body1"
+            sx={{
+              fontSize: `${fontSize}px`,
+              lineHeight: 1.6,
+              whiteSpace: 'pre-wrap',
+              fontFamily: 'monospace',
+              wordBreak: 'break-word',
+              pr: hideControls ? 0 : 12
             }}
           >
-            <Tooltip title="Decrease Font Size">
-              <IconButton size="small" onClick={handleFontSizeDecrease} disabled={fontSize <= 10}>
-                <ZoomOutIcon />
-              </IconButton>
-            </Tooltip>
-            
-            <Typography variant="body2" sx={{ alignSelf: 'center', minWidth: '32px', textAlign: 'center', fontSize: '11px' }}>
-              {fontSize}px
-            </Typography>
-            
-            <Tooltip title="Increase Font Size">
-              <IconButton size="small" onClick={handleFontSizeIncrease} disabled={fontSize >= 24}>
-                <ZoomInIcon />
-              </IconButton>
-            </Tooltip>
-            
-            <Tooltip title="Copy Text">
-              <IconButton size="small" onClick={handleCopyText}>
-                <CopyIcon />
-              </IconButton>
-            </Tooltip>
-            
-            <Tooltip title="Download as Text">
-              <IconButton size="small" onClick={handleDownload}>
-                <DownloadIcon />
-              </IconButton>
-            </Tooltip>
-          </Box>
-        )}
-
-{isEditable ? (
-  <Box sx={{ position: 'relative', height: '100%', display: 'flex', flexDirection: 'column' }}>
-    {renderDiffTextarea()}
-    {/* Only show diff highlights when actually showing diff */}
-    {showDiff && diff && renderDiffHighlights()}
-  </Box>
-) : (
-  <Typography
-    variant="body1"
-    sx={{
-      fontSize: `${fontSize}px`,
-      lineHeight: 1.6,
-      whiteSpace: 'pre-wrap',
-      fontFamily: 'monospace',
-      wordBreak: 'break-word',
-      pr: hideControls ? 0 : 12
-    }}
-  >
-    {documentData.text}
-  </Typography>
-)}
-
-
-      </Paper>
+            {documentData.text}
+          </Typography>
+        </Paper>
+      )}
     </Box>
   );
 }

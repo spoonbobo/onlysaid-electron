@@ -4,6 +4,13 @@ import { useTopicStore } from '@/renderer/stores/Topic/TopicStore';
 import { useCopilotStore } from '@/renderer/stores/Copilot/CopilotStore';
 import { appendRulesToSystemPrompt } from '@/utils/rules';
 
+// Helper to check if file is DOCX
+const isDOCXFile = (fileName?: string): boolean => {
+  if (!fileName) return false;
+  const ext = fileName.toLowerCase().substring(fileName.lastIndexOf('.'));
+  return ['.docx', '.doc'].includes(ext);
+};
+
 /**
  * Default system prompt for Ask Mode (with copilot mode detection)
  */
@@ -22,8 +29,108 @@ export const askModeSystemPrompt = (
   const isCopilotMode = topicStore.selectedContext?.section === 'local:copilot';
   
   if (isCopilotMode) {
-    // Copilot mode prompt - focused on file editing
-    return `
+    // Check if this is a DOCX file for special handling
+    const isDocxFile = isDOCXFile(fileName);
+    
+    if (isDocxFile) {
+      // Get structure information from copilot store
+      const copilotStore = useCopilotStore.getState();
+      const contextInfo = copilotStore.getContextInfo();
+      const documentStructure = contextInfo?.documentStructure;
+      
+      // Build structure summary for AI
+      let structureSummary = '';
+      if (documentStructure && documentStructure.length > 0) {
+        structureSummary = '\n\nDOCUMENT STRUCTURE BREAKDOWN:\n';
+        documentStructure.forEach((element, index) => {
+          const preview = element.content.length > 50 
+            ? element.content.substring(0, 50) + '...'
+            : element.content;
+          structureSummary += `- Element ${index}: ${element.type}${element.level ? ` (level ${element.level})` : ''} - "${preview}"\n`;
+        });
+        structureSummary += `\nTotal elements: ${documentStructure.length}\n`;
+      } else {
+        structureSummary = '\n\nDOCUMENT STRUCTURE: Not available - fallback to text-based patches\n';
+      }
+      
+      // DOCX-specific copilot mode prompt
+      return `
+Your name is ${assistantName} and you are an AI Document Copilot assistant for ${user.username}.
+
+You are currently assisting with editing and modifying the DOCX document: "${fileName}"
+
+CURRENT DOCUMENT CONTENT:
+\`\`\`text
+${fileContent}
+\`\`\`
+${structureSummary}
+
+As a DOCX Document Copilot, you should:
+
+1. **Understand document structure**: Analyze headings, paragraphs, formatting, and overall document organization
+2. **Provide content assistance**: Help with writing, editing, restructuring, and improving document content
+3. **Suggest document improvements**: Offer better organization, clarity, flow, and professional formatting
+4. **Answer document questions**: Explain content, suggest alternatives, or clarify document structure
+
+CRITICAL OUTPUT FORMAT FOR DOCX DOCUMENTS:
+
+**PREFERRED METHOD - Structure-based patches (most reliable):**
+For precise document element modifications, use structure patches:
+
+\`\`\`docx-structure-patch
+{
+  "elementIndex": 0,
+  "action": "replace",
+  "elementType": "heading",
+  "newElement": {
+    "type": "heading",
+    "content": "New Heading Text",
+    "level": 1,
+    "formatting": {
+      "bold": true,
+      "fontSize": 16
+    }
+  }
+}
+\`\`\`
+
+**Available actions:**
+- \`replace\`: Replace entire element at index
+- \`insert\`: Add new element (use \`insertPosition\`: "before"/"after")
+- \`delete\`: Remove element at index
+- \`modify\`: Merge changes with existing element
+
+**Element types:** heading, paragraph, table, list, image
+
+**FALLBACK METHOD - Anchor patches:**
+For simple text changes when structure is unclear:
+
+\`\`\`anchor-patch
+ANCHOR_START: [unique text before your change]
+ORIGINAL: [text to replace]
+REPLACEMENT: [new text]
+ANCHOR_END: [unique text after your change]
+\`\`\`
+
+**GUIDELINES:**
+- Use structure patches for precise element targeting (preferred)
+- Use anchor patches only for simple text replacements
+- Element indices start at 0 (first element = 0, second = 1, etc.)
+- Always specify element type when known
+- Preserve formatting unless explicitly changing it
+
+Your responses should be:
+- Focused on document content and structure
+- Professional and well-written
+- Contextually aware of the document's purpose
+- Specific about which parts to modify
+- Formatted for easy application to the document
+
+Remember: You're working with a structured document, not code. Focus on content quality, clarity, and proper document organization.
+      `.trim();
+    } else {
+      // Regular code file copilot mode prompt
+      return `
 Your name is ${assistantName} and you are an AI Copilot assistant for ${user.username}.
 
 You are currently assisting with editing and modifying the file: "${fileName}"
@@ -56,7 +163,8 @@ Your responses should be:
 - Professional yet friendly
 
 Remember: You have full context of the file content and should leverage this to provide the most relevant and helpful assistance.
-    `.trim();
+      `.trim();
+    }
   } else {
     // Regular ask mode prompt
     return `
@@ -103,6 +211,17 @@ export const getAskModeSystemPrompt = (
   } else {
     // Fallback to default prompt
     systemPrompt = askModeSystemPrompt(user, agent, avatarName, fileContent, fileName, fileExtension);
+  }
+  
+  // Additional context for DOCX files in copilot mode
+  if (isCopilotMode && isDOCXFile(fileName)) {
+    systemPrompt += `
+
+ADDITIONAL CONTEXT FOR DOCX DOCUMENTS:
+- The document has both "View Mode" (formatted) and "Edit Mode" (text editing)
+- Focus on making precise, targeted changes to specific parts of the document
+- Use anchor patches to avoid rewriting the entire document when possible
+`;
   }
   
   // Append rules for ask mode

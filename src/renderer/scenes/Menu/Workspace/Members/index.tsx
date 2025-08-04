@@ -171,6 +171,7 @@ export default memo(function WorkspaceMembersMenu() {
   const handleCloseMenu = useCallback(() => {
     setMenuAnchorEl(null);
     setSelectedItem(null);
+    setMenuOpen(false); // Ensure menu state is properly cleared
   }, []);
 
   const handleApproveJoinRequest = useCallback(async (userId: string, e?: React.MouseEvent) => {
@@ -355,6 +356,7 @@ export default memo(function WorkspaceMembersMenu() {
           anchorEl={menuAnchorEl}
           open={menuOpen}
           onClose={handleCloseMenu}
+          disableAutoFocusItem={true}
           anchorOrigin={{
             vertical: 'bottom',
             horizontal: 'right',
@@ -362,6 +364,9 @@ export default memo(function WorkspaceMembersMenu() {
           transformOrigin={{
             vertical: 'top',
             horizontal: 'right',
+          }}
+          MenuListProps={{
+            'aria-label': 'Member actions menu'
           }}
         >
           {selectedItem?.type === 'join' && canApproveJoinRequests && (

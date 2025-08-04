@@ -35,9 +35,9 @@ interface DocxPreviewProps {
   onApplyDiffBlock?: (block: DiffBlock) => void;
   onDeclineDiffBlock?: (block: DiffBlock) => void;
   // External control props
-  renderMode?: 'text' | 'html' | 'structured';
+  renderMode?: 'text' | 'view';
   useEnhancedReader?: boolean;
-  onRenderModeChange?: (mode: 'text' | 'html' | 'structured') => void;
+  onRenderModeChange?: (mode: 'text' | 'view') => void;
   onReaderTypeChange?: (useEnhanced: boolean) => void;
 }
 
@@ -103,7 +103,7 @@ export default function DocxPreview({
   const [internalFontSize, setInternalFontSize] = useState(14);
   const [editableContent, setEditableContent] = useState('');
   const [lastSavedContent, setLastSavedContent] = useState('');
-  const [internalRenderMode, setInternalRenderMode] = useState<'text' | 'html' | 'structured'>('structured');
+  const [internalRenderMode, setInternalRenderMode] = useState<'text' | 'view'>('view');
   const [internalUseEnhancedReader, setInternalUseEnhancedReader] = useState(true);
   
   // Use external props if provided, otherwise use internal state
@@ -111,7 +111,7 @@ export default function DocxPreview({
   const useEnhancedReader = externalUseEnhancedReader ?? internalUseEnhancedReader;
   
   // Helper functions to update render mode and reader type
-  const updateRenderMode = (mode: 'text' | 'html' | 'structured') => {
+  const updateRenderMode = (mode: 'text' | 'view') => {
     if (onRenderModeChange) {
       onRenderModeChange(mode);
     } else {
@@ -392,38 +392,17 @@ export default function DocxPreview({
     }
   }, [externalContent]);
 
-  // Create function to generate diff display content
-  const createDiffDisplayContent = (originalContent: string, diff: CodeDiff) => {
-    const lines = originalContent.split('\n');
-    let result = [...lines];
-    
-    // Apply diff blocks to create a display version
-    diff.blocks.forEach(block => {
-      const removedLines = block.lines.filter(line => line.type === 'removed');
-      const addedLines = block.lines.filter(line => line.type === 'added');
-      
-      // Replace lines in the result array for display purposes
-      const startIdx = block.startLine - 1;
-      const endIdx = block.endLine - 1;
-      
-      for (let i = startIdx; i <= endIdx && i < result.length; i++) {
-        // Mark lines that will be changed
-        result[i] = `[CHANGED] ${result[i]}`;
-      }
-    });
-    
-    return result.join('\n');
-  };
 
-  // Update diff display content when diff changes
+
+  // Update diff display content when diff changes (for view mode)
   useEffect(() => {
-    if (showDiff && diff && diff.hasChanges) {
-      const diffContent = createDiffDisplayContent(displayContent, diff);
-      setDiffDisplayContent(diffContent);
+    if (showDiff && diff && diff.hasChanges && renderMode === 'view') {
+      // For view mode, we'll handle diff display differently
+      setDiffDisplayContent('');
     } else {
       setDiffDisplayContent('');
     }
-  }, [showDiff, diff, displayContent]);
+  }, [showDiff, diff, displayContent, renderMode]);
 
   // Font size is now controlled externally via props from CopilotView
 
@@ -508,16 +487,90 @@ export default function DocxPreview({
     );
   }
 
-  // Calculate line positions for diff overlay
+  // Calculate line positions for diff overlay based on render mode
   const getLinePosition = (lineNumber: number) => {
-    const lineHeight = fontSize * 1.5; // Approximate line height
-    return (lineNumber - 1) * lineHeight + 20; // 20px padding offset
+    if (renderMode === 'text') {
+      // Text mode: uniform line height calculation
+      const lineHeight = fontSize * 1.6; // Match textarea line height
+      return (lineNumber - 1) * lineHeight + 16; // 16px padding offset for textarea
+    } else {
+      // View mode: need to map line numbers to actual document elements
+      // This is more complex because elements have variable heights
+      return mapLineToViewPosition(lineNumber);
+    }
+  };
+
+  // Map line numbers to actual positions in view mode
+  const mapLineToViewPosition = (lineNumber: number) => {
+    if (!documentData?.structure) {
+      const lineHeight = fontSize * 1.6;
+      return (lineNumber - 1) * lineHeight + 20;
+    }
+
+    // Calculate cumulative height based on document structure
+    let currentLine = 1;
+    let cumulativeHeight = 0;
+    
+    for (const element of documentData.structure) {
+      const elementLines = Math.ceil(element.content.length / 80) || 1; // Estimate lines per element
+      const elementHeight = getElementHeight(element);
+      
+      if (lineNumber >= currentLine && lineNumber <= currentLine + elementLines - 1) {
+        // Line is within this element
+        const relativeLinePosition = lineNumber - currentLine;
+        const lineHeightInElement = elementHeight / elementLines;
+        return cumulativeHeight + (relativeLinePosition * lineHeightInElement) + 20; // 20px page padding
+      }
+      
+      currentLine += elementLines;
+      cumulativeHeight += elementHeight;
+      
+      if (currentLine > lineNumber) break;
+    }
+    
+    return cumulativeHeight + 20;
+  };
+
+  // Get the visual height of a document element
+  const getElementHeight = (element: DocxElement): number => {
+    const baseLineHeight = fontSize * 1.6;
+    
+    switch (element.type) {
+      case 'heading':
+        const level = element.level || 1;
+        const headingMultipliers = { 1: 2.0, 2: 1.8, 3: 1.6, 4: 1.4, 5: 1.2, 6: 1.1 };
+        return baseLineHeight * (headingMultipliers[level as keyof typeof headingMultipliers] || 1.5) + 24; // Extra margin for headings
+      case 'paragraph':
+        const lines = Math.ceil(element.content.length / 80) || 1;
+        return (baseLineHeight * lines) + 12; // Standard paragraph spacing
+      case 'table':
+        const tableRows = element.content.split('\n').length;
+        return (baseLineHeight * tableRows) + 16; // Table row height
+      case 'list':
+        const listItems = element.content.split('\n').length;
+        return (baseLineHeight * listItems) + 8; // List item spacing
+      default:
+        return baseLineHeight + 12;
+    }
   };
 
   const renderDiffOverlay = () => {
     if (!showDiff || !diff || !diff.hasChanges) {
       return null;
     }
+
+    // Only show diff overlay in text mode, not in view mode
+    if (renderMode === 'text') {
+      return renderTextModeDiffOverlay();
+    } else {
+      // No diff overlay in view mode - diff is handled inline in the content
+      return null;
+    }
+  };
+
+  // Diff overlay for text mode - only show apply/decline buttons, no highlighting
+  const renderTextModeDiffOverlay = () => {
+    if (!showDiff || !diff) return null;
 
     return (
       <Box
@@ -531,63 +584,135 @@ export default function DocxPreview({
           zIndex: 10
         }}
       >
-        {diff.blocks.map((block, blockIndex) => (
-          <Box
-            key={block.id}
-            sx={{
-              position: 'absolute',
-              left: 0,
-              right: 0,
-              top: getLinePosition(block.startLine),
-              height: (block.endLine - block.startLine + 1) * fontSize * 1.5,
-              border: '2px solid',
-              borderColor: 'warning.main',
-              backgroundColor: 'rgba(255, 193, 7, 0.1)',
-              borderRadius: 1,
-              pointerEvents: 'auto',
-              display: 'flex',
-              alignItems: 'flex-start',
-              justifyContent: 'flex-end',
-              p: 0.5,
-              gap: 0.5
-            }}
-          >
-            <Tooltip title="Apply Changes">
+        {diff.blocks.map((block) => {
+          // Position buttons at the first line of each diff block
+          const startLinePosition = (block.startLine - 1) * fontSize * 1.6 + 16; // 16px for padding
+          
+          return (
+            <Box
+              key={block.id}
+              sx={{
+                position: 'absolute',
+                top: startLinePosition,
+                right: 8,
+                display: 'flex',
+                gap: 0.5,
+                pointerEvents: 'auto',
+                zIndex: 3
+              }}
+            >
               <IconButton
                 size="small"
                 onClick={() => onApplyDiffBlock?.(block)}
                 sx={{
-                  backgroundColor: 'success.main',
-                  color: 'success.contrastText',
-                  '&:hover': {
-                    backgroundColor: 'success.dark',
-                  },
-                  width: 24,
-                  height: 24
+                  backgroundColor: '#2ea043',
+                  color: 'white',
+                  '&:hover': { backgroundColor: '#2c974b' },
+                  width: 18,
+                  height: 18,
+                  minWidth: 18,
+                  borderRadius: '3px',
+                  boxShadow: 2
                 }}
               >
-                <AcceptIcon sx={{ fontSize: 16 }} />
+                <AcceptIcon sx={{ fontSize: 11 }} />
               </IconButton>
-            </Tooltip>
-            <Tooltip title="Decline Changes">
               <IconButton
                 size="small"
                 onClick={() => onDeclineDiffBlock?.(block)}
                 sx={{
-                  backgroundColor: 'error.main',
-                  color: 'error.contrastText',
-                  '&:hover': {
-                    backgroundColor: 'error.dark',
-                  },
-                  width: 24,
-                  height: 24
+                  backgroundColor: '#f85149',
+                  color: 'white',
+                  '&:hover': { backgroundColor: '#e5484d' },
+                  width: 18,
+                  height: 18,
+                  minWidth: 18,
+                  borderRadius: '3px',
+                  boxShadow: 2
                 }}
               >
-                <DeclineIcon sx={{ fontSize: 16 }} />
+                <DeclineIcon sx={{ fontSize: 11 }} />
               </IconButton>
-            </Tooltip>
-          </Box>
-        ))}
+            </Box>
+          );
+        })}
+      </Box>
+    );
+  };
+
+  // Diff overlay for structured view mode
+  const renderViewModeDiffOverlay = () => {
+    return (
+      <Box
+        sx={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          pointerEvents: 'none',
+          zIndex: 10
+        }}
+      >
+        {diff!.blocks.map((block) => {
+          const topPosition = getLinePosition(block.startLine);
+          const bottomPosition = getLinePosition(block.endLine + 1);
+          const blockHeight = Math.max(bottomPosition - topPosition, fontSize * 1.6);
+          
+          return (
+            <Box
+              key={block.id}
+              sx={{
+                position: 'absolute',
+                left: '50px', // Account for page margins
+                right: '50px',
+                top: topPosition,
+                height: blockHeight,
+                border: '2px solid',
+                borderColor: 'warning.main',
+                backgroundColor: 'rgba(255, 193, 7, 0.1)',
+                borderRadius: 1,
+                pointerEvents: 'auto',
+                display: 'flex',
+                alignItems: 'flex-start',
+                justifyContent: 'flex-end',
+                p: 0.5,
+                gap: 0.5
+              }}
+            >
+              <Tooltip title="Apply Changes">
+                <IconButton
+                  size="small"
+                  onClick={() => onApplyDiffBlock?.(block)}
+                  sx={{
+                    backgroundColor: 'success.main',
+                    color: 'success.contrastText',
+                    '&:hover': { backgroundColor: 'success.dark' },
+                    width: 24,
+                    height: 24
+                  }}
+                >
+                  <AcceptIcon sx={{ fontSize: 16 }} />
+                </IconButton>
+              </Tooltip>
+              <Tooltip title="Decline Changes">
+                <IconButton
+                  size="small"
+                  onClick={() => onDeclineDiffBlock?.(block)}
+                  sx={{
+                    backgroundColor: 'error.main',
+                    color: 'error.contrastText',
+                    '&:hover': { backgroundColor: 'error.dark' },
+                    width: 24,
+                    height: 24
+                  }}
+                >
+                  <DeclineIcon sx={{ fontSize: 16 }} />
+                </IconButton>
+              </Tooltip>
+            </Box>
+          );
+        })}
       </Box>
     );
   };
@@ -673,6 +798,137 @@ export default function DocxPreview({
     return content;
   };
 
+  // Create function to generate diff display content for text mode
+  const createDiffDisplayContent = (originalContent: string, diff: CodeDiff) => {
+    const originalLines = originalContent.split('\n');
+    const result: string[] = [];
+    let currentLineIndex = 0;
+    
+    // Sort blocks by start line
+    const sortedBlocks = [...diff.blocks].sort((a, b) => a.startLine - b.startLine);
+    
+    for (const block of sortedBlocks) {
+      // Add original lines before this block
+      while (currentLineIndex < block.startLine - 1) {
+        result.push(originalLines[currentLineIndex]);
+        currentLineIndex++;
+      }
+      
+      // Add diff lines from this block
+      for (const line of block.lines) {
+        if (line.type === 'removed') {
+          result.push(`- ${line.content}`);
+        } else if (line.type === 'added') {
+          result.push(`+ ${line.content}`);
+        }
+      }
+      
+      // Skip the original lines that were replaced
+      currentLineIndex = block.endLine;
+    }
+    
+    // Add remaining original lines
+    while (currentLineIndex < originalLines.length) {
+      result.push(originalLines[currentLineIndex]);
+      currentLineIndex++;
+    }
+    
+    return result.join('\n');
+  };
+
+  // Add function to apply line styling for text mode diff display
+  const getStyledDiffLines = (content: string, diff: CodeDiff) => {
+    const lines = content.split('\n');
+    return lines.map((line, index) => {
+      if (line.startsWith('- ')) {
+        return { content: line, type: 'removed', index };
+      } else if (line.startsWith('+ ')) {
+        return { content: line, type: 'added', index };
+      }
+      return { content: line, type: 'normal', index };
+    });
+  };
+
+  // Render text mode content with diff support
+  const renderTextModeContent = () => {
+    if (showDiff && diff && diff.hasChanges) {
+      // Show styled diff view
+      const diffContent = createDiffDisplayContent(displayContent, diff);
+      const styledLines = getStyledDiffLines(diffContent, diff);
+      
+      return (
+        <Box
+          sx={{
+            width: '100%',
+            flex: 1,
+            fontSize: `${fontSize}px`,
+            lineHeight: 1.6,
+            fontFamily: '"Times New Roman", Times, serif',
+            border: 'none',
+            outline: 'none',
+            background: 'transparent',
+            color: theme.palette.text.primary,
+            padding: '16px',
+            margin: 0,
+            overflow: 'auto',
+            whiteSpace: 'pre-wrap',
+            cursor: 'default',
+            position: 'relative'
+          }}
+        >
+          {styledLines.map((line, index) => (
+            <Box
+              key={index}
+              sx={{
+                minHeight: `${fontSize * 1.6}px`,
+                display: 'block',
+                backgroundColor: 
+                  line.type === 'added' ? 'rgba(46, 160, 67, 0.2)' :
+                  line.type === 'removed' ? 'rgba(248, 81, 73, 0.2)' : 
+                  'transparent',
+                borderLeft: line.type !== 'normal' ? '3px solid' : 'none',
+                borderLeftColor:
+                  line.type === 'added' ? '#2ea043' :
+                  line.type === 'removed' ? '#f85149' : 'transparent',
+                color:
+                  line.type === 'added' ? '#2ea043' :
+                  line.type === 'removed' ? '#f85149' : theme.palette.text.primary,
+                fontWeight: line.type !== 'normal' ? 'bold' : 'normal',
+                paddingLeft: line.type !== 'normal' ? '8px' : '0px'
+              }}
+            >
+              {line.content}
+            </Box>
+          ))}
+        </Box>
+      );
+    }
+    
+    // Normal text editing when not showing diff
+    return (
+      <textarea
+        value={displayContent}
+        onChange={handleContentChange}
+        style={{
+          width: '100%',
+          flex: 1,
+          fontSize: `${fontSize}px`,
+          fontFamily: '"Times New Roman", Times, serif',
+          lineHeight: 1.6, // Match the diff view line height
+          border: 'none',
+          outline: 'none',
+          resize: 'none',
+          backgroundColor: 'transparent',
+          color: theme.palette.text.primary,
+          padding: '16px',
+          whiteSpace: 'pre-wrap',
+          wordBreak: 'break-word'
+        }}
+        placeholder="DOCX content will appear here..."
+      />
+    );
+  };
+
   const renderEditableContent = () => {
     if (!isEditable) {
       return null;
@@ -685,27 +941,10 @@ export default function DocxPreview({
         {showDiff && renderDiffOverlay()}
         
         {renderMode === 'text' ? (
-          // Raw text editing mode
-          <textarea
-            value={displayContent}
-            onChange={handleContentChange}
-            style={{
-              width: '100%',
-              flex: 1,
-              fontSize: `${fontSize}px`,
-              fontFamily: '"Times New Roman", Times, serif', // Keep Word font even in edit mode
-              lineHeight: 1.15,
-              border: 'none',
-              outline: 'none',
-              resize: 'none',
-              backgroundColor: 'transparent',
-              color: theme.palette.text.primary,
-              padding: '16px',
-              whiteSpace: 'pre-wrap',
-              wordBreak: 'break-word'
-            }}
-            placeholder="DOCX content will appear here..."
-          />
+          // Raw text editing mode with diff support
+          <Box sx={{ position: 'relative', flex: 1, display: 'flex', flexDirection: 'column' }}>
+            {renderTextModeContent()}
+          </Box>
         ) : (
           // Word-like structured view (read-only in editable mode for better UX)
           <Box sx={{ position: 'relative', cursor: 'text', flex: 1, height: '100%' }}>
@@ -853,8 +1092,29 @@ export default function DocxPreview({
             )}
             
             {/* Page content */}
-            <Box sx={{ position: 'relative', zIndex: 1 }}>
-              {page.map((element, elementIndex) => renderDocxElement(element, elementIndex + pageIndex * 1000))}
+            <Box sx={{ 
+              position: 'relative', 
+              zIndex: 1,
+              paddingLeft: renderMode === 'view' ? '70px' : '0px', // Add space for element info in view mode
+              transition: 'padding-left 0.2s ease'
+            }}>
+              {page.map((element, elementIndex) => {
+                const globalIndex = elementIndex + pageIndex * 1000;
+                return (
+                  <Box 
+                    key={globalIndex}
+                    sx={{ 
+                      position: 'relative',
+                      '&:hover .element-label': {
+                        opacity: 0.7
+                      }
+                    }}
+                  >
+
+                    {renderDocxElement(element, globalIndex)}
+                  </Box>
+                );
+              })}
             </Box>
 
             {/* Page footer - enhanced page numbering */}
@@ -904,6 +1164,7 @@ export default function DocxPreview({
         ))}
 
 
+
       </Box>
     );
   };
@@ -923,6 +1184,59 @@ export default function DocxPreview({
       wordBreak: 'break-word',
       hyphens: 'auto'
     };
+
+    // Helper function to create element info text
+    const getElementInfo = (element: DocxElement, index: number): string => {
+      switch (element.type) {
+        case 'heading':
+          return `H${element.level || 1}[${index}]`;
+        case 'paragraph':
+          return `P[${index}]`;
+        case 'table':
+          return `T[${index}]`;
+        case 'list':
+          return `L[${index}]`;
+        case 'image':
+          return `I[${index}]`;
+        default:
+          return `E[${index}]`;
+      }
+    };
+
+    // Helper function to wrap element with info text in view mode
+    const wrapWithInfo = (content: React.ReactNode, element: DocxElement, index: number) => {
+      if (renderMode !== 'view') {
+        return content;
+      }
+      
+      return (
+        <Box sx={{ position: 'relative', '&:hover .element-info': { opacity: 1 } }}>
+          <Box
+            className="element-info"
+            sx={{
+              position: 'absolute',
+              left: -60,
+              top: 0,
+              fontSize: '10px',
+              color: 'text.secondary',
+              opacity: 0.3,
+              transition: 'opacity 0.2s ease',
+              fontFamily: 'monospace',
+              minWidth: '50px',
+              textAlign: 'right',
+              paddingRight: '8px',
+              userSelect: 'none',
+              zIndex: 1
+            }}
+          >
+            {getElementInfo(element, index)}
+          </Box>
+          {content}
+        </Box>
+      );
+    };
+
+
 
     // Add page break styling if needed
     if (element.formatting?.pageBreak) {
@@ -953,36 +1267,95 @@ export default function DocxPreview({
         
         switch (level) {
           case 1:
-            return <h1 key={index} style={headingStyle}>{element.content}</h1>;
+            return wrapWithInfo(
+              <h1 key={index} style={headingStyle}>
+                {element.content}
+              </h1>,
+              element,
+              index
+            );
           case 2:
-            return <h2 key={index} style={headingStyle}>{element.content}</h2>;
+            return wrapWithInfo(
+              <h2 key={index} style={headingStyle}>
+                {element.content}
+              </h2>,
+              element,
+              index
+            );
           case 3:
-            return <h3 key={index} style={headingStyle}>{element.content}</h3>;
+            return wrapWithInfo(
+              <h3 
+                key={index} 
+                style={headingStyle}
+              >
+                {element.content}
+              </h3>,
+              element,
+              index
+            );
           case 4:
-            return <h4 key={index} style={headingStyle}>{element.content}</h4>;
+            return wrapWithInfo(
+              <h4 
+                key={index} 
+                style={headingStyle}
+              >
+                {element.content}
+              </h4>,
+              element,
+              index
+            );
           case 5:
-            return <h5 key={index} style={headingStyle}>{element.content}</h5>;
+            return wrapWithInfo(
+              <h5 
+                key={index} 
+                style={headingStyle}
+              >
+                {element.content}
+              </h5>,
+              element,
+              index
+            );
           case 6:
-            return <h6 key={index} style={headingStyle}>{element.content}</h6>;
+            return wrapWithInfo(
+              <h6 
+                key={index} 
+                style={headingStyle}
+              >
+                {element.content}
+              </h6>,
+              element,
+              index
+            );
           default:
-            return <h1 key={index} style={headingStyle}>{element.content}</h1>;
+            return wrapWithInfo(
+              <h1 
+                key={index} 
+                style={headingStyle}
+              >
+                {element.content}
+              </h1>,
+              element,
+              index
+            );
         }
       
       case 'paragraph':
-        return (
+        return wrapWithInfo(
           <Typography
             key={index}
             component="p"
             sx={elementStyle}
           >
             {element.content}
-          </Typography>
+          </Typography>,
+          element,
+          index
         );
       
       case 'table':
         // Enhanced table rendering similar to Word
         const tableRows = element.content.split('\n').filter(row => row.trim());
-        return (
+        return wrapWithInfo(
           <Box 
             key={index}
             sx={{ 
@@ -1023,13 +1396,15 @@ export default function DocxPreview({
                 ))}
               </tbody>
             </table>
-          </Box>
+          </Box>,
+          element,
+          index
         );
       
       case 'list':
         // Enhanced list rendering with proper Word-like styling
         const listItems = element.content.split('\n').filter(item => item.trim());
-        return (
+        return wrapWithInfo(
           <Box key={index} sx={{ mb: 2, pl: 2 }}>
             {listItems.map((item, itemIndex) => (
               <Box 
@@ -1065,44 +1440,33 @@ export default function DocxPreview({
                 </Typography>
               </Box>
             ))}
-          </Box>
+          </Box>,
+          element,
+          index
         );
       
       case 'image':
-        return (
+        return wrapWithInfo(
           <Paper key={index} sx={{ p: 1, mb: 1, backgroundColor: 'action.hover' }}>
             <Typography variant="caption" color="text.secondary">Image:</Typography>
             <Typography sx={elementStyle}>{element.content}</Typography>
-          </Paper>
+          </Paper>,
+          element,
+          index
         );
       
       default:
-        return (
+        return wrapWithInfo(
           <Typography key={index} sx={elementStyle}>
             {element.content}
-          </Typography>
+          </Typography>,
+          element,
+          index
         );
     }
   };
 
-  const renderHtmlContent = () => {
-    if (!documentData?.htmlContent) {
-      return renderTextContent();
-    }
 
-    return (
-      <Box 
-        sx={{ 
-          p: 2, 
-          fontSize: `${fontSize}px`,
-          height: '100%',
-          overflow: 'auto',
-          bgcolor: theme.palette.mode === 'dark' ? 'grey.900' : 'grey.50'
-        }}
-        dangerouslySetInnerHTML={{ __html: documentData.htmlContent }}
-      />
-    );
-  };
 
   const renderTextContent = () => {
     return (
@@ -1144,10 +1508,8 @@ export default function DocxPreview({
 
   const renderContent = () => {
     switch (renderMode) {
-      case 'structured':
+      case 'view':
         return renderStructuredContent();
-      case 'html':
-        return renderHtmlContent();
       case 'text':
       default:
         return renderTextContent();
@@ -1162,6 +1524,85 @@ export default function DocxPreview({
         <Box sx={{ position: 'relative' }}>
           {showDiff && renderDiffOverlay()}
           {renderContent()}
+        </Box>
+      )}
+      
+      {/* Microsoft Office-style document info - show for all view modes */}
+      {documentData && !isEditable && (
+        <Box
+          sx={{
+            position: 'absolute',
+            bottom: '20px',
+            right: '20px',
+            backgroundColor: theme.palette.mode === 'dark' 
+              ? 'rgba(0, 0, 0, 0.8)' 
+              : 'rgba(255, 255, 255, 0.9)',
+            border: `1px solid ${theme.palette.divider}`,
+            borderRadius: '20px',
+            padding: '8px 16px',
+            fontSize: '12px',
+            color: theme.palette.text.primary,
+            fontFamily: '"Segoe UI", system-ui, sans-serif',
+            boxShadow: theme.palette.mode === 'dark' 
+              ? '0 2px 8px rgba(0,0,0,0.5)' 
+              : '0 2px 8px rgba(0,0,0,0.15)',
+            backdropFilter: 'blur(8px)',
+            userSelect: 'none',
+            zIndex: 1000,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 1
+          }}
+        >
+          {/* Document icon */}
+          <Box sx={{ 
+            fontSize: '14px', 
+            color: theme.palette.primary.main,
+            display: 'flex',
+            alignItems: 'center'
+          }}>
+            📄
+          </Box>
+          
+          <Typography variant="caption" sx={{ fontSize: '12px', fontWeight: 500 }}>
+            {renderMode === 'view' && documentData?.structure ? (
+              // For view mode, show calculated pages
+              (() => {
+                const pages: any[][] = [];
+                let currentPage: any[] = [];
+                let currentPageLines = 0;
+                const LINES_PER_PAGE = 50;
+                
+                for (const element of documentData.structure) {
+                  const elementLines = Math.ceil(element.content.length / 80);
+                  if (currentPageLines + elementLines > LINES_PER_PAGE && currentPage.length > 0) {
+                    pages.push(currentPage);
+                    currentPage = [element];
+                    currentPageLines = elementLines;
+                  } else {
+                    currentPage.push(element);
+                    currentPageLines += elementLines;
+                  }
+                }
+                if (currentPage.length > 0) pages.push(currentPage);
+                
+                const pageCount = Math.max(pages.length, 1);
+                return `${pageCount} ${pageCount === 1 ? 'page' : 'pages'}`;
+              })()
+            ) : (
+              // For text view, estimate pages from text length
+              (() => {
+                const textLength = documentData.text?.length || 0;
+                const estimatedPages = Math.max(Math.ceil(textLength / 2500), 1); // ~2500 chars per page
+                return `~${estimatedPages} ${estimatedPages === 1 ? 'page' : 'pages'}`;
+              })()
+            )}
+            {documentData?.metadata?.wordCount && (
+              <span style={{ opacity: 0.7, marginLeft: '8px' }}>
+                • {documentData.metadata.wordCount.toLocaleString()} words
+              </span>
+            )}
+          </Typography>
         </Box>
       )}
     </Box>

@@ -13,17 +13,8 @@ import {
 } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
 import DownloadIcon from "@mui/icons-material/Download";
-import {
-  ZoomIn as ZoomInIcon,
-  ZoomOut as ZoomOutIcon,
-  ViewStream as StructuredIcon,
-  Code as HtmlIcon,
-  TextFields as TextIcon,
-  ContentCopy as CopyIcon,
-  SettingsBackupRestore as FallbackIcon,
-  AutoFixHigh as EnhancedIcon
-} from "@mui/icons-material";
-import { Tooltip } from "@mui/material";
+
+
 import { FormattedMessage, useIntl } from "react-intl";
 import { useFileExplorerStore, selectors, FileNode } from "@/renderer/stores/File/FileExplorerStore";
 import { useEffect, useState } from "react";
@@ -51,47 +42,11 @@ export default function FileClickDialog({
   const [isDownloading, setIsDownloading] = useState(false);
   const [downloadToastId, setDownloadToastId] = useState<string | null>(null);
   
-  // Document preview controls
-  const [fontSize, setFontSize] = useState(14);
-  const [renderMode, setRenderMode] = useState<'text' | 'html' | 'structured'>('structured');
-  const [useEnhancedReader, setUseEnhancedReader] = useState(true);
+
 
   const nodeDisplayNameFromStore = node?.label || node?.name || "Unknown Item";
 
-  // Font size controls
-  const handleFontSizeIncrease = () => {
-    const newSize = Math.min(fontSize + 2, 24);
-    setFontSize(newSize);
-    toast.success(`Font size: ${newSize}px`);
-  };
-  
-  const handleFontSizeDecrease = () => {
-    const newSize = Math.max(fontSize - 2, 10);
-    setFontSize(newSize);
-    toast.success(`Font size: ${newSize}px`);
-  };
 
-  // Document preview controls
-  const handleRenderModeChange = (mode: 'text' | 'html' | 'structured') => {
-    setRenderMode(mode);
-    const modeNames = { text: 'Text', html: 'HTML', structured: 'Structured' };
-    toast.success(`View mode: ${modeNames[mode]}`);
-  };
-
-  const handleReaderTypeChange = (useEnhanced: boolean) => {
-    setUseEnhancedReader(useEnhanced);
-    toast.success(`Reader: ${useEnhanced ? 'Enhanced' : 'Fallback'}`);
-  };
-
-  const handleCopyText = async () => {
-    if (!node) return;
-    try {
-      // This will be handled by the FilePreview component
-      toast.success('Text copied to clipboard');
-    } catch (err) {
-      toast.error('Failed to copy text');
-    }
-  };
 
   // Check if file is an image that should show preview
   const isImageFile = (fileName: string): boolean => {
@@ -101,20 +56,7 @@ export default function FileClickDialog({
     return imageExts.includes(ext);
   };
 
-  // Check if file is a DOCX document
-  const isDOCXFile = (fileName: string): boolean => {
-    if (!fileName) return false;
-    const ext = fileName.toLowerCase().substring(fileName.lastIndexOf('.'));
-    return ['.docx', '.doc'].includes(ext);
-  };
 
-  // Check if file is a document that should show preview
-  const isDocumentFile = (fileName: string): boolean => {
-    if (!fileName) return false;
-    const ext = fileName.toLowerCase().substring(fileName.lastIndexOf('.'));
-    const docExts = ['.txt', '.md', '.markdown', '.csv', '.docx', '.doc', '.xlsx', '.xls', '.pptx', '.ppt', '.pdf', '.odt', '.ods', '.odp', '.rtf', '.html', '.htm', '.xml'];
-    return docExts.includes(ext);
-  };
 
   useEffect(() => {
     const fetchDetails = async () => {
@@ -282,83 +224,7 @@ export default function FileClickDialog({
             <FormattedMessage id="dialog.item.click.title" defaultMessage="Item Details" />
           </Typography>
           
-          {/* Document preview controls - show only for DOCX and document files */}
-          {node && node.type === 'file' && (isDocumentFile(node.name) || isDOCXFile(node.name)) && (
-            <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'center', mr: 1 }}>
-              {/* Font size controls */}
-              <Tooltip title="Decrease Font Size">
-                <IconButton size="small" onClick={handleFontSizeDecrease} disabled={fontSize <= 10}>
-                  <ZoomOutIcon />
-                </IconButton>
-              </Tooltip>
-              
-              <Tooltip title="Increase Font Size">
-                <IconButton size="small" onClick={handleFontSizeIncrease} disabled={fontSize >= 24}>
-                  <ZoomInIcon />
-                </IconButton>
-              </Tooltip>
-              
-              <Divider orientation="vertical" flexItem sx={{ mx: 0.5 }} />
-              
-              {/* View mode controls - only for DOCX */}
-              {isDOCXFile(node.name) && (
-                <>
-                  <Tooltip title="Structured View">
-                    <IconButton 
-                      size="small" 
-                      onClick={() => handleRenderModeChange('structured')}
-                      color={renderMode === 'structured' ? 'primary' : 'default'}
-                    >
-                      <StructuredIcon />
-                    </IconButton>
-                  </Tooltip>
-                  
-                  <Tooltip title="HTML View">
-                    <IconButton 
-                      size="small" 
-                      onClick={() => handleRenderModeChange('html')}
-                      color={renderMode === 'html' ? 'primary' : 'default'}
-                    >
-                      <HtmlIcon />
-                    </IconButton>
-                  </Tooltip>
-                  
-                  <Tooltip title="Text View">
-                    <IconButton 
-                      size="small" 
-                      onClick={() => handleRenderModeChange('text')}
-                      color={renderMode === 'text' ? 'primary' : 'default'}
-                    >
-                      <TextIcon />
-                    </IconButton>
-                  </Tooltip>
-                  
-                  <Divider orientation="vertical" flexItem sx={{ mx: 0.5 }} />
-                  
-                  <Tooltip title={useEnhancedReader ? "Switch to Fallback Reader" : "Switch to Enhanced Reader"}>
-                    <IconButton 
-                      size="small" 
-                      onClick={() => handleReaderTypeChange(!useEnhancedReader)}
-                      sx={{ 
-                        color: useEnhancedReader ? 'primary.main' : 'warning.main'
-                      }}
-                    >
-                      {useEnhancedReader ? <EnhancedIcon /> : <FallbackIcon />}
-                    </IconButton>
-                  </Tooltip>
-                </>
-              )}
-              
-              <Divider orientation="vertical" flexItem sx={{ mx: 0.5 }} />
-              
-              {/* Copy text control */}
-              <Tooltip title="Copy Text">
-                <IconButton size="small" onClick={handleCopyText}>
-                  <CopyIcon />
-                </IconButton>
-              </Tooltip>
-            </Box>
-          )}
+
           
           <IconButton onClick={onClose} size="small">
             <CloseIcon />
@@ -426,31 +292,13 @@ export default function FileClickDialog({
             </Typography>
           )}
 
-          {/* Image preview for image files */}
+          {/* Image preview for image files only */}
           {node && node.type === 'file' && isImageFile(node.name) && (
             <Box mt={2}>
               <Divider sx={{ mb: 2 }} />
               <Typography variant="subtitle2" gutterBottom>Preview:</Typography>
               <FilePreview 
                 node={node} 
-                fontSize={fontSize}
-              />
-            </Box>
-          )}
-
-          {/* Document preview for document files */}
-          {node && node.type === 'file' && isDocumentFile(node.name) && (
-            <Box mt={2}>
-              <Divider sx={{ mb: 2 }} />
-              <Typography variant="subtitle2" gutterBottom>Document Preview:</Typography>
-              <FilePreview 
-                node={node} 
-                maxHeight={400}
-                fontSize={fontSize}
-                renderMode={isDOCXFile(node.name) ? renderMode : undefined}
-                useEnhancedReader={isDOCXFile(node.name) ? useEnhancedReader : undefined}
-                onRenderModeChange={isDOCXFile(node.name) ? handleRenderModeChange : undefined}
-                onReaderTypeChange={isDOCXFile(node.name) ? handleReaderTypeChange : undefined}
               />
             </Box>
           )}

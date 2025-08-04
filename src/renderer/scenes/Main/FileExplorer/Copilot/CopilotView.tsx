@@ -18,7 +18,6 @@ import {
   Save as SaveIcon,
   FiberManualRecord as UnsavedIcon,
   ViewStream as StructuredIcon,
-  Code as HtmlIcon,
   TextFields as TextIcon,
   ContentCopy as CopyIcon
 } from '@mui/icons-material';
@@ -30,6 +29,18 @@ import { useChatStore } from '@/renderer/stores/Chat/ChatStore';
 import { useTopicStore } from '@/renderer/stores/Topic/TopicStore';
 import { getUserFromStore } from '@/utils/user';
 import { createCodeDiff, CodeDiff, DiffBlock, applyDiffBlock } from '@/utils/codeDiff';
+import { 
+  parseAnchorPatches, 
+  applyAnchorPatches, 
+  extractDocxContent, 
+  parseDocxStructurePatches,
+  applyDocxStructurePatches,
+  applyStructurePatchesToText,
+  docxElementsToText,
+  AnchorPatch,
+  DocxStructurePatch,
+  DocxElement 
+} from '@/utils/docxPatch';
 
 interface CopilotViewProps {
   // Props will be passed via context/store rather than direct props
@@ -48,7 +59,7 @@ export default function CopilotView({}: CopilotViewProps) {
   const [currentDiff, setCurrentDiff] = useState<CodeDiff | null>(null);
   
   // Document viewing controls
-  const [renderMode, setRenderMode] = useState<'text' | 'html' | 'structured'>('structured');
+  const [renderMode, setRenderMode] = useState<'text' | 'view'>('view');
   
   const { selectedContext, setSelectedContext } = useCurrentTopicContext();
   
@@ -62,7 +73,8 @@ export default function CopilotView({}: CopilotViewProps) {
     getContextInfo,
     hasUnsavedChanges,
     setHasUnsavedChanges,
-    setCurrentFileContent
+    setCurrentFileContent,
+    setCurrentDocumentStructure
   } = useCopilotStore();
   
   // Chat and topic management
@@ -148,14 +160,144 @@ export default function CopilotView({}: CopilotViewProps) {
     createCopilotChat();
   }, [currentDocument, selectedContext, selectedTopics, chats, createChat, updateChat, setSelectedTopic]);
 
-  // Updated event listener for code application
+  // Updated event listener for code application (includes DOCX patch support)
   useEffect(() => {
     const handleApplyCode = (e: Event) => {
       const customEvent = e as CustomEvent;
       const { code } = customEvent.detail;
       
+
+      
       if (code && typeof code === 'string') {
-        // Create diff between current content and suggested code
+        // Check if this is a DOCX file for anchor patch support
+        const isDocxFile = currentDocument && isDOCXFile(currentDocument.name);
+        
+        if (isDocxFile) {
+          // Try structure patches first (most reliable for DOCX)
+          let structurePatches: any[] = [];
+          try {
+            structurePatches = parseDocxStructurePatches(code);
+          } catch (error: any) {
+            console.error('Structure patch parsing failed:', error);
+            toast.error(`AI response format error: ${error.message}`);
+            return; // Stop processing - no fallback allowed
+          }
+          
+          if (structurePatches.length > 0) {
+            console.log('Found structure patches:', structurePatches);
+            console.log('Current documentData:', documentData);
+            console.log('Document structure available:', !!documentData?.structure);
+            console.log('Structure length:', documentData?.structure?.length);
+            
+            // Need to get current document structure
+            if (documentData?.structure) {
+              console.log('Creating diff for structure patches instead of applying immediately');
+              
+              // Create a preview of what the changes would look like
+              const patchResult = applyDocxStructurePatches(documentData.structure, structurePatches);
+              
+              if (patchResult.success) {
+                // Use targeted text replacement to get the new content for diff comparison
+                const targetedResult = applyStructurePatchesToText(editedContent, documentData.structure, structurePatches);
+                
+                let newContent: string;
+                if (targetedResult.success) {
+                  newContent = targetedResult.content;
+                } else {
+                  // Fallback to full reconstruction
+                  newContent = docxElementsToText(patchResult.elements);
+                }
+                
+                // Create diff instead of applying immediately
+                const diff = createCodeDiff(editedContent, newContent);
+                
+                if (diff.hasChanges) {
+                  // Store the structure patches so we can apply them when user approves
+                  (diff as any).structurePatches = structurePatches;
+                  (diff as any).newStructure = patchResult.elements;
+                  
+                  setCurrentDiff(diff);
+                  setShowInlineDiff(true);
+                  toast.info(`Found ${diff.blocks.length} structural change(s) from DOCX patches - review and approve/decline in editor`);
+                  return;
+                } else {
+                  toast.success('No changes needed - content is already up to date!');
+                  return;
+                }
+              } else {
+                console.error('Structure patch failed:', patchResult.error);
+                toast.error(`Structure patch failed: ${patchResult.error}. Trying anchor patches...`);
+                // Continue to try anchor patches
+              }
+            } else {
+              console.warn('No document structure available for structure patches');
+              console.warn('DocumentData keys:', documentData ? Object.keys(documentData) : 'no documentData');
+              toast.warning('Document structure not available. Using anchor patches instead...');
+            }
+          }
+          
+          // Try anchor patches as fallback (faster for localized changes)
+          let anchorPatches: any[] = [];
+          try {
+            anchorPatches = parseAnchorPatches(code);
+          } catch (error: any) {
+            console.error('Anchor patch parsing failed:', error);
+            toast.error(`AI response format error: ${error.message}`);
+            return; // Stop processing - no fallback allowed
+          }
+          
+          if (anchorPatches.length > 0) {
+            console.log('Found anchor patches:', anchorPatches);
+            
+            // Apply anchor patches directly
+            const patchResult = applyAnchorPatches(editedContent, anchorPatches);
+            
+            if (patchResult.success) {
+              setEditedContent(patchResult.content);
+              setCurrentFileContent(patchResult.content);
+              toast.success(`Applied ${anchorPatches.length} anchor patch(es) successfully!`);
+              return;
+            } else {
+              console.error('Anchor patch failed:', patchResult.error);
+              toast.error(`Anchor patch failed: ${patchResult.error}. Trying standard diff...`);
+              // Continue to try full diff approach
+            }
+          } else if (code.includes('anchor-patch') && !code.includes('```anchor-patch')) {
+            // Check if AI tried to provide anchor patch but used wrong format
+            console.warn('AI provided malformed anchor patch - missing triple backticks');
+            toast.warning('AI used incorrect anchor patch format. Using standard diff instead...');
+          }
+          
+          // Check if we found any DOCX-specific patches at all
+          if (structurePatches.length === 0 && anchorPatches.length === 0) {
+            // Try to extract complete DOCX content as final fallback
+            const docxContent = extractDocxContent(code);
+            if (docxContent) {
+              const diff = createCodeDiff(editedContent, docxContent);
+              
+              if (diff.hasChanges) {
+                setCurrentDiff(diff);
+                setShowInlineDiff(true);
+                toast.info(`Found ${diff.blocks.length} change(s) from full content - review in editor`);
+                return;
+              } else {
+                toast.success('No changes needed - content is already up to date!');
+                return;
+              }
+            }
+            
+            // No DOCX patches or content found - show explicit error
+            console.error('❌ No valid DOCX patches found in AI response');
+            console.error('AI must provide one of:');
+            console.error('1. ```docx-structure-patch code blocks');
+            console.error('2. ```anchor-patch code blocks');
+            console.error('3. ```docx-content code blocks');
+            toast.error('AI response does not contain valid DOCX patches. AI must use proper patch format (```docx-structure-patch, ```anchor-patch, or ```docx-content).');
+            return;
+          }
+        }
+        
+        // For non-DOCX files or fallback, use standard diff approach
         const diff = createCodeDiff(editedContent, code);
         
         if (diff.hasChanges) {
@@ -163,7 +305,7 @@ export default function CopilotView({}: CopilotViewProps) {
           setShowInlineDiff(true);
           toast.info(`Found ${diff.blocks.length} change(s) - review in editor`);
         } else {
-          toast.success('No changes needed - code is already up to date!');
+          toast.success('No changes needed - content is already up to date!');
         }
       }
     };
@@ -173,7 +315,7 @@ export default function CopilotView({}: CopilotViewProps) {
     return () => {
       document.removeEventListener('onlysaid-apply-code', handleApplyCode);
     };
-  }, [editedContent]);
+  }, [editedContent, currentDocument]);
 
   // Handle content changes with auto-save
   const handleContentChange = (content: string) => {
@@ -218,6 +360,20 @@ export default function CopilotView({}: CopilotViewProps) {
         // Hide diff only if no more changes remain
         if (!updatedDiff.hasChanges) {
           setShowInlineDiff(false);
+          
+          // If this was a DOCX structure patch diff and all blocks are now applied,
+          // update the document structure as well
+          const diffWithPatches = currentDiff as any;
+          if (diffWithPatches.structurePatches && diffWithPatches.newStructure) {
+            console.log('All DOCX structure diff blocks applied - updating document structure');
+            setCurrentDocumentStructure(diffWithPatches.newStructure);
+            setDocumentData((prev: any) => ({
+              ...prev,
+              text: newContent,
+              structure: diffWithPatches.newStructure
+            }));
+            toast.success(`Applied all DOCX structural changes successfully!`);
+          }
         }
       }
       
@@ -364,10 +520,10 @@ export default function CopilotView({}: CopilotViewProps) {
   };
 
   // Document viewing controls
-  const handleRenderModeChange = (mode: 'text' | 'html' | 'structured') => {
+  const handleRenderModeChange = (mode: 'text' | 'view') => {
     setRenderMode(mode);
-    const modeNames = { text: 'Text', html: 'HTML', structured: 'Structured' };
-    toast.success(`View mode: ${modeNames[mode]}`);
+    const modeNames = { text: 'Edit Mode', view: 'View Mode' };
+    toast.success(`${modeNames[mode]}`);
   };
 
 
@@ -622,27 +778,17 @@ export default function CopilotView({}: CopilotViewProps) {
               <Divider orientation="vertical" flexItem sx={{ mx: 0.5, height: 20 }} />
               
               {/* View mode controls */}
-              <Tooltip title="Structured View">
+              <Tooltip title="View Mode">
                 <IconButton 
                   size="small" 
-                  onClick={() => handleRenderModeChange('structured')}
-                  color={renderMode === 'structured' ? 'primary' : 'default'}
+                  onClick={() => handleRenderModeChange('view')}
+                  color={renderMode === 'view' ? 'primary' : 'default'}
                 >
                   <StructuredIcon />
                 </IconButton>
               </Tooltip>
               
-              <Tooltip title="HTML View">
-                <IconButton 
-                  size="small" 
-                  onClick={() => handleRenderModeChange('html')}
-                  color={renderMode === 'html' ? 'primary' : 'default'}
-                >
-                  <HtmlIcon />
-                </IconButton>
-              </Tooltip>
-              
-              <Tooltip title="Text View">
+              <Tooltip title="Edit Mode">
                 <IconButton 
                   size="small" 
                   onClick={() => handleRenderModeChange('text')}
@@ -727,6 +873,10 @@ export default function CopilotView({}: CopilotViewProps) {
                     setEditedContent(data.text);
                     setLastSavedContent(data.text);
                     setCurrentFileContent(data.text);
+                    // Store document structure if available (for DOCX files)
+                    if (data.structure) {
+                      setCurrentDocumentStructure(data.structure);
+                    }
                   }}
                   onContentChange={handleContentChange}
                 />

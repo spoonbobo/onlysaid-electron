@@ -121,7 +121,9 @@ export function setupDocxHandlers() {
         }
 
         // Parse the DOCX structure using mammoth
+        console.log('[DocxReader] Parsing DOCX structure...');
         structure = await parseDocxStructure(buffer);
+        console.log(`[DocxReader] Parsed structure with ${structure.length} elements`);
         
         // Get file stats for metadata
         const stats = await fs.promises.stat(resolvedPath);
@@ -441,28 +443,17 @@ function parseHtmlToStructure(html: string): DocxElement[] {
       regex: /<div[^>]*class="?page-break"?[^>]*>.*?<\/div>/gi,
       type: 'page-break' as const
     },
-    // Headings with classes
+    // ALL heading tags (h1-h6) regardless of class
     {
-      regex: /<h([1-6])[^>]*class="?heading([1-6])"?[^>]*>(.*?)<\/h[1-6]>/gi,
+      regex: /<h([1-6])[^>]*>(.*?)<\/h[1-6]>/gi,
       type: 'heading' as const
     },
-    // Title and subtitle
+    // Tables (any table, not just with specific classes)
     {
-      regex: /<h1[^>]*class="?title"?[^>]*>(.*?)<\/h1>/gi,
-      type: 'heading' as const,
-      level: 1
-    },
-    {
-      regex: /<h2[^>]*class="?subtitle"?[^>]*>(.*?)<\/h2>/gi,
-      type: 'heading' as const,
-      level: 2
-    },
-    // Tables
-    {
-      regex: /<table[^>]*class="?word-table"?[^>]*>(.*?)<\/table>/gi,
+      regex: /<table[^>]*>(.*?)<\/table>/gi,
       type: 'table' as const
     },
-    // Lists
+    // Lists (unordered and ordered)
     {
       regex: /<ul[^>]*>(.*?)<\/ul>/gi,
       type: 'list' as const
@@ -471,9 +462,9 @@ function parseHtmlToStructure(html: string): DocxElement[] {
       regex: /<ol[^>]*>(.*?)<\/ol>/gi,
       type: 'list' as const
     },
-    // Regular paragraphs
+    // Regular paragraphs (any p tag)
     {
-      regex: /<p[^>]*(?:class="?normal"?)?[^>]*>(.*?)<\/p>/gi,
+      regex: /<p[^>]*>(.*?)<\/p>/gi,
       type: 'paragraph' as const
     }
   ];
@@ -499,9 +490,10 @@ function parseHtmlToStructure(html: string): DocxElement[] {
       
       if (pattern.type === 'page-break') {
         content = '[PAGE BREAK]';
-      } else if (pattern.type === 'heading' && match[2]) {
-        level = parseInt(match[1]) || pattern.level || 1;
-        content = stripHtmlTags(match[3] || match[1] || '').trim();
+      } else if (pattern.type === 'heading') {
+        // For headings, match[1] is the heading level (1-6), match[2] is the content
+        level = parseInt(match[1]) || 1;
+        content = stripHtmlTags(match[2] || '').trim();
       } else if (pattern.type === 'table') {
         content = extractTableContent(match[1] || '');
       } else if (pattern.type === 'list') {
@@ -541,6 +533,7 @@ function parseHtmlToStructure(html: string): DocxElement[] {
 
   // If no structured elements found, fallback to paragraph splitting
   if (structure.length === 0) {
+    console.log('[DocxParser] No structured elements found, falling back to text parsing');
     const textContent = stripHtmlTags(html);
     const paragraphs = textContent.split(/\n\s*\n/).filter(p => p.trim());
     
@@ -552,6 +545,12 @@ function parseHtmlToStructure(html: string): DocxElement[] {
       });
     }
   }
+
+  console.log(`[DocxParser] Final structure has ${structure.length} elements:`, structure.map(el => ({
+    type: el.type,
+    content: el.content.substring(0, 50) + (el.content.length > 50 ? '...' : ''),
+    level: el.level
+  })));
 
   return structure;
 }
