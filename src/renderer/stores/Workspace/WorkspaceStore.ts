@@ -115,7 +115,14 @@ export const useWorkspaceStore = create<WorkspaceState>()((set, get) => ({
         throw new Error("Workspace name is required");
       }
 
-      const newWorkspace: IWorkspace = {
+      // Validate token
+      const token = getUserTokenFromStore();
+      if (!token) {
+        throw new Error("Authentication token is required");
+      }
+
+      // Create workspace object - ensure all fields are properly defined
+      const newWorkspace = {
         id: uuidv4(),
         name: data.name.trim(),
         image: data.image || '/default-workspace.png',
@@ -125,28 +132,38 @@ export const useWorkspaceStore = create<WorkspaceState>()((set, get) => ({
         settings: data.settings || {},
       };
 
-      const response = await window.electron.workspace.create({
-        token: getUserTokenFromStore() || '',
+      // Create a clean request object for IPC
+      const createRequest = {
+        token: token,
         request: newWorkspace
-      });
+      };
+
+      console.log("🔍 Creating workspace with request:", createRequest);
+
+      const response = await window.electron.workspace.create(createRequest);
 
       console.log("🔍 Workspace creation API response:", response);
 
+      // Handle error response
+      if (response.error) {
+        throw new Error(response.error);
+      }
+
+      // Extract created workspace from response
       let createdWorkspace: IWorkspace;
       if (response.data?.data && Array.isArray(response.data.data) && response.data.data.length > 0) {
         createdWorkspace = response.data.data[0];
       } else if (response.data?.data) {
-        // API returns { message: "Workspace created", data: result } - use data directly
         createdWorkspace = response.data.data;
       } else if (response.data) {
         createdWorkspace = response.data;
       } else {
-        createdWorkspace = newWorkspace;
+        throw new Error("Failed to create workspace: Invalid response format");
       }
 
-      // Validate that we have a proper workspace with an ID
+      // Validate response
       if (!createdWorkspace || !createdWorkspace.id) {
-        console.error("Created workspace does not have a valid ID:", createdWorkspace);
+        console.error("Created workspace missing ID:", createdWorkspace);
         throw new Error("Failed to create workspace: Invalid workspace response");
       }
 

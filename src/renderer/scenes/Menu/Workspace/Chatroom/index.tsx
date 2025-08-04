@@ -1,4 +1,4 @@
-import { Box, IconButton, Menu, MenuItem, Badge, Typography } from "@mui/material";
+import { Box, IconButton, Menu, MenuItem, Badge, Typography, CircularProgress } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
 import { useState, useEffect, useMemo } from "react";
 import { FormattedMessage } from "react-intl";
@@ -14,6 +14,17 @@ import { useWorkspaceStore } from "@/renderer/stores/Workspace/WorkspaceStore";
 import { toast } from "@/utils/toast";
 import { IWorkspaceUser } from '@/../../types/Workspace/Workspace';
 
+// Helper function to check if user has specific policy permission
+const hasPolicy = (policies: any, policyName: string): boolean => {
+  if (!policies?.role_policies) return false;
+  
+  return policies.role_policies.some((policy: any) => 
+    policy.name === policyName || 
+    (policy.resource_type === 'chat' && policy.action === 'admin') ||
+    (policy.resource_type === 'workspace' && policy.action === 'admin')
+  );
+};
+
 export default function WorkspaceChatMenu() {
   const { selectedContext } = useCurrentTopicContext();
   const selectedTopics = useTopicStore((state) => state.selectedTopics);
@@ -27,7 +38,7 @@ export default function WorkspaceChatMenu() {
   const setActiveChat = useChatStore((state) => state.setActiveChat);
   const deleteChat = useChatStore((state) => state.deleteChat);
   const getChat = useChatStore((state) => state.getChat);
-  const getUserInWorkspace = useWorkspaceStore((state) => state.getUserInWorkspace);
+  const { getUserInWorkspace, getUserPolicies } = useWorkspaceStore();
 
   // Get notification data for unread counts
   const allNotifications = useNotificationStore(state => state.notifications);
@@ -37,6 +48,8 @@ export default function WorkspaceChatMenu() {
   const [chatUpdateOpen, setChatUpdateOpen] = useState(false);
   const [selectedChat, setSelectedChat] = useState<IChatRoom | null>(null);
   const [workspaceUser, setWorkspaceUser] = useState<IWorkspaceUser | null>(null);
+  const [userPolicies, setUserPolicies] = useState<any>(null);
+  const [isCheckingPermissions, setIsCheckingPermissions] = useState(false); // Change from true to false
   const menuOpen = Boolean(menuAnchorEl);
 
   const workspaceId = selectedContext?.id || '';
@@ -76,11 +89,23 @@ export default function WorkspaceChatMenu() {
     return counts;
   }, [allNotifications, workspaceId, workspaceChats]);
 
+  // Policy-based permission checking
+  const canDeleteChats = userPolicies && (
+    hasPolicy(userPolicies, 'chat.admin') ||
+    hasPolicy(userPolicies, 'workspace.admin')
+  );
+
+  const canModifyChats = userPolicies && (
+    hasPolicy(userPolicies, 'chat.admin') ||
+    hasPolicy(userPolicies, 'workspace.admin')
+  );
+
   useEffect(() => {
     const currentUser = getUserFromStore();
     if (currentUser?.id && selectedContext?.id) {
       const workspaceId = selectedContext.id || '';
-      getChat(currentUser.id, 'chatroom', workspaceId);
+      console.log('🔍 Fetching chats for:', { userId: currentUser.id, type: 'chatroom', workspaceId });
+      getChat(currentUser.id, 'workspace', workspaceId);
     }
   }, [selectedContext?.id, getChat]);
 
@@ -131,16 +156,38 @@ export default function WorkspaceChatMenu() {
   }, [workspaceChats, section, workspaceId, getWorkspaceSelectedChat, setWorkspaceSelectedChat, getContextId]); // ✅ REMOVED selectedSubcategory from dependencies
 
   useEffect(() => {
-    const fetchWorkspaceUser = async () => {
+    const fetchWorkspaceUserAndPolicies = async () => {
+      setIsCheckingPermissions(true);
       const currentUser = getUserFromStore();
       if (currentUser?.id && workspaceId) {
-        const user = await getUserInWorkspace(workspaceId, currentUser.id);
-        setWorkspaceUser(user);
+        try {
+          // Fetch workspace user info and policies in parallel
+          const [user, policies] = await Promise.all([
+            getUserInWorkspace(workspaceId, currentUser.id),
+            getUserPolicies(workspaceId, currentUser.id)
+          ]);
+          
+          setWorkspaceUser(user);
+          setUserPolicies(policies);
+          
+          console.log('🔐 User policies for chat management:', {
+            userId: currentUser.id,
+            workspaceId: workspaceId,
+            policies: policies,
+            canDeleteChats: hasPolicy(policies, 'chat.admin') || hasPolicy(policies, 'workspace.admin'),
+            canModifyChats: hasPolicy(policies, 'chat.admin') || hasPolicy(policies, 'workspace.admin')
+          });
+        } catch (error) {
+          console.error('Error fetching user permissions:', error);
+          setUserPolicies(null);
+          setWorkspaceUser(null);
+        }
       }
+      setIsCheckingPermissions(false);
     };
 
-    fetchWorkspaceUser();
-  }, [workspaceId, getUserInWorkspace]);
+    fetchWorkspaceUserAndPolicies();
+  }, [workspaceId, getUserInWorkspace, getUserPolicies]);
 
   const handleSelectChat = (chatId: string) => {
     setSelectedTopic(section, chatId);
@@ -165,11 +212,13 @@ export default function WorkspaceChatMenu() {
     setMenuAnchorEl(null);
   };
 
-  const canModifyChat = workspaceUser?.role === 'admin' || workspaceUser?.role === 'super_admin';
+  // Updated permission check using policy system with fallback to role-based check
+  const canModifyChat = canModifyChats || workspaceUser?.role?.name === 'admin' || workspaceUser?.role?.name === 'super_admin';
+  const canDeleteChat = canDeleteChats || workspaceUser?.role?.name === 'admin' || workspaceUser?.role?.name === 'super_admin';
 
   const handleDeleteChat = (id?: string, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
-    if (!canModifyChat) {
+    if (!canDeleteChat) {
       toast.error("You don't have permission to delete chats");
       return;
     }
@@ -183,6 +232,11 @@ export default function WorkspaceChatMenu() {
 
   const handleRenameChat = (chat: IChatRoom | null) => {
     if (!chat) return;
+    if (!canModifyChat) {
+      toast.error("You don't have permission to modify chats");
+      return;
+    }
+    
     setSelectedChat(chat);
     setChatUpdateOpen(true);
     handleCloseMenu();
@@ -203,7 +257,9 @@ export default function WorkspaceChatMenu() {
         <FormattedMessage id="menu.chat.rename" defaultMessage="Rename" />
       </MenuItem>
     );
+  }
 
+  if (canDeleteChat) {
     menuItems.push(
       <MenuItem
         key="delete"
@@ -212,6 +268,15 @@ export default function WorkspaceChatMenu() {
       >
         <FormattedMessage id="menu.chat.delete" defaultMessage="Delete" />
       </MenuItem>
+    );
+  }
+
+  // Show loading state while checking permissions
+  if (isCheckingPermissions) {
+    return (
+      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', p: 2 }}>
+        <CircularProgress size={24} />
+      </Box>
     );
   }
 
@@ -257,7 +322,7 @@ export default function WorkspaceChatMenu() {
                   onClick={() => handleSelectChat(chat.id)}
                   onContextMenu={(e) => handleContextMenu(e, chat.id)}
                   endIcon={
-                    canModifyChat && (
+                    canDeleteChat && (
                       <IconButton
                         size="small"
                         sx={{

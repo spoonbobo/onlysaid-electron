@@ -20,6 +20,9 @@ export interface LLMConfiguration {
   ollamaModel: string;
   ollamaEnabled: boolean;
   ollamaVerified: boolean;
+  h20Key: string;
+  h20Enabled: boolean;
+  h20Verified: boolean;
 }
 
 function LLMConfiguration() {
@@ -47,16 +50,24 @@ function LLMConfiguration() {
     setOllamaModel,
     setOllamaEnabled,
     ollamaVerified,
-    setOllamaVerified
+    setOllamaVerified,
+    h20Key,
+    h20Enabled,
+    setH20Key,
+    setH20Enabled,
+    h20Verified,
+    setH20Verified
   } = llmStore;
 
   // State variables for verification
   const [verifyingDeepSeek, setVerifyingDeepSeek] = useState(false);
   const [verifyingOpenAI, setVerifyingOpenAI] = useState(false);
   const [verifyingOneasia, setVerifyingOneasia] = useState(false);
+  const [verifyingH20, setVerifyingH20] = useState(false);
   const [deepSeekVerified, setDeepSeekVerified] = useState(!!deepSeekKey && deepSeekEnabled);
   const [openAIVerified, setOpenAIVerified] = useState(!!openAIKey && openAIEnabled);
   const [oneasiaVerified, setOneasiaVerified] = useState(!!oneasiaKey && oneasiaEnabled);
+  // h20Verified is already coming from the store
   const [availableOllamaModels, setAvailableOllamaModels] = useState([]);
   const [loadingOllamaModels, setLoadingOllamaModels] = useState(false);
 
@@ -98,6 +109,11 @@ function LLMConfiguration() {
       setOneasiaEnabled(false);
     }
 
+    // H20 doesn't require API key, so don't disable it
+    // if (!h20Key) {
+    //   setH20Enabled(false);
+    // }
+
     if (!ollamaBaseURL || !ollamaVerified || !ollamaModel) {
       setOllamaEnabled(false);
     }
@@ -105,6 +121,7 @@ function LLMConfiguration() {
     deepSeekKey, deepSeekVerified, setDeepSeekEnabled,
     openAIKey, openAIVerified, setOpenAIEnabled,
     oneasiaKey, oneasiaVerified, setOneasiaEnabled,
+    // Don't include h20Key in dependencies
     ollamaBaseURL, ollamaVerified, ollamaModel, setOllamaEnabled
   ]);
 
@@ -113,9 +130,11 @@ function LLMConfiguration() {
       openAIKey,
       deepSeekKey,
       oneasiaKey,
+      h20Key,
       openAIEnabled: openAIEnabled && !!openAIKey && (openAIVerified || !openAIKey),
       deepSeekEnabled: deepSeekEnabled && !!deepSeekKey && (deepSeekVerified || !deepSeekKey),
       oneasiaEnabled: oneasiaEnabled && !!oneasiaKey && (oneasiaVerified || !oneasiaKey),
+      h20Enabled: h20Enabled, // H20 can work without key
       ollamaModel,
       ollamaEnabled: ollamaEnabled && !!ollamaBaseURL && !!ollamaModel && ollamaVerified
     });
@@ -161,6 +180,19 @@ function LLMConfiguration() {
     }
   };
 
+  const handleVerifyH20 = async () => {
+    try {
+      setVerifyingH20(true);
+      const isVerified = await llmService.VerifyLLM("h20", h20Key);
+      setH20Verified(isVerified); // This will update the store
+    } catch (error) {
+      console.error("Error verifying H20 API key:", error);
+      setH20Verified(false);
+    } finally {
+      setVerifyingH20(false);
+    }
+  };
+
   const fetchOllamaModels = async () => {
     try {
       setLoadingOllamaModels(true);
@@ -197,8 +229,9 @@ function LLMConfiguration() {
     setOneasiaVerified(false);
   };
 
-  const handleOllamaModelChange = (e: SelectChangeEvent<string>) => {
-    setOllamaModel(e.target.value);
+  const handleH20KeyChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setH20Key(e.target.value);
+    setH20Verified(false); // This will update the store
   };
 
   // Clear handlers
@@ -223,6 +256,12 @@ function LLMConfiguration() {
   const handleClearOllamaModel = () => {
     setOllamaModel("");
     setOllamaEnabled(false);
+  };
+
+  const handleClearH20 = () => {
+    setH20Key("");
+    setH20Verified(false);
+    setH20Enabled(false);
   };
 
   return (
@@ -365,6 +404,48 @@ function LLMConfiguration() {
                   {intl.formatMessage({ id: "settings.llmModels.public.requiresVerification" })}
                 </Typography>
               )}
+            </Box>
+          }
+          sx={{ mt: 1 }}
+        />
+      </SettingsSection>
+
+      <SettingsSection title={intl.formatMessage({ id: "settings.llmModels.public.h20Configuration" })} sx={{ mb: 3 }}>
+        <SettingsFormField label={intl.formatMessage({ id: "settings.llmModels.public.h20Key" })}>
+          <Box sx={{ display: 'flex', gap: 1 }}>
+            <TextFieldWithOptions
+              fullWidth
+              size="small"
+              value={h20Key}
+              onChange={handleH20KeyChange}
+              onClear={handleClearH20}
+              placeholder={intl.formatMessage({ id: "settings.llmModels.public.h20KeyPlaceholder" })}
+              isPassword
+            />
+            <Button
+              variant="outlined"
+              size="small"
+              onClick={handleVerifyH20}
+              color="success"
+              sx={{ whiteSpace: 'nowrap', width: '90px' }}
+            >
+              Ready
+            </Button>
+          </Box>
+        </SettingsFormField>
+        <FormControlLabel
+          control={
+            <Switch
+              checked={h20Enabled}
+              onChange={(e) => setH20Enabled(e.target.checked)}
+            />
+          }
+          label={
+            <Box component="span" sx={{ display: 'flex', alignItems: 'center' }}>
+              {intl.formatMessage({ id: "settings.llmModels.public.enableH20Models" })}
+              <Typography variant="caption" color="textSecondary" sx={{ ml: 1 }}>
+                (No API key required)
+              </Typography>
             </Box>
           }
           sx={{ mt: 1 }}

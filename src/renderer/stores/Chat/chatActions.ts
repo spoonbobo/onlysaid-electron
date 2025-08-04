@@ -220,7 +220,16 @@ export const createChatActions = (set: any, get: () => ChatState) => ({
       const isAvatarMode = topicStore.selectedContext?.section === 'workspace:avatar';
       const shouldUseLocal = !userId || isAvatarMode || (!workspaceId || workspaceId === 'undefined');
 
+      console.log('🔍 getChat decision:', {
+        userId,
+        type,
+        workspaceId,
+        isAvatarMode,
+        shouldUseLocal
+      });
+
       if (shouldUseLocal) {
+        console.log('📱 Using local storage for chats');
         let query = `
           select * from ${DBTABLES.CHATROOM}
           where type = @type
@@ -248,15 +257,22 @@ export const createChatActions = (set: any, get: () => ChatState) => ({
           set({ isLoading: false });
         }
       } else {
+        console.log('🌐 Using remote API for chats');
+        const token = getUserTokenFromStore();
+        console.log('🔍 API call params:', { token: token ? 'present' : 'missing', userId, type, workspaceId });
+
         const response = await window.electron.chat.get({
-          token: getUserTokenFromStore(),
+          token,
           userId,
           type,
           workspaceId
         });
 
+        console.log('🔍 Remote chat response:', response);
+
         if (response.data && response.data.data && Array.isArray(response.data.data)) {
           const newChats = response.data.data;
+          console.log('📝 Found chats:', newChats);
           
           set((state: ChatState) => {
             const existingChats = state.chats;
@@ -277,12 +293,13 @@ export const createChatActions = (set: any, get: () => ChatState) => ({
             };
           });
         } else {
+          console.log('❌ No chats found or invalid response structure');
           set({ isLoading: false });
         }
       }
     } catch (error: any) {
+      console.error('💥 Error in getChat:', error);
       set({ error: error.message, isLoading: false });
-      console.error(error);
     }
   },
 

@@ -6,7 +6,7 @@ import { OneasiaVLLMAPIService } from "./oneasia_vllm";
 export interface LLMModel {
   id: string;
   name: string;
-  provider: "openai" | "deepseek" | "ollama" | "oneasia";
+  provider: "openai" | "deepseek" | "ollama" | "oneasia" | "h20";
   enabled: boolean;
 }
 
@@ -20,10 +20,12 @@ export interface LLMConfiguration {
   openAIKey: string;
   deepSeekKey: string;
   oneasiaKey: string;
+  h20Key: string;
   // Enable flags
   openAIEnabled: boolean;
   deepSeekEnabled: boolean;
   oneasiaEnabled: boolean;
+  h20Enabled: boolean;
   // Ollama settings
   ollamaBaseURL: string;
   ollamaModel: string;
@@ -89,6 +91,16 @@ export class LLMService {
         id: "oneasia-llama",
         name: "Oneasia Llama 3.3 70B",
         provider: "oneasia",
+        enabled: true
+      });
+    }
+
+    // Add H20 models - works without API key
+    if (config.h20Enabled) {
+      enabledModels.push({
+        id: "Llama-4-Maverick-17B-128E-Instruct-FP8", // Use the actual model name
+        name: "Llama 4 Maverick 17B 128E Instruct FP8",
+        provider: "h20",
         enabled: true
       });
     }
@@ -190,6 +202,10 @@ export class LLMService {
       store.setOneasiaKey(config.oneasiaKey);
     }
 
+    if (config.h20Key !== undefined) {
+      store.setH20Key(config.h20Key);
+    }
+
     if (config.openAIEnabled !== undefined) {
       store.setOpenAIEnabled(config.openAIEnabled);
     }
@@ -200,6 +216,10 @@ export class LLMService {
 
     if (config.oneasiaEnabled !== undefined) {
       store.setOneasiaEnabled(config.oneasiaEnabled);
+    }
+
+    if (config.h20Enabled !== undefined) {
+      store.setH20Enabled(config.h20Enabled);
     }
 
     if (config.ollamaBaseURL !== undefined) {
@@ -219,7 +239,7 @@ export class LLMService {
     }
   }
 
-  async VerifyLLM(provider: "openai" | "deepseek" | "ollama" | "oneasia", apiKey: string = ""): Promise<boolean> {
+  async VerifyLLM(provider: "openai" | "deepseek" | "ollama" | "oneasia" | "h20", apiKey: string = ""): Promise<boolean> {
     try {
       const store = useLLMConfigurationStore.getState();
       let isVerified = false;
@@ -236,6 +256,11 @@ export class LLMService {
         case "oneasia":
           isVerified = await this.oneasiaService.Authenticate(apiKey);
           store.setOneasiaVerified(isVerified);
+          break;
+        case "h20":
+          // H20 doesn't require verification - always return true
+          isVerified = true;
+          store.setH20Verified(isVerified);
           break;
         case "ollama":
           const { success, models } = await this.TestOllamaConnection();
@@ -258,6 +283,7 @@ export class LLMService {
       if (provider === "openai") store.setOpenAIVerified(false);
       if (provider === "deepseek") store.setDeepSeekVerified(false);
       if (provider === "oneasia") store.setOneasiaVerified(false);
+      if (provider === "h20") store.setH20Verified(false);
       if (provider === "ollama") store.setOllamaVerified(false);
 
       return false;

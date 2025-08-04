@@ -258,12 +258,30 @@ export function WorkflowDialog({ open, onClose, onCreateWorkflow }: WorkflowDial
     const previewDates: Date[] = [];
     
     if (selectedPeriodType === 'one-time') {
-      // For one-time, use the specific date and time
       if (scheduleData.date && scheduleData.time) {
         const [hours, minutes] = scheduleData.time.split(':');
-        const date = new Date(scheduleData.date);
+        
+        // ✅ FIX: Parse date string as local timezone to avoid UTC conversion
+        const [year, month, day] = scheduleData.date.split('-').map(Number);
+        const date = new Date(year, month - 1, day); // month is 0-indexed
         date.setHours(parseInt(hours), parseInt(minutes), 0, 0);
-        previewDates.push(date);
+        
+        // Check if this is today and time has already passed
+        const today = new Date();
+        const isToday = date.toDateString() === today.toDateString();
+        
+        if (isToday) {
+          const currentTime = today.getHours() * 60 + today.getMinutes();
+          const scheduleTime = parseInt(hours) * 60 + parseInt(minutes);
+          
+          // Only add if time hasn't passed, or if it's in the future
+          if (scheduleTime > currentTime) {
+            previewDates.push(date);
+          }
+        } else if (date > today) {
+          // Future date
+          previewDates.push(date);
+        }
       }
     } else if (selectedPeriodType === 'recurring') {
       if (scheduleData.frequency && scheduleData.time) {
@@ -299,7 +317,7 @@ export function WorkflowDialog({ open, onClose, onCreateWorkflow }: WorkflowDial
                 if (week === 0 && daysUntilTarget === 0) {
                   const currentTime = today.getHours() * 60 + today.getMinutes();
                   const scheduleTime = parseInt(hours) * 60 + parseInt(minutes);
-                  if (scheduleTime <= currentTime) {
+                  if (scheduleTime < currentTime) { // Changed from <= to <
                     daysUntilTarget = 7;
                   }
                 }
@@ -379,11 +397,12 @@ export function WorkflowDialog({ open, onClose, onCreateWorkflow }: WorkflowDial
   const getDaysUntil = (date: Date) => {
     const now = new Date();
     
-    // Compare calendar dates, not time differences
-    const nowDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    // Create date-only versions in local timezone
+    const nowDateOnly = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const targetDateOnly = new Date(date.getFullYear(), date.getMonth(), date.getDate());
     
-    const diffMs = targetDateOnly.getTime() - nowDate.getTime();
+    // Calculate difference in days
+    const diffMs = targetDateOnly.getTime() - nowDateOnly.getTime();
     const diffDays = Math.round(diffMs / (1000 * 60 * 60 * 24));
     
     if (diffDays < 0) {

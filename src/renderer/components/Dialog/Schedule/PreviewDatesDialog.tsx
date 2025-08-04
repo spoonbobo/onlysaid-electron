@@ -44,14 +44,32 @@ export function PreviewDatesDialog({
 
   // Helper function to calculate days until execution
   const getDaysUntil = (date: Date | string) => {
-    const targetDate = typeof date === 'string' ? new Date(date) : date;
+    // ✅ FIX: Handle timezone consistently for both string and Date inputs
+    let targetDate: Date;
+    
+    if (typeof date === 'string') {
+      // For string dates (like "2024-01-15" or "2024-01-15T10:30"), 
+      // parse them as local timezone to avoid UTC conversion issues
+      if (date.includes('T')) {
+        // Has time component
+        targetDate = new Date(date);
+      } else {
+        // Date only - parse as local date to avoid UTC midnight issue
+        const [year, month, day] = date.split('-').map(Number);
+        targetDate = new Date(year, month - 1, day); // month is 0-indexed
+      }
+    } else {
+      targetDate = date;
+    }
+    
     const now = new Date();
     
-    // Compare calendar dates, not time differences
-    const nowDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    // Create date-only versions in local timezone
+    const nowDateOnly = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const targetDateOnly = new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate());
     
-    const diffMs = targetDateOnly.getTime() - nowDate.getTime();
+    // Calculate difference in days
+    const diffMs = targetDateOnly.getTime() - nowDateOnly.getTime();
     const diffDays = Math.round(diffMs / (1000 * 60 * 60 * 24));
     
     if (diffDays < 0) {

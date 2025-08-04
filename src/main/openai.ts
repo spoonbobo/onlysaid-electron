@@ -2,6 +2,7 @@ import { ipcMain } from 'electron';
 import OpenAI from 'openai';
 import { LightRAGService, QueryKnowledgeBaseParams } from '@/service/knowledge_base/lightrag_kb'; // Updated import
 import { Readable } from 'stream';
+import https from 'https';
 
 interface LightRAGStreamData {
   response?: string; // ✅ LightRAG uses "response" field, not "token" or "content"
@@ -12,7 +13,7 @@ interface LightRAGStreamData {
 const activeStreams: Record<string, AbortController> = {};
 
 // Update to use LightRAG URL
-const LIGHTRAG_BASE_URL = process.env.LIGHTRAG_BASE_URL || 'http://lightrag.onlysaid-dev.com';
+const LIGHTRAG_BASE_URL = process.env.KB_BASE_URL || 'http://lightrag.onlysaid-dev.com';
 let lightragServiceInstance: LightRAGService | null = null;
 
 const getLightRAGService = () => {
@@ -391,6 +392,115 @@ export function setupSSEHandlers() {
 
             sendChunkToRenderer("", true);
             return { success: true, fullResponse: accumulatedResponse };
+          case 'h20':
+            let h20Model = model;
+            if (model === 'Llama-4-Maverick-17B-128E-Instruct-FP8') {
+              h20Model = 'Llama-4-Maverick-17B-128E-Instruct-FP8'; // Keep the exact model name
+            }
+
+            const h20Payload = JSON.stringify({
+              model: h20Model,
+              messages: messages,
+              temperature,
+              max_tokens: maxTokens,
+              stream: true,
+            });
+
+            const h20Headers: Record<string, string> = {
+              'Accept': 'application/json',
+              'Content-Type': 'application/json',
+              'User-Agent': 'OnlySaid/1.0.0',
+              'Content-Length': Buffer.byteLength(h20Payload).toString()
+            };
+
+            // Only add Authorization if API key exists
+            if (options.apiKeys.h20) {
+              h20Headers['Authorization'] = `Bearer ${options.apiKeys.h20}`;
+            }
+
+            const h20Options = {
+              hostname: 'askgenie-api.oagpuservices.com',
+              port: 443,
+              path: '/v1/chat/completions',
+              method: 'POST',
+              headers: h20Headers,
+              rejectUnauthorized: false
+            };
+
+            return new Promise((resolve, reject) => {
+              const h20Req = https.request(h20Options, (h20Res) => {
+                console.log(`H20 Response status: ${h20Res.statusCode}`);
+                console.log(`H20 Response headers:`, h20Res.headers);
+                
+                if (h20Res.statusCode !== 200) {
+                  let errorBody = '';
+                  h20Res.on('data', chunk => errorBody += chunk);
+                  h20Res.on('end', () => {
+                    console.error(`H20 API error response: ${errorBody}`);
+                    reject(new Error(`H20 API error: ${h20Res.statusCode} ${h20Res.statusMessage} - ${errorBody}`));
+                  });
+                  return;
+                }
+
+                let h20Buffer = '';
+                
+                h20Res.on('data', (chunk) => {
+                  if (controller.signal.aborted) {
+                    h20Res.destroy();
+                    return;
+                  }
+                  
+                  h20Buffer += chunk.toString();
+                  const lines = h20Buffer.split('\n');
+                  h20Buffer = lines.pop() || '';
+
+                  for (const line of lines) {
+                    const trimmedLine = line.trim();
+                    if (trimmedLine.startsWith('data: ')) {
+                      const data = trimmedLine.slice(6);
+                      if (data === '[DONE]') {
+                        sendChunkToRenderer("", true);
+                        resolve({ success: true, fullResponse: accumulatedResponse });
+                        return;
+                      }
+
+                      try {
+                        const parsed = JSON.parse(data);
+                        const content = parsed.choices?.[0]?.delta?.content || '';
+                        if (content) {
+                          sendChunkToRenderer(content);
+                        }
+                      } catch (e) {
+                        console.warn('Failed to parse H20 SSE data:', data);
+                      }
+                    }
+                  }
+                });
+
+                h20Res.on('end', () => {
+                  sendChunkToRenderer("", true);
+                  resolve({ success: true, fullResponse: accumulatedResponse });
+                });
+
+                h20Res.on('error', (error) => {
+                  console.error('H20 response error:', error);
+                  reject(error);
+                });
+              });
+
+              h20Req.on('error', (error) => {
+                console.error('H20 request error:', error);
+                reject(error);
+              });
+
+              controller.signal.addEventListener('abort', () => {
+                h20Req.destroy();
+                resolve({ success: true, aborted: true, fullResponse: accumulatedResponse });
+              });
+
+              h20Req.write(h20Payload);
+              h20Req.end();
+            });
           case 'ollama':
           default:
             if (!options.ollamaConfig || !options.ollamaConfig.baseUrl) {

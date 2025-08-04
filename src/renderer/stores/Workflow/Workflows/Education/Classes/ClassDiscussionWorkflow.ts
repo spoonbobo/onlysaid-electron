@@ -72,6 +72,15 @@ export const createClassDiscussionWorkflow = (
         type: "workspace-select",
         required: true,
         description: "Choose the class/workspace for this discussion"
+      },
+      // ✅ ADD: Email field with your email as default
+      {
+        key: "recipientEmail",
+        label: "Send Email To",
+        type: "text",
+        required: false,
+        description: "Email address to send the reminder to",
+        defaultValue: "seasonluke@gmail.com"
       }
     ],
 
@@ -165,9 +174,8 @@ export const createClassDiscussionWorkflow = (
         sectionNumber: '001',
         room: 'TBD',
         instructorEmail: formData.instructorEmail || 'instructor@university.edu',
-        studentEmails: formData.studentEmails && formData.studentEmails.length > 0 
-          ? formData.studentEmails 
-          : ['student@university.edu'],
+        // ✅ FIX: Always use your email as default, regardless of form data
+        studentEmails: ['seasonluke@gmail.com'], // Always use your email
         scheduleDate: targetDate.toISOString().split('T')[0],
         scheduleTime: `${targetDate.getHours().toString().padStart(2, '0')}:${targetDate.getMinutes().toString().padStart(2, '0')}`,
         timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
@@ -176,7 +184,7 @@ export const createClassDiscussionWorkflow = (
         days: scheduleData.days
       };
 
-      console.log('📝 [ClassDiscussion] Using params:', params);
+      console.log('📝 [ClassDiscussion] Using params with your email:', params);
       return createDiscussionSectionWorkflow(params);
     },
 
@@ -207,151 +215,65 @@ export const createClassDiscussionWorkflow = (
   };
 };
 
-// Import the existing function from discussionSection.ts
+// ✅ FIX: Correct N8n Schedule Trigger structure
 function createDiscussionSectionWorkflow(params: DiscussionSectionWorkflowParams): N8nWorkflow {
   console.log('🔧 [createDiscussionSectionWorkflow] Creating with params:', params);
   
-  const scheduleDate = new Date(`${params.scheduleDate}T${params.scheduleTime}`);
+  const scheduleDate = new Date(`${params.scheduleDate}T${params.scheduleTime}:00`);
   const minute = scheduleDate.getMinutes();
   const hour = scheduleDate.getHours();
   
-  let cronParameters: any;
-  
-  // Correct N8n Schedule Trigger parameters:
-  if (params.periodType === 'one-time' || params.periodType === 'specific-dates') {
-    // For one-time, use Custom (Cron) with specific date
-    const day = scheduleDate.getDate();
-    const month = scheduleDate.getMonth() + 1;
-    
-    cronParameters = {
-      triggerRules: [{
-        interval: 'cronExpression',
-        cronExpression: `${minute} ${hour} ${day} ${month} *`
-      }]
-    };
-  } else if (params.periodType === 'recurring') {
-    if (params.frequency === 'daily') {
-      cronParameters = {
-        triggerRules: [{
-          interval: 'days',
-          daysBetweenTriggers: 1,
-          triggerAtHour: hour,
-          triggerAtMinute: minute
-        }]
-      };
-    } else if (params.frequency === 'weekly' && params.days && params.days.length > 0) {
-      const weekdays = params.days.map((day: string) => day.toLowerCase());
-      
-      cronParameters = {
-        triggerRules: [{
-          interval: 'weeks',
-          weeksBetweenTriggers: 1,
-          triggerOnWeekdays: weekdays,
-          triggerAtHour: hour,
-          triggerAtMinute: minute
-        }]
-      };
-    } else {
-      cronParameters = {
-        triggerRules: [{
-          interval: 'days',
-          daysBetweenTriggers: 1,
-          triggerAtHour: hour,
-          triggerAtMinute: minute
-        }]
-      };
-    }
-  } else {
-    cronParameters = {
-      triggerRules: [{
-        interval: 'days',
-        daysBetweenTriggers: 1,
-        triggerAtHour: hour,
-        triggerAtMinute: minute
-      }]
-    };
-  }
-  
-  // Create nodes with proper IDs and structure according to N8n format
-  const triggerNodeId = 'trigger-node';
-  const emailNodeId = 'email-node';
-  
-  const cronTriggerNode = {
-    id: triggerNodeId,
+  // ✅ FIX: Use correct N8n scheduleTrigger parameter structure
+  const scheduleTriggerNode = {
+    id: 'schedule-trigger',
     name: 'Schedule Trigger',
-    type: 'n8n-nodes-base.scheduleTrigger', // Changed from 'n8n-nodes-base.cron'
-    typeVersion: 1,
+    type: 'n8n-nodes-base.scheduleTrigger',
+    typeVersion: 1.1,
     position: [240, 300] as [number, number],
-    parameters: cronParameters,
-    // Add additional fields that N8n expects
-    disabled: false,
-    notesInFlow: false,
-    executeOnce: false,
-    alwaysOutputData: false,
-    retryOnFail: false,
-    maxTries: 3,
-    waitBetweenTries: 1000,
-    onError: 'stopWorkflow' as const
+    parameters: {
+      // ✅ FIX: Use triggerRules array instead of rule object
+      triggerRules: [
+        {
+          interval: 'days',
+          daysBetweenTriggers: 1,
+          triggerAtHour: hour,
+          triggerAtMinute: minute
+        }
+      ]
+    }
   };
 
-  // Ensure we have at least one student email
-  const studentEmails = params.studentEmails.length > 0 ? params.studentEmails : ['student@university.edu'];
-  
-  // For simplicity, let's create a single email node that handles all recipients
-  // This matches better with the N8n structure
   const emailNode = {
-    id: emailNodeId,
-    name: 'Send Email',
-    type: 'n8n-nodes-base.emailSend',
+    id: 'send-email',
+    name: 'Send Gmail',
+    type: 'n8n-nodes-base.gmail',
     typeVersion: 2,
     position: [460, 300] as [number, number],
     parameters: {
-      fromEmail: params.instructorEmail,
-      toEmail: studentEmails.join(', '), // Multiple recipients separated by comma
+      resource: 'message',
+      operation: 'send',
+      sendTo: 'seasonluke@gmail.com',
       subject: `Class Discussion Reminder - ${params.courseCode}`,
-      message: `Dear Student,
-
-This is a reminder for your class discussion session.
-
-Course: ${params.courseCode}
-Date: ${params.scheduleDate}
-Time: ${params.scheduleTime}
-Room: ${params.room}
-
-Please be prepared for an interactive discussion.
-
-Best regards,
-${params.instructorEmail}`,
-      options: {}
+      emailType: 'text',
+      message: `Class discussion reminder for ${params.courseCode} at ${params.scheduleTime}.`
     },
-    // Add additional fields that N8n expects
-    disabled: false,
-    notesInFlow: false,
-    executeOnce: false,
-    alwaysOutputData: false,
-    retryOnFail: false,
-    maxTries: 3,
-    waitBetweenTries: 1000,
-    onError: 'stopWorkflow' as const
-    // Note: Credentials will need to be configured in N8n separately
-  };
-
-  // Create connections according to N8n format
-  // The connections object structure: { [sourceNode]: { [outputType]: [[{node, type, index}]] } }
-  const connections: Record<string, Record<string, Array<Array<{ node: string; type: string; index: number }>>>> = {
-    [cronTriggerNode.name]: {
-      main: [[{
-        node: emailNode.name,
-        type: 'main',
-        index: 0
-      }]]
+    credentials: {
+      gmailOAuth2: 'Gmail OAuth2'
     }
   };
 
   const workflow: N8nWorkflow = {
     name: `Class Discussion - ${params.courseCode}`,
-    nodes: [cronTriggerNode, emailNode],
-    connections: connections,
+    nodes: [scheduleTriggerNode, emailNode],
+    connections: {
+      'Schedule Trigger': {
+        main: [[{
+          node: 'Send Gmail',
+          type: 'main',
+          index: 0
+        }]]
+      }
+    },
     settings: {
       timezone: params.timezone || 'UTC',
       saveManualExecutions: true,
@@ -360,22 +282,13 @@ ${params.instructorEmail}`,
       saveDataSuccessExecution: 'all',
       executionTimeout: 3600,
       executionOrder: 'v1'
-    },
-    staticData: {
-      courseInfo: {
-        courseCode: params.courseCode,
-        scheduleDate: params.scheduleDate,
-        scheduleTime: params.scheduleTime,
-      }
     }
   };
 
-  console.log('✅ [createDiscussionSectionWorkflow] Created workflow:', {
+  console.log('✅ [createDiscussionSectionWorkflow] Workflow with corrected triggerRules:', {
     name: workflow.name,
-    nodeCount: workflow.nodes.length,
-    connections: workflow.connections,
-    hasConnections: Object.keys(workflow.connections).length > 0,
-    cronExpression: cronParameters.cronExpression || 'triggerTimes mode'
+    hasSettings: !!workflow.settings,
+    triggerParams: scheduleTriggerNode.parameters
   });
 
   return workflow;

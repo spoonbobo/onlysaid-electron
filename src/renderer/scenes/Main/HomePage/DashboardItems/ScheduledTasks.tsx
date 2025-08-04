@@ -46,6 +46,18 @@ function ScheduledTasks() {
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<ScheduledItem | null>(null);
 
+  // ✅ ADD: Auto-load scheduled items on component mount
+  useEffect(() => {
+    loadScheduledItems();
+  }, []);
+
+  // ✅ ADD: Reload when n8n connection status changes
+  useEffect(() => {
+    if (n8nConnected && n8nApiUrl && n8nApiKey) {
+      loadScheduledItems();
+    }
+  }, [n8nConnected, n8nApiUrl, n8nApiKey]);
+
   // ✅ ENHANCED: Better getDaysUntil function with minutes/hours support
   const getDaysUntil = (date: Date | string) => {
     const targetDate = typeof date === 'string' ? new Date(date) : date;

@@ -38,6 +38,37 @@ export function ScheduleConfiguration({
 }: ScheduleConfigurationProps) {
   const intl = useIntl();
 
+  const handlePresetSelection = (preset: string) => {
+    const now = new Date();
+    let targetDate: Date;
+
+    switch (preset) {
+      case '5min':
+        targetDate = new Date(now.getTime() + 5 * 60 * 1000);
+        break;
+      case '30min':
+        targetDate = new Date(now.getTime() + 30 * 60 * 1000);
+        break;
+      case '1hour':
+        targetDate = new Date(now.getTime() + 60 * 60 * 1000);
+        break;
+      case '1day':
+        targetDate = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+        break;
+      case '1week':
+        targetDate = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+        break;
+      default:
+        return;
+    }
+
+    const dateStr = targetDate.toISOString().split('T')[0];
+    const timeStr = `${targetDate.getHours().toString().padStart(2, '0')}:${targetDate.getMinutes().toString().padStart(2, '0')}`;
+    
+    onScheduleChange('date', dateStr);
+    onScheduleChange('time', timeStr);
+  };
+
   return (
     <Box sx={{ mb: 4 }}>
       <Typography variant="h6" sx={{ mb: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -78,30 +109,64 @@ export function ScheduleConfiguration({
         
         {/* One-time Schedule */}
         {selectedPeriodType === 'one-time' && (
-          <Grid container spacing={2}>
-            <Grid size={{ xs: 12, md: 6 }}>
-              <TextField
-                fullWidth
-                label={intl.formatMessage({ id: 'workflow.field.date', defaultMessage: 'Date' })}
-                type="date"
-                value={scheduleData.date || getCurrentDate()}
-                onChange={(e) => onScheduleChange('date', e.target.value)}
-                size="small"
-                InputLabelProps={{ shrink: true }}
-              />
+          <Box>
+            <Grid container spacing={2}>
+              <Grid size={{ xs: 12, md: 6 }}>
+                <TextField
+                  fullWidth
+                  label={intl.formatMessage({ id: 'workflow.field.date', defaultMessage: 'Date' })}
+                  type="date"
+                  value={scheduleData.date || getCurrentDate()}
+                  onChange={(e) => onScheduleChange('date', e.target.value)}
+                  size="small"
+                  InputLabelProps={{ shrink: true }}
+                />
+              </Grid>
+              <Grid size={{ xs: 12, md: 6 }}>
+                <TextField
+                  fullWidth
+                  label={intl.formatMessage({ id: 'workflow.field.time', defaultMessage: 'Time' })}
+                  type="time"
+                  value={scheduleData.time || getCurrentTime()}
+                  onChange={(e) => onScheduleChange('time', e.target.value)}
+                  size="small"
+                  InputLabelProps={{ shrink: true }}
+                />
+              </Grid>
             </Grid>
-            <Grid size={{ xs: 12, md: 6 }}>
-              <TextField
-                fullWidth
-                label={intl.formatMessage({ id: 'workflow.field.time', defaultMessage: 'Time' })}
-                type="time"
-                value={scheduleData.time || getCurrentTime()}
-                onChange={(e) => onScheduleChange('time', e.target.value)}
-                size="small"
-                InputLabelProps={{ shrink: true }}
-              />
-            </Grid>
-          </Grid>
+            
+            {/* Quick Time Presets */}
+            <Box sx={{ mt: 2 }}>
+              <Typography variant="body2" sx={{ mb: 1, color: 'text.secondary' }}>
+                {intl.formatMessage({ id: 'workflow.preset.quickSelect', defaultMessage: 'Quick Select' })}
+              </Typography>
+              <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                {[
+                  { key: '5min', label: intl.formatMessage({ id: 'workflow.preset.5min', defaultMessage: '5 min later' }) },
+                  { key: '30min', label: intl.formatMessage({ id: 'workflow.preset.30min', defaultMessage: '30 min later' }) },
+                  { key: '1hour', label: intl.formatMessage({ id: 'workflow.preset.1hour', defaultMessage: '1 hour later' }) },
+                  { key: '1day', label: intl.formatMessage({ id: 'workflow.preset.1day', defaultMessage: '1 day later' }) },
+                  { key: '1week', label: intl.formatMessage({ id: 'workflow.preset.1week', defaultMessage: '1 week later' }) }
+                ].map(({ key, label }) => (
+                  <Chip
+                    key={key}
+                    label={label}
+                    onClick={() => handlePresetSelection(key)}
+                    size="small"
+                    variant="outlined"
+                    clickable
+                    sx={{ 
+                      height: 28,
+                      '&:hover': {
+                        bgcolor: 'primary.main',
+                        color: 'primary.contrastText'
+                      }
+                    }}
+                  />
+                ))}
+              </Box>
+            </Box>
+          </Box>
         )}
 
         {/* Recurring Schedule */}

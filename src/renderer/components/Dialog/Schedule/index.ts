@@ -7,7 +7,6 @@ export { WorkflowFormFields } from './WorkflowFormFields';
 export { ScheduleConfiguration } from './ScheduleConfiguration';
 export { ScheduleDatesPreview } from './ScheduleDatesPreview';
 export { WorkflowDialogHeader } from './WorkflowDialogHeader';
-export { WorkflowDialogActions } from './WorkflowDialogActions';
 export { PreviewDatesDialog } from './PreviewDatesDialog';
 
 // Types
