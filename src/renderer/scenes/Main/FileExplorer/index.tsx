@@ -411,6 +411,8 @@ function FileExplorer() {
     }
   };
 
+
+
   return (
     <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
       {/* Header with breadcrumbs and actions */}
@@ -500,6 +502,7 @@ function FileExplorer() {
               onClick={handleGoBack}
               size="small"
               sx={{ bgcolor: 'action.hover' }}
+              title="Go Back"
             >
               <ArrowBackIcon />
             </IconButton>
@@ -508,6 +511,7 @@ function FileExplorer() {
               size="small"
               disabled={isLoading}
               sx={{ bgcolor: 'action.hover' }}
+              title="Refresh Folder"
             >
               <RefreshIcon />
             </IconButton>

@@ -95,12 +95,31 @@ export function setupDocxHandlers() {
         };
       }
       
-      // Check for ZIP signature (PK headers)
-      const zipSignature1 = buffer[0] === 0x50 && buffer[1] === 0x4B; // "PK"
-      if (!zipSignature1) {
+      // Check for valid ZIP signatures - DOCX files can have multiple valid ZIP signatures
+      const isValidZipSignature = isValidZipFile(buffer);
+      if (!isValidZipSignature) {
+        console.log(`[DocxReader] ZIP validation failed for file: ${filePath}`);
+        console.log(`[DocxReader] Buffer length: ${buffer.length}, First 16 bytes:`, buffer.subarray(0, 16));
+        
+        // Check if this appears to be a text file with Chinese/Unicode characters
+        const firstBytes = buffer.subarray(0, 32);
+        const isLikelyTextFile = firstBytes.every(byte => 
+          // UTF-8 continuation bytes or common ASCII chars
+          (byte >= 0x80 && byte <= 0xFF) || // UTF-8 multi-byte chars
+          (byte >= 0x20 && byte <= 0x7E) || // Printable ASCII
+          byte === 0x0A || byte === 0x0D || byte === 0x09 // Line breaks, tabs
+        );
+        
+        let errorMessage = 'File does not appear to be a valid DOCX document.';
+        if (isLikelyTextFile) {
+          errorMessage = 'This appears to be a text file that has been incorrectly named with a .docx extension. DOCX files are compressed archives, but this file contains plain text. Please verify the file format or rename it with the correct extension (.txt).';
+        } else {
+          errorMessage = 'File does not appear to be a valid DOCX document. This may be caused by file corruption, an older .doc format, or the file may not be a Word document. Try opening the file in Microsoft Word and saving it as a .docx file.';
+        }
+        
         return {
           success: false,
-          error: 'File does not appear to be a valid DOCX document (missing ZIP signature)'
+          error: errorMessage
         };
       }
       
@@ -137,6 +156,38 @@ export function setupDocxHandlers() {
 
       } catch (parseError: any) {
         console.error('[DocxReader] Error parsing DOCX:', parseError);
+        
+        // Try a fallback approach for files that pass ZIP validation but have parsing issues
+        try {
+          console.log('[DocxReader] Attempting fallback text extraction...');
+          const fallbackResult = await mammoth.extractRawText({buffer: buffer});
+          if (fallbackResult.value && fallbackResult.value.trim()) {
+            console.log('[DocxReader] Fallback extraction successful, returning basic document structure');
+            
+            const fallbackStructure = parseTextToStructure(fallbackResult.value);
+            const stats = await fs.promises.stat(resolvedPath);
+            
+            return {
+              success: true,
+              document: {
+                content: fallbackResult.value,
+                structure: fallbackStructure,
+                metadata: {
+                  words: fallbackResult.value.trim().split(/\s+/).length,
+                  characters: fallbackResult.value.length,
+                  created: stats.birthtime,
+                  modified: stats.mtime,
+                  title: path.basename(resolvedPath, path.extname(resolvedPath))
+                }
+              },
+              size: buffer.length,
+              type: 'docx',
+              note: 'Document opened in text mode due to structure parsing issues'
+            };
+          }
+        } catch (fallbackError) {
+          console.error('[DocxReader] Fallback extraction also failed:', fallbackError);
+        }
         
         // Provide more specific error messages for common issues
         let errorMessage = parseError.message;
@@ -253,6 +304,12 @@ export function setupDocxHandlers() {
       try {
         const readResult = await fs.promises.readFile(resolvedPath);
         const readBuffer = Buffer.from(readResult);
+        
+        // Validate that it's a valid ZIP file before attempting to parse
+        if (!isValidZipFile(readBuffer)) {
+          console.log(`[DocxTextSaver] Existing file is not a valid ZIP/DOCX format, creating new document`);
+          throw new Error('Invalid ZIP format');
+        }
         
         // Try to parse existing structure
         const extractedText = await mammoth.extractRawText({buffer: readBuffer});
@@ -1078,6 +1135,53 @@ function updateStructureWithText(existingStructure: DocxElement[], newText: stri
   }
   
   return updatedStructure;
+}
+
+/**
+ * Validate if a buffer contains a valid ZIP file signature
+ * DOCX files are ZIP archives and can have multiple valid signatures
+ */
+function isValidZipFile(buffer: Buffer): boolean {
+  if (buffer.length < 4) {
+    return false;
+  }
+  
+  // Check for various valid ZIP signatures
+  const signature = buffer.readUInt32LE(0);
+  
+  // Standard ZIP signatures
+  const validSignatures = [
+    0x04034b50, // Standard ZIP local file header signature "PK\x03\x04"
+    0x08074b50, // ZIP data descriptor signature "PK\x07\x08"
+    0x02014b50, // ZIP central directory file header signature "PK\x01\x02"
+    0x06054b50, // ZIP end of central directory signature "PK\x05\x06"
+    0x30304b50, // Alternative signature pattern sometimes used
+    0x06064b50, // ZIP64 end of central directory signature "PK\x06\x06"
+    0x07064b50, // ZIP64 end of central directory locator signature "PK\x06\x07"
+  ];
+  
+  // Check if the signature matches any valid ZIP signature
+  if (validSignatures.includes(signature)) {
+    return true;
+  }
+  
+  // Also check the traditional byte-by-byte method for "PK" header
+  const pkSignature = buffer[0] === 0x50 && buffer[1] === 0x4B; // "PK"
+  if (pkSignature) {
+    return true;
+  }
+  
+  // Check for empty ZIP file signature
+  if (buffer.length >= 22) {
+    // Look for ZIP end of central directory signature anywhere in the first 22 bytes
+    for (let i = 0; i <= buffer.length - 4; i++) {
+      if (buffer.readUInt32LE(i) === 0x06054b50) {
+        return true;
+      }
+    }
+  }
+  
+  return false;
 }
 
 /**

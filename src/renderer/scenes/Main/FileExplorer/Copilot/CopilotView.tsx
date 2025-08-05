@@ -19,7 +19,8 @@ import {
   FiberManualRecord as UnsavedIcon,
   ViewStream as StructuredIcon,
   TextFields as TextIcon,
-  ContentCopy as CopyIcon
+  ContentCopy as CopyIcon,
+  ClearAll as ClearAllIcon
 } from '@mui/icons-material';
 import FilePreview from '../FileRenderer';
 import Chat from '../../Chat';
@@ -37,6 +38,9 @@ import {
   applyDocxStructurePatches,
   applyStructurePatchesToText,
   docxElementsToText,
+  applySingleStructurePatchIsolated,
+  createIndependentStructurePatches,
+  createIndividualDiffBlocks,
   AnchorPatch,
   DocxStructurePatch,
   DocxElement 
@@ -74,7 +78,9 @@ export default function CopilotView({}: CopilotViewProps) {
     hasUnsavedChanges,
     setHasUnsavedChanges,
     setCurrentFileContent,
-    setCurrentDocumentStructure
+    setCurrentDocumentStructure,
+    clearDiffBlockStates,
+    setDiffBlockState
   } = useCopilotStore();
   
   // Chat and topic management
@@ -160,6 +166,15 @@ export default function CopilotView({}: CopilotViewProps) {
     createCopilotChat();
   }, [currentDocument, selectedContext, selectedTopics, chats, createChat, updateChat, setSelectedTopic]);
 
+  // Event listener for resetting approvals
+  useEffect(() => {
+    document.addEventListener('onlysaid-reset-approvals', handleResetApprovals);
+    
+    return () => {
+      document.removeEventListener('onlysaid-reset-approvals', handleResetApprovals);
+    };
+  }, []);
+
   // Updated event listener for code application (includes DOCX patch support)
   useEffect(() => {
     const handleApplyCode = (e: Event) => {
@@ -191,34 +206,41 @@ export default function CopilotView({}: CopilotViewProps) {
             
             // Need to get current document structure
             if (documentData?.structure) {
-              console.log('Creating diff for structure patches instead of applying immediately');
+              console.log('Creating isolated diff for structure patches to prevent index shifting issues');
               
               // Create a preview of what the changes would look like
               const patchResult = applyDocxStructurePatches(documentData.structure, structurePatches);
               
               if (patchResult.success) {
-                // Use targeted text replacement to get the new content for diff comparison
-                const targetedResult = applyStructurePatchesToText(editedContent, documentData.structure, structurePatches);
+                console.log('Creating individual diff blocks for each structure patch to prevent index shifting');
                 
-                let newContent: string;
-                if (targetedResult.success) {
-                  newContent = targetedResult.content;
-                } else {
-                  // Fallback to full reconstruction
-                  newContent = docxElementsToText(patchResult.elements);
-                }
+                // Create individual diff blocks for each patch
+                const { diffBlocks, patchMapping } = createIndividualDiffBlocks(
+                  editedContent, 
+                  documentData.structure, 
+                  structurePatches
+                );
                 
-                // Create diff instead of applying immediately
-                const diff = createCodeDiff(editedContent, newContent);
+                console.log(`Created ${diffBlocks.length} individual diff blocks from ${structurePatches.length} structure patches`);
                 
-                if (diff.hasChanges) {
-                  // Store the structure patches so we can apply them when user approves
-                  (diff as any).structurePatches = structurePatches;
-                  (diff as any).newStructure = patchResult.elements;
+                if (diffBlocks.length > 0) {
+                  // Create a custom diff object with individual blocks
+                  const customDiff = {
+                    blocks: diffBlocks,
+                    hasChanges: true
+                  };
                   
-                  setCurrentDiff(diff);
+                  // Store patch mapping and metadata
+                  (customDiff as any).patchMapping = patchMapping;
+                  (customDiff as any).originalStructure = documentData.structure;
+                  (customDiff as any).originalContent = editedContent;
+                  (customDiff as any).isIndividualPatch = true; // Flag for new approach
+                  
+                  // Clear previous diff block states for new diff
+                  clearDiffBlockStates();
+                  setCurrentDiff(customDiff);
                   setShowInlineDiff(true);
-                  toast.info(`Found ${diff.blocks.length} structural change(s) from DOCX patches - review and approve/decline in editor`);
+                  toast.info(`Found ${diffBlocks.length} independent structural change(s) - switch to Edit Mode to approve/decline them`);
                   return;
                 } else {
                   toast.success('No changes needed - content is already up to date!');
@@ -276,6 +298,8 @@ export default function CopilotView({}: CopilotViewProps) {
               const diff = createCodeDiff(editedContent, docxContent);
               
               if (diff.hasChanges) {
+                // Clear previous diff block states for new diff
+                clearDiffBlockStates();
                 setCurrentDiff(diff);
                 setShowInlineDiff(true);
                 toast.info(`Found ${diff.blocks.length} change(s) from full content - review in editor`);
@@ -301,6 +325,8 @@ export default function CopilotView({}: CopilotViewProps) {
         const diff = createCodeDiff(editedContent, code);
         
         if (diff.hasChanges) {
+          // Clear previous diff block states for new diff
+          clearDiffBlockStates();
           setCurrentDiff(diff);
           setShowInlineDiff(true);
           toast.info(`Found ${diff.blocks.length} change(s) - review in editor`);
@@ -335,63 +361,329 @@ export default function CopilotView({}: CopilotViewProps) {
     setAutoSaveTimer(timer);
   };
 
-  // Handle applying individual diff blocks
-  const handleApplyDiffBlock = async (block: DiffBlock) => {
+  // Handle applying DOCX structure diff blocks with isolated patch approach
+  const handleApplyDocxStructureDiffBlock = async (block: DiffBlock, diffWithPatches: any) => {
     try {
-      // Apply the diff block to get new content
-      const newContent = applyDiffBlock(editedContent, block);
+      console.log('Applying isolated DOCX structure diff block:', block.id);
       
-      // Update the editor content immediately
-      setEditedContent(newContent);
-      setCurrentFileContent(newContent);
-      setLastSavedContent(newContent);
-      
-      // Remove the applied block from the diff (same logic as decline)
-      if (currentDiff) {
-        const updatedBlocks = currentDiff.blocks.filter(b => b.id !== block.id);
-        const updatedDiff = {
-          ...currentDiff,
-          blocks: updatedBlocks,
-          hasChanges: updatedBlocks.length > 0
-        };
+      // Check if this is using the new individual patch approach
+      if (diffWithPatches.isIndividualPatch && diffWithPatches.patchMapping) {
+        const patchMapping = diffWithPatches.patchMapping as Map<string, DocxStructurePatch>;
+        const correspondingPatch = patchMapping.get(block.id);
         
-        setCurrentDiff(updatedDiff);
-        
-        // Hide diff only if no more changes remain
-        if (!updatedDiff.hasChanges) {
-          setShowInlineDiff(false);
+        if (correspondingPatch) {
+          console.log('Applying individual structure patch:', correspondingPatch);
           
-          // If this was a DOCX structure patch diff and all blocks are now applied,
-          // update the document structure as well
-          const diffWithPatches = currentDiff as any;
-          if (diffWithPatches.structurePatches && diffWithPatches.newStructure) {
-            console.log('All DOCX structure diff blocks applied - updating document structure');
-            setCurrentDocumentStructure(diffWithPatches.newStructure);
-            setDocumentData((prev: any) => ({
-              ...prev,
-              text: newContent,
-              structure: diffWithPatches.newStructure
-            }));
-            toast.success(`Applied all DOCX structural changes successfully!`);
+          // Get current structure from store (which includes previous changes)
+          const { currentDocumentStructure } = useCopilotStore.getState();
+          const currentStructure = currentDocumentStructure || diffWithPatches.originalStructure;
+          
+          console.log('Using current structure for patch application:', {
+            hasCurrentStructure: !!currentDocumentStructure,
+            structureLength: currentStructure?.length
+          });
+          
+          // Apply the individual patch to the current content and current structure
+          const isolatedResult = applySingleStructurePatchIsolated(
+            editedContent,
+            currentStructure,
+            [correspondingPatch],
+            correspondingPatch
+          );
+          
+          if (isolatedResult.success) {
+            // Update content
+            setEditedContent(isolatedResult.newContent);
+            setCurrentFileContent(isolatedResult.newContent);
+            setLastSavedContent(isolatedResult.newContent);
+            
+            // Update structure in store to reflect the new changes
+            try {
+              const structureResult = await window.electron.fileSystem.textToDocxStructure(isolatedResult.newContent);
+              if (structureResult.success) {
+                setCurrentDocumentStructure(structureResult.structure);
+                console.log('Updated document structure after patch application');
+              } else {
+                console.warn('Failed to update document structure:', structureResult.error);
+              }
+            } catch (error) {
+              console.warn('Error updating document structure:', error);
+            }
+            
+            // Mark as applied in store instead of removing from diff
+            const { setDiffBlockState } = useCopilotStore();
+            setDiffBlockState(block.id, { 
+              status: 'applied', 
+              appliedAt: new Date() 
+            });
+            
+            // Count remaining pending blocks for user feedback
+            const remainingPendingBlocks = currentDiff!.blocks.filter(b => {
+              const state = useCopilotStore.getState().getDiffBlockState(b.id);
+              return state.status === 'pending' || state.status === 'error';
+            }).length - 1; // -1 because we just applied one
+            
+            if (remainingPendingBlocks > 0) {
+              toast.success(`Applied structural change. ${remainingPendingBlocks} independent change(s) remaining.`);
+            } else {
+              toast.success('All DOCX structural changes applied successfully!');
+            }
+            
+            // Save to file system
+            if (currentDocument && window.electron?.fileSystem?.saveDocumentText) {
+              const result = await window.electron.fileSystem.saveDocumentText(
+                currentDocument.path, 
+                isolatedResult.newContent
+              );
+              
+              if (result?.success) {
+                console.log('DOCX structure changes saved successfully');
+              } else {
+                console.error('Failed to save DOCX structure changes:', result?.error);
+                toast.error(`Failed to save changes: ${result?.error || 'Unknown error'}`);
+              }
+            }
+          } else {
+            // Mark as error in store
+            const { setDiffBlockState } = useCopilotStore();
+            setDiffBlockState(block.id, { 
+              status: 'error', 
+              error: isolatedResult.error 
+            });
+            
+            console.error('Failed to apply individual patch:', isolatedResult.error);
+            toast.error(`Failed to apply structural change: ${isolatedResult.error}`);
+          }
+        } else {
+          console.error('No corresponding structure patch found for block:', block.id);
+          toast.error('Could not find corresponding structural change to apply');
+        }
+      } else if (diffWithPatches.isIsolatedPatch && diffWithPatches.structurePatches) {
+        // Legacy isolated patch handling
+        const blockIndex = diffWithPatches.blocks.findIndex((b: DiffBlock) => b.id === block.id);
+        const correspondingPatch = diffWithPatches.structurePatches[blockIndex];
+        
+        if (correspondingPatch) {
+          console.log('Applying legacy isolated structure patch:', correspondingPatch);
+          
+          // Get current structure from store (which includes previous changes)
+          const { currentDocumentStructure } = useCopilotStore.getState();
+          const currentStructure = currentDocumentStructure || diffWithPatches.originalStructure;
+          
+          const isolatedResult = applySingleStructurePatchIsolated(
+            editedContent,
+            currentStructure,
+            diffWithPatches.structurePatches,
+            correspondingPatch
+          );
+          
+          if (isolatedResult.success) {
+            setEditedContent(isolatedResult.newContent);
+            setCurrentFileContent(isolatedResult.newContent);
+            setLastSavedContent(isolatedResult.newContent);
+            
+            // Update structure in store to reflect the new changes
+            try {
+              const structureResult = await window.electron.fileSystem.textToDocxStructure(isolatedResult.newContent);
+              if (structureResult.success) {
+                setCurrentDocumentStructure(structureResult.structure);
+                console.log('Updated document structure after legacy patch application');
+              } else {
+                console.warn('Failed to update document structure:', structureResult.error);
+              }
+            } catch (error) {
+              console.warn('Error updating document structure:', error);
+            }
+            
+            // Mark as applied in store instead of removing from diff
+            const { setDiffBlockState } = useCopilotStore();
+            setDiffBlockState(block.id, { 
+              status: 'applied', 
+              appliedAt: new Date() 
+            });
+            
+            // Count remaining pending blocks for user feedback
+            const remainingPendingBlocks = currentDiff!.blocks.filter(b => {
+              const state = useCopilotStore.getState().getDiffBlockState(b.id);
+              return state.status === 'pending' || state.status === 'error';
+            }).length - 1; // -1 because we just applied one
+            
+            if (remainingPendingBlocks > 0) {
+              toast.success(`Applied structural change. ${remainingPendingBlocks} change(s) remaining.`);
+            } else {
+              toast.success('All DOCX structural changes applied successfully!');
+            }
+            
+            if (currentDocument && window.electron?.fileSystem?.saveDocumentText) {
+              const result = await window.electron.fileSystem.saveDocumentText(
+                currentDocument.path, 
+                isolatedResult.newContent
+              );
+              
+              if (result?.success) {
+                console.log('DOCX structure changes saved successfully');
+              } else {
+                console.error('Failed to save DOCX structure changes:', result?.error);
+                toast.error(`Failed to save changes: ${result?.error || 'Unknown error'}`);
+              }
+            }
+          } else {
+            // Mark as error in store
+            const { setDiffBlockState } = useCopilotStore();
+            setDiffBlockState(block.id, { 
+              status: 'error', 
+              error: isolatedResult.error 
+            });
+            
+            console.error('Failed to apply legacy isolated patch:', isolatedResult.error);
+            toast.error(`Failed to apply structural change: ${isolatedResult.error}`);
+          }
+        } else {
+          console.error('No corresponding structure patch found for block:', block.id);
+          toast.error('Could not find corresponding structural change to apply');
+        }
+      } else {
+        // Fall back to the legacy approach for older diffs
+        console.log('Using legacy DOCX structure diff handling');
+        
+        // Apply the text diff to get the new content first
+        const newContent = applyDiffBlock(editedContent, block);
+        
+        // Update the current content
+        setEditedContent(newContent);
+        setCurrentFileContent(newContent);
+        setLastSavedContent(newContent);
+        
+        // Mark as applied in store instead of removing from diff
+        const { setDiffBlockState } = useCopilotStore();
+        setDiffBlockState(block.id, { 
+          status: 'applied', 
+          appliedAt: new Date() 
+        });
+        
+        // Count remaining pending blocks for user feedback
+        const remainingPendingBlocks = currentDiff!.blocks.filter(b => {
+          const state = useCopilotStore.getState().getDiffBlockState(b.id);
+          return state.status === 'pending' || state.status === 'error';
+        }).length - 1; // -1 because we just applied one
+        
+        if (remainingPendingBlocks > 0) {
+          toast.info(`Applied change. ${remainingPendingBlocks} change(s) remaining.`);
+        } else {
+          toast.success('All changes applied successfully!');
+        }
+        
+        // Save to file system
+        if (currentDocument && window.electron?.fileSystem?.saveDocumentText) {
+          const result = await window.electron.fileSystem.saveDocumentText(
+            currentDocument.path, 
+            newContent
+          );
+          
+          if (result?.success) {
+            console.log('Changes saved successfully');
+          } else {
+            console.error('Failed to save changes:', result?.error);
+            toast.error(`Failed to save changes: ${result?.error || 'Unknown error'}`);
           }
         }
       }
       
-      // Save to file system
-      if (currentDocument && window.electron?.fileSystem?.saveDocumentText) {
-        const result = await window.electron.fileSystem.saveDocumentText(
-          currentDocument.path, 
-          newContent
-        );
+    } catch (error) {
+      console.error('Failed to apply DOCX structure diff block:', error);
+      toast.error('Failed to apply structural changes');
+    }
+  };
+
+  // Handle applying individual diff blocks
+  const handleApplyDiffBlock = async (block: DiffBlock) => {
+    try {
+      const diffWithPatches = currentDiff as any;
+      
+      // Check if this is a DOCX structure patch diff
+      if (diffWithPatches?.structurePatches && diffWithPatches?.originalStructure) {
+        // For DOCX structure patches, we need to handle this more carefully
+        await handleApplyDocxStructureDiffBlock(block, diffWithPatches);
+        // Note: DOCX structure diff handling includes its own save logic
+      } else {
+        // For regular text diffs, use the standard approach
+        const newContent = applyDiffBlock(editedContent, block);
         
-        if (result?.success) {
-          setDocumentData((prev: any) => ({ ...prev, text: newContent }));
-          toast.success(`Applied changes to line ${block.startLine}`);
-        } else {
-          toast.error(`Failed to save changes: ${result?.error || 'Unknown error'}`);
+        // Update the editor content immediately
+        setEditedContent(newContent);
+        setCurrentFileContent(newContent);
+        setLastSavedContent(newContent);
+        
+        // Mark as applied in store instead of removing from diff
+        setDiffBlockState(block.id, { 
+          status: 'applied', 
+          appliedAt: new Date() 
+        });
+        
+        // Save to file system - use appropriate save method based on file type
+        if (currentDocument) {
+          let result;
+          
+          // Use DOCX-specific save for DOCX files to preserve format
+          if (isDOCXFile(currentDocument.name)) {
+            console.log('[CopilotView] Saving DOCX file using enhanced DOCX save handler');
+            if (window.electron?.fileSystem?.saveDocxTextContent) {
+              result = await window.electron.fileSystem.saveDocxTextContent(
+                currentDocument.path, 
+                newContent
+              );
+            } else {
+              result = {
+                success: false,
+                error: 'DOCX save functionality not available'
+              };
+            }
+          } else {
+            // Use regular text save for non-DOCX files
+            console.log('[CopilotView] Saving text file using regular save handler');
+            if (window.electron?.fileSystem?.saveDocumentText) {
+              result = await window.electron.fileSystem.saveDocumentText(
+                currentDocument.path, 
+                newContent
+              );
+            } else {
+              result = {
+                success: false,
+                error: 'Save functionality not available'
+              };
+            }
+          }
+          
+          if (result?.success) {
+            // Update document data with new content
+            setDocumentData((prev: any) => ({ ...prev, text: newContent }));
+            
+            // If this is a DOCX document and we're in view mode, switch to text mode
+            // to avoid structure/content mismatch after edits
+            if (isDOCXFile(currentDocument.name) && documentData?.structure && documentData.structure.length > 0 && renderMode === 'view') {
+              console.log('[CopilotView] DOCX content edited, switching to text mode to maintain consistency');
+              setRenderMode('text');
+              toast.info('Switched to text mode due to content changes. Reload document to restore structured view.');
+            } else {
+              toast.success(`Applied changes to line ${block.startLine}`);
+            }
+          } else {
+            // Mark as error in store if save failed
+            setDiffBlockState(block.id, { 
+              status: 'error', 
+              error: result?.error || 'Unknown error' 
+            });
+            toast.error(`Failed to save changes: ${result?.error || 'Unknown error'}`);
+          }
         }
       }
     } catch (error) {
+      // Mark as error in store if unexpected error occurred
+      setDiffBlockState(block.id, { 
+        status: 'error', 
+        error: error instanceof Error ? error.message : 'Unknown error' 
+      });
+      
       toast.error('Failed to apply changes');
       console.error('Failed to apply diff block:', error);
     }
@@ -469,32 +761,35 @@ export default function CopilotView({}: CopilotViewProps) {
     return div.innerHTML;
   };
 
-  // Handle declining diff blocks
+  // Handle declining diff blocks - use store state instead of removing from diff
   const handleDeclineDiffBlock = (block: DiffBlock) => {
-    toast.info(`Declined changes to line ${block.startLine}`);
+    const { setDiffBlockState } = useCopilotStore();
     
-    // Remove the declined block from the diff
-    if (currentDiff) {
-      const updatedBlocks = currentDiff.blocks.filter(b => b.id !== block.id);
-      const updatedDiff = {
-        ...currentDiff,
-        blocks: updatedBlocks,
-        hasChanges: updatedBlocks.length > 0
-      };
-      
-      setCurrentDiff(updatedDiff);
-      
-      // Hide diff if no more changes
-      if (!updatedDiff.hasChanges) {
-        setShowInlineDiff(false);
-      }
-    }
+    // Mark as declined in store
+    setDiffBlockState(block.id, { status: 'declined' });
+    
+    toast.info(`Declined changes to element #${(block as any).elementIndex || 'unknown'}`);
+    
+    // Don't remove from currentDiff - let the UI render logic handle showing/hiding based on store state
+    console.log(`🚫 Marked diff block ${block.id} as declined in store`);
   };
 
   // Close inline diff
   const handleCloseDiff = () => {
     setShowInlineDiff(false);
     setCurrentDiff(null);
+  };
+
+  // Reset all approvals/declines
+  const handleResetApprovals = () => {
+    console.log('Resetting all pending approvals/declines');
+    
+    // Clear diff block states from store - use the store directly from the hook at component level
+    clearDiffBlockStates();
+    
+    setShowInlineDiff(false);
+    setCurrentDiff(null);
+    toast.success('Reset all pending approvals/declines');
   };
 
   // Define handleBack function first
@@ -761,15 +1056,19 @@ export default function CopilotView({}: CopilotViewProps) {
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
           {/* Font size controls */}
           <Tooltip title="Decrease Font Size">
-            <IconButton size="small" onClick={handleFontSizeDecrease} disabled={fontSize <= 10}>
-              <ZoomOutIcon />
-            </IconButton>
+            <span>
+              <IconButton size="small" onClick={handleFontSizeDecrease} disabled={fontSize <= 10}>
+                <ZoomOutIcon />
+              </IconButton>
+            </span>
           </Tooltip>
           
           <Tooltip title="Increase Font Size">
-            <IconButton size="small" onClick={handleFontSizeIncrease} disabled={fontSize >= 24}>
-              <ZoomInIcon />
-            </IconButton>
+            <span>
+              <IconButton size="small" onClick={handleFontSizeIncrease} disabled={fontSize >= 24}>
+                <ZoomInIcon />
+              </IconButton>
+            </span>
           </Tooltip>
           
           {/* Document controls - only show for DOCX files */}
@@ -811,17 +1110,38 @@ export default function CopilotView({}: CopilotViewProps) {
             </IconButton>
           </Tooltip>
           
+          {/* Reset approvals button */}
+          <Tooltip title="Reset all pending approvals/declines">
+            <span>
+              <IconButton 
+                size="small" 
+                onClick={handleResetApprovals}
+                disabled={!showInlineDiff}
+                sx={{ 
+                  color: showInlineDiff ? 'warning.main' : 'inherit',
+                  '&:hover': {
+                    bgcolor: showInlineDiff ? 'warning.light' : 'action.hover'
+                  }
+                }}
+              >
+                <ClearAllIcon />
+              </IconButton>
+            </span>
+          </Tooltip>
+          
           <Tooltip title={hasUnsavedChanges ? "Save File (Ctrl+S) - Unsaved changes" : "Save File (Ctrl+S)"}>
-            <IconButton 
-              size="small" 
-              onClick={handleSave} 
-              disabled={!documentData?.text || isSaving}
-              sx={{
-                color: hasUnsavedChanges ? 'warning.main' : 'inherit'
-              }}
-            >
-              <SaveIcon />
-            </IconButton>
+            <span>
+              <IconButton 
+                size="small" 
+                onClick={handleSave} 
+                disabled={!documentData?.text || isSaving}
+                sx={{
+                  color: hasUnsavedChanges ? 'warning.main' : 'inherit'
+                }}
+              >
+                <SaveIcon />
+              </IconButton>
+            </span>
           </Tooltip>
         </Box>
       </Box>

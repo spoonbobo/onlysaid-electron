@@ -6,14 +6,14 @@ export interface DocxPatch {
   target: string;
   action: 'replace' | 'insert' | 'delete' | 'modify';
   content: string;
-  elementType?: 'heading' | 'paragraph' | 'table' | 'list';
+  elementType?: 'heading' | 'paragraph' | 'table' | 'list' | 'image';
   elementIndex?: number;
 }
 
 export interface DocxStructurePatch {
   elementIndex: number;
-  action: 'replace' | 'insert' | 'delete' | 'modify';
-  elementType?: 'heading' | 'paragraph' | 'table' | 'list';
+  action: 'replace' | 'insert' | 'delete' | 'modify' | 'append';
+  elementType?: 'heading' | 'paragraph' | 'table' | 'list' | 'image';
   newElement?: DocxElement;
   insertPosition?: 'before' | 'after';
 }
@@ -35,6 +35,13 @@ export interface DocxFormatting {
   color?: string;
   alignment?: 'left' | 'center' | 'right' | 'justify';
   pageBreak?: boolean;
+}
+
+export interface IndexShift {
+  operation: 'insert' | 'delete';
+  originalIndex: number;
+  shift: number; // +1 for insert, -1 for delete
+  affectedRange: { start: number; end: number };
 }
 
 export interface AnchorPatch {
@@ -563,10 +570,14 @@ function applySingleAnchorPatch(content: string, patch: AnchorPatch): { success:
       content: beforeAnchorStart + startAnchorText + updatedBetween + endAnchorText + afterAnchorEnd
     };
   } else {
-    // If no original specified, replace entire content between anchors
+    // If no original specified, insert the replacement while preserving existing content
+    // This prevents content from disappearing when showing diffs
+    const existingContent = betweenAnchors.trim();
+    const combinedContent = existingContent ? `${existingContent}\n${patch.replacement}` : patch.replacement;
+    
     return {
       success: true,
-      content: beforeAnchorStart + startAnchorText + patch.replacement + endAnchorText + afterAnchorEnd
+      content: beforeAnchorStart + startAnchorText + combinedContent + endAnchorText + afterAnchorEnd
     };
   }
 }
@@ -695,8 +706,9 @@ function parseSingleStructurePatch(patchContent: string): DocxStructurePatch | n
 /**
  * Apply structure-based patches to DocxElement array
  */
-export function applyDocxStructurePatches(elements: DocxElement[], patches: DocxStructurePatch[]): { success: boolean; elements: DocxElement[]; error?: string } {
+export function applyDocxStructurePatches(elements: DocxElement[], patches: DocxStructurePatch[]): { success: boolean; elements: DocxElement[]; error?: string; indexShifts?: IndexShift[] } {
   let modifiedElements = [...elements];
+  const indexShifts: IndexShift[] = [];
   
   try {
     // Sort patches by elementIndex in descending order to avoid index shifting issues
@@ -706,6 +718,27 @@ export function applyDocxStructurePatches(elements: DocxElement[], patches: Docx
       const result = applySingleStructurePatch(modifiedElements, patch);
       if (result.success) {
         modifiedElements = result.elements;
+        
+        // Track index shifts for insert/delete operations
+        if (patch.action === 'insert' || patch.action === 'append') {
+          const insertIndex = patch.action === 'append' ? 
+            modifiedElements.length - 1 : 
+            (patch.insertPosition === 'before' ? patch.elementIndex : patch.elementIndex + 1);
+          
+          indexShifts.push({
+            operation: 'insert',
+            originalIndex: insertIndex,
+            shift: 1,
+            affectedRange: { start: insertIndex, end: modifiedElements.length - 1 }
+          });
+        } else if (patch.action === 'delete') {
+          indexShifts.push({
+            operation: 'delete',
+            originalIndex: patch.elementIndex,
+            shift: -1,
+            affectedRange: { start: patch.elementIndex, end: modifiedElements.length }
+          });
+        }
       } else {
         console.warn(`Failed to apply structure patch: ${result.error}`, patch);
         return {
@@ -718,7 +751,8 @@ export function applyDocxStructurePatches(elements: DocxElement[], patches: Docx
     
     return {
       success: true,
-      elements: modifiedElements
+      elements: modifiedElements,
+      indexShifts
     };
   } catch (error) {
     return {
@@ -735,8 +769,8 @@ export function applyDocxStructurePatches(elements: DocxElement[], patches: Docx
 function applySingleStructurePatch(elements: DocxElement[], patch: DocxStructurePatch): { success: boolean; elements: DocxElement[]; error?: string } {
   const modifiedElements = [...elements];
   
-  // Validate element index
-  if (patch.elementIndex < 0 || patch.elementIndex >= elements.length) {
+  // Validate element index (skip validation for append since it doesn't use elementIndex)
+  if (patch.action !== 'append' && (patch.elementIndex < 0 || patch.elementIndex >= elements.length)) {
     return {
       success: false,
       elements: elements,
@@ -792,6 +826,18 @@ function applySingleStructurePatch(elements: DocxElement[], patch: DocxStructure
           ...patch.newElement.formatting
         }
       };
+      break;
+      
+    case 'append':
+      if (!patch.newElement) {
+        return {
+          success: false,
+          elements: elements,
+          error: 'Append action requires newElement'
+        };
+      }
+      // Append to the end of the document (ignore elementIndex for append)
+      modifiedElements.push(patch.newElement);
       break;
       
     default:
@@ -890,4 +936,219 @@ export function docxElementsToText(elements: DocxElement[]): string {
     }
   }).filter(content => content.trim().length > 0) // Remove empty elements
     .join('\n\n'); // Use consistent double newline separation
+}
+
+/**
+ * Apply index shifts to a set of structure patches to account for previous insertions/deletions
+ */
+export function applyIndexShiftsToPatches(patches: DocxStructurePatch[], indexShifts: IndexShift[]): DocxStructurePatch[] {
+  return patches.map(patch => {
+    let adjustedIndex = patch.elementIndex;
+    
+    // Apply all relevant shifts to this patch's index
+    for (const shift of indexShifts) {
+      if (patch.elementIndex >= shift.affectedRange.start) {
+        adjustedIndex += shift.shift;
+      }
+    }
+    
+    return {
+      ...patch,
+      elementIndex: Math.max(0, adjustedIndex) // Ensure index doesn't go negative
+    };
+  });
+}
+
+/**
+ * Create isolated structure patches that don't depend on other patches
+ * This creates individual patches that can be applied independently
+ */
+export function createIndependentStructurePatches(
+  originalPatches: DocxStructurePatch[]
+): DocxStructurePatch[] {
+  // For now, return the original patches as-is since each AI-requested patch
+  // should be independent. The real issue is in how we handle them in the UI.
+  // We'll make each patch truly isolated by ensuring they don't affect each other.
+  return originalPatches.map((patch, index) => ({
+    ...patch,
+    // Add a unique identifier to help track patches independently
+    patchId: `isolated-${index}-${patch.action}-${patch.elementIndex}`
+  } as DocxStructurePatch & { patchId: string }));
+}
+
+/**
+ * Apply a single structure patch in isolation, creating a new diff for remaining changes
+ */
+export function applySingleStructurePatchIsolated(
+  originalText: string,
+  originalStructure: DocxElement[],
+  allPatches: DocxStructurePatch[],
+  patchToApply: DocxStructurePatch
+): { success: boolean; newContent: string; remainingPatches: DocxStructurePatch[]; error?: string } {
+  try {
+    // Apply only the single patch
+    const singlePatchResult = applyDocxStructurePatches(originalStructure, [patchToApply]);
+    
+    if (!singlePatchResult.success) {
+      return {
+        success: false,
+        newContent: originalText,
+        remainingPatches: allPatches,
+        error: singlePatchResult.error
+      };
+    }
+    
+    // Convert to text
+    const targetedResult = applyStructurePatchesToText(originalText, originalStructure, [patchToApply]);
+    
+    if (!targetedResult.success) {
+      return {
+        success: false,
+        newContent: originalText,
+        remainingPatches: allPatches,
+        error: targetedResult.error
+      };
+    }
+    
+    // Remove the applied patch from remaining patches using patchId if available
+    const patchWithId = patchToApply as DocxStructurePatch & { patchId?: string };
+    const remainingPatches = allPatches.filter(p => {
+      const pWithId = p as DocxStructurePatch & { patchId?: string };
+      if (patchWithId.patchId && pWithId.patchId) {
+        return pWithId.patchId !== patchWithId.patchId;
+      }
+      // Fallback to content comparison
+      return !(p.elementIndex === patchToApply.elementIndex && 
+        p.action === patchToApply.action &&
+        JSON.stringify(p.newElement) === JSON.stringify(patchToApply.newElement));
+    });
+    
+    return {
+      success: true,
+      newContent: targetedResult.content,
+      remainingPatches
+    };
+    
+  } catch (error) {
+    return {
+      success: false,
+      newContent: originalText,
+      remainingPatches: allPatches,
+      error: error instanceof Error ? error.message : 'Unknown error'
+    };
+  }
+}
+
+/**
+ * Create individual diff blocks for each structure patch
+ * This ensures each patch can be approved/declined independently
+ */
+export function createIndividualDiffBlocks(
+  originalText: string,
+  originalStructure: DocxElement[],
+  patches: DocxStructurePatch[]
+): { diffBlocks: any[]; patchMapping: Map<string, DocxStructurePatch> } {
+  const diffBlocks: any[] = [];
+  const patchMapping = new Map<string, DocxStructurePatch>();
+  const originalLines = originalText.split('\n');
+  
+  patches.forEach((patch, index) => {
+    const blockId = `patch-block-${index}`;
+    
+    // Calculate the actual line number where this element appears in the text
+    let actualLineNumber = 1;
+    let elementCount = 0;
+    
+    // Count elements to find the line position
+    for (let i = 0; i < originalStructure.length && elementCount <= patch.elementIndex; i++) {
+      const element = originalStructure[i];
+      if (elementCount === patch.elementIndex) {
+        // Find this element's content in the original text
+        const elementContent = element.content.trim();
+        for (let lineIndex = 0; lineIndex < originalLines.length; lineIndex++) {
+          if (originalLines[lineIndex].includes(elementContent.substring(0, Math.min(50, elementContent.length)))) {
+            actualLineNumber = lineIndex + 1;
+            break;
+          }
+        }
+        break;
+      }
+      elementCount++;
+    }
+    
+    // Apply just this patch to see what changes
+    const singlePatchResult = applyDocxStructurePatches(originalStructure, [patch]);
+    if (singlePatchResult.success) {
+      const targetedResult = applyStructurePatchesToText(originalText, originalStructure, [patch]);
+      if (targetedResult.success) {
+        // Create a proper diff block that shows both original and new content
+        const lines = [];
+        
+        if (patch.action === 'replace' || patch.action === 'modify') {
+          // For replace/modify actions, show both removed and added lines
+          const originalContent = originalStructure[patch.elementIndex]?.content || '';
+          const newContent = patch.newElement?.content || '';
+          
+          // Add removed line (original content)
+          lines.push({
+            content: originalContent,
+            type: 'removed',
+            lineNumber: actualLineNumber,
+            originalLineNumber: actualLineNumber
+          });
+          
+          // Add added line (new content)
+          lines.push({
+            content: newContent,
+            type: 'added',
+            lineNumber: actualLineNumber,
+            originalLineNumber: actualLineNumber
+          });
+        } else if (patch.action === 'delete') {
+          // For delete actions, show only removed line
+          lines.push({
+            content: originalStructure[patch.elementIndex]?.content || '',
+            type: 'removed',
+            lineNumber: actualLineNumber,
+            originalLineNumber: actualLineNumber
+          });
+        } else if (patch.action === 'insert' || patch.action === 'append') {
+          // For insert/append actions, show only added line
+          lines.push({
+            content: patch.newElement?.content || '',
+            type: 'added',
+            lineNumber: actualLineNumber,
+            originalLineNumber: actualLineNumber
+          });
+        }
+        
+        const diffBlock = {
+          id: blockId,
+          type: patch.action === 'insert' ? 'addition' : patch.action === 'delete' ? 'deletion' : 'modification',
+          startLine: actualLineNumber,
+          endLine: actualLineNumber + (patch.newElement?.content.split('\n').length || 1) - 1,
+          lines: lines,
+          newContent: targetedResult.content.split('\n'),
+          // Add metadata for better positioning
+          elementIndex: patch.elementIndex,
+          elementType: patch.elementType,
+          action: patch.action,
+          originalElement: originalStructure[patch.elementIndex],
+          newElement: patch.newElement
+        };
+        
+        console.log(`Created diff block for patch ${index}:`, {
+          elementIndex: patch.elementIndex,
+          actualLineNumber,
+          action: patch.action,
+          content: patch.newElement?.content?.substring(0, 50) + '...'
+        });
+        
+        diffBlocks.push(diffBlock);
+        patchMapping.set(blockId, patch);
+      }
+    }
+  });
+  
+  return { diffBlocks, patchMapping };
 }

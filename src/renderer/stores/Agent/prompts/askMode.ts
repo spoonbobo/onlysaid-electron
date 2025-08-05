@@ -94,9 +94,44 @@ For precise document element modifications, use structure patches:
 }
 \`\`\`
 
+**INSERT example (add new paragraph before element 2):**
+\`\`\`docx-structure-patch
+{
+  "elementIndex": 2,
+  "action": "insert",
+  "insertPosition": "before",
+  "newElement": {
+    "type": "paragraph",
+    "content": "This new paragraph will be inserted before the existing element at index 2",
+    "formatting": {
+      "fontSize": 12
+    }
+  }
+}
+\`\`\`
+
+**APPEND example (add new section at end of document):**
+\`\`\`docx-structure-patch
+{
+  "elementIndex": 0,
+  "action": "append",
+  "newElement": {
+    "type": "heading",
+    "content": "Conclusion",
+    "level": 2,
+    "formatting": {
+      "bold": true,
+      "fontSize": 14
+    }
+  }
+}
+\`\`\`
+Note: For \`append\` actions, elementIndex is ignored as content is always added at the end.
+
 **Available actions:**
 - \`replace\`: Replace entire element at index
-- \`insert\`: Add new element (use \`insertPosition\`: "before"/"after")
+- \`insert\`: Add new element at specific position (use \`insertPosition\`: "before"/"after")
+- \`append\`: Add new element at the end of document
 - \`delete\`: Remove element at index
 - \`modify\`: Merge changes with existing element
 
@@ -118,6 +153,13 @@ ANCHOR_END: [unique text after your change]
 - Element indices start at 0 (first element = 0, second = 1, etc.)
 - Always specify element type when known
 - Preserve formatting unless explicitly changing it
+
+**WHEN TO USE EACH ACTION:**
+- \`replace\`: When modifying existing content
+- \`insert\`: When adding content at a specific position (pushes elements down)
+- \`append\`: When adding new content at the end (conclusions, new sections, etc.)
+- \`delete\`: When removing unwanted content
+- \`modify\`: When partially updating an element (preserves existing formatting)
 
 Your responses should be:
 - Focused on document content and structure

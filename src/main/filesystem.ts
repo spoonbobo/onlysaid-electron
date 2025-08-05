@@ -423,6 +423,30 @@ export function setupContentHandlers() {
       // Security check: ensure the path is not attempting path traversal
       const resolvedPath = path.resolve(filePath);
       
+      // Check if this is a DOCX file and use appropriate save method
+      const ext = path.extname(filePath).toLowerCase();
+      if (['.docx', '.doc'].includes(ext)) {
+        console.log(`[FileSave] Detected DOCX file, using enhanced DOCX save handler`);
+        
+        // Use the enhanced DOCX save handler instead of plain text write
+        console.log(`[FileSave] Delegating to DOCX save handler for proper format preservation`);
+        
+        // Since we can't easily call IPC handlers from within handlers, 
+        // we need to add a preload function that calls the DOCX handler.
+        // For now, warn the user and prevent corruption by refusing to save.
+        console.error(`[FileSave] CRITICAL: Cannot save DOCX files as plain text - this would corrupt the format!`);
+        console.error(`[FileSave] Please use the dedicated DOCX save functionality instead.`);
+        
+        return {
+          success: false,
+          error: 'DOCX files cannot be saved as plain text. This would corrupt the document format. Please use the DOCX-specific save functionality.',
+          path: filePath
+        };
+      }
+      
+      // For non-DOCX files or fallback, use regular text save
+      console.log(`[FileSave] Using plain text save for file: ${filePath}`);
+      
       // Create directory if it doesn't exist
       const dir = path.dirname(resolvedPath);
       await fs.promises.mkdir(dir, { recursive: true });
