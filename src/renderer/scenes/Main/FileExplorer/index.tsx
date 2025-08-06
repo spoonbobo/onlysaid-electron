@@ -58,8 +58,8 @@ const getPathBasename = (filePath: string, ext?: string): string => {
 const supportsCopilot = (fileName: string): boolean => {
   if (!fileName) return false;
   const ext = fileName.toLowerCase().substring(fileName.lastIndexOf('.'));
-  // TXT and DOCX files are supported for copilot mode
-  const supportedExts = ['.txt', '.docx', '.doc'];
+  // TXT, DOCX, and Excel files are supported for copilot mode
+  const supportedExts = ['.txt', '.docx', '.doc', '.xlsx', '.xls', '.xlsm', '.xlsb', '.csv'];
   return supportedExts.includes(ext);
 };
 

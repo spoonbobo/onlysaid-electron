@@ -200,7 +200,7 @@ export default function DiffOverlay({
             {/* Action buttons - only show if pending or error */}
             {(blockState.status === 'pending' || blockState.status === 'error') && (
               <Box sx={{ display: 'flex', gap: 0.5 }}>
-                <Tooltip title="Apply Changes">
+                <Tooltip title="Apply Changes" disableFocusListener disableHoverListener={false}>
                   <IconButton
                     size="small"
                     onClick={() => handleApplyBlock(block)}
@@ -220,7 +220,7 @@ export default function DiffOverlay({
                     <AcceptIcon sx={{ fontSize: 12 }} />
                   </IconButton>
                 </Tooltip>
-                <Tooltip title="Decline Changes">
+                <Tooltip title="Decline Changes" disableFocusListener disableHoverListener={false}>
                   <IconButton
                     size="small"
                     onClick={() => handleDeclineBlock(block)}

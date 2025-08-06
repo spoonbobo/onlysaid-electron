@@ -5,6 +5,7 @@ import { promisify } from 'util';
 import axios from 'axios';
 import officeParser from 'officeparser';
 import { setupDocxHandlers } from './msft_docx';
+import { setupExcelHandlers } from './msft_excel';
 
 const readdir = promisify(fs.readdir);
 const stat = promisify(fs.stat);
@@ -14,6 +15,8 @@ const readFile = promisify(fs.readFile);
 export function setupFileSystemHandlers() {
   // Setup enhanced DOCX handlers
   setupDocxHandlers();
+  // Setup enhanced Excel handlers
+  setupExcelHandlers();
   // Dialog to open folder
   ipcMain.handle('folder:open-dialog', async (event) => {
     const window = BrowserWindow.fromWebContents(event.sender);
@@ -423,7 +426,7 @@ export function setupContentHandlers() {
       // Security check: ensure the path is not attempting path traversal
       const resolvedPath = path.resolve(filePath);
       
-      // Check if this is a DOCX file and use appropriate save method
+      // Check if this is a DOCX or Excel file and use appropriate save method
       const ext = path.extname(filePath).toLowerCase();
       if (['.docx', '.doc'].includes(ext)) {
         console.log(`[FileSave] Detected DOCX file, using enhanced DOCX save handler`);
@@ -440,6 +443,22 @@ export function setupContentHandlers() {
         return {
           success: false,
           error: 'DOCX files cannot be saved as plain text. This would corrupt the document format. Please use the DOCX-specific save functionality.',
+          path: filePath
+        };
+      }
+      
+      if (['.xlsx', '.xls', '.xlsm', '.xlsb'].includes(ext)) {
+        console.log(`[FileSave] Detected Excel file, using enhanced Excel save handler`);
+        
+        // Use the enhanced Excel save handler instead of plain text write
+        console.log(`[FileSave] Delegating to Excel save handler for proper format preservation`);
+        
+        console.error(`[FileSave] CRITICAL: Cannot save Excel files as plain text - this would corrupt the format!`);
+        console.error(`[FileSave] Please use the dedicated Excel save functionality instead.`);
+        
+        return {
+          success: false,
+          error: 'Excel files cannot be saved as plain text. This would corrupt the document format. Please use the Excel-specific save functionality.',
           path: filePath
         };
       }

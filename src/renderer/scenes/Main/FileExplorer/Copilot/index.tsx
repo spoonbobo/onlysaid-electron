@@ -14,11 +14,15 @@ import {
   AutoAwesome as CopilotIcon,
   ZoomIn as ZoomInIcon,
   ZoomOut as ZoomOutIcon,
-  Save as SaveIcon
+  Save as SaveIcon,
+  Article as TextModeIcon,
+  TableChart as ViewModeIcon,
+  AutoFixHigh as EnhancedReaderIcon,
+  TextFields as BasicReaderIcon
 } from '@mui/icons-material';
 import { FormattedMessage } from 'react-intl';
 import { FileNode } from '@/renderer/stores/File/FileExplorerStore';
-import TextPreview from '../FileRenderer/TextPreview';
+import FilePreview from '../FileRenderer';
 import Chat from '../../Chat';
 import { useCurrentTopicContext } from '@/renderer/stores/Topic/TopicStore';
 import { useCopilotStore } from '@/renderer/stores/Copilot/CopilotStore';
@@ -48,6 +52,10 @@ export default function Copilot({ node, onClose }: CopilotProps) {
   const [editedContent, setEditedContent] = useState('');
   const [lastSavedContent, setLastSavedContent] = useState('');
   const [autoSaveTimer, setAutoSaveTimer] = useState<NodeJS.Timeout | null>(null);
+  
+  // Document view mode controls (for DOCX and Excel files)
+  const [renderMode, setRenderMode] = useState<'text' | 'view'>('view');
+  const [useEnhancedReader, setUseEnhancedReader] = useState(true);
   const { setSelectedContext } = useCurrentTopicContext();
 
   // Compute unsaved changes state
@@ -106,17 +114,60 @@ export default function Copilot({ node, onClose }: CopilotProps) {
   const handleFontSizeIncrease = () => setFontSize(prev => Math.min(prev + 2, 24));
   const handleFontSizeDecrease = () => setFontSize(prev => Math.max(prev - 2, 10));
   
+  // Helper functions to check file types
+  const isDOCXFile = (fileName: string): boolean => {
+    if (!fileName) return false;
+    const ext = fileName.toLowerCase().substring(fileName.lastIndexOf('.'));
+    return ['.docx', '.doc'].includes(ext);
+  };
+  
+  const isExcelFile = (fileName: string): boolean => {
+    if (!fileName) return false;
+    const ext = fileName.toLowerCase().substring(fileName.lastIndexOf('.'));
+    return ['.xlsx', '.xls', '.xlsm', '.xlsb'].includes(ext);
+  };
+
+  // Check if file supports structured viewing (DOCX/Excel)
+  const supportsStructuredView = (fileName: string): boolean => {
+    return isDOCXFile(fileName) || isExcelFile(fileName);
+  };
+
+  // Mode control handlers
+  const handleRenderModeChange = (mode: 'text' | 'view') => {
+    setRenderMode(mode);
+  };
+
+  const handleReaderTypeChange = (useEnhanced: boolean) => {
+    setUseEnhancedReader(useEnhanced);
+  };
+
   // Save function
   const handleSave = async () => {
     if (!node || !editedContent.trim()) return;
     
     setIsSaving(true);
     try {
-      if (!window.electron?.fileSystem?.saveDocumentText) {
-        throw new Error('saveDocumentText function is not available. Please restart the application.');
-      }
+      let result;
       
-      const result = await window.electron.fileSystem.saveDocumentText(node.path, editedContent);
+      if (isDOCXFile(node.name)) {
+        // Use DOCX-specific save handler
+        if (!window.electron?.fileSystem?.saveDocxTextContent) {
+          throw new Error('DOCX save function is not available. Please restart the application.');
+        }
+        result = await window.electron.fileSystem.saveDocxTextContent(node.path, editedContent);
+      } else if (isExcelFile(node.name)) {
+        // Use Excel-specific save handler
+        if (!window.electron?.fileSystem?.saveExcelTextContent) {
+          throw new Error('Excel save function is not available. Please restart the application.');
+        }
+        result = await window.electron.fileSystem.saveExcelTextContent(node.path, editedContent);
+      } else {
+        // Use regular text save for other file types
+        if (!window.electron?.fileSystem?.saveDocumentText) {
+          throw new Error('saveDocumentText function is not available. Please restart the application.');
+        }
+        result = await window.electron.fileSystem.saveDocumentText(node.path, editedContent);
+      }
       
       if (result?.success) {
         // Update document data to reflect the saved content
@@ -144,12 +195,30 @@ export default function Copilot({ node, onClose }: CopilotProps) {
     if (editedContent === lastSavedContent) return;
     
     try {
-      if (!window.electron?.fileSystem?.saveDocumentText) {
-        console.error('Auto-save failed: saveDocumentText function not available');
-        return;
-      }
+      let result;
       
-      const result = await window.electron.fileSystem.saveDocumentText(node.path, editedContent);
+      if (isDOCXFile(node.name)) {
+        // Use DOCX-specific save handler
+        if (!window.electron?.fileSystem?.saveDocxTextContent) {
+          console.error('Auto-save failed: DOCX save function not available');
+          return;
+        }
+        result = await window.electron.fileSystem.saveDocxTextContent(node.path, editedContent);
+      } else if (isExcelFile(node.name)) {
+        // Use Excel-specific save handler
+        if (!window.electron?.fileSystem?.saveExcelTextContent) {
+          console.error('Auto-save failed: Excel save function not available');
+          return;
+        }
+        result = await window.electron.fileSystem.saveExcelTextContent(node.path, editedContent);
+      } else {
+        // Use regular text save for other file types
+        if (!window.electron?.fileSystem?.saveDocumentText) {
+          console.error('Auto-save failed: saveDocumentText function not available');
+          return;
+        }
+        result = await window.electron.fileSystem.saveDocumentText(node.path, editedContent);
+      }
       
       if (result?.success) {
         // Update document data to reflect the saved content
@@ -276,6 +345,41 @@ export default function Copilot({ node, onClose }: CopilotProps) {
             </IconButton>
           </Tooltip>
           
+          {/* Document controls - only show for structured documents (DOCX/Excel) */}
+          {supportsStructuredView(node.name) && (
+            <>
+              <Divider orientation="vertical" flexItem sx={{ mx: 0.5, height: 20 }} />
+              
+              {/* View mode controls */}
+              <Tooltip title="View Mode">
+                <IconButton
+                  size="small"
+                  onClick={() => handleRenderModeChange(renderMode === 'text' ? 'view' : 'text')}
+                  sx={{
+                    color: renderMode === 'view' ? 'primary.main' : 'inherit'
+                  }}
+                >
+                  {renderMode === 'view' ? <ViewModeIcon /> : <TextModeIcon />}
+                </IconButton>
+              </Tooltip>
+              
+              {/* Enhanced reader toggle */}
+              <Tooltip title={useEnhancedReader ? "Enhanced Reader" : "Basic Reader"}>
+                <IconButton
+                  size="small"
+                  onClick={() => handleReaderTypeChange(!useEnhancedReader)}
+                  sx={{
+                    color: useEnhancedReader ? 'success.main' : 'inherit'
+                  }}
+                >
+                  {useEnhancedReader ? <EnhancedReaderIcon /> : <BasicReaderIcon />}
+                </IconButton>
+              </Tooltip>
+            </>
+          )}
+          
+          <Divider orientation="vertical" flexItem sx={{ mx: 0.5, height: 20 }} />
+          
           <Tooltip title={hasUnsavedChanges ? "Save File (Ctrl+S) - Unsaved changes" : "Save File (Ctrl+S)"}>
             <IconButton 
               size="small" 
@@ -323,17 +427,21 @@ export default function Copilot({ node, onClose }: CopilotProps) {
           {/* Document Content */}
           <Box sx={{ flex: 1, overflow: 'auto', height: '100%', display: 'flex', flexDirection: 'column' }}>
             <Box sx={{ flex: 1, height: '100%' }}>
-              <TextPreview 
+              <FilePreview 
                 node={node} 
                 fontSize={fontSize}
                 hideControls={true}
-                isEditable={true}
+                isEditable={renderMode === 'text'}
                 onDocumentLoad={(data) => {
                   setDocumentData(data);
                   setEditedContent(data.text);
                   setLastSavedContent(data.text);
                 }}
                 onContentChange={handleContentChange}
+                renderMode={supportsStructuredView(node.name) ? renderMode : undefined}
+                useEnhancedReader={supportsStructuredView(node.name) ? useEnhancedReader : undefined}
+                onRenderModeChange={supportsStructuredView(node.name) ? handleRenderModeChange : undefined}
+                onReaderTypeChange={supportsStructuredView(node.name) ? handleReaderTypeChange : undefined}
               />
             </Box>
           </Box>

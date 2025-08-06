@@ -55,7 +55,11 @@ type FileSystemChannels =
   | 'docx:write-document'
   | 'docx:text-to-structure'
   | 'docx:structure-to-html'
-  | 'docx:save-text-content';
+  | 'docx:save-text-content'
+  | 'excel:read-document'
+  | 'excel:write-document'
+  | 'excel:structure-to-html'
+  | 'excel:save-text-content';
 
 // Add dialog channels
 type DialogChannels = 'dialog:showSaveDialog';
@@ -514,6 +518,16 @@ const electronHandler = {
       ipcRenderer.invoke('docx:structure-to-html', structure),
     saveDocxTextContent: (filePath: string, textContent: string) =>
       ipcRenderer.invoke('docx:save-text-content', filePath, textContent),
+    
+    // Enhanced Excel handlers
+    readExcelDocument: (filePath: string) =>
+      ipcRenderer.invoke('excel:read-document', filePath),
+    writeExcelDocument: (filePath: string, document: any) =>
+      ipcRenderer.invoke('excel:write-document', filePath, document),
+    excelStructureToHtml: (structure: any[]) =>
+      ipcRenderer.invoke('excel:structure-to-html', structure),
+    saveExcelTextContent: (filePath: string, textContent: string, worksheetName?: string) =>
+      ipcRenderer.invoke('excel:save-text-content', filePath, textContent, worksheetName),
   },
   dialog: {
     showSaveDialog: (options: any) => ipcRenderer.invoke('dialog:showSaveDialog', options),

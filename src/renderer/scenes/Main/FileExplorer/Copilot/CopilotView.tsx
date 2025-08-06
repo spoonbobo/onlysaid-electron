@@ -624,7 +624,7 @@ export default function CopilotView({}: CopilotViewProps) {
         if (currentDocument) {
           let result;
           
-          // Use DOCX-specific save for DOCX files to preserve format
+          // Use appropriate save method based on file type to preserve format
           if (isDOCXFile(currentDocument.name)) {
             console.log('[CopilotView] Saving DOCX file using enhanced DOCX save handler');
             if (window.electron?.fileSystem?.saveDocxTextContent) {
@@ -636,6 +636,19 @@ export default function CopilotView({}: CopilotViewProps) {
               result = {
                 success: false,
                 error: 'DOCX save functionality not available'
+              };
+            }
+          } else if (isExcelFile(currentDocument.name)) {
+            console.log('[CopilotView] Saving Excel file using enhanced Excel save handler');
+            if (window.electron?.fileSystem?.saveExcelTextContent) {
+              result = await window.electron.fileSystem.saveExcelTextContent(
+                currentDocument.path, 
+                newContent
+              );
+            } else {
+              result = {
+                success: false,
+                error: 'Excel save functionality not available'
               };
             }
           } else {
@@ -658,10 +671,10 @@ export default function CopilotView({}: CopilotViewProps) {
             // Update document data with new content
             setDocumentData((prev: any) => ({ ...prev, text: newContent }));
             
-            // If this is a DOCX document and we're in view mode, switch to text mode
+            // If this is a structured document (DOCX/Excel) and we're in view mode, switch to text mode
             // to avoid structure/content mismatch after edits
-            if (isDOCXFile(currentDocument.name) && documentData?.structure && documentData.structure.length > 0 && renderMode === 'view') {
-              console.log('[CopilotView] DOCX content edited, switching to text mode to maintain consistency');
+            if ((isDOCXFile(currentDocument.name) || isExcelFile(currentDocument.name)) && documentData?.structure && documentData.structure.length > 0 && renderMode === 'view') {
+              console.log('[CopilotView] Structured document content edited, switching to text mode to maintain consistency');
               setRenderMode('text');
               toast.info('Switched to text mode due to content changes. Reload document to restore structured view.');
             } else {
@@ -763,8 +776,6 @@ export default function CopilotView({}: CopilotViewProps) {
 
   // Handle declining diff blocks - use store state instead of removing from diff
   const handleDeclineDiffBlock = (block: DiffBlock) => {
-    const { setDiffBlockState } = useCopilotStore();
-    
     // Mark as declined in store
     setDiffBlockState(block.id, { status: 'declined' });
     
@@ -841,6 +852,13 @@ export default function CopilotView({}: CopilotViewProps) {
     return ['.docx', '.doc'].includes(ext);
   };
   
+  // Check if current document is an Excel file
+  const isExcelFile = (fileName: string): boolean => {
+    if (!fileName) return false;
+    const ext = fileName.toLowerCase().substring(fileName.lastIndexOf('.'));
+    return ['.xlsx', '.xls', '.xlsm', '.xlsb'].includes(ext);
+  };
+  
   // Save function
   const handleSave = async () => {
     if (!currentDocument || !editedContent.trim()) return;
@@ -859,6 +877,15 @@ export default function CopilotView({}: CopilotViewProps) {
         }
         
         result = await window.electron.fileSystem.saveDocxTextContent(currentDocument.path, editedContent);
+      } else if (isExcelFile(currentDocument.name)) {
+        // Use Excel-specific save handler with file locking retry logic
+        console.log('Saving Excel file with enhanced handler:', currentDocument.path);
+        
+        if (!window.electron?.fileSystem?.saveExcelTextContent) {
+          throw new Error('Excel save function is not available. Please restart the application.');
+        }
+        
+        result = await window.electron.fileSystem.saveExcelTextContent(currentDocument.path, editedContent);
       } else {
         // Use regular text save for other file types
         console.log('Saving regular text file:', currentDocument.path);
@@ -1071,8 +1098,8 @@ export default function CopilotView({}: CopilotViewProps) {
             </span>
           </Tooltip>
           
-          {/* Document controls - only show for DOCX files */}
-          {currentDocument && isDOCXFile(currentDocument.name) && (
+          {/* Document controls - only show for structured documents (DOCX/Excel) */}
+          {currentDocument && (isDOCXFile(currentDocument.name) || isExcelFile(currentDocument.name)) && (
             <>
               <Divider orientation="vertical" flexItem sx={{ mx: 0.5, height: 20 }} />
               
@@ -1180,14 +1207,14 @@ export default function CopilotView({}: CopilotViewProps) {
                   node={documentNode} 
                   fontSize={fontSize}
                   hideControls={true}
-                  isEditable={true}
+                  isEditable={renderMode === 'text'}
                   externalContent={editedContent}
                   showDiff={showInlineDiff}
                   diff={currentDiff || undefined}
                   onApplyDiffBlock={handleApplyDiffBlock}
                   onDeclineDiffBlock={handleDeclineDiffBlock}
-                  renderMode={isDOCXFile(documentNode.name) ? renderMode : undefined}
-                  onRenderModeChange={isDOCXFile(documentNode.name) ? handleRenderModeChange : undefined}
+                  renderMode={(isDOCXFile(documentNode.name) || isExcelFile(documentNode.name)) ? renderMode : undefined}
+                  onRenderModeChange={(isDOCXFile(documentNode.name) || isExcelFile(documentNode.name)) ? handleRenderModeChange : undefined}
                   onDocumentLoad={(data) => {
                     setDocumentData(data);
                     setEditedContent(data.text);

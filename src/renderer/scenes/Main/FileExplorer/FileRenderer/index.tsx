@@ -4,6 +4,7 @@ import { FormattedMessage } from 'react-intl';
 import ImagePreview from './Image';
 import TextPreview from './TextPreview';
 import DocxPreview from './Docx';
+import ExcelPreview from './Excel';
 import { FileNode } from '@/renderer/stores/File/FileExplorerStore';
 import { CodeDiff, DiffBlock } from '@/utils/codeDiff';
 
@@ -44,8 +45,14 @@ const getFileType = (fileName: string): string => {
     return 'docx';
   }
   
+  // Excel formats - separate renderer
+  const excelExts = ['.xlsx', '.xls', '.xlsm', '.xlsb', '.csv'];
+  if (excelExts.includes(ext)) {
+    return 'excel';
+  }
+  
   // Other document formats - text, markdown, and other office documents
-  const docExts = ['.txt', '.md', '.markdown', '.csv', '.xlsx', '.xls', '.pptx', '.ppt', '.pdf', '.odt', '.ods', '.odp', '.rtf', '.html', '.htm', '.xml'];
+  const docExts = ['.txt', '.md', '.markdown', '.pptx', '.ppt', '.pdf', '.odt', '.ods', '.odp', '.rtf', '.html', '.htm', '.xml'];
   if (docExts.includes(ext)) {
     return 'document';
   }
@@ -101,6 +108,26 @@ export default function FilePreview({
         onReaderTypeChange={onReaderTypeChange}
       />;
     
+    case 'excel':
+      return <ExcelPreview 
+        node={node} 
+        maxHeight={maxHeight}
+        fontSize={fontSize}
+        hideControls={hideControls}
+        isEditable={isEditable}
+        onDocumentLoad={onDocumentLoad}
+        onContentChange={onContentChange}
+        externalContent={externalContent}
+        showDiff={showDiff}
+        diff={diff}
+        onApplyDiffBlock={onApplyDiffBlock}
+        onDeclineDiffBlock={onDeclineDiffBlock}
+        renderMode={renderMode === 'text' ? 'text' : 'table'}
+        useEnhancedReader={useEnhancedReader}
+        onRenderModeChange={onRenderModeChange ? (mode: 'table' | 'text') => onRenderModeChange(mode === 'table' ? 'view' : 'text') : undefined}
+        onReaderTypeChange={onReaderTypeChange}
+      />;
+    
     case 'document':
       return <TextPreview 
         node={node} 
@@ -134,4 +161,4 @@ export default function FilePreview({
 }
 
 // Export individual components for direct use
-export { ImagePreview, TextPreview, DocxPreview };
+export { ImagePreview, TextPreview, DocxPreview, ExcelPreview };
