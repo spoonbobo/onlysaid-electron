@@ -128,6 +128,7 @@ export default function AvatarChatMenu() {
 
   const handleCloseMenu = () => {
     setMenuAnchorEl(null);
+    setMenuOpen(false); // Ensure menu state is properly cleared
   };
 
   const handleDeleteChat = (id?: string, e?: React.MouseEvent) => {
@@ -196,6 +197,7 @@ export default function AvatarChatMenu() {
         anchorEl={menuAnchorEl}
         open={menuOpen}
         onClose={handleCloseMenu}
+        disableAutoFocusItem={true}
         anchorOrigin={{
           vertical: 'bottom',
           horizontal: 'right',
@@ -203,6 +205,9 @@ export default function AvatarChatMenu() {
         transformOrigin={{
           vertical: 'top',
           horizontal: 'right',
+        }}
+        MenuListProps={{
+          'aria-label': 'Chat actions menu'
         }}
       >
         <MenuItem onClick={() => {

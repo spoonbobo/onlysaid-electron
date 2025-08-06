@@ -351,6 +351,11 @@ const TitleBar = () => {
           name: intl.formatMessage({ id: 'titleBar.topic.calendar' }),
           icon: null
         };
+      case 'copilot':
+        return {
+          name: intl.formatMessage({ id: 'titleBar.topic.copilot', defaultMessage: 'AI Copilot' }),
+          icon: null
+        };
       default:
         return {
           name: selectedContext.name || selectedContext.type,
@@ -648,9 +653,7 @@ const TitleBar = () => {
                        option.workspaceId === value.workspaceId &&
                        option.name === value.name;
               }}
-              // ✅ Fix accessibility issues
-              disablePortal={true}
-              componentsProps={{
+              slotProps={{
                 popper: {
                   placement: 'bottom-start',
                   modifiers: [
@@ -905,8 +908,10 @@ const TitleBar = () => {
           transformOrigin={{ vertical: 'top', horizontal: 'left' }}
           TransitionComponent={undefined}
           transitionDuration={0}
-          // ✅ Fix accessibility issues
-          disablePortal={true}
+          // ✅ Remove disablePortal and add proper focus management
+          disableAutoFocus={false}
+          disableEnforceFocus={false}
+          disableRestoreFocus={false}
           sx={{
             '& .MuiPaper-root': {
               mt: 0.5,
@@ -945,8 +950,10 @@ const TitleBar = () => {
           transformOrigin={{ vertical: 'top', horizontal: 'left' }}
           TransitionComponent={undefined}
           transitionDuration={0}
-          // ✅ Fix accessibility issues
-          disablePortal={true}
+          // ✅ Remove disablePortal and add proper focus management
+          disableAutoFocus={false}
+          disableEnforceFocus={false}
+          disableRestoreFocus={false}
           sx={{
             '& .MuiPaper-root': {
               mt: 0.5,
@@ -1025,8 +1032,10 @@ const TitleBar = () => {
           transformOrigin={{ vertical: 'top', horizontal: 'left' }}
           TransitionComponent={undefined}
           transitionDuration={0}
-          // ✅ Fix accessibility issues
-          disablePortal={true}
+          // ✅ Remove disablePortal and add proper focus management
+          disableAutoFocus={false}
+          disableEnforceFocus={false}
+          disableRestoreFocus={false}
           sx={{
             '& .MuiPaper-root': {
               mt: 0.5,
@@ -1111,8 +1120,10 @@ const TitleBar = () => {
           transformOrigin={{ vertical: 'top', horizontal: 'left' }}
           TransitionComponent={undefined}
           transitionDuration={0}
-          // ✅ Fix accessibility issues
-          disablePortal={true}
+          // ✅ Remove disablePortal and add proper focus management
+          disableAutoFocus={false}
+          disableEnforceFocus={false}
+          disableRestoreFocus={false}
           sx={{
             '& .MuiPaper-root': {
               mt: 0.5,

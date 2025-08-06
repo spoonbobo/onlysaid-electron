@@ -15,7 +15,7 @@
   --transition-fast: 0.15s ease-in-out;
   --transition-medium: 0.2s ease-in-out;
   --shadow-subtle: 0 1px 3px rgba(0, 0, 0, 0.1);
-  --scrollbar-width: 6px;
+  --scrollbar-width: 4px;
   --scrollbar-color: #D0D0D0;
 }
 

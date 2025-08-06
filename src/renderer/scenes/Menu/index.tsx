@@ -10,6 +10,7 @@ import React from "react";
 import CalendarMenu from "./Calendar";
 import MenuDefault from "./default";
 import DocsMenu from "./Docs";
+import CopilotSidebarMenu from "./Copilot/Sidebar";
 
 const MIN_CONTENT_HEIGHT = 50;
 
@@ -32,6 +33,7 @@ function Menu() {
       case "home": return HomeMenu;
       case "calendar": return CalendarMenu;
       case "docs": return DocsMenu;
+      case "copilot": return CopilotSidebarMenu;
       default: return MenuDefault;
     }
   }, [selectedContextType]);

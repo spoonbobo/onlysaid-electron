@@ -1503,5 +1503,7 @@
   "workflow.preset.30min": "30分鐘後",
   "workflow.preset.1hour": "1小時後",
   "workflow.preset.1day": "1天後",
-  "workflow.preset.1week": "1週後"
+  "workflow.preset.1week": "1週後",
+
+  "chat.noMoreMessages": "沒有更多訊息"
 }

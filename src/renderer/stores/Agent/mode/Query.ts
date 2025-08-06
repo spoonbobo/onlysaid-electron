@@ -2,76 +2,13 @@ import { v4 as uuidv4 } from 'uuid';
 import { IChatMessage } from '@/../../types/Chat/Message';
 import { IUser } from '@/../../types/User/User';
 import { useKBSettingsStore } from '@/renderer/stores/KB/KBSettingStore';
-import { useLLMConfigurationStore } from '@/renderer/stores/LLM/LLMConfiguration';
 import { useThreeStore } from '@/renderer/stores/Avatar/ThreeStore';
 import { useTopicStore } from '@/renderer/stores/Topic/TopicStore';
 import { OpenAIMessage, OpenAIStreamOptions } from '@/renderer/stores/Stream/StreamStore';
 import { getAgentFromStore } from '@/utils/agent';
-import { appendRulesToSystemPrompt } from '@/utils/rules';
+import { getQueryModeSystemPrompt } from '../prompts';
 
-// System prompt for Query Mode
-export const queryModeSystemPrompt = (
-  user: IUser,
-  agent: IUser,
-  kbIds: string[],
-  queryEngine: string,
-  embeddingModel: string,
-  avatarName?: string
-) => {
-  const assistantName = avatarName || agent.username;
-  let kbInfo = "No specific Knowledge Bases are selected for this query.";
-  if (kbIds.length > 0) {
-    kbInfo = `You should primarily use the following Knowledge Base(s) for your answer: [${kbIds.join(', ')}].`;
-    if (queryEngine) {
-      kbInfo += `\nUse the "${queryEngine}" query engine.`;
-    }
-    if (embeddingModel && embeddingModel !== "none") {
-      kbInfo += `\nContextual embeddings were generated using "${embeddingModel}".`;
-    }
-  }
 
-  return `
-  You are ${assistantName}, a specialized assistant for ${user.username}.
-  Your task is to answer questions based on the provided chat history and available Knowledge Bases.
-  ${kbInfo}
-  Analyze the user's latest message in the context of the conversation history.
-  Formulate a comprehensive answer using the information from the specified Knowledge Bases.
-  If the KBs do not contain relevant information, clearly state that.
-  Be concise and informative.
-  `;
-};
-
-// Helper function to get system prompt with fallback and rules
-const getSystemPrompt = (
-  user: IUser,
-  agent: IUser,
-  kbIds: string[],
-  queryEngine: string,
-  embeddingModel: string,
-  avatarName?: string
-): string => {
-  const { queryModeSystemPrompt: customPrompt } = useLLMConfigurationStore.getState();
-  const assistantName = avatarName || agent.username;
-  
-  let systemPrompt = '';
-  if (customPrompt && customPrompt.trim()) {
-    // Replace placeholders in custom prompt
-    systemPrompt = customPrompt
-      .replace(/\{agent\.username\}/g, assistantName)
-      .replace(/\{user\.username\}/g, user.username)
-      .replace(/\{agent_username\}/g, assistantName)
-      .replace(/\{user_username\}/g, user.username)
-      .replace(/\{kbIds\}/g, kbIds.join(', '))
-      .replace(/\{queryEngine\}/g, queryEngine)
-      .replace(/\{embeddingModel\}/g, embeddingModel);
-  } else {
-    // Fallback to default prompt
-    systemPrompt = queryModeSystemPrompt(user, agent, kbIds, queryEngine, embeddingModel, avatarName);
-  }
-  
-  // Append rules for query mode
-  return appendRulesToSystemPrompt(systemPrompt, 'query');
-};
 
 interface ProcessQueryModeAIResponseParams {
   activeChatId: string;
@@ -174,7 +111,7 @@ export async function processQueryModeAIResponse({
     let systemPromptText = "";
     if (currentUser && assistantSender) {
       const avatarName = isAvatarMode ? assistantSenderObject.username : undefined;
-      systemPromptText = getSystemPrompt(
+      systemPromptText = getQueryModeSystemPrompt(
         currentUser,
         assistantSender,
         selectedKbIds,

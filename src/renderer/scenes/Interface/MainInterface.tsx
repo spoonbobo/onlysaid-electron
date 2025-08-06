@@ -229,17 +229,17 @@ function MainInterface() {
             flexDirection: "column", 
             overflow: "hidden", 
             position: "relative",
-            // Custom scrollbar styling
+            // Custom scrollbar styling using global CSS variables
             '& ::-webkit-scrollbar': {
-              width: '12px',
+              width: 'var(--scrollbar-width)',
             },
             '& ::-webkit-scrollbar-track': {
               backgroundColor: 'background.paper',
-              borderRadius: '6px',
+              borderRadius: 'var(--border-radius)',
             },
             '& ::-webkit-scrollbar-thumb': {
-              backgroundColor: 'action.disabled',
-              borderRadius: '6px',
+              backgroundColor: 'var(--scrollbar-color)',
+              borderRadius: 'var(--border-radius)',
               '&:hover': {
                 backgroundColor: 'action.hover',
               },
@@ -254,18 +254,18 @@ function MainInterface() {
               pr: 2, // Reduced right padding to give space for scrollbar
               pt: 3,
               pb: 3,
-              // Ensure scrollbar appears at the right edge
+              // Ensure scrollbar appears at the right edge using global CSS variables
               '&::-webkit-scrollbar': {
-                width: '12px',
+                width: 'var(--scrollbar-width)',
               },
               '&::-webkit-scrollbar-track': {
                 backgroundColor: 'rgba(0,0,0,0.1)',
-                borderRadius: '6px',
+                borderRadius: 'var(--border-radius)',
                 marginRight: '4px',
               },
               '&::-webkit-scrollbar-thumb': {
-                backgroundColor: 'rgba(0,0,0,0.3)',
-                borderRadius: '6px',
+                backgroundColor: 'var(--scrollbar-color)',
+                borderRadius: 'var(--border-radius)',
                 border: '2px solid transparent',
                 backgroundClip: 'padding-box',
                 '&:hover': {

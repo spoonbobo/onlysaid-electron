@@ -557,7 +557,10 @@ function ChatUI({ messages, onReply, streamingMessageId, streamContentForBubble,
                 py: 1,
               }}
             >
-              No more messages
+              {intl.formatMessage({ 
+                id: 'chat.noMoreMessages', 
+                defaultMessage: 'No more messages' 
+              })}
             </Typography>
           )}
 

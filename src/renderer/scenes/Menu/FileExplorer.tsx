@@ -293,6 +293,7 @@ function FileNodeItem({ node, level = 0 }: { node: FileNode, level?: number }) {
 
   const handleCloseMenu = () => {
     setMenuAnchorEl(null);
+    setMenuOpen(false); // Ensure menu state is properly cleared
   };
 
   const handleRemoveFolder = () => {
@@ -473,6 +474,7 @@ function FileNodeItem({ node, level = 0 }: { node: FileNode, level?: number }) {
         anchorEl={menuAnchorEl}
         open={menuOpen}
         onClose={handleCloseMenu}
+        disableAutoFocusItem={true}
         anchorOrigin={{
           vertical: 'bottom',
           horizontal: 'right',
@@ -480,6 +482,9 @@ function FileNodeItem({ node, level = 0 }: { node: FileNode, level?: number }) {
         transformOrigin={{
           vertical: 'top',
           horizontal: 'right',
+        }}
+        MenuListProps={{
+          'aria-label': 'File actions menu'
         }}
       >
         {level === 0 && (

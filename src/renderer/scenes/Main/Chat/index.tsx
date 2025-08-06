@@ -17,7 +17,7 @@ import { useWorkspaceStore } from "@/renderer/stores/Workspace/WorkspaceStore";
 import { useLLMConfigurationStore } from "@/renderer/stores/LLM/LLMConfiguration";
 import { toast } from "@/utils/toast";
 import { IChatRoom } from "@/../../types/Chat/Chatroom";
-import ChatUIWithNoChat from "./ChatUIWithNoChat";
+import ChatUIWithNoChat from "@/renderer/scenes/Main/Chat/default";
 
 function Chat() {
   const {
@@ -113,8 +113,11 @@ function Chat() {
   // NEW: Check if we're in avatar mode to force local chat
   const isAvatarMode = selectedContext?.section === 'workspace:avatar';
   
+  // NEW: Check if we're in copilot mode to force local chat
+  const isCopilotMode = selectedContext?.section === 'local:copilot';
+  
   let workspaceId = '';
-  if (!isLocal && !isAvatarMode) { // Don't use workspace for avatar mode
+  if (!isLocal && !isAvatarMode && !isCopilotMode) { // Don't use workspace for avatar or copilot mode
     workspaceId = selectedContext?.id || '';
   }
 
@@ -124,8 +127,8 @@ function Chat() {
   const isGuest = isGuestUser();
 
   useEffect(() => {
-    // Only fetch workspace users if not in avatar mode
-    if (workspaceId && !isAvatarMode) {
+    // Only fetch workspace users if not in avatar or copilot mode
+    if (workspaceId && !isAvatarMode && !isCopilotMode) {
       const fetchUsers = async () => {
         try {
           const users = await getUsersByWorkspace(workspaceId);
@@ -136,7 +139,7 @@ function Chat() {
       };
       fetchUsers();
     }
-  }, [workspaceId, getUsersByWorkspace, isAvatarMode]);
+  }, [workspaceId, getUsersByWorkspace, isAvatarMode, isCopilotMode]);
 
   const messages = storeMessages[activeChatId || ''] || [];
   const replyingToMessage = replyingToId ? messages.find((m: IChatMessage) => m.id === replyingToId) || null : null;
@@ -288,8 +291,8 @@ function Chat() {
           messageData.reply_to = replyingToId;
         }
 
-        // NEW: Pass workspaceId only if not in avatar mode
-        const effectiveWorkspaceId = isAvatarMode ? undefined : workspaceId;
+        // NEW: Pass workspaceId only if not in avatar or copilot mode
+        const effectiveWorkspaceId = (isAvatarMode || isCopilotMode) ? undefined : workspaceId;
         const messageId = await sendMessage(activeChatId, messageData, effectiveWorkspaceId);
 
         if (messageId) {
@@ -327,7 +330,7 @@ function Chat() {
                 provider: provider || "openai",
                 currentUser,
                 existingMessages: messages,
-                workspaceId: isAvatarMode ? undefined : selectedContext?.id, // Don't pass workspace for avatar mode
+                workspaceId: (isAvatarMode || isCopilotMode) ? undefined : selectedContext?.id, // Don't pass workspace for avatar or copilot mode
                 aiMode,
                 appendMessage,
                 updateMessage,
@@ -353,9 +356,9 @@ function Chat() {
     }
   };
 
-  const handleInputChange = (newInput: string) => {
+  const handleInputChange = useCallback((newInput: string) => {
     setInput(activeChatId || '', newInput, contextId);
-  };
+  }, [setInput, activeChatId, contextId]);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -381,8 +384,8 @@ function Chat() {
   }, [streamingState.messageId, abortStream, setStreamingState]);
 
   const messagesWithRoles = useMemo(() => {
-    // Only add roles if we have workspace users (not in avatar mode)
-    if (!messages.length || !workspaceUsers.length || isAvatarMode) return messages;
+    // Only add roles if we have workspace users (not in avatar or copilot mode)
+    if (!messages.length || !workspaceUsers.length || isAvatarMode || isCopilotMode) return messages;
 
     const userRoleMap = workspaceUsers.reduce((acc, user) => {
       acc[user.user_id] = user.role;
@@ -393,7 +396,7 @@ function Chat() {
       ...message,
       sender_role: userRoleMap[message.sender] || 'user'
     }));
-  }, [messages, workspaceUsers, isAvatarMode]);
+  }, [messages, workspaceUsers, isAvatarMode, isCopilotMode]);
 
   // Ensure guest agent exists when no user is logged in
   useEffect(() => {

@@ -16,6 +16,7 @@ import WorkspaceInsights from "@/renderer/scenes/Main/Workspace/Insights/index";
 import Avatar from "@/renderer/scenes/Main/Workspace/Avatar/index";
 import MyPartner from "./Workspace/MyPartner";
 import Docs from "./Docs";
+import CopilotView from "./FileExplorer/Copilot/CopilotView";
 
 function Main() {
   const { selectedContext } = useTopicStore();
@@ -73,6 +74,8 @@ function Main() {
     componentToRender = <Calendar />;
   } else if (contextTypeToRender === "home") {
     componentToRender = getHomeComponent(contextSection);
+  } else if (contextTypeToRender === "copilot") {
+    componentToRender = <CopilotView />;
   } else {
     const menuComponents: Record<string, React.ReactNode> = {
       settings: <Settings />,
