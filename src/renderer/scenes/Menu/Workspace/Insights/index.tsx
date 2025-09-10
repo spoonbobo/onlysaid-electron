@@ -12,6 +12,9 @@ import BackupIcon from "@mui/icons-material/Backup";
 import ArchitectureIcon from "@mui/icons-material/Architecture";
 import AssessmentIcon from "@mui/icons-material/Assessment";
 import PublishIcon from "@mui/icons-material/Publish";
+import DesignServicesIcon from "@mui/icons-material/DesignServices";
+import SmartToyIcon from "@mui/icons-material/SmartToy";
+import TheaterComedyIcon from "@mui/icons-material/TheaterComedy";
 
 export default function WorkspaceInsightsMenu() {
   const intl = useIntl();
@@ -40,14 +43,56 @@ export default function WorkspaceInsightsMenu() {
       disabled: false
     },
     {
+      id: 'deeptrend',
+      name: intl.formatMessage({ id: "workspace.insights.moodle.tabs.deeptrend", defaultMessage: "DeepTrend" }),
+      icon: TrendingUpIcon,
+      disabled: true
+    },
+    {
+      id: 'semesterreport',
+      name: intl.formatMessage({ id: "workspace.insights.moodle.tabs.semesterreport", defaultMessage: "Semester Report" }),
+      icon: AssessmentIcon,
+      disabled: true
+    },
+    {
+      id: 'insightsreleaser',
+      name: intl.formatMessage({ id: "workspace.insights.moodle.tabs.insightsreleaser", defaultMessage: "Insights Releaser" }),
+      icon: PublishIcon,
+      disabled: true
+    },
+    {
+      id: 'safebackup',
+      name: intl.formatMessage({ id: "workspace.insights.moodle.tabs.safebackup", defaultMessage: "SafeBackup" }),
+      icon: BackupIcon,
+      disabled: true
+    },
+    {
+      id: 'ai-curriculum-design',
+      name: intl.formatMessage({ id: "workspace.insights.services.ai-curriculum-design", defaultMessage: "Curriculum Design" }),
+      icon: DesignServicesIcon,
+      disabled: true
+    },
+    {
+      id: 'ai-teacher-avatar',
+      name: intl.formatMessage({ id: "workspace.insights.services.ai-teacher-avatar", defaultMessage: "Teacher Avatar" }),
+      icon: SmartToyIcon,
+      disabled: true
+    },
+    {
+      id: 'ai-interactive-roleplay',
+      name: intl.formatMessage({ id: "workspace.insights.services.ai-interactive-roleplay", defaultMessage: "Interactive Role Play" }),
+      icon: TheaterComedyIcon,
+      disabled: true
+    },
+    {
       id: 'meeting-summarizer',
-      name: intl.formatMessage({ id: "workspace.insights.services.meetingSummarizer", defaultMessage: "Meeting Summarizer" }),
+      name: intl.formatMessage({ id: "workspace.insights.services.meeting-summarizer", defaultMessage: "Meeting Summarizer" }),
       icon: AnalyticsIcon,
-      disabled: false
+      disabled: true
     }
   ];
 
-  // Moodle tabs configuration
+  // Moodle tabs configuration (only overview and autograde remain as inner tabs)
   const moodleTabs = [
     {
       id: 'overview',
@@ -62,41 +107,6 @@ export default function WorkspaceInsightsMenu() {
       keyWord: "AUTOGRADE",
       icon: AutoFixHighIcon,
       disabled: false
-    },
-    {
-      id: 'deeptrend',
-      label: intl.formatMessage({ id: "workspace.insights.moodle.tabs.deeptrend", defaultMessage: "DeepTrend" }),
-      keyWord: "DEEPTREND",
-      icon: TrendingUpIcon,
-      disabled: true
-    },
-    {
-      id: 'coursearchitect',
-      label: intl.formatMessage({ id: "workspace.insights.moodle.tabs.coursearchitect", defaultMessage: "CourseArchitect" }),
-      keyWord: "ARCHITECT",
-      icon: ArchitectureIcon,
-      disabled: true
-    },
-    {
-      id: 'semesterreport',
-      label: intl.formatMessage({ id: "workspace.insights.moodle.tabs.semesterreport", defaultMessage: "Semester Report" }),
-      keyWord: "REPORT",
-      icon: AssessmentIcon,
-      disabled: true
-    },
-    {
-      id: 'insightsreleaser',
-      label: intl.formatMessage({ id: "workspace.insights.moodle.tabs.insightsreleaser", defaultMessage: "Insights Releaser" }),
-      keyWord: "RELEASER",
-      icon: PublishIcon,
-      disabled: true
-    },
-    {
-      id: 'safebackup',
-      label: intl.formatMessage({ id: "workspace.insights.moodle.tabs.safebackup", defaultMessage: "SafeBackup" }),
-      keyWord: "BACKUP",
-      icon: BackupIcon,
-      disabled: true
     }
   ];
 

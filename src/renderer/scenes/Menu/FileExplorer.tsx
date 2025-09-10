@@ -58,7 +58,7 @@ const getPathBasename = (filePath: string, ext?: string): string => {
 };
 
 function FileNodeItem({ node, level = 0 }: { node: FileNode, level?: number }) {
-  const { loadFolder, toggleFolder, removeRootFolder, refreshFolder } = useFilesStore();
+  const { loadFolder, toggleFolder, removeRootFolder, refreshFolder, setCurrentNode } = useFilesStore();
   const isLoading = useFilesStore(selectors.selectIsNodeLoading(node.id));
   const [isDragging, setIsDragging] = useState(false);
   const [menuAnchorEl, setMenuAnchorEl] = useState<null | HTMLElement>(null);
@@ -136,6 +136,8 @@ function FileNodeItem({ node, level = 0 }: { node: FileNode, level?: number }) {
 
   const handleViewInFileExplorer = (e: React.MouseEvent) => {
     e.stopPropagation();
+    // Set the current node in FileExplorerStore so the main file explorer navigates to this folder
+    setCurrentNode(node.id);
     // Switch to file context
     setSelectedContext({ name: "file", type: "file" });
   };
@@ -293,7 +295,6 @@ function FileNodeItem({ node, level = 0 }: { node: FileNode, level?: number }) {
 
   const handleCloseMenu = () => {
     setMenuAnchorEl(null);
-    setMenuOpen(false); // Ensure menu state is properly cleared
   };
 
   const handleRemoveFolder = () => {

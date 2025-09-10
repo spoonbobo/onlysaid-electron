@@ -1435,6 +1435,10 @@
 
   "workspace.insights.services.moodle": "Moodle 學習分析",
   "workspace.insights.services.meetingSummarizer": "會議摘要工具",
+  "workspace.insights.services.meeting-summarizer": "會議摘要工具",
+  "workspace.insights.services.ai-curriculum-design": "課程設計",
+  "workspace.insights.services.ai-teacher-avatar": "教師虛擬助理",
+  "workspace.insights.services.ai-interactive-roleplay": "互動角色扮演",
   
   "workspace.insights.moodle.tabs.overview.keyword": "概覽",
   
@@ -1454,6 +1458,7 @@
   "workspace.insights.selectService": "選擇洞察服務",
   "workspace.insights.selectServiceDescription": "從選單中選擇洞察服務開始進行分析和報告。",
   "workspace.insights.serviceNotImplemented": "{service} 服務尚未實現。",
+  "workspace.insights.serviceComingSoon": "{service} 功能即將推出...",
   "workspace.insights.meetingSummarizer.description": "{name} 的會議分析和摘要洞察",
   "workspace.insights.meetingSummarizer.comingSoon": "會議摘要和洞察功能即將推出...",
   "docs.mcp-tools": "MCP 工具和測試",
@@ -1505,5 +1510,88 @@
   "workflow.preset.1day": "1天後",
   "workflow.preset.1week": "1週後",
 
-  "chat.noMoreMessages": "沒有更多訊息"
+  "chat.noMoreMessages": "沒有更多訊息",
+
+  "workspace.mypartner.courseworkHelper.title": "課業助手",
+  "workspace.mypartner.courseworkHelper.description": "為您的學習提供全面的課業支援，包括作業協助、測驗練習和研究指導。",
+  "workspace.mypartner.courseworkHelper.noWorkspaceSelected": "未選擇工作空間。請選擇一個工作空間以使用課業助手。",
+  "workspace.mypartner.courseworkHelper.welcomeTitle": "歡迎使用課業助手",
+  "workspace.mypartner.courseworkHelper.welcomeMessage": "選擇側邊欄中的功能開始使用課業支援工具。",
+
+  "workspace.mypartner.coursework.assignments.title": "作業助手",
+  "workspace.mypartner.coursework.assignments.description": "協助您完成作業、提供寫作指導和格式建議。",
+  "workspace.mypartner.coursework.assignments.comingSoon": "作業助手功能即將推出，敬請期待！",
+
+  "workspace.mypartner.coursework.quizHelp.title": "測驗助手",
+
+  "workspace.mypartner.coursework.research.title": "研究助手",
+  "workspace.mypartner.coursework.research.description": "研究協助、資料來源搜尋和文獻回顧支援。",
+  "workspace.mypartner.coursework.research.disabled": "研究助手目前已停用。此功能正在開發中。",
+
+  "quizHelper.mainDescription": "從您的知識庫生成練習題目，為考試做好準備。",
+  "quizHelper.button.showFunctionality": "顯示測驗助手功能",
+  "quizHelper.button.generating": "生成中...",
+  "quizHelper.button.generateQuestions": "生成題目",
+  "quizHelper.button.checking": "檢查中...",
+  "quizHelper.button.checkAnswers": "檢查答案",
+  "quizHelper.button.reset": "重置",
+
+  "quizHelper.form.questionCount": "題目數量",
+  "quizHelper.form.questionType": "題目類型",
+  "quizHelper.form.difficulty": "難度",
+  "quizHelper.form.selectKnowledgeBases": "選擇知識庫",
+  "quizHelper.form.noKnowledgeBases": "沒有可用的知識庫。請先添加知識庫。",
+
+  "quizHelper.questionType.multipleChoice": "選擇題",
+  "quizHelper.questionType.shortAnswer": "簡答題",
+  "quizHelper.questionType.trueFalse": "是非題",
+  "quizHelper.questionType.mixed": "混合題型",
+
+  "quizHelper.difficulty.easy": "簡單",
+  "quizHelper.difficulty.medium": "中等",
+  "quizHelper.difficulty.hard": "困難",
+  "quizHelper.difficulty.mixed": "混合難度",
+
+  "quizHelper.questions.title": "練習題目（{count} 題）",
+  "quizHelper.questions.question": "第 {number} 題",
+  "quizHelper.questions.true": "正確",
+  "quizHelper.questions.false": "錯誤",
+  "quizHelper.questions.answerPlaceholder": "請在此輸入您的答案...",
+
+  "quizHelper.answers.correctAnswer": "正確答案",
+  "quizHelper.answers.explanation": "解釋",
+  "quizHelper.answers.evaluation": "評估結果",
+  "quizHelper.answers.score": "分數：{score}",
+  "quizHelper.answers.yourAnswerAnalysis": "您的答案分析",
+
+  "quizHelper.explanation.whyIncorrect": "為什麼您的答案不正確",
+  "quizHelper.explanation.correctUnderstanding": "正確理解",
+  "quizHelper.explanation.keyLearningPoint": "重點學習要點",
+
+  "quizHelper.progress.title": "正在分析您的答案",
+  "quizHelper.progress.complete": "{current} / {total}",
+  "quizHelper.progress.percentComplete": "{percent}% 完成",
+  "quizHelper.progress.processingRate": "處理速度",
+  "quizHelper.progress.analysesPerSecond": "{rate} 分析/秒",
+  "quizHelper.progress.estimatedTime": "預估剩餘時間",
+  "quizHelper.progress.remainingTime": "{eta} 秒",
+  "quizHelper.progress.calculating": "計算中...",
+  "quizHelper.progress.parallelProcessing": "並行處理",
+
+  "quizHelper.generation.freshQuestionSet": "新生成的題目集（ID：{id}）",
+  "quizHelper.generation.focus": "重點：{focus}",
+  "quizHelper.generation.style": "風格：{style}",
+  "quizHelper.generation.approach": "方法：{approach}",
+  "quizHelper.generation.generationNumber": "第 {number} 次生成",
+
+  "quizHelper.toast.selectKnowledgeBase": "請選擇至少一個知識庫",
+  "quizHelper.toast.loadKnowledgeBasesFailed": "載入知識庫失敗",
+  "quizHelper.toast.questionsGenerated": "成功生成 {count} 道題目",
+  "quizHelper.toast.basicQuestionGenerated": "生成了基本題目，建議檢查知識庫內容",
+  "quizHelper.toast.failedToGenerate": "生成題目失敗：{error}",
+  "quizHelper.toast.analysesRunning": "正在運行 {count} 項分析（並發數：{concurrency}）",
+  "quizHelper.toast.analysesFailed": "{failed}/{total} 項分析失敗（成功率：{successRate}%，耗時：{time}秒）",
+  "quizHelper.toast.analysesCompleted": "完成 {count} 項分析（耗時：{time}秒，吞吐量：{throughput} 分析/秒）",
+  "quizHelper.toast.scoreResult": "您答對了 {correct}/{total} 題",
+  "quizHelper.toast.withAnalyses": "（包含 {count} 項詳細分析）"
 }

@@ -483,7 +483,7 @@ export const setupWorkspaceHandlers = () => {
   ipcMain.handle('workspace:get_settings', async (event, args: IGetWorkspaceSettingsArgs) => {
     try {
       const response = await onlysaidServiceInstance.get(
-        `/workspace/${args.workspaceId}/settings`,
+        `/v2/workspace/${args.workspaceId}/settings`,
         {
           headers: {
             Authorization: `Bearer ${args.token}`
@@ -503,7 +503,7 @@ export const setupWorkspaceHandlers = () => {
   ipcMain.handle('workspace:create_settings', async (event, args: ICreateWorkspaceSettingsArgs) => {
     try {
       const response = await onlysaidServiceInstance.post(
-        `/workspace/${args.workspaceId}/settings`,
+        `/v2/workspace/${args.workspaceId}/settings`,
         args.request,
         {
           headers: {
@@ -524,7 +524,7 @@ export const setupWorkspaceHandlers = () => {
   ipcMain.handle('workspace:update_settings', async (event, args: IUpdateWorkspaceSettingsArgs) => {
     try {
       const response = await onlysaidServiceInstance.put(
-        `/workspace/${args.workspaceId}/settings`,
+        `/v2/workspace/${args.workspaceId}/settings`,
         args.request,
         {
           headers: {
@@ -545,7 +545,7 @@ export const setupWorkspaceHandlers = () => {
   ipcMain.handle('workspace:delete_settings', async (event, args: IDeleteWorkspaceSettingsArgs) => {
     try {
       const response = await onlysaidServiceInstance.delete(
-        `/workspace/${args.workspaceId}/settings`,
+        `/v2/workspace/${args.workspaceId}/settings`,
         {
           headers: {
             Authorization: `Bearer ${args.token}`

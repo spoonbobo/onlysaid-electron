@@ -43,7 +43,23 @@ function WorkspaceInsights() {
       case 'moodle':
         return <MoodleInsights />;
       case 'meeting-summarizer':
-        return <MeetingSummarizer />;
+      case 'ai-curriculum-design':
+      case 'ai-teacher-avatar':
+      case 'ai-interactive-roleplay':
+      case 'deeptrend':
+      case 'semesterreport':
+      case 'insightsreleaser':
+      case 'safebackup':
+        return (
+          <Box sx={{ p: 3 }}>
+            <Alert severity="info">
+              {intl.formatMessage(
+                { id: "workspace.insights.serviceComingSoon" },
+                { service: intl.formatMessage({ id: `workspace.insights.services.${selectedInsightService}` }) || intl.formatMessage({ id: `workspace.insights.moodle.tabs.${selectedInsightService}` }) }
+              )}
+            </Alert>
+          </Box>
+        );
       default:
         return (
           <Box sx={{ p: 3 }}>

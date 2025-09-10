@@ -141,6 +141,9 @@ export default function AutoGrade({ workspaceId }: AutoGradeProps) {
   const [showAvailableSchemes, setShowAvailableSchemes] = useState(false);
 
   const settings = getSettingsFromStore(workspaceId);
+  // HARDCODED FOR TESTING
+  // const courseId = '2'; // Hardcoded course ID for testing
+  // const apiToken = 'd8d5fcfba154543cbfa80168e16b2a20'; // Hardcoded API key for testing
   const courseId = settings?.moodle_course_id;
   const apiToken = settings?.moodle_api_token;
   

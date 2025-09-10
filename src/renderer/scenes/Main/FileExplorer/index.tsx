@@ -194,7 +194,7 @@ function FileListItem({ node, onNodeClick, onFileClick, onEditClick }: FileListI
     <ListItemButton
       onClick={handleClick}
       sx={{
-        py: 1,
+        py: 0.5, // Reduced from 1 to 0.5 for more compact rows
         px: 2,
         borderRadius: 1,
         mb: 0.5,
@@ -265,7 +265,7 @@ function FileListItem({ node, onNodeClick, onFileClick, onEditClick }: FileListI
             )}
           </Box>
         }
-        secondary={node.type === 'directory' ? 'Folder' : 'File'}
+        // Removed secondary prop to eliminate the "Folder"/"File" text
       />
     </ListItemButton>
   );
