@@ -444,9 +444,6 @@ function UserPreferences() {
             <option value="zh-hk">
               <FormattedMessage id="language.chinese" />
             </option>
-            <option value="ja">
-              <FormattedMessage id="language.japanese" />
-            </option>
           </TextField>
         </SettingsFormField>
       </SettingsSection>

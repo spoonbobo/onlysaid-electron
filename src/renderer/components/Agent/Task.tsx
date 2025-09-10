@@ -78,6 +78,41 @@ const TaskCard: React.FC<TaskCardProps> = ({
   const theme = useTheme();
   const intl = useIntl();
 
+  const getStatusLabel = (status: string) => {
+    switch (status) {
+      case 'completed':
+        return intl.formatMessage({ id: 'common.completed' });
+      case 'failed':
+        return intl.formatMessage({ id: 'task.failed' });
+      case 'running':
+        return intl.formatMessage({ id: 'task.running' });
+      case 'pending':
+        return intl.formatMessage({ id: 'task.pending' });
+      default:
+        return status;
+    }
+  };
+
+  const getComplexityLabel = (complexity?: string) => {
+    switch (complexity) {
+      case 'high':
+        return intl.formatMessage({ id: 'task.complexity.high' });
+      case 'medium':
+        return intl.formatMessage({ id: 'task.complexity.medium' });
+      case 'low':
+        return intl.formatMessage({ id: 'task.complexity.low' });
+      default:
+        return complexity || '';
+    }
+  };
+
+  const formatDateTime = (value: string | number | Date) => {
+    const date = new Date(value);
+    const datePart = intl.formatDate(date, { year: 'numeric', month: '2-digit', day: '2-digit' });
+    const timePart = intl.formatTime(date, { hour: '2-digit', minute: '2-digit' });
+    return `${datePart} ${timePart}`;
+  };
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'completed': return theme.palette.success.main;
@@ -149,7 +184,7 @@ const TaskCard: React.FC<TaskCardProps> = ({
                 {task.estimated_complexity && (
                   <Chip 
                     size="small" 
-                    label={task.estimated_complexity}
+                    label={getComplexityLabel(task.estimated_complexity)}
                     sx={{ 
                       backgroundColor: alpha(getComplexityColor(task.estimated_complexity), 0.1),
                       color: getComplexityColor(task.estimated_complexity),
@@ -160,7 +195,7 @@ const TaskCard: React.FC<TaskCardProps> = ({
 
                 <Chip 
                   size="small" 
-                  label={task.status}
+                  label={getStatusLabel(task.status)}
                   sx={{ 
                     backgroundColor: alpha(getStatusColor(task.status), 0.1),
                     color: getStatusColor(task.status),
@@ -240,18 +275,18 @@ const TaskCard: React.FC<TaskCardProps> = ({
             {/* Timing Information */}
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
               <Typography variant="caption" color="text.secondary">
-                {intl.formatMessage({ id: 'task.created' })} {new Date(task.created_at).toLocaleTimeString()}
+                {intl.formatMessage({ id: 'task.created' })} {formatDateTime(task.created_at)}
               </Typography>
               
               {task.started_at && (
                 <Typography variant="caption" color="text.secondary">
-                  {intl.formatMessage({ id: 'task.started' })} {new Date(task.started_at).toLocaleTimeString()}
+                  {intl.formatMessage({ id: 'task.started' })} {formatDateTime(task.started_at)}
                 </Typography>
               )}
               
               {task.completed_at && (
                 <Typography variant="caption" color="text.secondary">
-                  {intl.formatMessage({ id: 'task.completed' })} {new Date(task.completed_at).toLocaleTimeString()}
+                  {intl.formatMessage({ id: 'task.completed' })} {formatDateTime(task.completed_at)}
                 </Typography>
               )}
             </Box>

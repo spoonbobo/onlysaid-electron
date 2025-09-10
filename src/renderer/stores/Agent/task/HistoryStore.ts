@@ -458,3 +458,33 @@ export const useHistoryStore = create<HistoryState>()(
     }
   )
 ); 
+
+// Register IPC listener: update execution status -> reflect in history store
+if (typeof window !== 'undefined' && (window as any).electron?.ipcRenderer) {
+  const w = window as any;
+  if (!w.__onlysaid_history_execstatus_listener_registered__) {
+    w.__onlysaid_history_execstatus_listener_registered__ = true;
+    w.electron.ipcRenderer.on('agent:update_execution_status', (event: any, payload?: any) => {
+      try {
+        const data = payload || {};
+        const { executionId, status, result, error } = data as { executionId?: string; status?: string; result?: string; error?: string };
+        if (!executionId || !status) return;
+
+        const updates: Partial<OSSwarmExecution> = { status: status as any };
+        if (result !== undefined) updates.result = result;
+        if (error !== undefined) updates.error = error;
+        if (status === 'running' && !useHistoryStore.getState().executions.find(e => e.id === executionId)?.started_at) {
+          updates.started_at = new Date().toISOString();
+        }
+        if ((status === 'completed' || status === 'failed')) {
+          updates.completed_at = new Date().toISOString();
+        }
+
+        useHistoryStore.getState().updateExecution(executionId, updates);
+        // Also refresh stats asynchronously if needed (opt-in)
+      } catch (e) {
+        console.warn('[HistoryStore] ⚠️ Failed to handle execution status update:', e);
+      }
+    });
+  }
+}

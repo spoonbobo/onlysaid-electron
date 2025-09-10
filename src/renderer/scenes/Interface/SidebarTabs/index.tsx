@@ -21,6 +21,10 @@ import { useWorkspaceIcons } from '@/renderer/hooks/useWorkspaceIcons';
 import SupervisorAccountIcon from "@mui/icons-material/SupervisorAccount";
 import PortalIcon from "@mui/icons-material/Web";
 import ExpandedTabs from "./ExpandedTabs";
+import { useAgentUIStore } from '@/renderer/stores/Agent/AgentUIStore';
+import { TaskHistory } from '@/renderer/components/Dialog/Agent/TaskHistory';
+import { useHistoryStore } from '@/renderer/stores/Agent/task';
+import { useAgentTaskOrchestrator } from '@/renderer/stores/Agent/task';
 
 interface SidebarTabsProps {
   onExpandChange?: (expanded: boolean) => void;
@@ -30,6 +34,10 @@ interface SidebarTabsProps {
 }
 
 function SidebarTabs({ onExpandChange, onAgentToggle, agentOverlayVisible = false, onWidthChange }: SidebarTabsProps) {
+  const taskHistoryOpen = useAgentUIStore(s => s.taskHistoryOpen);
+  const closeTaskHistory = useAgentUIStore(s => s.closeTaskHistory);
+  const { executions, loadExecutionHistory } = useHistoryStore();
+  const { deleteExecutionCompletely, setCurrentExecution } = useAgentTaskOrchestrator();
   const { selectedContext, contexts, setSelectedContext, removeContext, addContext } = useTopicStore();
   const { workspaces, exitWorkspace, isLoading, setWorkspaceCreatedCallback } = useWorkspaceStore();
   const {
@@ -624,6 +632,25 @@ function SidebarTabs({ onExpandChange, onAgentToggle, agentOverlayVisible = fals
         }}
         onConfirm={handleConfirmExit}
         workspace={workspaceToExit}
+      />
+
+      {/* Global Task History Dialog */}
+      <TaskHistory
+        open={taskHistoryOpen}
+        onClose={closeTaskHistory}
+        executions={executions}
+        onSelectExecution={async (executionId) => {
+          try {
+            await setCurrentExecution(executionId);
+          } catch (err) {
+            console.error('[SidebarTabs] Failed to set current execution from history:', err);
+          } finally {
+            onAgentToggle?.(true);
+            closeTaskHistory();
+          }
+        }}
+        onDeleteExecution={deleteExecutionCompletely}
+        onRefreshHistory={() => loadExecutionHistory(20)}
       />
     </>
   );

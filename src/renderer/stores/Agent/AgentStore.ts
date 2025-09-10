@@ -170,8 +170,8 @@ export const useAgentStore = create<AgentState>()(
     (set, get) => {
       // Setup Agent Task IPC listeners
       if (typeof window !== 'undefined' && window.electron) {
-        window.electron.ipcRenderer.on('agent:stream_update', (...args) => {
-          const payload = args[1] as { update?: string };
+        window.electron.ipcRenderer.on('agent:stream_update', (event: any, ...args: any[]) => {
+          const payload = args[0] as { update?: string };
           if (payload?.update) {
             const taskId = 'current';
             
@@ -204,8 +204,8 @@ export const useAgentStore = create<AgentState>()(
       // Remove the old abort controller setup and replace with human-in-the-loop
       if (typeof window !== 'undefined' && window.electron) {
         // Setup human interaction IPC listeners
-        window.electron.ipcRenderer.on('agent:human_interaction_request', (...args) => {
-          const payload = args[1] as { interactionId: string; request: HumanInteractionRequest };
+        window.electron.ipcRenderer.on('agent:human_interaction_request', (event: any, ...args: any[]) => {
+          const payload = args[0] as { interactionId: string; request: HumanInteractionRequest };
           console.log('[AgentStore] Received LangGraph human interaction request:', payload);
           
           set(state => ({
@@ -220,8 +220,8 @@ export const useAgentStore = create<AgentState>()(
         });
 
         // Handle human interaction responses and resume LangGraph
-        window.electron.ipcRenderer.on('agent:human_interaction_response', (...args) => {
-          const payload = args[1] as { interactionId: string; response: HumanInteractionResponse };
+        window.electron.ipcRenderer.on('agent:human_interaction_response', (event: any, ...args: any[]) => {
+          const payload = args[0] as { interactionId: string; response: HumanInteractionResponse };
           console.log('[AgentStore] Processing LangGraph human interaction response:', payload);
           
           // Resume the LangGraph workflow
@@ -236,6 +236,26 @@ export const useAgentStore = create<AgentState>()(
             delete newInteractions[payload.interactionId];
             return { pendingHumanInteractions: newInteractions };
           });
+        });
+
+        // Map execution status updates to agent task status for UI consistency
+        window.electron.ipcRenderer.on('agent:update_execution_status', (event: any, ...args: any[]) => {
+          const data = args[0] as { executionId: string; status: string };
+          const taskId = 'current';
+          const statusMap: Record<string, AgentState['agentTaskStatus'][string]> = {
+            pending: 'initializing',
+            running: 'running',
+            completing: 'completing',
+            completed: 'completed',
+            failed: 'failed',
+            aborted: 'aborted'
+          };
+          const mapped = statusMap[(data?.status || '').toLowerCase()] || undefined;
+          if (mapped) {
+            set(state => ({
+              agentTaskStatus: { ...state.agentTaskStatus, [taskId]: mapped }
+            }));
+          }
         });
       }
 

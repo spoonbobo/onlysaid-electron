@@ -120,6 +120,23 @@ export function setupLangChainHandlers() {
         isAutoGrading: executionId.startsWith('autograde_')
       });
       
+      // Notify renderer to create execution record and mark as running
+      try {
+        ipcSend('agent:create_execution_record', {
+          executionId,
+          taskDescription: task,
+          chatId,
+          workspaceId
+        });
+
+        ipcSend('agent:update_execution_status', {
+          executionId,
+          status: 'running'
+        });
+      } catch (statusInitError) {
+        console.warn('[LangGraph-IPC] Failed to initialize execution status in renderer:', statusInitError);
+      }
+
       const result = await workflow.executeWorkflow(task, threadId, {
         executionId: executionId,
         chatId,
@@ -127,6 +144,16 @@ export function setupLangChainHandlers() {
         streamCallback: (update: string) => {
           if (!event.sender.isDestroyed()) {
             event.sender.send('agent:stream_update', { update });
+            // Also record stream updates as status logs for this execution
+            try {
+              ipcSend('agent:add_log_to_db', {
+                executionId: executionId,
+                logType: 'status_update',
+                message: update,
+              });
+            } catch (logErr) {
+              console.warn('[LangGraph-IPC] Failed to log stream update:', logErr);
+            }
           }
         },
         ipcSend,
@@ -135,6 +162,18 @@ export function setupLangChainHandlers() {
 
       // ✅ FIX: Clean up the global reference after workflow completes
       delete (global as any).osswarmWebContents;
+
+      // Update execution status on completion
+      try {
+        ipcSend('agent:update_execution_status', {
+          executionId,
+          status: result.success ? 'completed' : 'failed',
+          result: result.success ? result.result : undefined,
+          error: 'error' in result ? result.error : undefined
+        });
+      } catch (statusCompleteError) {
+        console.warn('[LangGraph-IPC] Failed to finalize execution status:', statusCompleteError);
+      }
 
       const response = {
         success: result.success,
@@ -150,6 +189,17 @@ export function setupLangChainHandlers() {
       console.error('Error in agent:execute_task:', error);
       // ✅ FIX: Clean up the global reference on error
       delete (global as any).osswarmWebContents;
+      try {
+        // Attempt to update execution as failed if we had created one
+        const failedExecutionId = (event as any)?.executionId || undefined;
+        if (failedExecutionId) {
+          (event as any).sender?.send?.('agent:update_execution_status', {
+            executionId: failedExecutionId,
+            status: 'failed',
+            error: error.message || 'Unknown error occurred'
+          });
+        }
+      } catch {}
       return { success: false, error: error.message || 'Unknown error occurred' };
     }
   });
@@ -433,14 +483,16 @@ export function setupLangChainHandlers() {
     }
   });
 
-  ipcMain.handle('agent:update_task_status', async (event, { taskId, status, result, error, executionId }) => {
+  ipcMain.handle('agent:update_task_status', async (event, { taskId, status, result, error, executionId, agentId, taskDescription }) => {
     try {
       event.sender.send('agent:update_task_status', {
         taskId,
         status,
         result,
         error,
-        executionId
+        executionId,
+        agentId,
+        taskDescription
       });
       
       event.sender.send('agent:task_updated', {

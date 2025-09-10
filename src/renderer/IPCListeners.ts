@@ -682,6 +682,8 @@ export const useIPCListeners = ({
         
         console.log('[IPCListeners] ✅ Synthesis message displayed in chat');
         
+        // Reconciliation moved to TaskManagementStore listeners
+        
       } catch (error) {
         console.error('[IPCListeners] ❌ Failed to save synthesis message:', error);
         // Still show in UI even if database save failed
@@ -704,6 +706,15 @@ export const useIPCListeners = ({
         );
         
         console.log('[IPCListeners-Global-IPC] ✅ Agent saved to database with ID:', dbAgentId);
+
+        // Also bump total_agents in HistoryStore if present in memory
+        try {
+          const history = useHistoryStore.getState();
+          const current = history.executions.find(e => e.id === data.executionId)?.total_agents ?? 0;
+          history.updateExecution(data.executionId, { total_agents: current + 1 });
+        } catch (e) {
+          console.warn('[IPCListeners] ⚠️ Failed to update total_agents in history store:', (e as any)?.message);
+        }
       } catch (error) {
         console.error('[IPCListeners-Global-IPC] ❌ Error saving agent to database:', error);
       }
@@ -815,17 +826,29 @@ export const useIPCListeners = ({
       try {
         // Check if execution already exists
         const existingExecution = await window.electron.db.query({
-          query: `SELECT id FROM osswarm_executions WHERE id = @id`,
+          query: `SELECT id, status FROM osswarm_executions WHERE id = @id`,
           params: { id: data.executionId }
         });
         
-        if (!existingExecution || existingExecution.length === 0) {
-          // ✅ FIX: Create execution with the specific provided ID instead of using createExecution
-          const currentUser = getUserFromStore();
-          const now = new Date().toISOString();
+        if (existingExecution && existingExecution.length > 0) {
+          // Execution already exists - this is OK, just update the store
+          console.log('[IPCListeners-Global-IPC] ✅ Execution record already exists:', data.executionId, 'Status:', existingExecution[0].status);
+          
+          // Update the execution store with the existing execution
+          const existing = existingExecution[0];
+          useExecutionStore.getState().setCurrentExecution(existing);
+          
+          // Don't throw an error, just return successfully
+          return;
+        }
+        
+        // Create new execution
+        const currentUser = getUserFromStore();
+        const now = new Date().toISOString();
 
-          console.log('[IPCListeners-Global-IPC] Creating execution with specific ID:', data.executionId);
+        console.log('[IPCListeners-Global-IPC] Creating execution with specific ID:', data.executionId);
 
+        try {
           await window.electron.db.query({
             query: `
               INSERT INTO osswarm_executions
@@ -833,7 +856,7 @@ export const useIPCListeners = ({
               VALUES (@id, @task_description, @status, @created_at, @user_id, @chat_id, @workspace_id, @total_agents, @total_tasks, @total_tool_executions)
             `,
             params: {
-              id: data.executionId,  // ✅ Use the provided ID instead of generating a new one
+              id: data.executionId,
               task_description: data.taskDescription,
               status: 'pending',
               created_at: now,
@@ -864,8 +887,25 @@ export const useIPCListeners = ({
           useHistoryStore.getState().addExecution(execution);
 
           console.log('[IPCListeners-Global-IPC] ✅ Execution record created with ID:', data.executionId);
-        } else {
-          console.log('[IPCListeners-Global-IPC] ✅ Execution record already exists:', data.executionId);
+        } catch (dbError: any) {
+          // Check if it's a unique constraint error
+          if (dbError.message?.includes('UNIQUE constraint failed')) {
+            console.log('[IPCListeners-Global-IPC] ⚠️ Execution already exists (race condition), fetching existing record');
+            
+            // Fetch the existing record
+            const existingAfterRace = await window.electron.db.query({
+              query: `SELECT * FROM osswarm_executions WHERE id = @id`,
+              params: { id: data.executionId }
+            });
+            
+            if (existingAfterRace && existingAfterRace.length > 0) {
+              useExecutionStore.getState().setCurrentExecution(existingAfterRace[0]);
+              console.log('[IPCListeners-Global-IPC] ✅ Using existing execution record after race condition');
+            }
+          } else {
+            // Re-throw if it's a different error
+            throw dbError;
+          }
         }
       } catch (error) {
         console.error('[IPCListeners-Global-IPC] ❌ Error creating execution record:', error);
@@ -890,12 +930,68 @@ export const useIPCListeners = ({
     };
 
     const handleUpdateTaskStatus = async (event: any, ...args: unknown[]) => {
-      const data = args[0] as { taskId: string; status: string; result?: string; error?: string; executionId: string };
+      const data = args[0] as { 
+        taskId?: string; 
+        subtaskId?: string; 
+        executionId?: string; 
+        taskDescription?: string; 
+        status: string; 
+        result?: string; 
+        error?: string; 
+      };
       console.log('[IPCListeners-Global-IPC] 🔥 Received update task status request:', data);
       
       try {
+        // Resolve the concrete task ID if not provided
+        let resolvedTaskId = data.taskId;
+        
+        if (!resolvedTaskId) {
+          // Prefer resolution by executionId + subtaskId for decomposed tasks
+          if (data.subtaskId && data.executionId) {
+            const rowsBySubtask = await window.electron.db.query({
+              query: `SELECT id FROM osswarm_tasks WHERE execution_id = @execution_id AND subtask_id = @subtask_id ORDER BY created_at DESC LIMIT 1`,
+              params: { execution_id: data.executionId, subtask_id: data.subtaskId }
+            });
+            if (rowsBySubtask && rowsBySubtask.length > 0) {
+              resolvedTaskId = rowsBySubtask[0].id;
+            }
+          }
+          
+          // Fallback to executionId + taskDescription
+          if (!resolvedTaskId && data.executionId && data.taskDescription) {
+            const rowsByExecAndDesc = await window.electron.db.query({
+              query: `SELECT id FROM osswarm_tasks WHERE execution_id = @execution_id AND task_description = @task_description ORDER BY created_at DESC LIMIT 1`,
+              params: { execution_id: data.executionId, task_description: data.taskDescription }
+            });
+            if (rowsByExecAndDesc && rowsByExecAndDesc.length > 0) {
+              resolvedTaskId = rowsByExecAndDesc[0].id;
+            }
+          }
+          
+          // Final fallback to taskDescription only
+          if (!resolvedTaskId && data.taskDescription) {
+            const rowsByDesc = await window.electron.db.query({
+              query: `SELECT id FROM osswarm_tasks WHERE task_description = @task_description ORDER BY created_at DESC LIMIT 1`,
+              params: { task_description: data.taskDescription }
+            });
+            if (rowsByDesc && rowsByDesc.length > 0) {
+              resolvedTaskId = rowsByDesc[0].id;
+            }
+          }
+        }
+        
+        if (!resolvedTaskId) {
+          console.warn('[IPCListeners-Global-IPC] ⚠️ Could not resolve task id for status update', {
+            executionId: data.executionId,
+            subtaskId: data.subtaskId,
+            taskDescription: data.taskDescription,
+            status: data.status
+          });
+          return;
+        }
+        
         await useTaskManagementStore.getState().updateTaskStatus(
-          data.taskId,
+          resolvedTaskId,
           data.status as any,
           data.result,
           data.error
@@ -995,7 +1091,8 @@ export const useIPCListeners = ({
 
     const handleUpdateTaskAssignment = async (event: any, ...args: unknown[]) => {
       const data = args[0] as { 
-        taskId: string; 
+        taskId?: string; 
+        subtaskId?: string;
         agentId: string; 
         assignmentReason?: string; 
         executionId: string; 
@@ -1003,11 +1100,25 @@ export const useIPCListeners = ({
       console.log('[IPCListeners-Global-IPC] 🔥 Received update task assignment request:', data);
       
       try {
+        let resolvedTaskId = data.taskId;
+        if (!resolvedTaskId && data.subtaskId) {
+          const rows = await window.electron.db.query({
+            query: `SELECT id FROM osswarm_tasks WHERE execution_id = @execution_id AND subtask_id = @subtask_id ORDER BY created_at DESC LIMIT 1`,
+            params: { execution_id: data.executionId, subtask_id: data.subtaskId }
+          });
+          resolvedTaskId = rows && rows.length > 0 ? rows[0].id : undefined;
+        }
+
+        if (!resolvedTaskId) {
+          console.warn('[IPCListeners-Global-IPC] ⚠️ Could not resolve taskId for assignment:', data);
+          return;
+        }
+
         // Update the task's agent assignment in the database
         await window.electron.db.query({
           query: `UPDATE osswarm_tasks SET agent_id = @agent_id, assignment_reason = @assignment_reason WHERE id = @id`,
           params: {
-            id: data.taskId,
+            id: resolvedTaskId,
             agent_id: data.agentId,
             assignment_reason: data.assignmentReason || null
           }
@@ -1017,7 +1128,7 @@ export const useIPCListeners = ({
         const taskStore = useTaskManagementStore.getState();
         taskStore.setTasks(
           taskStore.tasks.map(task => 
-            task.id === data.taskId 
+            task.id === resolvedTaskId 
               ? { ...task, agent_id: data.agentId, assignment_reason: data.assignmentReason }
               : task
           )

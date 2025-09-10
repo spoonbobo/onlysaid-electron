@@ -99,6 +99,26 @@ export class AgentExecutorNode extends BaseWorkflowNode {
         }
       });
       
+      // Update matching decomposed tasks to completed/failed
+      try {
+        if (state.webContents && !state.webContents.isDestroyed() && state.executionId && state.decomposedSubtasks && Array.isArray(state.decomposedSubtasks)) {
+          const relevant = (state.decomposedSubtasks as any[]).filter(st => Array.isArray(st?.suggestedAgentTypes) && st.suggestedAgentTypes.includes(nextRole));
+          for (const st of relevant) {
+            // Send update with subtask_id for proper linkage
+            state.webContents.send('agent:update_task_status', {
+              executionId: state.executionId,
+              subtaskId: st.id, // Use the decomposed subtask ID
+              taskDescription: st.description,
+              status: finalAgentCard.status === 'completed' ? 'completed' : 'failed',
+              result: result.output,
+              agentId: updatedAgentCard.runtimeId || nextRole
+            });
+          }
+        }
+      } catch (e) {
+        console.warn('[LangGraph] Failed to update decomposed task status:', e);
+      }
+
       return {
         activeAgentCards: {
           ...state.activeAgentCards,
@@ -126,6 +146,23 @@ export class AgentExecutorNode extends BaseWorkflowNode {
       }
       
       console.error(`[LangGraph] ${nextRole} agent error:`, error);
+      // Also mark relevant decomposed tasks failed
+      try {
+        if (state.webContents?.isValid() && state.executionId && state.decomposedSubtasks && Array.isArray(state.decomposedSubtasks)) {
+          const relevant = (state.decomposedSubtasks as any[]).filter(st => Array.isArray(st?.suggestedAgentTypes) && st.suggestedAgentTypes.includes(nextRole));
+          for (const st of relevant) {
+            state.webContents.send('agent:update_task_status', {
+              executionId: state.executionId,
+              taskDescription: st.description,
+              status: 'failed',
+              error: error.message,
+              agentId: updatedAgentCard.runtimeId || nextRole
+            });
+          }
+        }
+      } catch (e) {
+        console.warn('[LangGraph] Failed to update decomposed task status on error:', e);
+      }
       
       const failedAgentCard: AgentCard = {
         ...updatedAgentCard,
@@ -169,23 +206,71 @@ export class AgentExecutorNode extends BaseWorkflowNode {
     try {
       console.log(`[LangGraph] executeAgentWithApproval starting for ${role} agent at ${new Date(startTime).toLocaleTimeString()}`);
       
-      const webContents = state.webContents;
+      const webContents = (state as any).webContents || (global as any).osswarmWebContents;
       const taskDescription = `${role} agent execution: ${state.originalTask}`;
       
-      if (webContents?.isValid() && state.executionId) {
-        webContents.send('agent:save_task_to_db', {
-          executionId: state.executionId,
-          agentId: agentCard.runtimeId || agentCard.role,
-          taskDescription: taskDescription,
-          priority: 1
+      // Find matching decomposed subtask for this role
+      let matchingSubtask: any = null;
+      if (state.decomposedSubtasks && Array.isArray(state.decomposedSubtasks)) {
+        matchingSubtask = (state.decomposedSubtasks as any[]).find(st => {
+          const suggestMatch = Array.isArray(st?.suggestedAgentTypes) && st.suggestedAgentTypes.includes(role);
+          const skillMatch = Array.isArray(st?.requiredSkills) && st.requiredSkills.some((skill: string) => {
+            const mapping: { [key: string]: string[] } = {
+              'research': ['research', 'data_analysis', 'investigation'],
+              'analysis': ['analysis', 'critical_thinking', 'evaluation'],
+              'creative': ['creativity', 'design', 'marketing', 'content'],
+              'communication': ['writing', 'presentation', 'documentation'],
+              'technical': ['programming', 'development', 'engineering'],
+              'validation': ['testing', 'quality_assurance', 'verification']
+            };
+            const agentSkills = mapping[role] || [role];
+            return agentSkills.some(s => skill.toLowerCase().includes(s.toLowerCase()) || s.toLowerCase().includes(skill.toLowerCase()));
+          });
+          return suggestMatch || skillMatch;
         });
-        
-        webContents.send('agent:add_log_to_db', {
-          executionId: state.executionId,
-          logType: 'info',
-          message: `Task created for ${role} agent: ${taskDescription}`,
-          agentId: agentCard.runtimeId
-        });
+      }
+      
+      if (webContents && !webContents.isDestroyed() && state.executionId) {
+        // Mark matching decomposed task as running if found
+        if (matchingSubtask) {
+          webContents.send('agent:update_task_status', {
+            executionId: state.executionId,
+            subtaskId: matchingSubtask.id,
+            taskDescription: matchingSubtask.description,
+            status: 'running',
+            agentId: agentCard.runtimeId || agentCard.role
+          });
+          
+          webContents.send('agent:add_log_to_db', {
+            executionId: state.executionId,
+            logType: 'info',
+            message: `Started decomposed task ${matchingSubtask.id} for ${role} agent`,
+            agentId: agentCard.runtimeId
+          });
+        } else {
+          // Create new task if no decomposed task exists
+          webContents.send('agent:save_task_to_db', {
+            executionId: state.executionId,
+            agentId: agentCard.runtimeId || agentCard.role,
+            taskDescription: taskDescription,
+            priority: 1
+          });
+          // Immediately mark task as running
+          webContents.send('agent:update_task_status', {
+            executionId: state.executionId,
+            taskId: taskDescription,
+            status: 'running',
+            agentId: agentCard.runtimeId || agentCard.role,
+            taskDescription
+          });
+          
+          webContents.send('agent:add_log_to_db', {
+            executionId: state.executionId,
+            logType: 'info',
+            message: `Task created for ${role} agent: ${taskDescription}`,
+            agentId: agentCard.runtimeId
+          });
+        }
       }
       
       const config = AgentRegistry.getAgentConfig(role);
@@ -234,7 +319,7 @@ export class AgentExecutorNode extends BaseWorkflowNode {
           
           console.log(`[LangGraph-Timer] Creating pending approval for tool: ${toolName} from ${mcpServer} at ${new Date(currentTime).toLocaleTimeString()}`);
           
-          if (webContents?.isValid() && state.executionId) {
+          if (webContents && !webContents.isDestroyed() && state.executionId) {
             webContents.send('agent:add_log_to_db', {
               executionId: state.executionId,
               logType: 'tool_request',
@@ -276,12 +361,21 @@ export class AgentExecutorNode extends BaseWorkflowNode {
         };
       }
       
-      if (webContents?.isValid() && state.executionId) {
+      if (webContents && !webContents.isDestroyed() && state.executionId) {
         webContents.send('agent:add_log_to_db', {
           executionId: state.executionId,
           logType: 'info',
           message: `${role} agent completed successfully: ${output.substring(0, 100)}...`,
           agentId: agentCard.runtimeId
+        });
+        // Mark task as completed (renderer will resolve by description/assignment)
+        webContents.send('agent:update_task_status', {
+          executionId: state.executionId,
+          taskId: taskDescription,
+          status: 'completed',
+          result: output,
+          agentId: agentCard.runtimeId || agentCard.role,
+          taskDescription
         });
       }
       
@@ -298,6 +392,17 @@ export class AgentExecutorNode extends BaseWorkflowNode {
       }
       
       console.error(`[LangGraph] Agent execution failed:`, error);
+      const _webContents = (state as any).webContents || (global as any).osswarmWebContents;
+      if (_webContents && !_webContents.isDestroyed() && state.executionId) {
+        _webContents.send('agent:update_task_status', {
+          executionId: state.executionId,
+          taskId: `${role} agent execution: ${state.originalTask}`,
+          status: 'failed',
+          error: error.message,
+          agentId: agentCard.runtimeId || role,
+          taskDescription: `${role} agent execution: ${state.originalTask}`
+        });
+      }
       return {
         success: false,
         output: `Agent execution failed: ${error.message}`,

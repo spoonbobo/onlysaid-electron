@@ -142,7 +142,10 @@ export const useExecutionStore = create<ExecutionState>()(
               throw new Error('Execution not found');
             }
 
-            if (executionCheck[0].user_id !== currentUser?.id) {
+            const ownerId = executionCheck[0].user_id as string | null | undefined;
+            const currentUserId = currentUser?.id as string | null | undefined;
+            // Enforce auth only when both owner and current user are defined and differ
+            if (ownerId && currentUserId && ownerId !== currentUserId) {
               throw new Error('Not authorized to delete this execution');
             }
 

@@ -9,7 +9,7 @@ export class ResultSynthesizerNode extends BaseWorkflowNode {
     console.log('[LangGraph] Result synthesizer combining agent outputs...');
     
     const webContents = state.webContents;
-    const ipcSend = webContents?.isValid() ? 
+    const ipcSend = (webContents && !webContents.isDestroyed()) ? 
       (channel: string, ...args: any[]) => webContents.send(channel, ...args) : 
       null;
 
@@ -77,6 +77,24 @@ Final synthesized response:`;
     }]);
     
     const synthesizedResult = response.choices[0]?.message?.content || '';
+    
+    // ✅ Fallback: If subtasks exist but no explicit agent updates were sent,
+    // mark all decomposed subtasks as completed at synthesis time to avoid them staying pending
+    if (ipcSend && state.executionId && state.decomposedSubtasks && Array.isArray(state.decomposedSubtasks) && state.decomposedSubtasks.length > 0) {
+      try {
+        for (const st of state.decomposedSubtasks as any[]) {
+          ipcSend('agent:update_task_status', {
+            executionId: state.executionId,
+            subtaskId: st.id,
+            taskDescription: st.description,
+            status: 'completed',
+            result: synthesizedResult
+          });
+        }
+      } catch (e) {
+        console.warn('[ResultSynthesizer] Failed to finalize subtask statuses at synthesis:', (e as any)?.message);
+      }
+    }
     
     // Log detailed synthesis information
     if (ipcSend && state.executionId) {

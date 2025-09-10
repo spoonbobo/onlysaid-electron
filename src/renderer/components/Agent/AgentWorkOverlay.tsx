@@ -15,39 +15,30 @@ import { useAgentStore } from "@/renderer/stores/Agent/AgentStore";
 import { useLLMConfigurationStore } from "@/renderer/stores/LLM/LLMConfiguration";
 import { LLMService } from "@/service/ai";
 import { 
-  useExecutionStore,
-  useExecutionGraphStore,
-  useHistoryStore,
-  useAgentManagementStore,
-  useAgentTaskOrchestrator
+  useExecutionStore
 } from "@/renderer/stores/Agent/task";
 import { 
-  Timeline, 
   List as ListIcon, 
   Warning, 
-  Delete, 
   PlayArrow,
   Analytics,
   CheckCircle,
   Error as ErrorIcon,
   Info as InfoIcon,
-  Person,
   Task as TaskIcon,
   ExpandMore as ExpandMoreIcon
 } from "@mui/icons-material";
 import { useIntl } from "react-intl";
 import { alpha } from "@mui/material/styles";
-import { toast } from "@/utils/toast";
+// Removed toast usage along with execution history features
 
 // Import sub-components
 import { StatusHeader } from './StatusHeader';
 import { LogsPanel } from './LogsPanel';
-import { GraphPanel } from './GraphPanel';
-import { StatsFooter } from './StatsFooter';
-import TaskHistory from '../Dialog/Agent/TaskHistory';
 import { TaskPanel } from './Task';
 import KBSelector from './KBSelector';
 import MCPSelector from './MCPSelector';
+import { useAgentUIStore } from '@/renderer/stores/Agent/AgentUIStore';
 
 const llmService = new LLMService();
 
@@ -167,6 +158,7 @@ export default function AgentWorkOverlay({
   const theme = useTheme();
   const intl = useIntl();
   const overlayRef = useRef<HTMLDivElement>(null);
+  const openTaskHistory = useAgentUIStore(s => s.openTaskHistory);
   
   // Store hooks
   const { 
@@ -182,14 +174,6 @@ export default function AgentWorkOverlay({
   const { aiMode } = useLLMConfigurationStore();
   
   const { currentExecution } = useExecutionStore();
-  const { currentGraph } = useExecutionGraphStore();
-  const { executions, loadExecutionHistory } = useHistoryStore();
-  
-  const { 
-    setCurrentExecution, 
-    deleteExecutionCompletely, 
-    clearCurrentExecution 
-  } = useAgentTaskOrchestrator();
   
   // Local state
   const [shouldShow, setShouldShow] = useState(false);
@@ -197,9 +181,9 @@ export default function AgentWorkOverlay({
   const [isMinimized, setIsMinimized] = useState(false);
   const [isAborting, setIsAborting] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [showHistoryDialog, setShowHistoryDialog] = useState(false);
+  // History dialog removed
   const [parentBounds, setParentBounds] = useState<DOMRect | null>(null);
-  const [isHistoryView, setIsHistoryView] = useState(false);
+  // History view flag removed
 
   // Get current Agent Task state
   const currentTaskUpdates = agentTaskUpdates['current'] || [];
@@ -209,23 +193,16 @@ export default function AgentWorkOverlay({
   // Enhanced logic for determining when to show overlay
   const isAgentModeActive = aiMode === "agent" && isProcessingResponse;
   const hasAgentTaskUpdates = currentTaskUpdates.length > 0;
-  const hasExecutionGraph = currentGraph !== null;
-  
-  // Check execution status
-  const isExecutionRunning = currentGraph?.execution?.status === 'running';
-  const isExecutionCompleted = currentGraph?.execution?.status === 'completed' || currentGraph?.execution?.status === 'failed';
   
   // Check task status
   const isTaskRunning = ['initializing', 'running', 'completing'].includes(currentTaskStatus);
   const isTaskCompleted = ['completed', 'failed', 'aborted'].includes(currentTaskStatus);
 
   // ✅ Add logic to determine if we have an active execution that can be aborted
-  const hasActiveExecution = Boolean(currentGraph?.execution?.status === 'running' || 
-                          (currentGraph && isTaskActive && (isTaskRunning || currentTaskStatus === 'running')));
+  const hasActiveExecution = Boolean(isTaskActive || isTaskRunning);
   
   // ✅ Determine if viewing current execution (not historical)
-  const isViewingCurrentExecution = !currentExecution || 
-                                   (currentExecution?.id === currentGraph?.execution?.id);
+  const isViewingCurrentExecution = true;
 
   // Calculate parent container bounds when fullscreen and respectParentBounds is enabled
   useEffect(() => {
@@ -246,17 +223,7 @@ export default function AgentWorkOverlay({
     }
   }, [respectParentBounds, containerRef]);
 
-  // When the overlay hides, reset the history view flag
-  useEffect(() => {
-    if (!shouldShow) {
-      setIsHistoryView(false);
-    }
-  }, [shouldShow]);
-
-  // Load execution history on mount
-  useEffect(() => {
-    loadExecutionHistory(20);
-  }, [loadExecutionHistory]);
+  // Removed history view and execution history load
 
   const displayState = useMemo(() => {
     // Manually controlled state from the `visible` prop takes precedence
@@ -268,16 +235,14 @@ export default function AgentWorkOverlay({
     const shouldShowOverlay = isAgentModeActive || 
                              isTaskActive || 
                              isTaskRunning || 
-                             isExecutionRunning ||
-                             (hasAgentTaskUpdates && !isTaskCompleted) ||
-                             (hasExecutionGraph && !isExecutionCompleted);
+                             (hasAgentTaskUpdates && !isTaskCompleted);
     
     if (shouldShowOverlay) {
       return 'active';
     }
 
     // Determine if the task/execution has finished
-    const isFinished = (isTaskCompleted || isExecutionCompleted) && !isTaskActive && !isAgentModeActive;
+    const isFinished = isTaskCompleted && !isTaskActive && !isAgentModeActive;
     
     if (isFinished) {
       return currentTaskStatus === 'failed' ? 'completed_failed' : 'completed_success';
@@ -290,11 +255,8 @@ export default function AgentWorkOverlay({
     isAgentModeActive, 
     isTaskActive, 
     isTaskRunning,
-    isExecutionRunning, 
     hasAgentTaskUpdates,
-    hasExecutionGraph,
     isTaskCompleted, 
-    isExecutionCompleted,
     currentTaskStatus
   ]);
 
@@ -328,13 +290,7 @@ export default function AgentWorkOverlay({
     }
   }, [displayState]);
 
-  // Add this useEffect to clear stale agent state when execution completes
-  useEffect(() => {
-    // If execution is completed AND we are not viewing history, clear live agent state
-    if (!isHistoryView && isExecutionCompleted && !isTaskActive && !isAgentModeActive) {
-      clearCurrentExecution();
-    }
-  }, [isHistoryView, isExecutionCompleted, isTaskActive, isAgentModeActive, clearCurrentExecution]);
+  // Removed clearing execution state on completion (no execution graph)
 
   // Handler functions
   const handleAbort = async () => {
@@ -362,185 +318,69 @@ export default function AgentWorkOverlay({
     setIsFullscreen(!isFullscreen);
   };
 
-  // ✅ Enhanced history select with error handling
-  const handleHistorySelect = async (executionId: string) => {
-    try {
-      setIsHistoryView(true);
-      await setCurrentExecution(executionId);
-      setShowHistoryDialog(false);
-      setCurrentTab(1);
-    } catch (error) {
-      console.error('[AgentWorkOverlay] Error loading historical execution:', error);
-      
-      // ✅ If execution not found, refresh history and show error
-      if (error instanceof Error && error.message?.includes('Execution not found')) {
-        toast.error('Execution no longer exists. Refreshing history...');
-        await loadExecutionHistory(20);
-      } else {
-        toast.error('Failed to load execution');
-      }
-    }
-  };
-
-  // ✅ Simplified delete handler - let the stores handle state management
-  const handleDeleteExecution = async (executionId: string) => {
-    try {
-      console.log('[AgentWorkOverlay] Deleting execution:', executionId);
-      await deleteExecutionCompletely(executionId);
-      toast.success('Execution deleted successfully');
-    } catch (error) {
-      console.error('[AgentWorkOverlay] Error deleting execution:', error);
-      toast.error('Failed to delete execution');
-      
-      // ✅ Only refresh on error to sync state
-      await loadExecutionHistory(20);
-    }
-  };
-
-  // ✅ Simplified force delete handler
-  const handleForceDeleteExecution = async (executionId: string) => {
-    try {
-      console.log('[AgentWorkOverlay] Force deleting execution:', executionId);
-      await useExecutionStore.getState().forceDeleteExecution(executionId);
-      
-      // Remove from history
-      useHistoryStore.getState().removeExecution(executionId);
-      
-      // Clear current execution if it matches
-      const currentExecution = useExecutionStore.getState().currentExecution;
-      if (currentExecution?.id === executionId) {
-        clearCurrentExecution();
-      }
-      
-      toast.success('Execution deleted');
-    } catch (error) {
-      console.error('Force delete failed:', error);
-      toast.error('Delete failed');
-      
-      // ✅ Only refresh on error to sync state
-      await loadExecutionHistory(20);
-    }
-  };
-
-  // ✅ Simplified nuke handler
-  const handleNukeAll = async () => {
-    try {
-      console.log('[AgentWorkOverlay] Nuking all executions');
-      await useHistoryStore.getState().nukeAllExecutions();
-      clearCurrentExecution();
-      toast.success('All executions deleted');
-    } catch (error) {
-      console.error('Nuke all failed:', error);
-      toast.error('Failed to delete all executions');
-      
-      // ✅ Only refresh on error to sync state
-      await loadExecutionHistory(20);
-    }
-  };
+  // Removed execution history handlers
 
   const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
     setCurrentTab(newValue);
   };
 
-  // ✅ Enhanced status info with better logic prioritization
+  // ✅ Simplified status info without execution graph
   const getStatusInfo = () => {
-    // ✅ If no execution exists but activeAgentTasks is true, it's stale state - ignore it
-    const hasValidExecution = currentGraph?.execution?.status;
-    const shouldIgnoreStaleAgentState = !hasValidExecution && !currentExecution;
-    
-    // First check if we have actual execution data
-    if (hasValidExecution) {
-      const executionStatus = currentGraph.execution.status;
-      
-      if (executionStatus === 'failed') {
-        return { 
-          text: intl.formatMessage({ id: 'agent.status.failed' }), 
-          color: theme.palette.error.main,
-          bgcolor: theme.palette.error.main,
-          icon: <ErrorIcon />,
-          severity: 'error' as const
-        };
-      }
-      if (executionStatus === 'completed') {
-        return { 
-          text: intl.formatMessage({ id: 'agent.status.completed' }), 
-          color: theme.palette.success.main,
-          bgcolor: theme.palette.success.main,
-          icon: <CheckCircle />,
-          severity: 'success' as const
-        };
-      }
-      if (executionStatus === 'running') {
-        return { 
-          text: intl.formatMessage({ id: 'agent.status.running' }), 
-          color: theme.palette.primary.main,
-          bgcolor: theme.palette.primary.main,
-          icon: <PlayArrow />,
-          severity: 'info' as const
-        };
-      }
+    if (currentTaskStatus === 'failed') {
+      return { 
+        text: intl.formatMessage({ id: 'agent.status.failed' }), 
+        color: theme.palette.error.main,
+        bgcolor: theme.palette.error.main,
+        icon: <ErrorIcon />,
+        severity: 'error' as const
+      };
+    }
+    if (currentTaskStatus === 'aborted') {
+      return { 
+        text: intl.formatMessage({ id: 'agent.status.aborted' }), 
+        color: theme.palette.warning.main,
+        bgcolor: theme.palette.warning.main,
+        icon: <Warning />,
+        severity: 'warning' as const
+      };
+    }
+    if (currentTaskStatus === 'completed') {
+      return { 
+        text: intl.formatMessage({ id: 'agent.status.completed' }), 
+        color: theme.palette.success.main,
+        bgcolor: theme.palette.success.main,
+        icon: <CheckCircle />,
+        severity: 'success' as const
+      };
+    }
+    if (currentTaskStatus === 'completing') {
+      return { 
+        text: intl.formatMessage({ id: 'agent.status.completing' }), 
+        color: theme.palette.info.main,
+        bgcolor: theme.palette.info.main,
+        icon: <InfoIcon />,
+        severity: 'info' as const
+      };
+    }
+    if (currentTaskStatus === 'running') {
+      return { 
+        text: intl.formatMessage({ id: 'agent.status.running' }), 
+        color: theme.palette.primary.main,
+        bgcolor: theme.palette.primary.main,
+        icon: <PlayArrow />,
+        severity: 'info' as const
+      };
+    }
+    if (currentTaskStatus === 'initializing') {
+      return { 
+        text: intl.formatMessage({ id: 'agent.status.initializing' }), 
+        color: theme.palette.primary.main,
+        bgcolor: theme.palette.primary.main,
+        icon: <CircularProgress size={16} sx={{ color: 'inherit' }} />,
+        severity: 'info' as const
+      };
     }
     
-    // ✅ Only check agent task status if we have valid execution context
-    if (!shouldIgnoreStaleAgentState && (currentGraph || currentExecution)) {
-      if (currentTaskStatus === 'failed') {
-        return { 
-          text: intl.formatMessage({ id: 'agent.status.failed' }), 
-          color: theme.palette.error.main,
-          bgcolor: theme.palette.error.main,
-          icon: <ErrorIcon />,
-          severity: 'error' as const
-        };
-      }
-      if (currentTaskStatus === 'aborted') {
-        return { 
-          text: intl.formatMessage({ id: 'agent.status.aborted' }), 
-          color: theme.palette.warning.main,
-          bgcolor: theme.palette.warning.main,
-          icon: <Warning />,
-          severity: 'warning' as const
-        };
-      }
-      if (currentTaskStatus === 'completed') {
-        return { 
-          text: intl.formatMessage({ id: 'agent.status.completed' }), 
-          color: theme.palette.success.main,
-          bgcolor: theme.palette.success.main,
-          icon: <CheckCircle />,
-          severity: 'success' as const
-        };
-      }
-      if (currentTaskStatus === 'completing') {
-        return { 
-          text: intl.formatMessage({ id: 'agent.status.completing' }), 
-          color: theme.palette.info.main,
-          bgcolor: theme.palette.info.main,
-          icon: <InfoIcon />,
-          severity: 'info' as const
-        };
-      }
-      // ✅ Only show running if task status is actually running (ignore stale isTaskActive)
-      if (currentTaskStatus === 'running') {
-        return { 
-          text: intl.formatMessage({ id: 'agent.status.running' }), 
-          color: theme.palette.primary.main,
-          bgcolor: theme.palette.primary.main,
-          icon: <PlayArrow />,
-          severity: 'info' as const
-        };
-      }
-      if (currentTaskStatus === 'initializing') {
-        return { 
-          text: intl.formatMessage({ id: 'agent.status.initializing' }), 
-          color: theme.palette.primary.main,
-          bgcolor: theme.palette.primary.main,
-          icon: <CircularProgress size={16} sx={{ color: 'inherit' }} />,
-          severity: 'info' as const
-        };
-      }
-    }
-    
-    // Default when no execution or task data exists
     return { 
       text: intl.formatMessage({ id: 'agent.monitor.title' }), 
       color: theme.palette.primary.main,
@@ -630,7 +470,7 @@ export default function AgentWorkOverlay({
           isFullscreen={isFullscreen}
           isMinimized={isMinimized}
           isViewingCurrentExecution={isViewingCurrentExecution}
-          onShowHistory={() => setShowHistoryDialog(true)}
+          onShowHistory={openTaskHistory}
           onAbort={handleAbort}
           onForceStop={handleForceStop}
           onFullscreenToggle={handleFullscreenToggle}
@@ -673,7 +513,7 @@ export default function AgentWorkOverlay({
             minHeight: 0, // ✅ Critical for flex children to shrink properly
             bgcolor: 'background.paper'
           }}>
-            {/* Updated Tabs without Agents tab */}
+            {/* Updated Tabs without execution graph tab */}
             <Paper 
               square 
               elevation={0} 
@@ -706,12 +546,6 @@ export default function AgentWorkOverlay({
                   iconPosition="start"
                 />
                 <Tab 
-                  icon={<Timeline />} 
-                  label={intl.formatMessage({ id: 'agent.tabs.graph' })}
-                  iconPosition="start"
-                  disabled={!hasExecutionGraph}
-                />
-                <Tab 
                   icon={<TaskIcon />} 
                   label={intl.formatMessage({ id: 'agent.tabs.tasks' })}
                   iconPosition="start"
@@ -740,21 +574,8 @@ export default function AgentWorkOverlay({
                 />
               )}
 
-              {/* Graph Panel */}
-              {currentTab === 1 && (
-                <GraphPanel
-                  currentGraph={currentGraph}
-                  hasExecutionGraph={hasExecutionGraph}
-                  isTaskRunning={isTaskRunning}
-                  isTaskActive={isTaskActive}
-                  isFullscreen={isFullscreen}
-                  onFullscreenToggle={handleFullscreenToggle}
-                  onShowHistory={() => setShowHistoryDialog(true)}
-                />
-              )}
-
               {/* Tasks Panel */}
-              {currentTab === 2 && (
+              {currentTab === 1 && (
                 <TaskPanel
                   currentExecution={currentExecution}
                   isTaskRunning={isTaskRunning}
@@ -764,28 +585,11 @@ export default function AgentWorkOverlay({
               )}
             </Box>
 
-            {/* ✅ FIXED: Stats Footer moved inside content area and positioned properly */}
-            {currentGraph && (
-              <StatsFooter
-                currentGraph={currentGraph}
-                isFullscreen={isFullscreen}
-              />
-            )}
+            {/* Stats footer removed with execution graph */}
           </Box>
         )}
       </Paper>
-
-      {/* ✅ TaskHistory Dialog with correct handlers */}
-      <TaskHistory
-        open={showHistoryDialog}
-        onClose={() => setShowHistoryDialog(false)}
-        executions={executions}
-        onSelectExecution={handleHistorySelect}
-        onDeleteExecution={handleDeleteExecution}
-        onForceDeleteExecution={handleForceDeleteExecution}
-        onRefreshHistory={() => loadExecutionHistory(20)}
-        onNukeAll={handleNukeAll}
-      />
+      {/* Task history dialog removed */}
     </>
   );
 }

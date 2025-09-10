@@ -3,14 +3,12 @@ import { IntlProvider as ReactIntlProvider } from 'react-intl';
 
 import enMessages from '@/locales/en.json';
 import zhHKMessages from '@/locales/zh-hk.json';
-import jaMessages from '@/locales/ja.json';
 
-export type Locale = 'en' | 'zh-hk' | 'ja';
+export type Locale = 'en' | 'zh-hk';
 
 const messages: Record<Locale, Record<string, string>> = {
   en: enMessages as Record<string, string>,
   'zh-hk': zhHKMessages as Record<string, string>,
-  ja: jaMessages as Record<string, string>,
 };
 
 interface IntlContextType {
@@ -22,7 +20,7 @@ interface IntlContextType {
 const IntlContext = createContext<IntlContextType>({
   locale: 'zh-hk',
   setLocale: () => { },
-  availableLocales: ['en', 'zh-hk', 'ja'],
+  availableLocales: ['en', 'zh-hk'],
 });
 
 export const useIntl = () => useContext(IntlContext);

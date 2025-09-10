@@ -27,6 +27,9 @@ interface TaskManagementState {
   
   // Real-time updates
   handleTaskUpdate: (data: TaskUpdateData) => void;
+
+  // Reconciliation helpers
+  finalizePendingDecomposedTasks: (executionId: string, result?: string, error?: string) => Promise<void>;
 }
 
 export const useTaskManagementStore = create<TaskManagementState>((set, get) => ({
@@ -372,5 +375,163 @@ export const useTaskManagementStore = create<TaskManagementState>((set, get) => 
     }));
 
     console.log(`[TaskManagementStore] Real-time task update: ${taskId} -> ${status}`);
+  },
+
+  // Mark all pending/running decomposed tasks of an execution as completed/failed in DB and memory
+  finalizePendingDecomposedTasks: async (executionId: string, result?: string, error?: string) => {
+    try {
+      const now = new Date().toISOString();
+      const status = error ? 'failed' : 'completed';
+
+      await window.electron.db.query({
+        query: `
+          UPDATE ${DBTABLES.OSSWARM_TASKS}
+          SET status = @status,
+              result = COALESCE(result, @result),
+              error = COALESCE(error, @error),
+              completed_at = COALESCE(completed_at, @completed_at)
+          WHERE execution_id = @execution_id
+            AND is_decomposed_task = 1
+            AND (status IS NULL OR status IN ('pending','running'))
+        `,
+        params: {
+          status,
+          result: result || null,
+          error: error || null,
+          completed_at: now,
+          execution_id: executionId
+        }
+      });
+
+      // Update local state
+      set((state) => ({
+        tasks: state.tasks.map((t) => (
+          t.execution_id === executionId && t.is_decomposed_task && (!t.status || t.status === 'pending' || t.status === 'running')
+            ? { ...t, status: status as any, result: t.result ?? result, error: t.error ?? error, completed_at: t.completed_at ?? now }
+            : t
+        ))
+      }));
+
+      console.log('[TaskManagementStore] ✅ Finalized pending decomposed subtasks for execution:', executionId);
+    } catch (e: any) {
+      console.warn('[TaskManagementStore] ⚠️ Failed to finalize decomposed subtasks:', e?.message || e);
+    }
   }
-})); 
+}));
+
+// Register a single global listener exactly once to reflect real-time updates into the store
+if (typeof window !== 'undefined' && (window as any).electron?.ipcRenderer) {
+  const w = window as any;
+  if (!w.__onlysaid_task_status_listener_registered__) {
+    w.__onlysaid_task_status_listener_registered__ = true;
+    w.electron.ipcRenderer.on('agent:update_task_status', (event: any, payload?: any) => {
+      try {
+        const data = payload || {};
+        const { taskId, status, result, error, executionId, taskDescription, subtaskId } = data as { 
+          taskId?: string; 
+          status: string; 
+          result?: string; 
+          error?: string; 
+          executionId?: string; 
+          taskDescription?: string;
+          subtaskId?: string; // Added subtaskId for decomposed task tracking
+        };
+        if (!status) return;
+        const store = useTaskManagementStore.getState();
+
+        const persistUpdate = (resolvedTaskId: string) => {
+          store.updateTaskStatus(resolvedTaskId, status as any, result, error).catch((e) => {
+            console.warn('[TaskManagementStore] Failed to persist task status update, will still update state:', e);
+            useTaskManagementStore.setState((state) => ({
+              tasks: state.tasks.map((t) => t.id === resolvedTaskId ? { ...t, status: status as any, result, error, completed_at: (status === 'completed' || status === 'failed') ? new Date().toISOString() : t.completed_at } : t)
+            }));
+          });
+        };
+
+        // 1) If taskId exists in memory, use it directly
+        if (taskId && store.tasks.some(t => t.id === taskId)) {
+          persistUpdate(taskId);
+          return;
+        }
+
+        // 2) Try to resolve by querying DB using various methods
+        const resolveAndPersist = async () => {
+          try {
+            let rows: any[] = [];
+            
+            // First, try to find by subtask_id if provided (for decomposed tasks)
+            if (subtaskId && executionId) {
+              rows = await w.electron.db.query({
+                query: `SELECT id FROM ${DBTABLES.OSSWARM_TASKS} WHERE execution_id = @execution_id AND subtask_id = @subtask_id ORDER BY created_at DESC LIMIT 1`,
+                params: { execution_id: executionId, subtask_id: subtaskId }
+              });
+              if (rows && rows.length > 0) {
+                console.log('[TaskManagementStore] Found task by subtask_id:', subtaskId);
+                persistUpdate(rows[0].id);
+                return;
+              }
+            }
+            
+            // Fallback to original logic if no subtask_id or not found
+            if (!executionId && !taskDescription) return; // Not enough info
+            
+            if (executionId && taskDescription) {
+              rows = await w.electron.db.query({
+                query: `SELECT id FROM ${DBTABLES.OSSWARM_TASKS} WHERE execution_id = @execution_id AND task_description = @task_description ORDER BY created_at DESC LIMIT 1`,
+                params: { execution_id: executionId, task_description: taskDescription }
+              });
+            }
+            if ((!rows || rows.length === 0) && taskDescription) {
+              rows = await w.electron.db.query({
+                query: `SELECT id FROM ${DBTABLES.OSSWARM_TASKS} WHERE task_description = @task_description ORDER BY created_at DESC LIMIT 1`,
+                params: { task_description: taskDescription }
+              });
+            }
+            const resolvedTaskId = rows && rows.length > 0 ? rows[0].id : undefined;
+            if (resolvedTaskId) {
+              persistUpdate(resolvedTaskId);
+            } else {
+              console.warn('[TaskManagementStore] Could not resolve task id for status update:', { executionId, taskDescription, subtaskId, status });
+            }
+          } catch (e) {
+            console.error('[TaskManagementStore] DB lookup failed while resolving task for status update:', e);
+          }
+        };
+
+        resolveAndPersist();
+      } catch (e) {
+        console.error('[TaskManagementStore] Error handling agent:update_task_status:', e);
+      }
+    });
+  }
+
+  // Register a synthesis listener to reconcile decomposed tasks via the store
+  if (!w.__onlysaid_task_synthesis_listener_registered__) {
+    w.__onlysaid_task_synthesis_listener_registered__ = true;
+    w.electron.ipcRenderer.on('agent:result_synthesized', async (event: any, payload?: any) => {
+      try {
+        const data = payload || {};
+        const { executionId, result } = data as { executionId?: string; result?: string };
+        if (!executionId) return;
+        await useTaskManagementStore.getState().finalizePendingDecomposedTasks(executionId, result);
+      } catch (e) {
+        console.warn('[TaskManagementStore] ⚠️ Failed to handle result_synthesized reconciliation:', e);
+      }
+    });
+  }
+
+  // Also reconcile on execution status completed
+  if (!w.__onlysaid_task_execstatus_listener_registered__) {
+    w.__onlysaid_task_execstatus_listener_registered__ = true;
+    w.electron.ipcRenderer.on('agent:update_execution_status', async (event: any, payload?: any) => {
+      try {
+        const data = payload || {};
+        const { executionId, status, result, error } = data as { executionId?: string; status?: string; result?: string; error?: string };
+        if (!executionId || status !== 'completed') return;
+        await useTaskManagementStore.getState().finalizePendingDecomposedTasks(executionId, result, error);
+      } catch (e) {
+        console.warn('[TaskManagementStore] ⚠️ Failed to handle execution status reconciliation:', e);
+      }
+    });
+  }
+} 

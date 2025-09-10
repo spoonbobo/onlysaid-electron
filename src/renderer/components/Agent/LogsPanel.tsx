@@ -105,9 +105,9 @@ export const LogsPanel: React.FC<LogsPanelProps> = ({
 
   const allLogs = useMemo(() => {
     if (!executionId) return [];
-    
+    // Recompute whenever store logs change for real-time updates
     return getFormattedLogs(executionId);
-  }, [executionId, getFormattedLogs]);
+  }, [executionId, getFormattedLogs, storeLogs]);
 
   const filteredLogs = useMemo(() => {
     let logs = [...allLogs];
@@ -134,7 +134,7 @@ export const LogsPanel: React.FC<LogsPanelProps> = ({
       if (!a.isLive && b.isLive) return -1;
       return a.timestamp.localeCompare(b.timestamp);
     });
-  }, [allLogs, selectedLogLevel, searchQuery]);
+  }, [allLogs, selectedLogLevel, searchQuery, storeLogs]);
 
   const logTypeCounts = useMemo(() => {
     const counts: Record<string, number> = {};
@@ -142,7 +142,7 @@ export const LogsPanel: React.FC<LogsPanelProps> = ({
       counts[log.log_type] = (counts[log.log_type] || 0) + 1;
     });
     return counts;
-  }, [filteredLogs]);
+  }, [filteredLogs, storeLogs]);
 
   const handleRefresh = useCallback(() => {
     if (executionId) {

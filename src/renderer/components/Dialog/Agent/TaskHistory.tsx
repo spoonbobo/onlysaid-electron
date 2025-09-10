@@ -19,7 +19,6 @@ import {
   History,
   Close,
   Refresh,
-  DeleteForever,
   Warning,
   PlayArrow,
   CheckCircle,
@@ -35,9 +34,7 @@ interface TaskHistoryProps {
   executions: OSSwarmExecution[];
   onSelectExecution: (executionId: string) => void;
   onDeleteExecution: (executionId: string) => Promise<void>;
-  onForceDeleteExecution?: (executionId: string) => Promise<void>;
   onRefreshHistory?: () => Promise<void>;
-  onNukeAll?: () => Promise<void>;
 }
 
 export const TaskHistory: React.FC<TaskHistoryProps> = ({
@@ -46,9 +43,7 @@ export const TaskHistory: React.FC<TaskHistoryProps> = ({
   executions,
   onSelectExecution,
   onDeleteExecution,
-  onForceDeleteExecution,
-  onRefreshHistory,
-  onNukeAll
+  onRefreshHistory
 }) => {
   const theme = useTheme();
   const intl = useIntl();
@@ -87,15 +82,34 @@ export const TaskHistory: React.FC<TaskHistoryProps> = ({
     if (diffMins < 60) return intl.formatMessage({ id: 'time.minutesAgo' }, { minutes: diffMins });
     if (diffHours < 24) return intl.formatMessage({ id: 'time.hoursAgo' }, { hours: diffHours });
     if (diffDays < 7) return intl.formatMessage({ id: 'time.daysAgo' }, { days: diffDays });
-    return date.toLocaleDateString();
+    return intl.formatDate(date, { year: 'numeric', month: '2-digit', day: '2-digit' });
   };
 
   const formatDuration = (seconds: number) => {
-    if (seconds < 60) return `${seconds}s`;
+    const hUnit = intl.formatMessage({ id: 'time.hoursShort', defaultMessage: 'h' });
+    const mUnit = intl.formatMessage({ id: 'time.minutesShort', defaultMessage: 'm' });
+    const sUnit = intl.formatMessage({ id: 'time.secondsShort', defaultMessage: 's' });
+
+    if (seconds < 60) return `${seconds}${sUnit}`;
     const minutes = Math.floor(seconds / 60);
-    if (minutes < 60) return `${minutes}m ${seconds % 60}s`;
+    if (minutes < 60) return `${minutes}${mUnit} ${seconds % 60}${sUnit}`;
     const hours = Math.floor(minutes / 60);
-    return `${hours}h ${minutes % 60}m`;
+    return `${hours}${hUnit} ${minutes % 60}${mUnit}`;
+  };
+
+  const getStatusLabel = (status: string) => {
+    switch (status) {
+      case 'completed':
+        return intl.formatMessage({ id: 'common.completed' });
+      case 'failed':
+        return intl.formatMessage({ id: 'task.failed' });
+      case 'running':
+        return intl.formatMessage({ id: 'task.running' });
+      case 'pending':
+        return intl.formatMessage({ id: 'task.pending' });
+      default:
+        return status;
+    }
   };
 
   const getStatusIcon = (status: string) => {
@@ -120,11 +134,12 @@ export const TaskHistory: React.FC<TaskHistoryProps> = ({
       setDeleteError(null);
       setDeletingId(executionId);
       await onDeleteExecution(executionId);
-      toast.success('Execution deleted successfully');
+      toast.success(intl.formatMessage({ id: 'agent.executionDeleted', defaultMessage: 'Execution deleted successfully' }));
     } catch (error: any) {
       console.error('Error deleting execution:', error);
-      setDeleteError(error.message || 'Failed to delete execution');
-      toast.error('Failed to delete execution');
+      const message = error?.message || intl.formatMessage({ id: 'agent.deleteExecutionFailed', defaultMessage: 'Failed to delete execution' });
+      setDeleteError(message);
+      toast.error(message);
     } finally {
       setDeletingId(null);
     }
@@ -138,47 +153,13 @@ export const TaskHistory: React.FC<TaskHistoryProps> = ({
       await onRefreshHistory();
     } catch (error: any) {
       console.error('Error refreshing history:', error);
-      toast.error('Failed to refresh history');
+      toast.error(intl.formatMessage({ id: 'common.refreshFailed', defaultMessage: 'Failed to refresh history' }));
     } finally {
       setIsRefreshing(false);
     }
   };
 
-  const handleForceDeleteExecution = async (executionId: string, event: React.MouseEvent) => {
-    event.stopPropagation();
-    
-    if (!onForceDeleteExecution) return;
-    
-    try {
-      setDeleteError(null);
-      setDeletingId(executionId);
-      await onForceDeleteExecution(executionId);
-      toast.success('Execution force deleted');
-    } catch (error: any) {
-      console.error('Error force deleting execution:', error);
-      setDeleteError(error.message || 'Failed to force delete execution');
-      toast.error('Force delete failed');
-    } finally {
-      setDeletingId(null);
-    }
-  };
-
-  const handleNukeAll = async () => {
-    if (!onNukeAll) return;
-    
-    const confirmed = window.confirm('Are you sure you want to delete ALL execution history? This cannot be undone.');
-    if (!confirmed) return;
-    
-    try {
-      setDeleteError(null);
-      await onNukeAll();
-      toast.success('All executions deleted');
-    } catch (error: any) {
-      console.error('Error nuking all executions:', error);
-      setDeleteError(error.message || 'Failed to delete all executions');
-      toast.error('Nuke failed');
-    }
-  };
+  // Force delete and delete-all actions removed per request
 
   return (
     <Dialog
@@ -219,25 +200,7 @@ export const TaskHistory: React.FC<TaskHistoryProps> = ({
           </Stack>
           
           <Stack direction="row" spacing={1}>
-            {onNukeAll && executions.length > 0 && (
-              <Tooltip title={intl.formatMessage({ id: 'agent.deleteExecution' })}>
-                <Button
-                  onClick={handleNukeAll}
-                  color="error"
-                  variant="outlined"
-                  size="small"
-                  startIcon={<DeleteForever />}
-                  sx={{ 
-                    borderRadius: 1.5,
-                    textTransform: 'none',
-                    fontWeight: 500,
-                    px: 2
-                  }}
-                >
-                  Delete All
-                </Button>
-              </Tooltip>
-            )}
+            {/* Delete-all action removed */}
 
             {onRefreshHistory && (
               <Tooltip title={intl.formatMessage({ id: 'common.refresh' })}>
@@ -330,7 +293,7 @@ export const TaskHistory: React.FC<TaskHistoryProps> = ({
                 
                             <Chip
                               icon={getStatusIcon(execution.status)}
-                              label={execution.status.toUpperCase()}
+                              label={getStatusLabel(execution.status)}
                               size="small"
                               sx={{ 
                                 fontWeight: 600, 
@@ -358,7 +321,7 @@ export const TaskHistory: React.FC<TaskHistoryProps> = ({
                               {formatted.displayTime}
                             </Typography>
                             <Typography variant="caption" color="text.secondary">
-                              Duration: {formatted.displayDuration}
+                              {intl.formatMessage({ id: 'time.duration', defaultMessage: 'Duration' })}: {formatted.displayDuration}
                             </Typography>
                             <Typography variant="caption" color="text.secondary">
                               {execution.total_agents} {intl.formatMessage({ id: 'agent.agents' })}
@@ -396,30 +359,12 @@ export const TaskHistory: React.FC<TaskHistoryProps> = ({
                             }
                           }}
                         >
-                          {isDeleting ? '...' : 'Delete'}
+                          {isDeleting 
+                            ? intl.formatMessage({ id: 'common.deleting', defaultMessage: 'Deleting...' })
+                            : intl.formatMessage({ id: 'common.delete', defaultMessage: 'Delete' })}
                         </Button>
                         
-                        {onForceDeleteExecution && (
-                          <Button
-                            onClick={(e) => handleForceDeleteExecution(execution.id, e)}
-                            color="error"
-                            variant="text"
-                            size="small"
-                            disabled={isDeleting}
-                            sx={{ 
-                              textTransform: 'none',
-                              minWidth: 85,
-                              height: 32,
-                              borderRadius: 1.5,
-                              fontWeight: 500,
-                              '&:hover': {
-                                bgcolor: alpha(theme.palette.error.main, 0.1)
-                              }
-                            }}
-                          >
-                            Force Delete
-                          </Button>
-                        )}
+                        {/* Force Delete button removed */}
                       </Stack>
                     </Stack>
                   </CardContent>

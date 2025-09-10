@@ -58,6 +58,7 @@ export const StatusHeader: React.FC<StatusHeaderProps> = ({
 }) => {
   const theme = useTheme();
   const intl = useIntl();
+  const headerTitle = statusInfo.textId ? intl.formatMessage({ id: statusInfo.textId }) : statusInfo.text;
 
   return (
     <AppBar
@@ -83,7 +84,7 @@ export const StatusHeader: React.FC<StatusHeaderProps> = ({
                 textOverflow: 'ellipsis'
               }}
             >
-              {statusInfo.text}
+              {headerTitle}
             </Typography>
             {(isTaskRunning || isTaskActive) && !isTaskCompleted && !isMinimized && (
               <Chip

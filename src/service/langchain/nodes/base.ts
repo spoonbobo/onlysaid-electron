@@ -17,8 +17,8 @@ export abstract class BaseWorkflowNode {
       state.streamCallback(`[LangGraph OSSwarm] ${update.type}: ${JSON.stringify(update.data)}`);
     }
     
-    const webContents = state.webContents;
-    if (webContents?.isValid()) {
+    const webContents = (state as any).webContents || (global as any).osswarmWebContents;
+    if (webContents && !webContents.isDestroyed()) {
       try {
         switch (update.type) {
           case 'agent_status':

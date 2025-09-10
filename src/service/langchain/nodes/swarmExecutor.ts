@@ -43,6 +43,19 @@ export class SwarmExecutorNode extends BaseWorkflowNode {
     );
     
     if (!nextRole) {
+      // Check if any agents have been executed before going to synthesis
+      const hasExecutedAgents = Object.keys(state.agentResults || {}).length > 0;
+      
+      if (!hasExecutedAgents) {
+        console.log('[LangGraph] ERROR: No idle agents found and no agents have been executed. This should not happen!');
+        // Force execution of first available agent
+        const firstAgent = selectedRoles[0];
+        if (firstAgent) {
+          console.log(`[LangGraph] Forcing execution of first agent: ${firstAgent}`);
+          return this.executeIndividualAgent(state, firstAgent, tasks);
+        }
+      }
+      
       return {
         currentPhase: 'synthesis',
         waitingForHumanResponse: false,
@@ -89,8 +102,11 @@ export class SwarmExecutorNode extends BaseWorkflowNode {
   private selectNextSwarmAgent(state: WorkflowState, roles: string[], tasks: SubTask[]): string | null {
     // Enhanced smart scheduling considering task requirements and agent completion status
     
-    // First, check if all critical subtasks are completed to a satisfactory level
-    if (this.areAllCriticalTasksCompleted(state, tasks)) {
+    // Don't check for task completion if no agents have executed yet
+    const hasExecutedAgents = Object.keys(state.agentResults || {}).length > 0;
+    
+    // Only check if all critical subtasks are completed if we've actually executed some agents
+    if (hasExecutedAgents && this.areAllCriticalTasksCompleted(state, tasks)) {
       console.log('[LangGraph] All critical subtasks completed - no more agents needed');
       return null;
     }
@@ -246,6 +262,23 @@ export class SwarmExecutorNode extends BaseWorkflowNode {
       }
     });
     
+    // Mark matching decomposed tasks as running when this swarm agent starts
+    const webContents = (state as any).webContents || (global as any).osswarmWebContents;
+    if (webContents && !webContents.isDestroyed() && state.executionId && state.decomposedSubtasks && Array.isArray(state.decomposedSubtasks)) {
+      const runningRelevant = (state.decomposedSubtasks as any[]).filter(st => 
+        Array.isArray(st?.suggestedAgentTypes) && st.suggestedAgentTypes.includes(role)
+      );
+      for (const st of runningRelevant) {
+        webContents.send('agent:update_task_status', {
+          executionId: state.executionId,
+          subtaskId: st.id,
+          taskDescription: st.description,
+          status: 'running',
+          agentId: updatedAgentCard.runtimeId || role
+        });
+      }
+    }
+    
     try {
       // Gather context from other completed agents in the swarm
       const swarmContext = this.buildSwarmContext(state, role, allSwarmRoles, tasks);
@@ -287,6 +320,23 @@ export class SwarmExecutorNode extends BaseWorkflowNode {
         status: result.success ? 'completed' : 'failed'
       };
       
+      // Update matching decomposed tasks to completed/failed for this swarm agent
+      if (webContents && !webContents.isDestroyed() && state.executionId && state.decomposedSubtasks && Array.isArray(state.decomposedSubtasks)) {
+        const relevantDone = (state.decomposedSubtasks as any[]).filter(st => 
+          Array.isArray(st?.suggestedAgentTypes) && st.suggestedAgentTypes.includes(role)
+        );
+        for (const st of relevantDone) {
+          webContents.send('agent:update_task_status', {
+            executionId: state.executionId,
+            subtaskId: st.id,
+            taskDescription: st.description,
+            status: finalAgentCard.status,
+            result: result.output,
+            agentId: updatedAgentCard.runtimeId || role
+          });
+        }
+      }
+
       await this.sendRendererUpdate(state, {
         type: 'agent_status',
         data: {
@@ -582,6 +632,37 @@ ${relevantTasks.map(task => `- ${task.description}`).join('\n')}`;
       currentTask: state.originalTask
     };
     
+    // Send status update that agent is starting
+    await this.sendRendererUpdate(state, {
+      type: 'agent_status',
+      data: {
+        agentCard: updatedAgentCard,
+        status: 'busy',
+        currentTask: state.originalTask
+      }
+    });
+    
+    // Find matching decomposed subtask for this role and mark as running
+    const webContents = (state as any).webContents || (global as any).osswarmWebContents;
+    if (webContents && !webContents.isDestroyed() && state.executionId && state.decomposedSubtasks && Array.isArray(state.decomposedSubtasks)) {
+      const matchingSubtask = (state.decomposedSubtasks as any[]).find(st => {
+        const suggestMatch = Array.isArray(st?.suggestedAgentTypes) && st.suggestedAgentTypes.includes(role);
+        const skillMatch = Array.isArray(st?.requiredSkills) && st.requiredSkills.some((skill: string) => this.agentHasSkill(role, skill));
+        return suggestMatch || skillMatch;
+      });
+      
+      if (matchingSubtask) {
+        console.log(`[LangGraph] Marking decomposed task ${matchingSubtask.id} as running for ${role} agent`);
+        webContents.send('agent:update_task_status', {
+          executionId: state.executionId,
+          subtaskId: matchingSubtask.id,
+          taskDescription: matchingSubtask.description,
+          status: 'running',
+          agentId: updatedAgentCard.runtimeId || role
+        });
+      }
+    }
+    
     try {
       const result = await this.executeAgentWithApproval(
         updatedAgentCard,
@@ -607,6 +688,27 @@ ${relevantTasks.map(task => `- ${task.description}`).join('\n')}`;
         ...updatedAgentCard,
         status: result.success ? 'completed' : 'failed'
       };
+      
+      // Update matching decomposed tasks to completed/failed
+      if (webContents && !webContents.isDestroyed() && state.executionId && state.decomposedSubtasks && Array.isArray(state.decomposedSubtasks)) {
+        const relevantSubtasks = (state.decomposedSubtasks as any[]).filter(st => {
+          const suggestMatch = Array.isArray(st?.suggestedAgentTypes) && st.suggestedAgentTypes.includes(role);
+          const skillMatch = Array.isArray(st?.requiredSkills) && st.requiredSkills.some((skill: string) => this.agentHasSkill(role, skill));
+          return suggestMatch || skillMatch;
+        });
+        
+        for (const st of relevantSubtasks) {
+          console.log(`[LangGraph] Marking decomposed task ${st.id} as ${finalAgentCard.status} for ${role} agent`);
+          webContents.send('agent:update_task_status', {
+            executionId: state.executionId,
+            subtaskId: st.id,
+            taskDescription: st.description,
+            status: finalAgentCard.status,
+            result: result.output,
+            agentId: updatedAgentCard.runtimeId || role
+          });
+        }
+      }
       
       return {
         activeAgentCards: {
