@@ -35,9 +35,8 @@ export function setupSSEHandlers() {
     let totalBytesSent = 0;
     
     try {
-      console.log("🚀 [Main] chat_stream_complete received by main process");
+      console.log("🚀 [Main] chat_stream_complete received");
       console.log("📥 [Main] Messages count:", messages?.length);
-      console.log("⚙️  [Main] Options:", JSON.stringify(options, null, 2));
       
       const {
         model,
@@ -51,7 +50,7 @@ export function setupSSEHandlers() {
         messageIdToProcess
       } = options;
 
-      console.log(`🔍 [Main] Provider: ${provider}, kbIds: ${JSON.stringify(kbIds)}`);
+      console.log(`🔍 [Main] Provider: ${provider}, Model: ${model}`);
 
       const controller = new AbortController();
       activeStreams[streamId] = controller;
@@ -63,9 +62,7 @@ export function setupSSEHandlers() {
           buffer += contentChunk;
           accumulatedResponse += contentChunk;
           totalBytesSent += contentChunk.length;
-
-          console.log(`📤 [Main] Sending chunk #${++totalChunksReceived}: "${contentChunk}" (${contentChunk.length} chars)`);
-          console.log(`📊 [Main] Buffer size: ${buffer.length}, Total accumulated: ${accumulatedResponse.length}`);
+          totalChunksReceived++;
 
           if (buffer.length >= 1 || (isFinalChunk && buffer.length > 0)) {
             const chunkData = {
@@ -77,12 +74,10 @@ export function setupSSEHandlers() {
               }
             };
             
-            console.log(`🚀 [Main] Sending to renderer:`, JSON.stringify(chunkData, null, 2));
             event.sender.send('streaming:chunk', chunkData);
             buffer = '';
           }
         } else if (isFinalChunk && buffer.length > 0) {
-          console.log(`🏁 [Main] Final chunk with remaining buffer: "${buffer}"`);
           event.sender.send('streaming:chunk', {
             streamId: streamId,
             chunk: {
@@ -92,22 +87,17 @@ export function setupSSEHandlers() {
             }
           });
           buffer = '';
-        } else if (isFinalChunk) {
-          console.log(`🏁 [Main] Final chunk - no remaining buffer`);
         }
       };
 
       // Update provider check from 'onlysaid-kb' to 'lightrag'
       if (provider === 'lightrag' || provider === 'onlysaid-kb') {
-        console.log(`🎯 [Main] Handling LightRAG provider for streamId: ${streamId}`);
+        console.log(`🎯 [Main] Using LightRAG provider`);
         
         const lightragService = getLightRAGService();
 
         const conversationHistoryMessages = messages.slice(0, -1);
         const currentQueryMessage = messages[messages.length - 1];
-
-        console.log(`💬 [Main] Conversation history: ${conversationHistoryMessages.length} messages`);
-        console.log(`❓ [Main] Current query:`, JSON.stringify(currentQueryMessage));
 
         if (!currentQueryMessage || currentQueryMessage.role !== 'user' || !currentQueryMessage.content) {
           throw new Error("Valid user query not found in the last message for LightRAG.");
@@ -126,15 +116,13 @@ export function setupSSEHandlers() {
           mode: "hybrid"
         };
 
-        console.log("🔧 [Main] Querying LightRAG with params:", JSON.stringify(queryParams, null, 2));
+        console.log("🔧 [Main] Querying LightRAG with query:", userQueryText.substring(0, 100) + "...");
         
         try {
           const lightragResponse = await lightragService.queryKnowledgeBase(queryParams);
-          console.log("✅ [Main] LightRAG response received, status:", lightragResponse.status);
-          console.log("📡 [Main] Response headers:", JSON.stringify(lightragResponse.headers, null, 2));
+          console.log("✅ [Main] LightRAG response received");
           
           const sseStream = lightragResponse.data as Readable;
-          console.log("🌊 [Main] Stream object created, starting to listen for data...");
 
           return new Promise((resolve, reject) => {
             let lineBuffer = '';
@@ -143,7 +131,6 @@ export function setupSSEHandlers() {
             
             sseStream.on('data', (chunk: Buffer) => {
               if (controller.signal.aborted) {
-                console.log("🛑 [Main] Stream aborted, destroying...");
                 sseStream.destroy();
                 return;
               }
@@ -152,8 +139,6 @@ export function setupSSEHandlers() {
               const chunkStr = chunk.toString();
               chunkCount++;
               
-              console.log(`📦 [Main] Raw chunk #${chunkCount} (${chunk.length} bytes, total: ${totalBytesReceived}):`, JSON.stringify(chunkStr));
-              
               lineBuffer += chunkStr;
               let EOL_index;
               
@@ -161,28 +146,21 @@ export function setupSSEHandlers() {
                 const line = lineBuffer.substring(0, EOL_index).trim();
                 lineBuffer = lineBuffer.substring(EOL_index + 1);
 
-                console.log(`🔍 [Main] Processing line:`, JSON.stringify(line));
-
                 // ✅ Handle direct JSON responses (LightRAG format)
                 if (line.startsWith('{') && line.endsWith('}')) {
                   try {
                     const parsedData: LightRAGStreamData = JSON.parse(line);
-                    console.log(`✅ [Main] Parsed JSON:`, parsedData);
                     
                     if (parsedData.response) {
-                      console.log(`📤 [Main] Sending content:`, JSON.stringify(parsedData.response));
                       sendChunkToRenderer(parsedData.response);
                     } else if (parsedData.error) {
                       console.error(`❌ [Main] Error from LightRAG stream: ${parsedData.error}`);
                       sendChunkToRenderer(`\n[LightRAG Error: ${parsedData.error}]\n`);
-                    } else {
-                      console.warn(`⚠️  [Main] JSON object without response or error:`, parsedData);
                     }
                   } catch (parseError) {
-                    console.error('❌ [Main] Error parsing JSON from LightRAG stream:', parseError, 'Line:', line);
+                    console.error('❌ [Main] Error parsing JSON from LightRAG stream:', parseError);
                     // If JSON parsing fails, treat as plain text
                     if (line.trim()) {
-                      console.log(`📤 [Main] Sending as plain text:`, JSON.stringify(line));
                       sendChunkToRenderer(line);
                     }
                   }
@@ -190,53 +168,40 @@ export function setupSSEHandlers() {
                 // ✅ Handle SSE format (data: prefix)
                 else if (line.startsWith('data:')) {
                   const jsonData = line.substring(5).trim();
-                  console.log(`🔍 [Main] SSE data:`, JSON.stringify(jsonData));
                   
                   if (jsonData && jsonData !== '[DONE]') {
                     try {
                       const parsedData: LightRAGStreamData = JSON.parse(jsonData);
-                      console.log(`✅ [Main] Parsed SSE JSON:`, parsedData);
                       
                       if (parsedData.response) {
-                        console.log(`📤 [Main] Sending SSE content:`, JSON.stringify(parsedData.response));
                         sendChunkToRenderer(parsedData.response);
                       } else if (parsedData.error) {
                         console.error(`❌ [Main] Error from LightRAG SSE stream: ${parsedData.error}`);
                         sendChunkToRenderer(`\n[LightRAG Error: ${parsedData.error}]\n`);
-                      } else {
-                        console.warn(`⚠️  [Main] SSE JSON object without response or error:`, parsedData);
                       }
                     } catch (parseError) {
-                      console.error('❌ [Main] Error parsing JSON from LightRAG SSE stream:', parseError, 'Data:', jsonData);
+                      console.error('❌ [Main] Error parsing JSON from LightRAG SSE stream:', parseError);
                       // If JSON parsing fails, treat as plain text
                       if (jsonData) {
-                        console.log(`📤 [Main] Sending SSE data as plain text:`, JSON.stringify(jsonData));
                         sendChunkToRenderer(jsonData);
                       }
                     }
                   } else if (jsonData === '[DONE]') {
-                    console.log(`🏁 [Main] Stream completed with [DONE]`);
                     sendChunkToRenderer("", true);
                   }
                 }
                 // ✅ Handle plain text responses
                 else if (line.trim()) {
-                  console.log(`📤 [Main] Sending plain text:`, JSON.stringify(line));
                   sendChunkToRenderer(line);
                 }
               }
             });
 
             sseStream.on('end', () => {
-              console.log(`🏁 [Main] LightRAG SSE stream ended for streamId: ${streamId}`);
-              console.log(`📊 [Main] Stream stats - Chunks: ${chunkCount}, Bytes received: ${totalBytesReceived}, Bytes sent: ${totalBytesSent}`);
-              console.log(`📝 [Main] Total accumulated response length: ${accumulatedResponse.length}`);
-              console.log(`📄 [Main] Final response preview: "${accumulatedResponse.substring(0, 200)}..."`);
+              console.log(`🏁 [Main] LightRAG stream completed - ${totalChunksReceived} chunks, ${accumulatedResponse.length} chars`);
               
               // Process any remaining data in buffer
               if (lineBuffer.trim()) {
-                console.log(`🔄 [Main] Processing remaining buffer:`, JSON.stringify(lineBuffer.trim()));
-                
                 if (lineBuffer.trim().startsWith('{')) {
                   try {
                     const parsedData: LightRAGStreamData = JSON.parse(lineBuffer.trim());
@@ -253,22 +218,16 @@ export function setupSSEHandlers() {
                 sendChunkToRenderer("", true);
               }
               
-              console.log(`🎉 [Main] Final accumulated response: "${accumulatedResponse}"`);
               resolve({ success: true, fullResponse: accumulatedResponse });
             });
 
             sseStream.on('error', (err) => {
-              console.error(`❌ [Main] LightRAG SSE stream error for streamId: ${streamId}:`, err);
-              console.error(`❌ [Main] Error details:`, {
-                name: err.name,
-                message: err.message,
-                stack: err.stack
-              });
+              console.error(`❌ [Main] LightRAG SSE stream error:`, err.message);
               reject(err);
             });
 
             controller.signal.addEventListener('abort', () => {
-              console.log(`🛑 [Main] Aborting LightRAG SSE stream for streamId: ${streamId}`);
+              console.log(`🛑 [Main] Aborting LightRAG SSE stream`);
               sseStream.destroy();
               resolve({ success: true, aborted: true, fullResponse: accumulatedResponse });
             });
@@ -279,12 +238,11 @@ export function setupSSEHandlers() {
         }
 
       } else {
-        console.log(`🔄 [Main] Using non-LightRAG provider: ${provider}`);
+        console.log(`🔄 [Main] Using provider: ${provider}`);
         let openai;
         let completionStream;
 
         const selectedProvider = provider || (model.startsWith('gpt-') ? 'openai' : model.startsWith('deepseek-') ? 'deepseek' : model.startsWith('oneasia-') ? 'oneasia' : 'ollama');
-        console.log(`Using provider: ${selectedProvider} for model: ${model}`);
 
         switch (selectedProvider) {
           case 'openai':
@@ -429,9 +387,6 @@ export function setupSSEHandlers() {
 
             return new Promise((resolve, reject) => {
               const h20Req = https.request(h20Options, (h20Res) => {
-                console.log(`H20 Response status: ${h20Res.statusCode}`);
-                console.log(`H20 Response headers:`, h20Res.headers);
-                
                 if (h20Res.statusCode !== 200) {
                   let errorBody = '';
                   h20Res.on('data', chunk => errorBody += chunk);
@@ -530,9 +485,7 @@ export function setupSSEHandlers() {
       }
 
     } catch (error: any) {
-      console.error(`💥 [Main] Error in chat_stream_complete for streamId ${streamId}:`, error);
-      console.error(`💥 [Main] Error stack:`, error.stack);
-      console.error(`💥 [Main] Accumulated response so far: "${accumulatedResponse}"`);
+      console.error(`💥 [Main] Error in chat_stream_complete for streamId ${streamId}:`, error.message);
       
       const controllerForStream = streamId ? activeStreams[streamId] : null;
       if (error.name === 'AbortError' || controllerForStream?.signal.aborted) {
@@ -548,17 +501,15 @@ export function setupSSEHandlers() {
   });
 
   ipcMain.handle('streaming:abort_stream', async (event, { streamId }) => {
-    console.log("abort_stream requested for streamId:", streamId);
     if (activeStreams[streamId]) {
       activeStreams[streamId].abort();
-      console.log(`Abort signal sent for streamId ${streamId}.`);
+      console.log(`🛑 [Main] Stream ${streamId} aborted`);
       return { success: true, message: `Stream ${streamId} abortion initiated.` };
     }
     return { success: false, message: `Stream ${streamId} not found or already completed.` };
   });
 
   ipcMain.handle('ai:get_completion', async (event, { messages, options }) => {
-    console.log("ai:get_completion received by main process. Messages:", messages, "Options:", options);
     try {
       const {
         model,
@@ -578,7 +529,7 @@ export function setupSSEHandlers() {
       let openai;
       const selectedProvider = provider;
 
-      console.log(`Using provider: ${selectedProvider} for model: ${model} in ai:get_completion`);
+      console.log(`🤖 [Main] ai:get_completion - Provider: ${selectedProvider}, Model: ${model}`);
 
       switch (selectedProvider) {
         case 'openai':
@@ -638,7 +589,7 @@ export function setupSSEHandlers() {
       return { success: true, completion };
 
     } catch (error: any) {
-      console.error(`Error in ai:get_completion:`, error.message, error.stack);
+      console.error(`❌ [Main] Error in ai:get_completion:`, error.message);
       return { success: false, error: error.message };
     }
   });

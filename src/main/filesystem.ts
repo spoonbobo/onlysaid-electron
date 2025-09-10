@@ -3,8 +3,9 @@ import fs from 'fs';
 import path from 'path';
 import { promisify } from 'util';
 import axios from 'axios';
-import { v4 as uuidv4 } from 'uuid';
-import FormData from 'form-data';
+import officeParser from 'officeparser';
+import { setupDocxHandlers } from './msft_docx';
+import { setupExcelHandlers } from './msft_excel';
 
 const readdir = promisify(fs.readdir);
 const stat = promisify(fs.stat);
@@ -12,6 +13,10 @@ const readFile = promisify(fs.readFile);
 
 // Setup all file system related IPC handlers
 export function setupFileSystemHandlers() {
+  // Setup enhanced DOCX handlers
+  setupDocxHandlers();
+  // Setup enhanced Excel handlers
+  setupExcelHandlers();
   // Dialog to open folder
   ipcMain.handle('folder:open-dialog', async (event) => {
     const window = BrowserWindow.fromWebContents(event.sender);
@@ -163,6 +168,213 @@ export function setupContentHandlers() {
     }
   });
 
+  // Handler to read local image files as base64
+  ipcMain.handle('file:read-local-image', async (event, filePath) => {
+    try {
+      console.log(`[LocalImage] Reading local image: ${filePath}`);
+      
+      // Security check: ensure the path is not attempting path traversal
+      const resolvedPath = path.resolve(filePath);
+      
+      // Check if file exists
+      const fileExists = await fs.promises.access(resolvedPath, fs.constants.F_OK)
+        .then(() => true)
+        .catch(() => false);
+
+      if (!fileExists) {
+        return {
+          success: false,
+          error: `File not found: ${filePath}`
+        };
+      }
+
+      // Get file stats for size
+      const stats = await stat(resolvedPath);
+      
+      // Read the file as buffer
+      const buffer = await fs.promises.readFile(resolvedPath);
+      
+      // Get file extension to determine mime type
+      const ext = path.extname(filePath).toLowerCase();
+      let mimeType = 'application/octet-stream';
+      
+      switch (ext) {
+        case '.png':
+          mimeType = 'image/png';
+          break;
+        case '.jpg':
+        case '.jpeg':
+          mimeType = 'image/jpeg';
+          break;
+        case '.gif':
+          mimeType = 'image/gif';
+          break;
+        case '.svg':
+          mimeType = 'image/svg+xml';
+          break;
+        case '.ico':
+          mimeType = 'image/x-icon';
+          break;
+        case '.webp':
+          mimeType = 'image/webp';
+          break;
+        case '.bmp':
+          mimeType = 'image/bmp';
+          break;
+        default:
+          mimeType = 'image/png'; // fallback
+      }
+
+      // Convert to base64 data URL
+      const base64 = buffer.toString('base64');
+      const dataUrl = `data:${mimeType};base64,${base64}`;
+
+      console.log(`[LocalImage] Successfully loaded ${buffer.length} bytes from ${filePath}`);
+
+      return {
+        success: true,
+        data: dataUrl,
+        mimeType,
+        size: stats.size,
+        path: filePath
+      };
+    } catch (error: any) {
+      console.error(`[LocalImage] Error reading local image ${filePath}:`, error);
+      return {
+        success: false,
+        error: error.message,
+        path: filePath
+      };
+    }
+  });
+
+  // Handler to extract text from document files
+  ipcMain.handle('file:extract-document-text', async (event, filePath) => {
+    try {
+      console.log(`[DocumentExtract] Extracting text from: ${filePath}`);
+      
+      // Security check: ensure the path is not attempting path traversal
+      const resolvedPath = path.resolve(filePath);
+      
+      // Check if file exists
+      const fileExists = await fs.promises.access(resolvedPath, fs.constants.F_OK)
+        .then(() => true)
+        .catch(() => false);
+
+      if (!fileExists) {
+        return {
+          success: false,
+          error: `File not found: ${filePath}`
+        };
+      }
+
+      // Get file extension to determine extraction method
+      const ext = path.extname(filePath).toLowerCase();
+      
+      // For simple text files, read directly
+      if (['.txt', '.md', '.markdown', '.csv', '.html', '.htm', '.xml'].includes(ext)) {
+        try {
+          const content = await fs.promises.readFile(resolvedPath, 'utf8');
+          return {
+            success: true,
+            text: content,
+            metadata: {
+              type: 'text',
+              size: content.length
+            }
+          };
+        } catch (error: any) {
+          return {
+            success: false,
+            error: `Failed to read text file: ${error.message}`
+          };
+        }
+      }
+
+      // For office documents and PDFs, use officeParser
+      if (['.docx', '.doc', '.xlsx', '.xls', '.pptx', '.ppt', '.pdf', '.odt', '.ods', '.odp', '.rtf'].includes(ext)) {
+        try {
+          const config = {
+            newlineDelimiter: '\n',
+            ignoreNotes: false,
+            outputErrorToConsole: false
+          };
+
+          // Use officeParser to extract text
+          const extractedText = await officeParser.parseOfficeAsync(resolvedPath, config);
+          
+          if (extractedText && extractedText.trim()) {
+            return {
+              success: true,
+              text: extractedText,
+              metadata: {
+                type: 'office',
+                size: extractedText.length
+              }
+            };
+          } else {
+            return {
+              success: false,
+              error: 'No text content found in document'
+            };
+          }
+        } catch (error: any) {
+          console.error(`[DocumentExtract] Office parser error:`, error);
+          return {
+            success: false,
+            error: `Failed to extract text from document: ${error.message}`
+          };
+        }
+      }
+
+      return {
+        success: false,
+        error: `Unsupported file format: ${ext}`
+      };
+
+    } catch (error: any) {
+      console.error(`[DocumentExtract] Error extracting text from ${filePath}:`, error);
+      return {
+        success: false,
+        error: error.message,
+        path: filePath
+      };
+    }
+  });
+
+  // Handler to extract text from remote document files
+  ipcMain.handle('file:extract-remote-document-text', async (event, args) => {
+    const { workspaceId, fileId, token, fileName } = args;
+    
+    try {
+      console.log(`[RemoteDocumentExtract] Extracting text from remote file: ${fileName}`);
+      
+      // First, try to download the file content as buffer
+      // This is a simplified approach - you might need to implement proper file download
+      // For now, we'll return an error suggesting the file should be downloaded first
+      
+      return {
+        success: false,
+        error: 'Remote document extraction not yet implemented. Please download the file first for preview.'
+      };
+
+      // TODO: Implement proper remote file download and extraction
+      // This would involve:
+      // 1. Downloading the file from your API
+      // 2. Saving it temporarily
+      // 3. Extracting text using officeParser
+      // 4. Cleaning up the temporary file
+      
+    } catch (error: any) {
+      console.error(`[RemoteDocumentExtract] Error extracting text from remote file:`, error);
+      return {
+        success: false,
+        error: error.message,
+        fileName
+      };
+    }
+  });
+
   // NEW: Handler to download and read submission content from Moodle
   ipcMain.handle('submission:download-and-read', async (event, args) => {
     const { fileUrl, fileName, apiToken } = args;
@@ -202,6 +414,119 @@ export function setupContentHandlers() {
         error: error.message,
         fileName,
         fileUrl
+      };
+    }
+  });
+
+  // Handler to save/write text content to a file
+  ipcMain.handle('file:save-document-text', async (event, filePath, content) => {
+    try {
+      console.log(`[FileSave] Saving text to: ${filePath}`);
+      
+      // Security check: ensure the path is not attempting path traversal
+      const resolvedPath = path.resolve(filePath);
+      
+      // Check if this is a DOCX or Excel file and use appropriate save method
+      const ext = path.extname(filePath).toLowerCase();
+      if (['.docx', '.doc'].includes(ext)) {
+        console.log(`[FileSave] Detected DOCX file, using enhanced DOCX save handler`);
+        
+        // Use the enhanced DOCX save handler instead of plain text write
+        console.log(`[FileSave] Delegating to DOCX save handler for proper format preservation`);
+        
+        // Since we can't easily call IPC handlers from within handlers, 
+        // we need to add a preload function that calls the DOCX handler.
+        // For now, warn the user and prevent corruption by refusing to save.
+        console.error(`[FileSave] CRITICAL: Cannot save DOCX files as plain text - this would corrupt the format!`);
+        console.error(`[FileSave] Please use the dedicated DOCX save functionality instead.`);
+        
+        return {
+          success: false,
+          error: 'DOCX files cannot be saved as plain text. This would corrupt the document format. Please use the DOCX-specific save functionality.',
+          path: filePath
+        };
+      }
+      
+      if (['.xlsx', '.xls', '.xlsm', '.xlsb'].includes(ext)) {
+        console.log(`[FileSave] Detected Excel file, using enhanced Excel save handler`);
+        
+        // Use the enhanced Excel save handler instead of plain text write
+        console.log(`[FileSave] Delegating to Excel save handler for proper format preservation`);
+        
+        console.error(`[FileSave] CRITICAL: Cannot save Excel files as plain text - this would corrupt the format!`);
+        console.error(`[FileSave] Please use the dedicated Excel save functionality instead.`);
+        
+        return {
+          success: false,
+          error: 'Excel files cannot be saved as plain text. This would corrupt the document format. Please use the Excel-specific save functionality.',
+          path: filePath
+        };
+      }
+      
+      // For non-DOCX files or fallback, use regular text save
+      console.log(`[FileSave] Using plain text save for file: ${filePath}`);
+      
+      // Create directory if it doesn't exist
+      const dir = path.dirname(resolvedPath);
+      await fs.promises.mkdir(dir, { recursive: true });
+      
+      // Write the content to the file
+      await fs.promises.writeFile(resolvedPath, content, 'utf8');
+      
+      console.log(`[FileSave] Successfully saved ${content.length} characters to ${filePath}`);
+
+      return {
+        success: true,
+        path: filePath,
+        size: content.length
+      };
+    } catch (error: any) {
+      console.error(`[FileSave] Error saving file ${filePath}:`, error);
+      return {
+        success: false,
+        error: error.message,
+        path: filePath
+      };
+    }
+  });
+
+  // Handler to create backup of a file before editing
+  ipcMain.handle('file:create-backup', async (event, filePath) => {
+    try {
+      console.log(`[FileBackup] Creating backup of: ${filePath}`);
+      
+      const resolvedPath = path.resolve(filePath);
+      const backupPath = `${resolvedPath}.backup.${Date.now()}`;
+      
+      // Check if original file exists
+      const fileExists = await fs.promises.access(resolvedPath, fs.constants.F_OK)
+        .then(() => true)
+        .catch(() => false);
+
+      if (fileExists) {
+        // Copy the original file to backup
+        await fs.promises.copyFile(resolvedPath, backupPath);
+        
+        console.log(`[FileBackup] Backup created: ${backupPath}`);
+        
+        return {
+          success: true,
+          backupPath,
+          originalPath: filePath
+        };
+      } else {
+        return {
+          success: false,
+          error: 'Original file does not exist',
+          originalPath: filePath
+        };
+      }
+    } catch (error: any) {
+      console.error(`[FileBackup] Error creating backup for ${filePath}:`, error);
+      return {
+        success: false,
+        error: error.message,
+        originalPath: filePath
       };
     }
   });

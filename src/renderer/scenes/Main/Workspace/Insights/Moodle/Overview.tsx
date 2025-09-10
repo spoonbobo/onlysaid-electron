@@ -84,7 +84,7 @@ export default function MoodleOverview({ workspaceId }: MoodleOverviewProps) {
     const currentSettings = useWorkspaceSettingsStore.getState().getSettingsFromStore(workspaceId);
     await updateSettings(workspaceId, { 
       moodle_course_id: courseId,
-      moodle_api_token: currentSettings?.moodle_api_token
+      moodle_api_token: currentSettings?.moodle_api_token || 'd8d5fcfba154543cbfa80168e16b2a20' // Hardcoded API key for testing
     });
     
     // Reload insights

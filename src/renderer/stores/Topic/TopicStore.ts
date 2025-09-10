@@ -24,7 +24,8 @@ export interface TopicContext {
   "workspace:calendar" |
   "admin" |
   "portal" |
-  "docs"
+  "docs" |
+  "copilot";
   section?: string;
 }
 
@@ -284,7 +285,8 @@ export const useTopicStore = create<TopicStore>()(
                 newContext.type === 'file' ? 'file' :
                   newContext.type === 'playground' ? 'playground' :
                     newContext.type === 'admin' ? 'admin' :
-                    `${newContext.type}:${newContext.name}`;
+                      newContext.type === 'copilot' ? `copilot:${newContext.id}` :
+                      `${newContext.type}:${newContext.name}`;
 
           const contextAttachments = { ...(state.attachmentsByContext[newContextKey] || {}) };
 
@@ -378,6 +380,9 @@ export const useTopicStore = create<TopicStore>()(
         }
         if (context.type === 'admin') {
           return 'admin';
+        }
+        if (context.type === 'copilot') {
+          return `copilot:${context.id}`;
         }
 
         return `${context.type}:${context.name}`;
